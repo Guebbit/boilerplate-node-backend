@@ -1,50 +1,42 @@
 ---
 source: src/modules/account/services/verification.ts
-sha256: 2c4b0fb28355d21b6aba783acd13f676eb551fe946c06427ab53bfe9be1a6a27
-generated_at: 2026-11-14T18:54:51.537147+00:00
-model: ollama:qwen3.8:27b
+source_sha256: dc591e76439375a0c9e58a8b18f44bfd9fadf473768ff08a2493a0829b2db577
+context_sha256: 07ac212612569ee3ac7360d72ae5115bbad09e7709ebbbfcb5377cd1af4dab00
+generated_at: 2026-11-22T03:44:19.386700+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/verification.ts
 
 ## Purpose
-
-Unifies all email-verification mail-sending (signup confirm, explicit re-send, and email-change proof) behind a single token-issuing + mail-enqueueing mechanism so the two verification kinds cannot drift. Also owns the re-send pacing (cooldown + mail-budget) and the end-to-end HTTP handlers for `POST /account/email-verification/resend` and `POST /account/email-change/resend`.
+Single place where email-verification tokens are issued and the verification mail is queued. Two kinds of verification share it: proving the account's existing address (signup, explicit re-send) and proving the pending address of an email-change request. Every flow that starts either one goes through here so they cannot drift. Issuing a token atomically replaces the previous token of the same kind, so only the newest email works.
 
 ## Key elements
-
-- **`VERIFY_RESEND_SECONDS`** (60) — client-facing countdown before the Resend button re-enables; deliberately longer than the 2FA code window.
-- **`VerifyLinkType`** — union of `EMAIL_VERIFY_TOKEN_TYPE` and `EMAIL_CHANGE_TOKEN_TYPE`; prevents a third type from being passed.
-- **`VERIFICATION_TARGETS`** — maps each link type to its frontend route and the user field holding the target address (`email` vs `pendingEmail`).
-- **`sendVerificationEmail(user, context, type?)`** — core primitive: issues/replaces the kind's live token, composes the i18n mail, enqueues via `sendAccountMail`. No-op if the target address is missing.
-- **`requestEmailVerification(user, context)`** — wraps `sendVerificationEmail` and records the `AUTH_EMAIL_VERIFY_REQUESTED` audit action (only for the explicit user-initiated re-send, not signup/email-change side-effects).
-- **`resendCooldownRemaining(user, type)`** — returns seconds left before a re-send is allowed, anchored on the live token's `sentAt`.
-- **`pacedSend`** (internal) — sequential gate: cooldown → mail-budget → send. Returns a `ResponseReject` on any refusal.
-- **`requestEmailVerificationFor(userId, context)`** — full handler for the signup/re-send endpoint: loads the user, rejects 404 / 409-already-verified, then runs `pacedSend`.
-- **`resendPendingEmailVerificationFor(userId, context)`** — full handler for the email-change resend endpoint: no-op (200, `resendAfter: 0`) when no change is pending; otherwise `pacedSend` against `pendingEmail` with `EMAIL_CHANGE_TOKEN_TYPE`.
-- **Mark-verified logic** (truncated in source) — sets `verifiedAt` on the document for the caller's `save`; called by `password-reset.ts` as `beforeSave` so verification lands in the same write as the new password.
+- `VERIFY_RESEND_SECONDS` (60) – minimum gap between verification emails for one account; the value clients count down on their Resend button.
+- `VerifyLinkType` (internal) – union of `EMAIL_VERIFY_TOKEN_TYPE` and `EMAIL_CHANGE_TOKEN_TYPE`.
+- `VERIFICATION_TARGETS` (internal) – maps each token kind to the frontend route (`verify` / `email-change`) and the address it proves (`user.email` / `user.pendingEmail`).
+- `sendVerificationEmail(user, context, type?)` – issues a token (TTL from `accountConfig().NODE_EMAIL_VERIFY_TTL_MS`), builds the mail in the recipient's locale via `verifyRequestEmail`, and queues it through `sendAccountMail` with `urgent: true`. Resolves without doing anything if the target address is missing. Defaults to the signup/re-send kind.
+- `requestEmailVerification(user, context)` – wraps `sendVerificationEmail` and records the `AUTH_EMAIL_VERIFY_REQUESTED` audit action. Kept separate so signup and email-change sends are not audited as user requests.
+- `resendCooldownRemaining(user, type)` – seconds left before another send, anchored on the live token's `sentAt`; 0 if a send may proceed.
+- `pacedSend` (internal) – shared re-send pacing: cooldown first, then the recipient mailbox budget, then the send.
+- `requestEmailVerificationFor(userId, context)` – the `POST /account/email-verification/resend` flow. Returns 404 if the user is missing and 409 (`EMAIL_ALREADY_VERIFIED`) if already verified. Otherwise it paces and sends, returning `{ resendAfter: 60 }`.
+- `resendPendingEmailVerificationFor(userId, context)` – the `POST /account/email-change/resend` flow. Mails only the pending address. If no change is pending it returns `{ resendAfter: 0 }` and sends and audits nothing. On success it audits `AUTH_EMAIL_CHANGE_RESENT`.
+- The file also documents a function that marks the account's address proven by setting `verifiedAt` on the document without saving, so the caller's own `save` persists it. Its only caller is `password-reset.ts#markResetCompleted`, which passes it as `beforeSave` to `passwordWrite`, so verification lands in the same write as the new password.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/account/services/mail.ts` | `sendAccountMail` enqueues the composed mail for the worker. |
-| `src/modules/account/emails.ts` | `verifyRequestEmail`, `recipientLocale`, `greetableName` build the mail body and pick the language. |
-| `src/modules/account/cooldown.ts` | `cooldownRemaining` computes the wait; `resendTooSoon` builds the 429-style reject. |
-| `src/modules/account/mail-budget.ts` | `mailRecipientRefusal` checks per-recipient budget before sending. |
-| `src/modules/account/config.ts` | `accountConfig().NODE_EMAIL_VERIFY_TTL_MS` sets the shared token TTL. |
-| `src/modules/account/audit.ts` | `accountAuditActions` supplies the action constants for audit records. |
-| `src/infrastructure/observability/audit.ts` | `recordAudit` writes the audit entry. |
-| `src/modules/account/domain/email-change.ts` | `emailChangeNext`, `emailChangeStateOf` determine whether a resend is valid for the current state. |
-| `src/modules/account/services/caller.ts` | `withOwnAccount` loads the caller's own user document. |
-| `src/infrastructure/http/response.ts` | `generateSuccess` / `generateReject` shape the HTTP payloads. |
-| `src/infrastructure/i18n/index.ts` | `t()` resolves all user-facing strings. |
-| `src/modules/account/services/email-change.ts` | Upstream caller that triggers the `EMAIL_CHANGE_TOKEN_TYPE` path after a `POST /account/email-change`. |
+- `./tokens` (imported, not a listed neighbor) supplies `issueToken`, `tokenSentAt`, and other token helpers. Token type constants come from `../token-types`.
+- `src/modules/account/services/mail.ts` (`sendAccountMail`) queues the mail. `src/modules/account/emails.ts` supplies `verifyRequestEmail`, `recipientLocale` and `greetableName`.
+- `src/modules/account/config.ts` provides `accountConfig()` for the link TTL.
+- `src/modules/account/cooldown.ts` provides `cooldownRemaining` and `resendTooSoon`. `src/modules/account/mail-budget.ts` provides `mailRecipientRefusal`, the per-recipient budget check.
+- `src/modules/account/services/caller.ts` provides `withOwnAccount` (used by the email-change resend) and `recordAccountAudit`.
+- `src/modules/account/domain/index.ts` provides `emailChangeNext` and `emailChangeStateOf`, used to decide whether a resend is valid for the current email-change state. It also exports `undoRestoresPreviousEmail`. `src/modules/account/domain/email-change.ts` is a related neighbor.
+- `src/infrastructure/observability/audit.ts` provides `recordAudit`. `src/modules/account/audit.ts` provides `accountAuditActions`.
+- `src/infrastructure/http/response.ts` provides `generateSuccess` and `generateReject` for the response envelopes.
+- `src/infrastructure/i18n/index.ts` provides `t` for localized messages. `src/infrastructure/i18n/context.ts` is also a neighbor, but its interaction is not visible in the shown portion of this file.
+- `accountUserService` (`@modules/users/friends/account`) loads the user with credentials.
 
 ## Notes
-
-- **Atomic replacement, not security.** Issuing a new token revokes the same kind's previous one so "the newest email is the one that works"; spending any of them proves the same mailbox regardless.
-- **Cooldown is enforced here, not only in the route limiter.** `credentialLimiters` uses `skipSuccessfulRequests`, which would make a successful re-send cost zero rate-limit budget — unacceptable when each success publishes real mail.
-- **Email-change resend targets only the new address.** The old address was informed once at request time; re-sending to it would look like a takeover alert.
-- **Already-verified gets an honest 409**, not a silent 200, because the caller is authenticated and asking about their own account (no enumeration blur needed).
-- **The TTL is shared across both token kinds** and is a deployment tuning knob (`NODE_EMAIL_VERIFY_TTL_MS`); the safe direction is shorter.
+- The cooldown is enforced in the service, not only in the route limiter. The credential limiters skip successful requests, so a successful send would otherwise spend no budget even though each one publishes mail.
+- The resend flow returns an honest 409 for an already-verified account. There is no enumeration concern because the caller is authenticated and asking about their own account.
+- The 60 s cooldown is longer than the 2FA code's 30 s because a verification link stays valid for the configured TTL.
+- Several imports (`redeemLiveToken`, `spendThen`, `refuseLink`, `revokeFor`, `EMAIL_CHANGE_UNDO_TOKEN_TYPE`, `undoRestoresPreviousEmail`, `recordAccountAudit`) are not used in the visible part of the file. They are presumably used further on.

@@ -1,43 +1,48 @@
 ---
 source: src/modules/delivery/tests/integration/destination.test.ts
-sha256: 58cc118125c8aed725e91ca50cf2def1c32a7cdbaaaa383d9e8a9feb3a5e35b7
-generated_at: 2026-11-08T05:41:59.078840+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b2f0e06c1d71f76b13498020ae72dc41eccb67d279d7541fed5310e7940b5da0
+context_sha256: c02b6ba824a702b3a3809358ad2670dff2935ac04c785d6001b1a04466b17b19
+generated_at: 2026-11-22T05:00:44.926495+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/integration/destination.test.ts
 
 ## Purpose
-
-Integration tests verifying the lifetime of a shipment's destination address: it is copied from the order at ship-time, encrypted at rest, isolated from later address corrections, included in account exports, removed on order scrub, and migrated during PII key rotation. Runs against a real MongoDB instance.
+Integration tests (real Mongo via `setupTestDb`) for the per-shipment shipping-address copy. Each shipment stores its own encrypted copy of the order's shipping address as of the moment it was shipped. Later address corrections to the order don't change parcels already sent. The copy is exposed on the wire and in the account export, is removed when the order's address is scrubbed, and is re-encrypted on PII key rotation.
 
 ## Key elements
-
-- **`FIRST` / `SECOND`** — two fixed address fixtures; `SECOND` differs in street and zip to prove copies don't follow corrections.
-- **`twoUnitOrder()`** — creates a `processing` order for 2 units shipping to `FIRST`; increments a module-level `buyers` counter to guarantee unique buyer emails.
-- **`shipUnits(orderId, productId, quantity)`** — resolves the order's single fulfillment order and calls `deliveryService.shipFulfillmentOrder` for a given quantity.
-- **"a shipment keeps where it went" suite** — four specs: address is copied & encrypted at cut; first parcel is unaffected by a later `correctShippingAddress`; digital/pickup orders store no destination; `presentExportShipment` surfaces the destination.
-- **"scrubbing the order scrubs the copy" suite** — `deliveryService.scrubDestinations` unsets only the target order's shipments (other orders untouched); second call is a no-op (`1` then `0` affected).
-- **"rotating the PII key" suite** — overrides `NODE_PII_ENCRYPTION_KEY` with a two-version string, invokes `deliveryModule.reencrypt(false)`, asserts `rewritten: 6` on first pass / `0` on re-run, and confirms `keyVersionOf` reads `v2` and `decryptDestination` still yields the plaintext city.
+- `admin` — `callerContextAs('admin')`, used as the actor for every action.
+- `FIRST` / `SECOND` — fixture addresses: the original address, and a redirect address (differs in street and zip).
+- `twoUnitOrder()` — creates a fresh user (counter-based email via `buyers`), a product at 10.00, and a `processing` order of 2 units shipping to `FIRST`. Returns `{ order, productId }`.
+- `shipUnits(orderId, productId, quantity)` — ships the given quantity of the order's single fulfillment order through `deliveryService.shipFulfillmentOrder`.
+- Test groups:
+  - **"a shipment keeps where it went"**:
+    - The destination matches `FIRST` on the wire, while the raw Mongo document doesn't contain the plaintext street or phone.
+    - After `orderService.correctShippingAddress`, the first parcel keeps its original street and the second gets the new one. Shipment numbers are 1 and 2.
+    - Digital fulfillments and orders with no shipping address store no destination.
+    - `presentExportShipment` includes the destination.
+  - **"scrubbing the order scrubs the copy"**:
+    - `deliveryService.scrubDestinations(orderId)` unsets the destination on that order's shipments only.
+    - It returns the count changed (1, then 0 on a rerun). Another order's shipment is untouched.
+  - **"rotating the PII key"**:
+    - Sets `NODE_PII_ENCRYPTION_KEY` to `v2:...,v1:...` via `withEnvironmentOverrides`.
+    - `deliveryModule.reencrypt(false)` rewrites 6 values on the first run and 0 on the second.
+    - `keyVersionOf` reports `v2` for the stored city, and `decryptDestination` still returns `Milano`.
 
 ## Relationships
-
-- **`deliveryService`** (services/index) — primary SUT: `shipFulfillmentOrder`, `listShipmentsForOrder`, `scrubDestinations`, `fulfillFulfillmentOrder`.
-- **`orderService`** (orders/index) — `correctShippingAddress` used to verify address isolation.
-- **`shipmentModel`** (model) — direct Mongo queries to assert raw encryption and absence of plaintext.
-- **`deliveryModule.reencrypt`** (module) — called under the key-rotation environment override.
-- **`decryptDestination`** (pii) — verifies the stored ciphertext round-trips after rotation.
-- **`keyVersionOf`** (versioned-secret) — inspects the version tag embedded in the encrypted value.
-- **`presentExportShipment`** (presenter) — confirms the export shape includes `destination`.
-- **`fulfillmentOrdersOf`, `shipmentsOf`** (tests/factories) — test-only queries to fetch delivery documents.
-- **`createUser`, `createProduct`, `createOrder`, `seedDigitalOrder`, `toOrderItem`** (users/products/orders factories) — seed the prerequisite data.
-- **`asAdmin`, `callerContextAs`** (callers) — build the caller context passed to every service act.
-- **`withEnvironmentOverrides`** (environment) — temporarily swaps `NODE_PII_ENCRYPTION_KEY` for the rotation spec.
-- **`OrderStatus`** (types) — used when creating orders in the desired state.
+- `deliveryService` (`delivery/services`): ships and fulfills fulfillment orders, lists shipments, and scrubs destinations.
+- `orderService` (`orders`): `correctShippingAddress` redirects the rest of an order.
+- `shipmentModel` (`delivery/model`): reads raw stored documents to check encryption and the absence of a destination.
+- `decryptDestination` (`delivery/pii`) and `presentExportShipment` (`delivery/presenter`): decrypt the stored copy and shape the export record.
+- `deliveryModule` (`delivery/module`): its `reencrypt` hook is exercised for key rotation.
+- `keyVersionOf` (`infrastructure/security/versioned-secret`): reads the key version prefix of ciphertext.
+- Factories: `createUser`, `createProduct`, `createOrder`, `toOrderItem`, `seedDigitalOrder`, `fulfillmentOrdersOf`, `shipmentsOf`.
+- Test support: `asAdmin` and `callerContextAs` from `tests/callers`, and `withEnvironmentOverrides` from `tests/environment`.
+- `OrderStatus` comes from `@types`.
 
 ## Notes
-
-- `buyers` is a module-level mutable counter, not a `jest.fn()` — it exists solely to make buyer emails unique across parallel-ish specs within this file.
-- The key-rotation spec expects `rewritten: 6`, which corresponds to the six individual fields (`fullName`, `street`, `city`, `zip`, `country`, `phone`) stored as separate encrypted values in a single destination subdocument.
-- Scrub and reencrypt are both asserted idempotent (second invocation returns `0`), so any future change that makes them non-idempotent will break this test.
-- The test file calls `setupTestDb()` at module scope — it assumes a real `MONGO_URI`/`setup-test-db` helper; it will not run in a pure in-memory environment.
+- The tests rely on `NODE_PII_ENCRYPTION_KEY` already having a base key (`test-pii-encryption-key`) as `v1`. The rotation test prepends a `v2` key.
+- The expected rewrite count of 6 is hard-coded for one shipment with two shipped units. It likely corresponds to the number of encrypted destination fields, but the file doesn't say so.
+- The digital and pickup test expects exactly 2 stored shipments, and none of them has a `destination`.
+- `shipmentModel.collection.findOne` bypasses Mongoose, so the test sees the stored form rather than the decrypted one.

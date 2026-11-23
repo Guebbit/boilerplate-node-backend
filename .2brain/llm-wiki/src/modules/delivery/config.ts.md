@@ -1,29 +1,26 @@
 ---
 source: src/modules/delivery/config.ts
-sha256: a6547f4f1d95c20a92d26ce2223d9a4e38aa156ba8627a2db5d0d67a5e8b6a53
-generated_at: 2026-11-08T05:26:06.098237+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4f834807d3a95beb24ed970fcac7a619c1580db87895de7998e7902801d3daf7
+context_sha256: 7f98b385f4524c01f86805a3296f80599eaaf29f1ec11a7251710612ede813d8
+generated_at: 2026-11-22T04:45:06.023996+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/config.ts
 
 ## Purpose
-
-Declares the delivery module's single configuration value — the retention window for a staff's free-text hold note — and exposes a typed getter. It follows the read-per-call pattern (rather than a cached constant) so tests can vary the value case by case.
+Defines the `delivery` module's configuration: the retention window for the one piece of free text it stores, staff's note on a hold. The value is read per call, so tests can vary it per case.
 
 ## Key elements
-
-- **`deliveryConfig`** — The `defineConfig` instance for the `delivery` module. Defines one shape field: `NODE_HOLD_NOTE_RETENTION_DAYS` (integer, default 365, min 1).
-- **`holdNoteRetentionDays()`** — Zero-arg getter that reads the config and returns the retention in days. Callers use this instead of touching `deliveryConfig` directly.
+- `deliveryConfig`: config accessor built with `defineConfig({ name: 'delivery', shape })`. Its only field is `NODE_HOLD_NOTE_RETENTION_DAYS`, an `int` that defaults to 365 with a minimum of 1.
+- `holdNoteRetentionDays()`: returns `deliveryConfig().NODE_HOLD_NOTE_RETENTION_DAYS` as whole days. This is how long a fulfillment order may go unchanged before `reap:delivery` unsets its `holdNote`.
 
 ## Relationships
-
-- **`src/infrastructure/config/define.ts`** — Provides `defineConfig`, the factory used to build the module's config object.
-- **`src/infrastructure/config/fields.ts`** — Provides the `int` field descriptor (type, `default`, `min` constraints).
-- **`src/modules/delivery/services/retention.ts`** — Consumes `holdNoteRetentionDays()` to determine when `reap:delivery` should unset a stale `holdNote`.
-- **`src/modules/delivery/module.ts`** — Registers `deliveryConfig` with the module so it is picked up by the application's config loading.
+- `src/infrastructure/config/define.ts` provides `defineConfig`, which builds `deliveryConfig`.
+- `src/infrastructure/config/fields.ts` provides the `int` field helper used to declare the setting.
+- `src/modules/delivery/services/retention.ts` is the likely consumer of `holdNoteRetentionDays()`. The doc comment ties the value to the `reap:delivery` job, though this file doesn't import or call it.
+- `src/modules/delivery/module.ts` is a graph neighbor of this file. Nothing in this file shows how the two interact.
 
 ## Notes
-
-- The value is read on every call to `holdNoteRetentionDays()` (not snapshotted at import time), which is the convention established by `returns/config.ts`. This is intentional: it lets tests inject per-case values without mutation of a module-level constant.
-- `min: 1` means a retention of 0 is rejected at config-parse time; the smallest valid window is one day.
+- `deliveryConfig()` is called on each `holdNoteRetentionDays()` call, so the value isn't captured at import time.
+- The setting is read from the `NODE_HOLD_NOTE_RETENTION_DAYS` key. The file doesn't show how `defineConfig` resolves that key (environment or otherwise).

@@ -1,44 +1,40 @@
 ---
 source: src/modules/inventory/tests/integration/backorder-arrivals.test.ts
-sha256: ff7d44e1945a059a20fa5354c18cebea13121b03d969bb66d2a5efdbc9a55302
-generated_at: 2026-11-08T06:04:59.574510+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 039e51adff8677ef6fa1d1c28413f6621684e741dfac5bdcb5bc06ce15a4c040
+context_sha256: 18b2014287b01616c7f294ed92701d5951288f28f623105c250661fdf49c0faa
+generated_at: 2026-11-22T05:25:34.360286+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/tests/integration/backorder-arrivals.test.ts
 
 ## Purpose
-
-Integration tests that verify the "serve the paid backorder buyer first" invariant: whenever any write operation makes a unit sellable (stocktake, return restock, hold expiry, order cancellation, partial shipment release), the unit is allocated to the committed backorder reservation rather than becoming freely available.
+Integration tests verifying that whenever a unit becomes sellable, the paid buyers waiting on a backorder are served first, in the same transaction. This covers every write path that frees stock, not just receipts: stocktake adjustments, returned parcels, expired or canceled holds, and partial shipment cancellations. The module doc points to `src/modules/inventory/services/transition.ts` (anchor `#preorders`) for the underlying rules.
 
 ## Key elements
-
-- **`soldOutWithAPaidBuyerWaiting(shelf)`** — Setup helper. Creates a product with `shelf` units all reserved by a "holder" order, sets a backorder limit of 5, then creates and commits a second order with one `backorder`-kind reservation. Returns `{ productId, holder, waiting }`.
-- **`anOrderId()`** — Generates a unique 24-char hex string per call; used as the order key for holds.
-- **`levelOf(productId)`** — Reads `onHand`, `reserved`, `available`, `backordered` from `stockLevelRepository` for assertions.
-- **`itemsOf(orderId)`** — Reads the reservation's items (quantity + kind) from `reservationRepository` for assertions.
-- **7 test cases** inside `describe('a unit that becomes sellable')`:
-  - Stocktake adjustment (`inventoryService.adjust`)
-  - Return restock (`restockReturnedLines` inside a transaction)
-  - Unpaid hold expiry via `runReservationSweep` (expiration set directly via `reservationModel.updateOne`)
-  - Unpaid order cancel (`releaseForOrder`)
-  - Paid order cancel (`releaseCommittedForOrder` inside a transaction)
-  - Partial shipment cancel (`releaseLinesForOrder` inside a transaction)
-  - Negative case: releasing a `backorder`-kind line only frees allowance, not a shelf unit
+- `setupTestDb()`: called at module level to prepare the test database.
+- `anOrderId()`: returns a unique 24-character hex-style order id (padded with `e`) from a module-level counter.
+- `levelOf(productId)`: reads the stock level and returns `{ onHand, reserved, available, backordered }`.
+- `itemsOf(orderId)`: returns the `{ quantity, kind }` items on an order's reservation (hold).
+- `soldOutWithAPaidBuyerWaiting(shelf)`: fixture. It creates a product with `shelf` units on hand and sets a backorder limit of 5. A `holder` order reserves all shelf units, so none is sellable. A `waiting` order reserves one unit with `kind: 'backorder'` and commits it. It returns `{ productId, holder, waiting }`.
+- `describe('a unit that becomes sellable')`, with one test per trigger. In each test, the waiting buyer's item flips to `kind: 'stock'` and the counters show the unit reserved rather than available:
+  - `inventoryService.adjust` (stocktake found a unit)
+  - `restockReturnedLines` (returned parcel, inside `withTransaction`)
+  - `runReservationSweep` (after setting the holder's `expiresAt` to epoch 0 via `reservationModel.updateOne`)
+  - `releaseForOrder` (unpaid order canceled)
+  - `releaseCommittedForOrder` (paid order canceled)
+  - `releaseLinesForOrder` (rest of a shipment canceled)
+- A negative test: releasing the waiting buyer's own `backorder` claim via `releaseLinesForOrder` frees allowance only, leaving `available: 0` and `backordered: 0`.
 
 ## Relationships
-
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to initialize the in-memory test database before any test runs.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` provides a product fixture with a controllable `onHand` count.
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps service calls that are explicitly transactional (restock, paid cancel, partial release).
-- **`src/modules/inventory/services/index.ts`** — `inventoryService` is the SUT; nearly every assertion path goes through its methods (`reserveForOrder`, `commitForOrder`, `adjust`, `restockReturnedLines`, `runReservationSweep`, `releaseForOrder`, `releaseCommittedForOrder`, `releaseLinesForOrder`).
-- **`src/modules/inventory/model.ts`** — `reservationModel.updateOne` is used to force-expire the holder's reservation (bypassing time-based expiry) so the sweep test is deterministic.
-- **`src/modules/inventory/repository.ts`** — `reservationRepository` and `stockLevelRepository` are used exclusively in assertion helpers (`itemsOf`, `levelOf`).
-- **`tests/support/callers.ts`** — `testCallerContext` supplies the required caller identity for `inventoryService.adjust`.
+- `src/modules/inventory/services/index.ts`: supplies `inventoryService`, the system under test (`setBackorderLimit`, `reserveForOrder`, `commitForOrder`, `adjust`, `restockReturnedLines`, `runReservationSweep`, `releaseForOrder`, `releaseCommittedForOrder`, `releaseLinesForOrder`).
+- `src/modules/inventory/model.ts`: `reservationModel` is used to force a hold to expire directly in the DB.
+- `src/modules/inventory/repository.ts`: `reservationRepository` and `stockLevelRepository` are used for read-side assertions.
+- `src/infrastructure/runtime/database.ts`: `withTransaction` supplies the session for the service methods that take one.
+- `src/modules/products/tests/factories.ts`: `createProduct` builds products with an `onHand` quantity.
+- `tests/support/setup-test-db.ts` (`setupTestDb`) and `tests/support/callers.ts` (`testCallerContext`, passed to `adjust`): shared test support.
 
 ## Notes
-
-- The file is annotated with `@module` JSDoc; it intentionally has **no named exports** — it is a side-effect-only test module.
-- Transactional service calls (`restockReturnedLines`, `releaseCommittedForOrder`, `releaseLinesForOrder`) require an explicit `session` argument, hence the `withTransaction` wrapper. Non-transactional calls (`adjust`, `releaseForOrder`, `runReservationSweep`) do not.
-- The negative test ("does not take a unit from a buyer whose claim was only given back") confirms that releasing a `backorder`-kind reservation line does **not** trigger the serve-first logic — it only frees backorder allowance. This is a deliberate distinction from the positive cases above it.
-- `reservationModel` is imported solely for the direct `updateOne` that sets `expiresAt` to epoch-zero; all other state changes go through the service.
+- The order-id padding letter is chosen so ids don't collide with those from other test files.
+- Expiry is simulated by back-dating `expiresAt` rather than waiting.
+- In the expiry test, two units are released and one goes to the queue, so the other becomes available (`available: 1`).

@@ -1,38 +1,31 @@
 ---
 source: scripts/contracts/response-headers.ts
-sha256: de7585c1c9cc13855429afa4e1f66c42103a4451513f77212bc632139c92d46d
-generated_at: 2026-11-14T17:28:47.721419+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 33421263ea6daceedf2a336871f7d44656159bbf4a0c5d3061c6818edf38db03
+context_sha256: cabf4944071ede78f145dc210eca78e63de0ec435f85793f694e17b37cedea99
+generated_at: 2026-11-22T01:59:52.355284+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/response-headers.ts
 
 ## Purpose
-
-Stamps two categories of response headers onto the bundled OpenAPI document as a late pipeline step: app-level headers that middleware sets on every response, and the `Idempotent-Replayed` header on idempotent operations. Exists so these headers are derived from a single source of truth rather than hand-copied onto every operation, where they would silently go stale.
+Stamps response headers that no operation writes by hand onto the bundled `openapi.yaml`. The app sets these in middleware before any route runs, so a hand-copied list on every operation would be an unguarded claim that goes stale silently. The two steps run late in `./openapi-bundle`, after the steps that add an operation's own headers, so an operation's own header always wins.
 
 ## Key elements
-
-- **`withAppLevelHeaders`** (exported `Step`) — Reads the root `x-app-level-headers` map, writes each entry as a `$ref` under `headers` on every inline response (skipping any header the response already declares, case-insensitively). Excludes `ETag` on write responses (non-GET/HEAD). Deletes the `x-app-level-headers` key after stamping.
-- **`withIdempotentReplay`** (exported `Step`) — For each operation that references a shared `Idempotency-Key` parameter, declares `Idempotent-Replayed` on every response except 429. Inline responses are mutated in place; `$ref` responses are re-pointed to a generated `<Name>Replayable` twin.
-- **`inlineResponsesOf`** — Collects all inline `ResponseObject`s from operations and `components/responses`, filtering out `$ref` entries.
-- **`writeResponsesOf`** — Returns a `Set` of response objects belonging to non-GET/HEAD operations, used to suppress `ETag` stamping.
-- **`takesIdempotencyKey`** — Checks whether an operation's parameter list references one of the two shared idempotency-key parameters.
-- **`replayableTwinRef`** — Creates (or reuses) a `structuredClone`-d `<Name>Replayable` entry in `components/responses` with the replay header, returning its `$ref`.
-- **`declares`** — Case-insensitive check for whether a header name already exists in a response's header map.
-- **`isHeaderMap`** — Type guard narrowing `unknown` to a non-empty `Record<string, string>`.
+- `withAppLevelHeaders` (`Step`): reads the root's `x-app-level-headers` map (`{ header name: components/headers key }`) and adds a `$ref` to `#/components/headers/<key>` on every inline response. Those are each operation's inline responses plus `components/responses`. It never overwrites a header the response already declares (compared case-insensitively). It then deletes `x-app-level-headers` from the document. It throws if the map is missing, empty or not string-valued.
+- `withIdempotentReplay` (`Step`): for every operation that takes an `Idempotency-Key`, declares `Idempotent-Replayed` on all its responses except `429`.
+- `takesIdempotencyKey`: detects the key by a `$ref` to `IdempotencyKeyHeader` or `RequiredIdempotencyKeyHeader` under `components/parameters`. The parameter is the marker, with no hand-kept list.
+- `declareReplay`: adds the header in place on inline responses. A `$ref` response is repointed to a twin. It throws if a `$ref` points outside `#/components/responses/`.
+- `replayableTwinRef`: creates `<Name>Replayable` under `components/responses`, once per component, as a `structuredClone` of the original plus the replay header. It throws if the original is missing or is itself a `$ref`.
+- `writeResponsesOf` / `inlineResponsesOf`: helpers that collect the write-operation responses and all inline (non-`$ref`) responses.
 
 ## Relationships
-
-- **`scripts/contracts/openapi-document.ts`** — Source of the `Step` type, `operationsOf` iterator, and the `Operation` / `OpenApiDocument` types that this module operates on.
-- **`scripts/contracts/openapi-bundle.ts`** — The orchestrating pipeline that invokes `withAppLevelHeaders` and `withIdempotentReplay` as late-stage steps, after per-operation header assignment, so an operation's own headers always take precedence.
-- **`tests/unit/scripts/contracts/response-headers.test.ts`** — Unit tests covering stamping, override precedence, the ETag write-response exclusion, twin generation, and the 429 exception.
+- Imports `operationsOf` and the `Operation`, `OpenApiDocument` and `Step` types from `./openapi-document`.
+- Both exported steps are run by `./openapi-bundle` late in its pipeline.
+- `tests/unit/scripts/contracts/response-headers.test.ts` is the unit test for this file.
 
 ## Notes
-
-- Order matters: both steps run *after* any per-operation header steps in the bundle, guaranteeing a hand-written header on an operation wins over the stamped default.
-- `x-app-level-headers` is an instruction to this script, not part of the published contract — it is deleted before the document is written out.
-- The `ETag` exclusion on writes is grounded in RFC 9110 §8.8.3 / §9.3.4: a PUT carries no ETag, a POST/DELETE carries only one the API generated itself. An explicit `x-versioned` tag on a write response still wins because it is declared by hand.
-- The `<Name>Replayable` twin uses `structuredClone` deliberately; a shallow clone would let mutations to the twin's `headers` object leak back into the original shared response.
-- Idempotency detection is by parameter `$ref` (either `IdempotencyKeyHeader` or `RequiredIdempotencyKeyHeader`), not by a hand-maintained list of routes — adding the key parameter to a new route is sufficient.
-- 429 is excluded from the replay header because, by design, every rate-limit budget refuses before the idempotency key is claimed in the ledger.
+- On write operations (anything but GET and HEAD), the root-stamped `ETag` is skipped. A write answers only an `ETag` the API made itself, and a PUT answers none (RFC 9110). A write that returns a real tag declares it by hand, which wins. The doc comment says `dropUnownedValidators` enforces these ETag rules.
+- The `Replayable` twin keeps non-keyed operations pointing at the original shared response, which stays without the replay header. The deep clone prevents the twin's headers leaking into the original.
+- `429` is skipped because every budget refuses before the idempotency key is claimed, so the ledger never stores it.
+- `x-app-level-headers` is an instruction to this script only and is removed from the published contract.

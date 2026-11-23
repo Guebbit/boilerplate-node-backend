@@ -1,30 +1,28 @@
 ---
 source: src/infrastructure/persistence/changes.ts
-sha256: 74eca1d454031271f18480760cdfb3b67051dcb775ea2a87bd239d1a1ed22696
-generated_at: 2026-11-08T03:41:42.230106+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 14e66f31b84e317cdb2e5a5c2a752924feebb757fc1ca997f78f5a3b3692ef6a
+context_sha256: fc5e6528f2ccf7b0c7fd39494d8db9f4bd1d955f45e7349191e891a82ffe6898
+generated_at: 2026-11-22T03:01:16.668478+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/changes.ts
 
 ## Purpose
-
-Provides small utilities for translating a domain change-set (field path → new value) into the two-operator shape Mongo expects (`$set` / `$unset`). It exists so every repository that performs a partial update shares one consistent mapping from `null` (clear) and real values (set) to Mongoose/Mongo write operators, keeping the "PUT replaces, PATCH merges" contract (see `docs/theory/request-flow.md`) uniform across modules.
+Helpers for applying an update's change-set to Mongoose. It defines how `null` ("clear this field") and `undefined` (an unset path) map onto what is stored. It covers both hydrated-document assignment and direct Mongo update documents. Both rely on the same convention: a cleared optional field is removed with `$unset`, not stored as `null`.
 
 ## Key elements
-
-- **`clearedOrValue<T>(value: T | null): T | undefined`** — Coerces `null` to `undefined`. Used on hydrated Mongoose documents so that `.save()` emits `$unset` for cleared optional fields rather than persisting a literal `null`.
-- **`SetAndUnset`** (interface) — A partial `{ $set?: Record<string, unknown>; $unset?: Record<string, 1> }` shape representing the two operator halves of one Mongo update. An absent key means "no fields in that half."
-- **`setAndUnset(changes)`** — Accepts a flat `Record<string, unknown>` change-set where `undefined` signals "clear this field." Returns a `SetAndUnset` object with non-empty `$set` and/or `$unset` only (Mongo rejects empty operators).
+- `clearedOrValue(value)`: returns `value`, or `undefined` if it is `null`. Assigning `undefined` to a hydrated document path makes `.save()` emit `$unset` for it.
+- `SetAndUnset`: interface with optional `$set` (`Record<string, unknown>`) and `$unset` (`Record<string, 1>`).
+- `setAndUnset(changes)`: splits a path → value map into `$set` (defined values) and `$unset` (`undefined` values, each mapped to `1`). An empty half is omitted, because Mongo rejects an empty `$set` or `$unset`. The result is meant to be spread into an update document.
 
 ## Relationships
-
-- **Repository files** (`src/modules/addresses/repository.ts`, `src/modules/locales/repository.ts`, `src/modules/orders/repository.ts`, `src/modules/payments/repository.ts`, `src/modules/webhooks/repository.ts`) — Import `setAndUnset` (and/or `clearedOrValue`) to build the Mongo update document from a change-set before calling `collection.updateOne` or equivalent.
-- **Service files** (`src/modules/products/services/crud.ts`, `src/modules/users/services/update.ts`, `src/modules/webhooks/services/subscriptions.ts`) — Produce the change-set that is ultimately passed into `setAndUnset`, or apply `clearedOrValue` field-by-field on a hydrated document before `.save()`.
-- **`tests/unit/infrastructure/persistence/changes.test.ts`** — Unit-tests `clearedOrValue` and `setAndUnset` for the `null`→`undefined` coercion and the split/omit-empty behavior.
+The graph lists these neighbors but the file itself imports nothing. They are presumably its consumers, though this file's content does not show how they use it:
+- Repositories: `src/modules/addresses/repository.ts`, `src/modules/locales/repository.ts`, `src/modules/orders/repository.ts`, `src/modules/payments/repository.ts`, `src/modules/webhooks/repository.ts`.
+- Services: `src/modules/products/services/crud.ts`, `src/modules/users/services/update.ts`, `src/modules/webhooks/services/subscriptions.ts`.
+- Related persistence helper: `src/infrastructure/persistence/translatable-columns.ts`.
+- Tests: `tests/unit/infrastructure/persistence/changes.test.ts`.
 
 ## Notes
-
-- `null` in a change-set is the domain-level "clear this field" sentinel; it is *never* written to Mongo as a stored value. The file deliberately maps it to `undefined` so Mongoose emits `$unset`.
-- `setAndUnset` omits a `$set` or `$unset` key entirely when its half is empty — do not expect an empty `{ $set: {} }` in the returned object.
-- The function treats **only** `undefined` as the "unset" signal; a genuine `undefined` passed by a caller (as opposed to a coerced `null`) has the same effect. Callers must rely on `clearedOrValue` to perform the `null → undefined` step before invoking `setAndUnset`.
+- `null` and `undefined` mean different things at different layers. `clearedOrValue` converts `null` to `undefined` for document assignment. `setAndUnset` treats only `undefined` as a clear, so a `null` value would be `$set` as `null`.
+- The module doc references a "put replaces, patch merges" section of the request-flow documentation.

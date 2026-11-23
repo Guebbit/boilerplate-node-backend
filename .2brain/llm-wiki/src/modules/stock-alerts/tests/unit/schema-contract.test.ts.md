@@ -1,31 +1,28 @@
 ---
 source: src/modules/stock-alerts/tests/unit/schema-contract.test.ts
-sha256: e56a07e3d9e9cbfc0c55eb1029e2b99f3beda2d069bb35918c4b159435763846
-generated_at: 2026-11-08T08:30:42.465413+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e56a07e3d9e9cbfc0c55eb1029e2b99f3beda2d069bb35918c4b159435763846
+context_sha256: 79f2685ccaebc3264bb3ec3e92d7eb3f091c8f7b5d7e91a9342c0248cf4cb61b
+generated_at: 2026-11-22T07:56:19.662687+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stock-alerts/tests/unit/schema-contract.test.ts
 
 ## Purpose
-
-Unit test that verifies the **structural declarations** of `stockAlertSchema` (required paths, references, index specs, options) rather than document contents. It exists because constraints like a dropped `unique` flag on the compound index are invisible to fixture-based document tests: the pair still exists as data, it just loses its uniqueness guarantee.
+Unit test that pins the declared contract of `stockAlertSchema`: required paths, refs, indexes, and timestamps. It inspects the schema's declarations, not documents. The point is that "one request per user and product" is enforced by a unique index in the database, so removing `unique` would not break any valid-fixture test and needs a test of its own.
 
 ## Key elements
-
-- **`describe('stockAlertSchema')`** — single test suite with five assertions:
-  - `requiredPaths` → exactly `['productId', 'userId']` (no extras).
-  - `refOf` → `userId` references the `User` collection, `productId` references `Product`.
-  - `indexOptionSpecs` → the compound index `userId_1_productId_1` is marked `unique=true`.
-  - `indexSpecs` → exactly two indexes: single-field `productId_1` and the compound `userId_1_productId_1`; no others.
-  - `optionsOf(...).timestamps` → `true`.
+- **`describe('stockAlertSchema')`** holds five assertions:
+  - **Required paths:** only `productId` and `userId` are required.
+  - **Refs:** `userId` refs `User` and `productId` refs `Product`.
+  - **Unique pair:** the index spec `userId_1_productId_1: unique=true` is present.
+  - **Exact index set:** the indexes are exactly `productId_1` (per-product lookup) and `userId_1_productId_1` (the unique pair).
+  - **Timestamps:** the schema's `timestamps` option is `true`.
 
 ## Relationships
-
-- **`src/modules/stock-alerts/model.ts`** — provides `stockAlertSchema`, the sole subject under test.
-- **`tests/support/schema.ts`** — provides the schema-inspection helpers used by every assertion: `requiredPaths`, `refOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf`.
+- Imports `stockAlertSchema` from `@modules/stock-alerts/model`, which is the schema under test.
+- Imports the introspection helpers `requiredPaths`, `refOf`, `indexSpecs`, `indexOptionSpecs` and `optionsOf` from `@tests/schema` (`tests/support/schema.ts`). They turn schema declarations into plain values and strings for comparison.
 
 ## Notes
-
-- Assertions use **exact-set equality** (`toEqual`) or **membership** (`toContain`) intentionally. The "and nothing else" phrasing in test names signals that the suite guards against *accidental* additions (extra indexes, extra required fields), not just the presence of expected ones.
-- The module docstring draws a deliberate line between "schema contract" (this file) and "document validation" (handled elsewhere). Do not add document-shape assertions here; that would blur the separation and weaken the unique-index guarantee this file exists to protect.
+- The index and required-path assertions use `toEqual` with exact arrays. Adding an index or a required field to the model fails these tests until they are updated on purpose.
+- Index specs are strings in the form `name: field+direction, ...`. Option specs are in the form `name: unique=true`.

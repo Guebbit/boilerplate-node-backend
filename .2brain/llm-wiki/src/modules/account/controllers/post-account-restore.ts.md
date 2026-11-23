@@ -1,33 +1,34 @@
 ---
 source: src/modules/account/controllers/post-account-restore.ts
-sha256: 5ee8415ad04d8f864c7dda03a1e1bd5711fabe0662d79c9c21c8ab48f4cd2a0d
-generated_at: 2026-11-08T04:04:22.122306+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5ee8415ad04d8f864c7dda03a1e1bd5711fabe0662d79c9c21c8ab48f4cd2a0d
+context_sha256: 8154b383e73dbe0c85897843b8fb786d0eb11a6f23f40ccf7327f11a3d109be4
+generated_at: 2026-11-22T03:24:01.582294+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-account-restore.ts
 
 ## Purpose
-
-Handler for `POST /account/restore`. Validates a one-time restore token supplied in the request body and cancels the account's scheduled deletion. The endpoint is public — the token itself is the credential, and the operation does **not** create a session or sign anyone in.
+Express controller for `POST /account/restore`. It consumes the one-time restore token from a mailed link and cancels the account's scheduled deletion. The route is public because the token is the credential. It does not sign the user in.
 
 ## Key elements
-
-- **`postAccountRestore(request, response)`** — The sole export. Parses the body against the `RestoreAccountBody` Zod schema, then calls `accountService.restoreAccountByLink(token, callerContext)`. On success sends `204 No Content`; on a service-level refusal delegates to `refused`; on thrown errors delegates to `rejectDatabaseError`.
+- `postAccountRestore(request, response)`: the exported handler, which does the following:
+  1. Validates `request.body` with `parseBody(RestoreAccountBody, ...)`. If validation fails, it returns early, since `parseBody` has already handled the response.
+  2. Calls `accountService.restoreAccountByLink(body.token, callerContextOf(request))`.
+  3. If `refused(response, result)` is true, it stops. Otherwise it sends `noContentResponse(response)`.
+  4. On a rejected promise, it calls `rejectDatabaseError(response, 'postAccountRestore', error)`.
 
 ## Relationships
-
-- **`@modules/account/services/index.ts`** — Consumes `accountService.restoreAccountByLink`, the only business-logic call in the handler.
-- **`@infrastructure/http/controller.ts`** — Provides `parseBody` (Zod validation + 422 on failure) and `refused` (short-circuits to a 4xx when the service signals a policy rejection).
-- **`@infrastructure/http/errors.ts`** — `rejectDatabaseError` is the shared error formatter for all write-path controllers, ensuring consistent status codes and logging.
-- **`@infrastructure/http/request.ts`** — `callerContextOf` extracts caller metadata (IP, user-agent, etc.) to pass into the service call.
-- **`@infrastructure/http/response.ts`** — `noContentResponse` sends the `204` reply.
-- **`@types/index.ts`** — Supplies the `AccountRestoreRequest` type that narrows `Request`'s body parameter.
-- **`@modules/account/routes.ts`** — Registers this handler at the `POST /account/restore` path.
+- `src/infrastructure/http/controller.ts`: supplies `parseBody` (body validation) and `refused` (turns a refused service result into a response).
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `noContentResponse` sends the success response.
+- `src/infrastructure/http/errors.ts`: `rejectDatabaseError` handles thrown or rejected errors. A comment says it is the same interpreter every other write path uses.
+- `src/modules/account/services/index.ts`: exports `accountService`, whose `restoreAccountByLink` method this handler calls to perform the restore.
+- `src/types/index.ts`: provides the `AccountRestoreRequest` type for the request body.
+- `src/modules/account/routes.ts`: the route file that wires this handler to the endpoint. This file does not itself register the route.
+- `src/infrastructure/adapters/logger.ts`: no direct use is visible in this file.
 
 ## Notes
-
-- The endpoint requires **no authentication middleware**; the token in the body is the sole proof of authorization.
-- Success is `204 No Content`, not `200` — clients should not expect a response body.
-- The `refused` check is a *service-level* rejection (e.g., token already spent, deletion already executed) distinct from a validation failure caught by `parseBody`.
-- Error handling is intentionally minimal: any thrown error is funneled through `rejectDatabaseError`, which is the project-wide convention for write-path controllers.
+- `RestoreAccountBody` is imported from `@api/schemas.zod`.
+- A successful restore returns an empty (no content) response.
+- Business refusals come back as a service `result` handled by `refused`. Only thrown or rejected errors go through `rejectDatabaseError`.

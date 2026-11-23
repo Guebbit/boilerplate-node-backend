@@ -1,29 +1,34 @@
 ---
 source: src/modules/returns/tests/factories.ts
-sha256: e03800b2dc686e36c820d18bce4d1597688f971bb052ee64a2d133eaacdfe4f2
-generated_at: 2026-11-14T21:42:15.187531+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 991af13e1915832210e4cbfd830838d3a1dfdbc5d7b9dfa3d187bdf67a12a38c
+context_sha256: b2df8e9be7f2c172535ba325200823765993a53315de49ed598d7f7871293350
+generated_at: 2026-11-22T07:33:08.565727+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/tests/factories.ts
 
 ## Purpose
-
-Provides a minimal return-document factory for integration tests *outside* the returns module (e.g. shop-tasks tests) that only need to seed rows for a "count by status and age" query. It deliberately bypasses the service layer and validation so tests can insert bare documents without setting up orders, lines, or money.
+Test fixtures for the returns module, intended for tests in other modules. It writes minimal return documents straight into the database, bypassing the service layer. This suits tests that count returns by status and age and don't need lines, orders, or money.
 
 ## Key elements
-
-- **`BareReturn`** (interface) — The subset of fields a count-by-status-and-age query reads: `status` (`'requested' | 'approved'`), `reason`, `daysAgo`, and optional `proof` flag.
-- **`insertBareReturns(rows)`** (exported function) — Maps each `BareReturn` to a minimal MongoDB document (`kind: 'return'`, a single `createdAt`/`requestedAt`/`decidedAt` timestamp derived from `daysAgo`, optional `proofOfSendingAt`) and calls `returnModel.collection.insertMany` directly.
+- `BareReturn` (interface): the fields a count by status and age reads.
+  - `status`: `'requested'` or `'approved'`.
+  - `reason`: a string.
+  - `daysAgo`: how many days ago the return was opened.
+  - `proof?`: optional `true`. When set, a proof of sending is recorded.
+- `insertBareReturns(rows)`: takes a `readonly BareReturn[]` and bulk-inserts them with `returnModel.collection.insertMany`. It returns a `Promise<unknown>`.
+  - For each row it computes `opened = Date.now() - daysAgo * DAY_MS`.
+  - It sets `status`, `reason` and `kind: 'return'`.
+  - It sets `createdAt`, `requestedAt` and `decidedAt` all to `opened`.
+  - It adds `proofOfSendingAt: opened` only when `proof` is truthy.
 
 ## Relationships
-
-- **`src/modules/returns/model.ts`** — Imports `returnModel` to access the underlying collection for the raw `insertMany` call.
-- **`src/domain-primitives/time.ts`** — Imports `DAY_MS` to convert the `daysAgo` field into a concrete `Date` offset.
-- **`src/modules/shop-tasks/tests/integration/digest.test.ts`** and **`work-summary.test.ts`** — Downstream consumers that seed bare returns via `insertBareReturns` to exercise their count/aggregation logic.
+- `src/modules/returns/model.ts`: provides `returnModel`, whose raw collection is the insert target.
+- `src/domain-primitives/time.ts`: provides `DAY_MS`, used to convert `daysAgo` into a timestamp.
+- `src/modules/shop-tasks/tests/integration/digest.test.ts` and `work-summary.test.ts`: neighbors in the dependency graph, in the shop-tasks module. This matches the module doc's purpose of serving tests outside the returns module.
 
 ## Notes
-
-- The function intentionally skips the returns service and any validation (no order reference, no line items, no monetary fields). If a test needs full referential integrity, this factory is the wrong tool.
-- `kind` is hardcoded to `'return'` on every inserted document; callers do not supply it.
-- All timestamp fields (`createdAt`, `requestedAt`, `decidedAt`, `proofOfSendingAt`) share the same computed date. There is no way to express, for example, a decision made later than the request.
+- It uses `collection.insertMany` (the raw driver collection), not the Mongoose model API. This skips schema validation and defaults on purpose, so the inserted documents are intentionally incomplete.
+- `requestedAt` and `decidedAt` are always set to the same instant as `createdAt`, even for `requested` rows. Tests should not read them as meaningful decision timestamps.
+- Time is computed from `Date.now()` at insert, so any fake timers in the test affect the stored dates.

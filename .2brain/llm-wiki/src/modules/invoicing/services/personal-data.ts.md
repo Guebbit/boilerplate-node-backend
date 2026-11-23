@@ -1,28 +1,29 @@
 ---
 source: src/modules/invoicing/services/personal-data.ts
-sha256: 55206a5add32508041665cadaad469f23ca163c5bee6819da5b3b60c410024b2
-generated_at: 2026-11-08T06:15:20.375170+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b256c683e1da7027f62717a39305f6596d5da15c9be0b2db110f0337aee036fc
+context_sha256: e19894894df7975ef32a6dfdf4be18c843342e2627f6dd7ff56e49ad3d0b00b1
+generated_at: 2026-11-22T05:36:12.139855+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/services/personal-data.ts
 
 ## Purpose
-
-Implements the invoicing module's contribution to `POST /account/export`. Given a `userId`, it gathers every invoice and credit note tied to that account's orders and returns them in export-ready shape. It is the `personalData` handler referenced by the module's route registration.
+Provides the invoicing module's section of the `POST /account/export` personal-data export (wired in via `personalData` in `module.ts`). It gathers every invoice and credit note issued for an account's orders. It defines no `erase` step: neither collection stores `userId`, only `orderId`, so there is nothing to unlink once `orders` has detached the `userId` from the order. This follows the Art. 17(3)(b)/(e) retention exemption documented in `src/modules/orders/model.ts`.
 
 ## Key elements
-
-- **`collectPersonalData(userId)`** — the sole export. Resolves the user's order IDs via `orderService.findOwnOrders`, then fans out to `invoicingRepository` for the invoice and credit notes per order ID, and finally maps each raw record through `presentExportedDocument`. Returns `{ invoices: ExportedDocument[], creditNotes: ExportedDocument[] }`.
+- `collectPersonalData(userId)`: the only export. It returns `Promise<{ invoices: ExportedDocument[]; creditNotes: ExportedDocument[] }>`.
+  1. Calls `orderService.findOwnOrders(userId)` to get the account's orders.
+  2. For each order, in parallel, calls `invoicingRepository.findInvoicesByOrderId` and `findCreditNotesByOrderId`.
+  3. Flattens the results and maps each document through `presentExportedDocument`.
 
 ## Relationships
-
-- **`src/modules/invoicing/module.ts`** — registers this file's `collectPersonalData` as the invoicing section of the `/account/export` handler.
-- **`src/modules/invoicing/repository.ts`** — provides `invoicingRepository.findInvoiceByOrderId` and `.findCreditNotesByOrderId`, the two lookups this file calls.
-- **`src/modules/invoicing/presenter.ts`** — supplies the `presentExportedDocument` formatter and the `ExportedDocument` type used for the return value.
-- **`src/modules/orders/index.ts`** / **`src/modules/orders/services/index.ts`** — provides `orderService.findOwnOrders(userId)`, the first step that yields the order IDs needed for the invoicing queries.
+- `../repository`: `invoicingRepository` supplies the per-order invoice and credit-note lookups.
+- `../presenter`: supplies `presentExportedDocument` and the `ExportedDocument` type, which shape the exported output.
+- `@modules/orders` (`orderService`): `findOwnOrders` is the only link from a user to their orders. This module does not store `userId`.
+- `module.ts`: registers this function as the module's `personalData` export section.
 
 ## Notes
-
-- There is intentionally **no `erase` counterpart**. Neither the invoices nor credit-notes collection stores a `userId`; both are keyed only by `orderId`. Once `orders` performs its own `detachUserId`, the link is already broken, so there is nothing further to unlink here.
-- The GDPR Art. 17(3)(b)/(e) retention exemption for the order's `userId` field is documented in `orders/model.ts`, not here.
+- All of an order's invoices are exported, including those cancelled by a correction, because each was issued to the buyer.
+- Queries run per order (two per order, all in parallel), so the number of repository calls grows with the account's order count.
+- Only orders returned by `findOwnOrders` are covered. Any order whose `userId` link has already been detached is not found through this path.

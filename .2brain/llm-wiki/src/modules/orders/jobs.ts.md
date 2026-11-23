@@ -1,30 +1,27 @@
 ---
 source: src/modules/orders/jobs.ts
-sha256: bee402e8cf3750b2470c502fb36f0fab758602fe0e7da1dcfc3820385973e890
-generated_at: 2026-11-08T06:52:25.046059+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a95010cef7187c90a96415a5e2d7176abcf068f29b6e82684bb4a43d8a92d791
+context_sha256: 22d50ca203fe64f364c516d1a9b67e753a401b1f6b3caa2cc4d6390a1d1549a6
+generated_at: 2026-11-22T06:15:10.001016+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/jobs.ts
 
 ## Purpose
-
-Declares the single scheduled job (`reapOrders`) that the orders module owns: a retention scrub that anonymizes overdue orders and then strips their data from timeline text. The file exists so the kernel's job registry can discover and invoke this work without the orders module hard-coding scheduling logic elsewhere.
+Declares the scheduled jobs owned by the `orders` module. Currently that is a single job: the retention scrub, which anonymizes due orders and then scrubs timeline text. The file's header comment points to the scheduled-jobs section of the ops reference docs.
 
 ## Key elements
-
-- **`ordersJobs: readonly JobDeclaration[]`** — the sole export. A one-element array describing the `reapOrders` job. The `run` closure chains `anonymizeDueOrders()` → `scrubTimelineText()` and resolves with the anonymized count (used by the demo profile's job lever).
-- **`...ordersJobData.reapOrders`** — spread from the generated file `./jobs.generated`; supplies the static declaration fields (name, schedule, metadata) so only the runtime `run` body lives here.
+- `ordersJobs` (exported, `readonly JobDeclaration[]`): the module's job list, containing one entry.
+  - The entry spreads generated job data (`ordersJobData.reapOrders`) and adds a `run` function.
+  - `run` calls `anonymizeDueOrders()`, then `scrubTimelineText()`, and resolves to the count returned by `anonymizeDueOrders()`. A code comment says the demo profile's job lever reports this count.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** — source of the `JobDeclaration` type that shapes every entry in `ordersJobs`.
-- **`src/modules/orders/module.ts`** — the module entry point that registers `ordersJobs` with the kernel so the scheduler picks it up.
-- **`src/modules/orders/services/retention.ts`** — provides `anonymizeDueOrders`, the first step of the job.
-- **`src/modules/orders/services/timeline.ts`** — provides `scrubTimelineText`, the second step (runs after anonymization, before the promise resolves).
+- `src/kernel/registry.ts`: provides the `JobDeclaration` type (type-only import) that `ordersJobs` entries must satisfy.
+- `src/modules/orders/services/retention.ts`: provides `anonymizeDueOrders`, the first step of `run`.
+- `src/modules/orders/services/timeline.ts`: provides `scrubTimelineText`, run after anonymization.
+- `src/modules/orders/module.ts`: a graph neighbor, but this file does not import it or reference it.
 
 ## Notes
-
-- The `run` closure intentionally returns the anonymized *count* (not `void`) because the demo profile's job lever surfaces it; don't "clean up" the extra `.then` without removing that contract.
-- `ordersJobData` comes from a generated file (`jobs.generated`); regenerate it rather than editing declaration fields by hand.
-- `scrubTimelineText()` is awaited inside the chain but its result is discarded — only its side-effects (timeline text removal) matter to the job.
+- The two steps run sequentially. `scrubTimelineText()` runs only after `anonymizeDueOrders()` resolves, and its result is discarded.
+- Only the job's metadata comes from generated data. The `run` implementation is hand-written here.

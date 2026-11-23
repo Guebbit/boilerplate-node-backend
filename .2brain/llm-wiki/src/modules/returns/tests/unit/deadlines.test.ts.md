@@ -1,33 +1,30 @@
 ---
 source: src/modules/returns/tests/unit/deadlines.test.ts
-sha256: 7d8b748320a817ece5614ab3ad007bf3d898411f344dcab6e84e7ae763e1eb5e
-generated_at: 2026-11-08T08:12:21.272159+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 05e761ede7e0fcd1a6c6265b3f15bfd3ec2c1b854c323aec2632f12a917b3675
+context_sha256: 9ad9a23101c8ba0a4c87a8fa3372217136bbbe2e2c66dba6b898bd6e32587640
+generated_at: 2026-11-22T07:38:43.776729+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/tests/unit/deadlines.test.ts
 
 ## Purpose
-
-Unit tests for `frozenDeadlinesOf`, verifying that the withdrawal deadline is shifted one full UTC day past the customer-facing announcement (the "silent grace day") while the guarantee/conformity deadline remains untouched, and that the set of eligible return reasons flips correctly at the grace boundary.
+Unit tests for how the `returns` module reads deadlines off an order. They pin down that the withdrawal deadline is moved to the instant the window really closes (the announced day plus one silent UTC day), while the guarantee (conformity) deadline stays as given.
 
 ## Key elements
-
-- **`describe('frozenDeadlinesOf')`** – the single test suite in this file.
-  - *Moves the withdrawal deadline one UTC day past the announced last day* – asserts `withdrawUntil` is `ANNOUNCED + 1 day` and `conformityUntil` is unchanged.
-  - *Leaves a clock that has not started without an end* – asserts `withdrawUntil` is `undefined` when the input object is empty.
-  - *Keeps the withdrawal reasons open through the grace day and shuts them after it* – uses `reasonsOpenAt` to confirm `ReturnReason.withdrawal` is still available at the last grace instant but excluded one millisecond later, leaving only `defective` and `wrong_item`.
-- **`ANNOUNCED` / `GUARANTEE`** – fixed `Date` constants used as fixtures so tests are deterministic and timezone-independent.
+- `ANNOUNCED` – constant `2026-03-15T23:59:59.999Z`, the announced last day the withdrawal deadline counts from.
+- `GUARANTEE` – constant `2028-03-08T23:59:59.999Z`, the end of the legal-guarantee window.
+- `describe('frozenDeadlinesOf')` with three cases:
+  - Withdrawal deadline moves to `2026-03-16T23:59:59.999Z` (one UTC day later). `conformityUntil` is returned as the same `GUARANTEE` object (`toBe`).
+  - An empty input `{}` leaves `withdrawUntil` unset (asserted with `toBeUndefined`).
+  - With the resulting deadlines, `reasonsOpenAt` includes `ReturnReason.withdrawal` at the last grace instant (`2026-03-16T23:59:59.999Z`). One millisecond later it returns exactly `[ReturnReason.defective, ReturnReason.wrong_item]`.
 
 ## Relationships
-
-- **`src/modules/returns/services/deadlines.ts`** – provides `frozenDeadlinesOf`, the system under test.
-- **`src/modules/returns/domain/index.ts`** – re-exports `reasonsOpenAt`, which is called in the third test to check which reasons are still eligible at a given instant.
-- **`src/modules/returns/domain/reasons.ts`** – likely the implementation home of `reasonsOpenAt` (exposed via the domain barrel).
-- **`src/types/index.ts`** – supplies the `ReturnReason` enum (`withdrawal`, `defective`, `wrong_item`) used in assertions.
+- `src/modules/returns/services/deadlines.ts` – provides `frozenDeadlinesOf`, the function under test.
+- `src/modules/returns/domain/index.ts` – provides `reasonsOpenAt`, which is used to check which reasons are open at a given instant.
+- `src/modules/returns/domain/reasons.ts` – not imported directly. The `ReturnReason` values (`withdrawal`, `defective`, `wrong_item`) are imported through the `@types` alias, which points at `src/types/index.ts`.
+- `src/types/index.ts` – exports `ReturnReason`, which is used in the assertions.
 
 ## Notes
-
-- The "silent UTC day" is the product rule under test: the customer sees the announced date, but the real cutoff is end-of-next-UTC-day. Tests pin this with `…59.999Z` timestamps to make the boundary exact.
-- The third test asserts the *transition* at a 1 ms boundary (`lastGraceInstant` vs. `+1 ms`), so any off-by-one in the comparison operator inside `reasonsOpenAt` will be caught.
-- The empty-input test (`{}`) guards against `frozenDeadlinesOf` inadvertently fabricating a deadline for a clock that was never started.
+- The tests use millisecond-precise boundaries to check the end of the grace day. The window is inclusive at `23:59:59.999Z` and closed one millisecond later.
+- After the withdrawal window closes, the reasons that remain open are `defective` and `wrong_item`.

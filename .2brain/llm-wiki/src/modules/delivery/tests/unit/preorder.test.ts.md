@@ -1,34 +1,47 @@
 ---
 source: src/modules/delivery/tests/unit/preorder.test.ts
-sha256: 2fea875221e2542d425bd282575ae86569245f6f373f4c933bcc99f29f0102e9
-generated_at: 2026-11-08T05:46:32.681268+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6e23cf8c3d92f79164905b6b7c2949307f57ef3c5503feed18f272ce1de83124
+context_sha256: dc41f2add57ca1ed4bb99e097ceb372a8befb275516f631188949b4079b90680
+generated_at: 2026-11-22T05:05:08.801923+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/unit/preorder.test.ts
 
 ## Purpose
-
-Unit tests for the pure, decision-only preorder slip rules defined in the delivery domain. Each test row pins a specific input (dates, order lines, timezone) against a fixed clock and asserts the verdict the domain logic returns — which verdict to notify the buyer, whether a due notice is needed, how many shop days slipped, and what date the buyer retains after a notice. No side effects, no I/O, no buyer interaction is exercised here.
+Unit tests for the pure preorder slip rules: what a moved release date owes the buyer, and which expected dates the daily sweep still needs to notify about. The shop only notifies; nothing in these rules asks the buyer anything or cancels. Each test case corresponds to a row of the rule table in `src/modules/products/domain/preorder.ts`, run against a fixed clock and the `Europe/Rome` zone.
 
 ## Key elements
+- **Fixtures**: `DAY`/`HOUR` constants, `AGREED` (`2026-12-01T00:00:00Z`), `ZONE` (`Europe/Rome`), `afterAgreed(days)` for offsets from the agreed date, and `line(productId, quantity, shipped)` to build order lines.
+- **`judgeSlip`**:
+  - Any later shop day yields `notify`, whether the slip is 5 days, 29 days or a year; there is no length at which silence means anything else.
+  - Clearing a previously set date yields `notify`.
+  - Earlier or equal dates yield `earlier`.
+  - A move within the same Rome calendar day yields `earlier`, while a move to the next Rome day yields `notify`.
+  - With no prior date, the result is `earlier`, whether the next date is set or not.
+- **`expectedDateOf`**: returns the latest release date among lines that are still waiting. Fully shipped lines are ignored. It returns `undefined` if any line still waiting has no date, or if nothing is left to wait for.
+- **`judgeMove`**: returns `undefined` when nothing was promised (`{}`). Otherwise it delegates to the slip judgement, so short slips, long slips and cleared dates all `notify`. A date that was already cleared and is cleared again gives `earlier`.
+- **`needsDueNotice`**: tested against `now = 2026-12-20T00:00:00Z`. It returns true for:
+  - a date already passed that was never noticed;
+  - a date exactly now;
+  - a date 23 hours ahead.
 
-- **`judgeSlip` tests** — Verify the `kind` field (`'notify'` | `'earlier'`) for date changes of varying magnitudes, same-shop-day moves (timezone-dependent), cleared dates, and absent dates.
-- **`expectedDateOf` tests** — Verify that the function returns the latest release date among lines still awaiting shipment, ignores fully-shipped lines, and returns `undefined` when any waiting line has no date or no lines remain.
-- **`judgeMove` tests** — Verify the full judgment (including `undefined` when nothing was ever promised) against an agreed-date context.
-- **`needsDueNotice` tests** — Verify the daily-sweep gate: past/expiring dates trigger `true`, already-noticed or far-future dates return `false`, and a later move re-arms the notice.
-- **`slippedDays` tests** — Verify whole-shop-day counting (timezone-aware) and the floor at zero.
-- **`promisedAfterNotice` tests** — Verify the buyer-held-date update logic, including the `null`-vs-`undefined` distinction for "clear the date" vs "no date was held."
-- **Helpers** — `afterAgreed(days)`, `line(productId, quantity?, shipped?)` — small local factories for test fixtures.
+  It returns false for:
+  - a date 25 hours ahead or far ahead;
+  - a date already told about (`dueNoticeFor` equal to `expectedAt`);
+  - no expected date.
+
+  It returns true again if the date moved later than `dueNoticeFor`.
+- **`slippedDays`**: counts whole shop days (in the given zone) between promise and expectation, floored at 0, regardless of the hour either date carries.
+- **`promisedAfterNotice`**: the date the buyer holds after a notice.
+  - A later date is taken, including when the buyer held none.
+  - An earlier date, the same date, or no date named returns `undefined` (leave the held date alone).
+  - `null` clears the held date, returning `null`, or `undefined` if there was nothing to remove.
 
 ## Relationships
-
-- **`src/modules/delivery/domain/index.ts`** — Barrel import; the test pulls all six domain functions (`judgeSlip`, `judgeMove`, `expectedDateOf`, `needsDueNotice`, `slippedDays`, `promisedAfterNotice`) through this re-export point.
-- **`src/modules/delivery/domain/preorder.ts`** — The module under test. The file header docblock explicitly states every row here exercises a row of this module against a fixed clock.
+Imports `expectedDateOf`, `judgeMove`, `judgeSlip`, `needsDueNotice`, `promisedAfterNotice` and `slippedDays` from the domain barrel `src/modules/delivery/domain/index.ts`. The rules themselves live in `src/modules/delivery/domain/preorder.ts`, which the barrel presumably re-exports; this test does not import it directly.
 
 ## Notes
-
-- **Shop-day, not calendar-day.** Date comparisons are timezone-bound (`Europe/Rome` in the fixture). A move from 23:00 UTC one day to 20:00 UTC the next can be the *same* shop day. Tests pin both the UTC instant and the zone to make this explicit.
-- **`null` vs `undefined` in `promisedAfterNotice`.** Passing `null` as the second argument means "the notice cleared the date" (returns `null`); passing `undefined` means "no date was ever held" (returns `undefined`). Tests assert both branches separately.
-- **No severity threshold.** The `judgeSlip` tests deliberately cover 5 days, 29 days, and 365 days all yielding `'notify'`. A comment in the source makes the design intent explicit: the shop always tells, the buyer always decides; slip length never changes the verdict.
-- **`needsDueNotice` looks 24 hours ahead.** A date 23 hours in the future triggers `true`; 25 hours does not. The boundary is inclusive of "exactly now."
+- Day comparisons are by shop-day in `Europe/Rome`, not raw elapsed time. For example, `2026-12-04T23:00Z` and `2026-12-05T20:00Z` are both 5 December in Rome, and `slippedDays` counts 2 shop days where the clock difference is under 2 days.
+- The due-notice window looks one day ahead, so the buyer hears before the date is missed.
+- `promisedAfterNotice` distinguishes `undefined` (no change) from `null` (clear the held date).

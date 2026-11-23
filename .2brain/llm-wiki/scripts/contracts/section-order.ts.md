@@ -1,27 +1,25 @@
 ---
 source: scripts/contracts/section-order.ts
-sha256: a1a9cc094a4949bc17b1c3f5668dae00deffce7a7d26184b40415e25189f91de
-generated_at: 2026-11-08T02:44:52.557762+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:00:25.790571+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/section-order.ts
 
 ## Purpose
-
-Provides a single pure function that resolves the final order of per-module sections in a bundle. It preserves a "preferred" (historical) ordering for sections that actually exist on disk, while gracefully dropping missing modules and appending any newly-discovered sections alphabetically. This keeps generated bundle diffs—and their PHP/frontend twins—small and stable over time.
+Pure helper that decides the order in which a contract bundle lists its per-module sections. Keeping sections in their historical positions keeps bundle diffs small (including the PHP twin's and the frontend's). The order list passed in is a preference, not a registry, so nothing has to be kept in sync by hand.
 
 ## Key elements
-
-- **`orderSections(preferred, present): string[]`** — The sole export. Given a preferred order list and the set of sections actually present, returns the intersection in preferred order followed by the remainder sorted alphabetically. Fully pure; no I/O, no side effects.
+- `orderSections(preferred, present)` — returns the entries of `preferred` that also appear in `present` (in preferred order), followed by every remaining `present` section sorted alphabetically (`toSorted()`).
+  - `preferred`: historical order; entries for modules that don't exist are ignored (e.g. a module removed by `demo:remove`).
+  - `present`: every section that actually exists on disk.
 
 ## Relationships
-
-- **Bundle files** (`openapi-bundle.ts`, `authorization-bundle.ts`, `asyncapi-bundles.ts`, `asyncapi-section-fragments.ts`, `analytics-browser-events.ts`, `root-assembly.ts`) — Each bundler supplies its own `preferred` array (historical section order) and the discovered `present` set, then calls `orderSections` to produce the final section list before serializing output.
-- **`tests/unit/scripts/contracts/section-order.test.ts`** — Unit-tests the pure function against known preferred/present combinations.
+- The neighbors listed (`analytics-browser-events.ts`, `asyncapi-bundles.ts`, `asyncapi-section-fragments.ts`, `authorization-bundle.ts`, `openapi-bundle.ts`, `root-assembly.ts`) are in the same contracts directory and are linked to this file in the dependency graph. The file's own comment says the preferred list is passed in by "each bundler", so these bundlers are its likely callers. The file itself imports nothing.
+- `tests/unit/scripts/contracts/section-order.test.ts` tests it directly. The function is pure so the test can walk it without touching the filesystem.
 
 ## Notes
-
-- The `preferred` list is a *preference*, not a registry. Entries for modules that have been removed (e.g. via `demo:remove`) are silently ignored; modules the list has never seen are appended alphabetically. No manual synchronization is required.
-- `toSorted()` is used (not `sort()`), so the input `present` array is never mutated.
-- See `docs/theory/module-lifecycle.md` for the broader lifecycle context.
+- A module that isn't in `preferred` is appended alphabetically, so new modules need no edit here.
+- Duplicates in `preferred` or `present` aren't deduplicated. Each is kept as given.
+- Matching uses exact string equality via `includes`.
+- The header comment references `docs/build/module-lifecycle.md#_3-·-the-fragments` for background.

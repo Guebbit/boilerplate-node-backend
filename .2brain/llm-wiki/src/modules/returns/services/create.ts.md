@@ -1,50 +1,47 @@
 ---
 source: src/modules/returns/services/create.ts
-sha256: 05bd5c3409f451181f5522d8ba0ce3bfaabcfb94ae25d160197d49f129890549
-generated_at: 2026-11-08T08:03:06.803875+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a1d1218e12d5e7fbeb51a1552e4c108fcb4a25be3f613d893bae822a52bdc299
+context_sha256: ec4398f42e7a4340ee83cc0f7182d065f4f95fe58de92a141c3377aa10ffe403
+generated_at: 2026-11-22T07:29:07.798552+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/create.ts
 
 ## Purpose
-
-Opens a return for an order, or a withdrawal when the order has not yet been dispatched. It is the single entry point for both buyer-initiated and staff-initiated openings. The file decides which path to take (withdrawal vs. return + cancellation of unshipped lines), validates requested quantities against what actually shipped and is not already being returned, writes the return document inside a locked transaction, and enqueues the outbox messages that trigger downstream side-effects (mails, status sync).
+Opens a return, which is also the implementation of the withdrawal button. The call always answers with a `Return`, and where the goods are decides what that record is. Before dispatch, a withdrawal is `orders`' own cancel plus a `Return` written closed at birth (no lines, refund owed, Art. 11a acknowledgement mailed via `./withdraw`). Once something has shipped, the return is written open with the lines and quantities coming back. What has not shipped is canceled per fulfillment order through `./cancel-remainder`. The buyer opens it. Staff with `update:Return` can open it on the buyer's behalf, born approved with waived policy rules recorded, or record a withdrawal the buyer stated outside the shop.
 
 ## Key elements
-
-- **`openUnderLock`** — Core transactional step. Acquires the order lock row, reads prior returns, validates lines via `checkRequestedLines`, freezes policy exceptions, then calls `writeReturn`. Prevents two concurrent openings from both passing the "nothing returned yet" check under snapshot isolation.
-- **`writeReturn`** — Persists the `ReturnDocument` through `returnRepository.create`, then enqueues `return.requested` (and `return.decided` when staff opened a non-withdrawal), and appends order timeline rows via `appendOpened`.
-- **`appendOpened`** — Writes `return_requested` (and `return_approved` if status is already approved) to the order timeline. Only the reason code is stored there; the buyer's free-text note stays on the return.
-- **`alreadyReturned`** — Reads existing returns for the order and flattens their lines, excluding cancellations (which hold no goods coming back).
-- **`excludedProductIds`** — Collects product IDs the order holds that are excluded from withdrawal under Art. 16.
-- **`isWaiver`** — True when a staff member opens a return (not a withdrawal) for the buyer, meaning shop-policy deadlines are being waived.
-- **`announceOpened`** — Post-commit step: calls `recordOpened` (audit) and `syncReturnStatus` to bring the order's return status in step.
-- **`openFor`** — Orchestrates deadline judgment, exclusion of Art. 16 goods, and delegates to `openUnderLock`.
-- **`Opening` interface** — Extends `Statement` with `staffId` and `policyExceptions`; threaded into `writeReturn`.
-- **Re-exports** — `CreateReturnInput`, `CreateReturnOutcome` from `./outcome`.
+- `CreateReturnInput`, `CreateReturnOutcome` — types re-exported from `./outcome`.
+- `alreadyReturned` — reads the order's existing returns inside the transaction and keeps those that hold returned goods (`holdsReturnedGoods`). Cancellations are not counted, because their units never shipped.
+- `appendOpened` — appends `return_requested` to the order timeline, plus `return_approved` when the new return is already approved. It carries only the reason code and names the staff actor when there is one.
+- `Opening` — internal interface extending `Statement` with `staffId` and `policyExceptions`.
+- `writeReturn` — creates the return document and freezes the lines with the product title and unit price. It also records `returnPostage` (from `returnPostagePayer()`), `openedBy` (`staff` or `buyer`) and `policyExceptions`, and sets `decidedAt` when the status is `approved`. It then enqueues `return.requested`, and `return.decided` for staff openings that are not withdrawals, and appends the timeline rows. Waking the outbox relay is left to the caller.
+- `excludedProductIds` — ids of order lines that Art. 16 excludes from withdrawal.
+- `isWaiver` — true when staff open a non-withdrawal return. A withdrawal keeps its legal window and Art. 16 exclusion.
+- `openUnderLock` — runs in one `withTransaction`. It locks the order row (`returnRepository.lockOrder`), loads earlier returns, and checks the requested lines against `returnableQuantities(shipped, earlier)`. It returns `badLines` on failure. For waivers it computes `policyExceptionsOf` from `frozenDeadlinesOf(order)`, then calls `writeReturn`.
+- `announceOpened` — after commit, calls `recordOpened` for audit and `syncReturnStatus` to bring the order's return status in step.
+- `openFor` — documented as opening a return once the caller and statement are settled. It judges the reason's deadline on the day the buyer asked, cuts excluded goods, then writes. Its body is not shown in the visible content.
 
 ## Relationships
-
-- **`@modules/orders`** (`index.ts`, `services/index.ts`, `model.ts`, `domain/withdrawal.ts`) — Imports `orderService` (timeline appends), `isBeforeDispatch` (routing decision), `isExcludedFromWithdrawal` (Art. 16 check), `withdrawalRefusalOf`, and the `OrderDocument` type. The withdrawal path delegates fully to the orders module's cancel.
-- **`@modules/delivery`** (`index.ts`, `services/index.ts`) — Imports `deliveryService` to determine what has shipped per product.
-- **`@infrastructure/runtime/database.ts`** — `withTransaction` wraps the read-then-write critical section.
-- **`@kernel/outbox.ts`** — `nudgeOutbox` is called by the caller after commit to wake the relay; not invoked inside the transaction.
-- **`@infrastructure/http/response.ts`** — `generateReject` shapes error responses for failed openings.
-- **`@infrastructure/i18n`** — `t` provides translated strings in outcomes.
-- **`../domain`** (`index.ts`, `lifecycle.ts`, `quantities.ts`) — All pure validation and status logic: `checkRequestedLines`, `returnableQuantities`, `initialStatusFor`, `policyExceptionsOf`, `wireLines`, `holdsReturnedGoods`, `isReasonOpen`, `isGuaranteeReason`.
-- **`./withdraw`** — `withdrawBeforeDispatch` handles the pre-dispatch path (full refund + closed return + Art. 11a mail).
-- **`./cancel-remainder`** — `createCancellation` cancels unshipped fulfillment orders line-by-line when a post-dispatch return is opened.
-- **`./outcome`** — All outcome constructors (`badLines`, `opened`, `recordOpened`, `enqueueRequested`, `enqueueApproved`, etc.) and input types.
-- **`./projection`** — `syncReturnStatus` keeps the order's aggregated return status consistent post-commit.
-- **`./deadlines`** — `frozenDeadlinesOf` captures the order's deadline state at opening time for the waiver record.
-- **`@modules/shop`** — `returnPostagePayer` determines who pays return shipping, written onto the return at creation.
+- `src/modules/orders/index.ts` supplies the `OrderDocument` type, the `orderService` used to append timeline rows, and the helpers `isBeforeDispatch`, `isExcludedFromWithdrawal` and `withdrawalRefusalOf`. Orders' cancel is what performs the refund and stock release for pre-dispatch withdrawals.
+- `src/modules/delivery/index.ts` (`deliveryService`) is imported, presumably to establish what has shipped. Its usage is not visible in the shown portion.
+- `src/infrastructure/runtime/database.ts` provides `withTransaction`.
+- `src/kernel/outbox.ts` provides `nudgeOutbox`, which wakes the relay after commit. It is imported, but its call site is not shown.
+- `src/infrastructure/http/response.ts` provides `generateReject`, and `src/infrastructure/i18n/index.ts` provides `t`. Both are imported, but their call sites are not in the visible portion.
+- `src/modules/returns/domain/index.ts` supplies the pure rules: `checkRequestedLines`, `checkStatement`, `initialStatusFor`, `returnableQuantities`, `wireLines`, `policyExceptionsOf`, `isGuaranteeReason`, `isReasonOpen` and `holdsReturnedGoods`.
+- `../repository` (`returnRepository`) provides `create`, `findByOrderId` and `lockOrder`.
+- Sibling services:
+  - `./deadlines` — `frozenDeadlinesOf`.
+  - `./ownership` — `openableOrder`.
+  - `./projection` — `syncReturnStatus`.
+  - `./cancel-remainder` — `createCancellation`.
+  - `./withdraw` — `withdrawBeforeDispatch`.
+  - `./outcome` — the outcome constructors, the enqueue helpers and the `Opener` type.
+- `@modules/shop` provides `returnPostagePayer`.
 
 ## Notes
-
-- The withdrawal button and the return-opening call are the **same function**; dispatch status (`isBeforeDispatch`) is the only fork. A withdrawal produces a return with zero lines and `status: 'approved'` from birth — the record exists solely as dated proof.
-- **Concurrency guard**: `returnRepository.lockOrder` is called before any read inside the transaction. Without it, two simultaneous openings would both see zero prior returns under snapshot isolation and both commit full-quantity returns.
-- **Policy exceptions are frozen at opening time** (`frozenDeadlinesOf` + `policyExceptionsOf`). The waiver reflects what was true when staff clicked, not the state at any later moment.
-- **Outbox nudge is deferred to the caller** — `writeReturn` enqueues messages inside the transaction, but `nudgeOutbox` must fire only after the transaction commits.
-- **Cancellations are invisible to `alreadyReturned`** — a cancelled fulfillment order shipped nothing, so its quantities never enter the "already coming back" total.
-- The `d` import from `@infrastructure/i18n/context.ts` provides the request-scoped locale for any translated strings in error outcomes.
+- The order lock is what prevents two parallel openings from both reading "nothing returned yet" under snapshot isolation and each committing a full return.
+- Excluded goods are removed from `shipped` unless staff are waiving that rule, but a withdrawal is never waived.
+- The lines, the policy exceptions and `requestedAt` are frozen on the record when it is opened.
+- Nothing is announced inside the transaction. The commit must happen first, then `announceOpened` and the outbox nudge.

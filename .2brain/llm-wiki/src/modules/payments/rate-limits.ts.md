@@ -1,40 +1,39 @@
 ---
 source: src/modules/payments/rate-limits.ts
-sha256: 40e3af56d01f0d5b945f685c194f03101dc118b1421373d1ffd0d1e33d9675f0
-generated_at: 2026-11-14T21:04:22.640625+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7630ebb9c0d11438fac573734214edffb8696c7b261d502c4c219c43e93e88db
+context_sha256: 5b196cb73f85c503e412cecb1408ffc763ddc01f1bd7716dadeb38186f18fe94
+generated_at: 2026-11-22T06:48:12.559314+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/rate-limits.ts
 
 ## Purpose
-
-Declares and builds the payments module's rate-limit budgets (webhook forgery ceiling, confirm-attempt/decline/intent-sync caps) and a composite human-challenge gate. Each budget is plain `RateLimitBudget` data turned into Express middleware via the shared `buildRateLimiter` factory, so this file is purely wiring: it picks keying strategy, success semantics, and mount points for the payments routes.
+Declares the payments module's rate-limit budgets and turns each into Express middleware via the shared `buildRateLimiter` factory. It covers the unauthenticated webhook, pooled intent/sync calls, and a set of card-testing defenses on `POST /payments/:id/confirm`, including a gate that conditionally requires a human challenge.
 
 ## Key elements
-
-- **`webhookLimiter`** — Rate-limits unauthenticated webhook deliveries per *address block*; verified (signature-passing) deliveries are refunded via `skipSuccessfulRequests: true`.
-- **`paymentConfirmAttemptLimiter`** — Blunt per-account hourly cap on `POST /:id/confirm` attempts regardless of outcome.
-- **`paymentConfirmDeclineLimiter`** — Per-account decline-only budget; uses a custom `requestWasSuccessful` that checks the controller-set `request.paymentConfirmDeclined` flag (not raw status code) so `PAYMENT_ORDER_NOT_PAYABLE` (a race, not a decline) doesn't spend it. Stores its counter under `request.paymentDeclineRateLimit`.
-- **`paymentConfirmDeclineBlockLimiter`** — Same decline detection but keyed per *address block* (catches testers rotating accounts from one network). Stores its counter under `request.paymentDeclineBlockRateLimit`.
-- **`paymentIntentLimiter`** — Single shared budget for both intent-creation and sync routes; must be mounted as one instance on both so they share a counter.
-- **`paymentDeclineChallengeGate`** — Composite middleware: delegates to `humanChallengeGate` when the account has ≥ 1 prior decline *or* the address block has spent ≥ 50 % of its decline budget; otherwise passes through.
-- **`paymentsRateLimits`** — Read-only array of all five `RateLimitBudget` objects, referenced by the module's `rateLimits` declaration.
+- `webhookLimiter`: limits refused webhook deliveries, keyed by address block. Verified deliveries are refunded (`skipSuccessfulRequests`).
+- `paymentConfirmAttemptLimiter`: caps all confirm attempts per authenticated account per hour, regardless of outcome.
+- `paymentConfirmDeclineLimiter`: counts genuine declines per account. A request is "successful" unless `request.paymentConfirmDeclined` is set. Its counter is stored on `request.paymentDeclineRateLimit`.
+- `paymentConfirmDeclineBlockLimiter`: counts genuine declines per address block, with a larger budget because a block is shared by many people. Its counter is stored on `request.paymentDeclineBlockRateLimit`.
+- `paymentIntentLimiter`: a single per-account counter shared by intent creation and sync. Every request counts.
+- `paymentDeclineChallengeGate`: calls `humanChallengeGate` if the account has at least one prior decline or the address block has spent at least half of its decline budget. Otherwise it calls `next()`.
+- `paymentsRateLimits`: the array of the five `RateLimitBudget` objects (webhook, confirm attempt, confirm decline, confirm decline block, intent/sync).
+- Private helpers: `hasAPriorDecline` and `blockBudgetMostlySpent` read the counters via `rateLimitInfoOf` and `priorHits`. `CHALLENGE_AFTER_BLOCK_BUDGET_SPENT` is 0.5.
+- Private `*_BUDGET` constants spread numeric settings from `paymentsRateLimitData` (`./rate-limits.generated`) and add keying and skip behavior.
 
 ## Relationships
-
-- **`@infrastructure/http/middlewares/rate-limit`** — Source of `buildRateLimiter`, `rateLimitInfoOf`, `priorHits`, `accountIdOf`, `addressBlockOf`, and the `KEYED_BY_*` constants; this file is a consumer of that factory.
-- **`@infrastructure/http/middlewares/human-challenge`** — `paymentDeclineChallengeGate` delegates to `humanChallengeGate` when its conditions are met.
-- **`src/types/index.ts` / `src/types/rate-limit-budget.ts`** — Supply the `RateLimitBudget` type shape every budget literal conforms to.
-- **`src/modules/payments/tests/unit/rate-limits.test.ts`** — Unit tests for the budget objects and gate logic in this file.
-- **`src/modules/payments/tests/integration/payment-velocity.test.ts`** — Integration test exercising the confirm-attempt/decline budgets end-to-end.
-- **`src/modules/payments/tests/integration/webhook-rate-limit.test.ts`** — Integration test exercising `webhookLimiter` against the webhook route.
+- `src/infrastructure/http/middlewares/rate-limit.ts`: supplies `buildRateLimiter`, `rateLimitInfoOf`, `priorHits`, the key generators (`accountIdOf`, `addressBlockOf`) and the `KEYED_BY_*` constants.
+- `src/infrastructure/http/middlewares/human-challenge.ts`: supplies `humanChallengeGate`, which the decline gate delegates to.
+- `src/types/rate-limit-budget.ts` (also exported through `src/types/index.ts`): defines the `RateLimitBudget` type.
+- `src/modules/payments/module.ts`: lists `paymentsRateLimits` in its `rateLimits`.
+- `src/modules/payments/routes.ts`: mounts the limiters and the gate. The docs say `paymentIntentLimiter` is mounted on both the intent and sync routes.
+- Tests: `src/modules/payments/tests/unit/rate-limits.test.ts`, `src/modules/payments/tests/integration/payment-velocity.test.ts` and `src/modules/payments/tests/integration/webhook-rate-limit.test.ts` cover this file.
 
 ## Notes
-
-- `paymentIntentLimiter` is **one** `RequestHandler` instance meant to be attached to two routes. Attaching two separately-built instances would create two independent counters and double the effective budget.
-- The two decline limiters override `requestWasSuccessful` to read a controller-set boolean (`request.paymentConfirmDeclined`) instead of the stock `statusCode < 400` heuristic. The controller **must** set that flag for the budget to work correctly.
-- `paymentDeclineChallengeGate` reads rate-limit counters from `request` via `rateLimitInfoOf`; it only works when mounted **after** both decline limiters in the middleware chain.
-- `priorHits` excludes the current request's provisional count, so the gate arms at exactly the threshold rather than one step past it.
-- During a Redis outage the underlying store falls back to in-memory (`failoverStore`); the gate reads whatever numbers the fallback has, so protection degrades gracefully rather than failing open.
-- Numeric limits and thresholds come from a generated data module (`paymentsRateLimitData`), spread into each budget literal at build time.
+- The gate must be mounted after both decline limiters, because it reads the counters they store on the request. If a counter is missing, it reads as "not yet".
+- `priorHits` excludes the current request's provisional count, so the block gate arms at exactly half the budget.
+- `paymentConfirmDeclined` is set by the controller. The route's other 409, `PAYMENT_ORDER_NOT_PAYABLE`, is a race rather than a decline and does not spend the decline budgets.
+- `paymentIntentLimiter` must be a single shared instance, because two instances of one budget would count separately.
+- `humanChallengeGate` is a no-op until a human-challenge provider is configured.
+- During a Redis outage the budgets count in memory (`failoverStore`), and the gate reads the fallback's numbers.

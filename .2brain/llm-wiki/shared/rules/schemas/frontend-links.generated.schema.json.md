@@ -1,31 +1,25 @@
 ---
 source: shared/rules/schemas/frontend-links.generated.schema.json
-sha256: 8d031857215e6c1cb8dc13285d316d8409adf329ac26452a92abca5780ad68a8
-generated_at: 2026-11-14T17:46:56.394980+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8d031857215e6c1cb8dc13285d316d8409adf329ac26452a92abca5780ad68a8
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:27:30.193467+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/schemas/frontend-links.generated.schema.json
 
 ## Purpose
-
-A JSON Schema (draft 2020-12) that validates the shape of a frontend-link configuration object. It enforces a fixed, closed set of route/link keys for public pages, staff dashboard pages, and a list of static pages — ensuring any conforming config provides non-empty route strings for every expected entry.
+A JSON Schema (draft 2020-12) describing the shape of a generated "frontend links" data object. It defines which user-facing link keys, staff admin page keys, and static pages must be present. The `.generated.` filename indicates it is produced by tooling, not hand-edited.
 
 ## Key elements
-
-- **Root object** — requires exactly three properties (`links`, `staffPages`, `staticPages`); `additionalProperties: false` at every level.
-- **`links`** (object) — 12 required keys (`verify`, `reset`, `setup`, `restore`, `emailChange`, `emailUndo`, `export`, `order`, `product`, `contact`, `privacy`, `terms`). Each must be a non-empty string. No extra keys allowed.
-- **`staffPages`** (object) — 17 required keys covering staff-facing routes (`user`, `webhookSubscription`, `task`, `return`, `order`, `inventory`, `salesPayments`, `transfersDue`, `preordersLate`, `deliveryHoldsOpen`, `returnsAwaitingGoods`, `returnsUndecided`, `lowStock`, `unshipped`, `awaitingTracking`, `undelivered`, `staleRefunds`). Each must be a non-empty string. No extra keys allowed.
-- **`staticPages`** (array of strings) — a free-form list; no length or item constraints beyond string type.
-- **`minLength: 1`** on every string property — prevents empty-string route values.
+- **`links`** (object, all required, non-empty strings): `verify`, `reset`, `setup`, `restore`, `emailChange`, `emailUndo`, `export`, `order`, `product`, `contact`, `privacy`, `terms`.
+- **`staffPages`** (object, all required, non-empty strings): `user`, `webhookSubscription`, `task`, `return`, `order`, `inventory`, `salesPayments`, `transfersDue`, `preordersLate`, `deliveryHoldsOpen`, `returnsAwaitingGoods`, `returnsUndecided`, `lowStock`, `unshipped`, `awaitingTracking`, `undelivered`, `staleRefunds`.
+- **`staticPages`** (array of strings): list of static page identifiers. There is no `minLength` or uniqueness constraint on items.
 
 ## Relationships
-
-No graph neighbors detected for this file.
+No graph neighbors. Nothing in the file references other files, for example through `$ref`.
 
 ## Notes
-
-- The `.generated` suffix in the filename indicates this schema is produced by an automated pipeline; do not hand-edit it. Regenerate from the source of truth if the link set changes.
-- Both `links` and `staffPages` use `additionalProperties: false`, so adding a new route key without updating this schema will cause validation failures.
-- `staticPages` has no item constraints (e.g., `minLength`), unlike the other string fields — it only checks that each entry is a string.
-- The schema itself is data (a JSON document), not executable code; it is consumed by whatever tooling performs validation (e.g., CI checks, editor integrations).
+- All three objects use `additionalProperties: false`, and the top level does too. Adding a link or page key therefore requires regenerating or updating the schema, or validation fails.
+- Link and page values are only constrained to be non-empty strings. The schema does not enforce URL format or path templates.
+- Because the file is generated, edit its source and regenerate rather than changing the JSON directly. The source is not visible here.

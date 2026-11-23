@@ -1,39 +1,36 @@
 ---
 source: src/modules/account/session/family-liveness.ts
-sha256: 07f7d0a0335f71c49677171e4fca9290cee5bc398fc959bcc73c128e8e709069
-generated_at: 2026-11-08T04:28:06.447884+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 54d19a4fb206872a4f7d671f55f506558797b032a605350c428a5b254a0839c7
+context_sha256: fa93ad2093336a12bf917b900bd8f35ef79a932a570ebb6ab7f5a406aad3a1f3
+generated_at: 2026-11-22T03:46:39.094498+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/session/family-liveness.ts
 
 ## Purpose
-
-Determines whether a session **family** is still valid: it must have a live row in the repository, and (for staff roles) it must not have idled out or exceeded the staff lifetime cap. This logic is shared by the JWT bearer path (which names its family via the `sid` claim) and by SSE stream rechecks (which follow the family across credential rotation). If the family is dead, the session is revoked on the spot.
+Decides whether a session *family* is still a valid session: it must have a live row, and (for staff) must not have idled out or outlived the lifetime cap. It is shared by the `jwt` bearer path (an access token names its family in `sid`) and by an open SSE stream's recheck, which follows the family because the credential rotates underneath it. It also records activity and exposes the session clock to the caller.
 
 ## Key elements
-
-- **`ACTIVITY_STAMP_INTERVAL_MS`** (constant) – Minimum interval (1 minute) before a busy session writes a new activity stamp. Sourced from `MINUTE_MS`.
-- **`resolveInLiveFamily`** (exported function) – Core resolver. Given a user ID, family ID, session mode, a `resolveCaller` thunk, and optional `ResolveOptions`:
-  - Fetches the family's activity row and resolves the caller **in parallel** (`Promise.all`).
-  - Returns `{ miss: 'revoked' }` if no live row exists.
-  - Revokes the family (`removeFamily`) and returns `{ miss: 'idle' }` or `{ miss: 'expired' }` if the idle/lifetime predicates fire.
-  - Otherwise, opportunistically stamps activity (fire-and-forget) and returns `{ ok }`.
-  - When `options.passive` is true, the request is judged but **never** counted as activity (no stamp written).
+- `resolveInLiveFamily(userId, familyId, mode, resolveCaller, options)` – the only export. Returns `Promise<Resolution<AuthContext | undefined>>`.
+  - Concurrently reads `sessionRepository.familyActivity(...)` and calls `resolveCaller()`.
+  - No activity row: `{ miss: 'revoked' }`.
+  - Caller resolved and `hasIdledOut(...)` is true: removes the family and returns `{ miss: 'idle' }`.
+  - Caller resolved and `hasOutlivedStaffCap(...)` is true: removes the family and returns `{ miss: 'expired' }`.
+  - Otherwise returns `{ ok }`, where `ok` is the caller with a `sessionClock: { lastActiveAt, startedAt }` attached (or `undefined` if the caller didn't resolve).
+- `ACTIVITY_STAMP_INTERVAL_MS` – private constant, equal to `MINUTE_MS`. It limits how often a busy session writes its activity stamp.
 
 ## Relationships
-
-- **`src/modules/account/repository.ts`** – Calls `sessionRepository.familyActivity`, `removeFamily`, and `touchFamily` for all row-level operations.
-- **`src/modules/account/session/idle.ts`** – Imports `hasIdledOut` and `hasOutlivedStaffCap` predicates to decide whether to revoke.
-- **`src/domain-primitives/time.ts`** – Imports `MINUTE_MS` to set the activity-stamp interval.
-- **`src/kernel/authentication.ts`** – Imports the `Resolution<T>` type used as the return shape.
-- **`src/types/index.ts`** / **`src/types/auth-context.ts`** – Imports `AuthContext` and `ResolveOptions` types.
-- **`src/modules/account/session-mode.ts`** – Imports the `SessionMode` type (carried as a parameter).
-- **`src/modules/account/session/jwt.ts`** – Downstream consumer; the JWT bearer path invokes `resolveInLiveFamily` per request.
-- **`src/modules/account/tests/unit/family-liveness.test.ts`** – Unit tests for the module.
+- `../repository` (`sessionRepository`): `familyActivity` to read, `removeFamily` to end idle or expired sessions, and `touchFamily` to write the activity stamp.
+- `./idle`: supplies `hasIdledOut` and `hasOutlivedStaffCap`, which take the caller's roles.
+- `@domain-primitives/time`: `MINUTE_MS`.
+- `@kernel/authentication`: the `Resolution` type.
+- `@types`: the `AuthContext` and `ResolveOptions` types.
+- `../session-mode`: the `SessionMode` type.
+- The `jwt` strategy files and the unit test `family-liveness.test.ts` are its neighbours in the graph. The header comment says the `jwt` bearer uses this function.
 
 ## Notes
-
-- The activity stamp is intentionally **fire-and-forget** (`void …catch(() => false)`); a lost write only costs a stale reading on the next tick, never a failed request.
-- The idle and lifetime-cap checks are **role-conditional**: they only fire when `resolveCaller` produced a truthy `ok` (i.e., the caller actually has roles). A missing caller short-circuits to a simple `ok` or `miss` without touching the idle logic.
-- `passive` rechecks (e.g., SSE heartbeat) go through the same judgment path but skip the stamp write, so they don't artificially extend the idle window.
+- The idle and cap checks run only when the caller resolved (`ok` is truthy). A missing row is a miss regardless.
+- `options.passive` requests are judged but never write a stamp.
+- A stamp is written only when none exists yet or the last one is at least one minute old. The write is fire-and-forget via `touchFamily`, and errors are swallowed (`.catch(() => false)`). A lost stamp costs only a stale reading.
+- `sessionClock.lastActiveAt` is `now` only when this request writes a stamp. Otherwise it is the stored value, so the countdown never promises more time than the server will grant.

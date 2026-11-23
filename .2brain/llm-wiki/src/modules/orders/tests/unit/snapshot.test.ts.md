@@ -1,31 +1,37 @@
 ---
 source: src/modules/orders/tests/unit/snapshot.test.ts
-sha256: 8df49a8cbf0c88b39f11ff095aed1c6b10ee358d84272ae720f00e84a667e444
-generated_at: 2026-11-08T07:14:27.195700+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 71b63d7ce443cf80f5f66b558f2d899d5bc35c779ebc1140a073d8a69522db1d
+context_sha256: 9e44ec8925786dc59d13d67f9d7a2c131afaeed66f6999727321bdd3f3b8b584
+generated_at: 2026-11-22T06:38:23.925739+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/snapshot.test.ts
 
 ## Purpose
-
-Unit tests for `resolveSnapshotProducts` and `freezeOrderLines` (the buyer-language resolution and field-freezing logic that runs before an order line is embedded in an order document). A fake `TranslationPort` replaces the real `@modules/locales` implementation so the tests verify fallback-chain wiring, explicit-locale binding, VAT-rate resolution, and field-preservation contracts without a database.
+Unit tests for the order-line snapshot logic in `src/modules/orders/services/snapshot.ts`: `resolveSnapshotProducts` (buyer-language resolution of product fields) and `freezeOrderLines` (freezing product data, including the VAT rate, onto order lines). A fake `TranslationPort` replaces `@modules/locales`, so no database is needed.
 
 ## Key elements
-
-- **`fakePort(overrides?)`** — Factory returning a `TranslationPort` whose every method is a `jest.fn()` stubbed to a no-op/empty default. Individual tests override specific methods to assert call arguments or return values.
-- **`describe('resolveSnapshotProducts')`** — Five tests covering: translation overlay keyed by product `_id`; the full fallback chain passed to `port.resolve` (exact tag → base language → deployment fallback); unchanged product when no translation row exists; explicit-locale binding (ambient `runWithLocale('en')` must not leak into candidates built from the `'it'` argument); and preservation of the original `Types.ObjectId` `_id`.
-- **`describe('freezeOrderLines — the VAT rate')`** — Tests for: default `taxRate` when `taxClass` is absent; reduced rate when `taxClass === 'reduced'`; passthrough of `weight`, `sku`, and `rateType` (including their absent cases); stripping of `taxClass` from the frozen line; and preorder flag logic (date in the future → `preorder: true`; past or missing date → no flag).
+- `fakePort(overrides)` — builds a `TranslationPort` double with jest-mocked methods (`resolve`, `removeAll`, `search`, `plan`, `write`, `readAll`, `readServed`, `canPreviewDrafts`). Individual methods can be overridden per test.
+- `afterEach(() => registerTranslationPort(undefined))` — unregisters the port after every test. The `freezeOrderLines` block repeats this in its own `afterEach`.
+- `describe('resolveSnapshotProducts')` verifies:
+  - Resolved fields are overlaid onto the product, keyed by its own id; other fields are untouched.
+  - The port is asked for the full fallback chain, e.g. `['it-CH', 'it', 'en']`.
+  - A product with no translation row is returned unchanged.
+  - The explicit locale argument is used instead of the ambient one set with `runWithLocale` from `@infrastructure/i18n`.
+  - The product's original `ObjectId` `_id` is preserved.
+- `describe('freezeOrderLines — the VAT rate')` verifies:
+  - An absent `taxClass` resolves to `NODE_VAT_RATE_DEFAULT`, and `'reduced'` resolves to `NODE_VAT_RATE_REDUCED`. Both are set through `setEnvironment`.
+  - `weight`, `sku`, and `rateType` are frozen onto the line when present, and stay `undefined` when absent.
+  - `taxClass` is never present on the frozen product; only the resolved `taxRate` is.
+  - A nested `a preorder line` block checks that a future `releaseDate` freezes `preorder: true` plus the date. A past date, or no date, leaves `preorder` undefined.
 
 ## Relationships
-
-- **`src/modules/orders/services/snapshot.ts`** — The module under test. Imports `resolveSnapshotProducts` and `freezeOrderLines`; all assertions target their return shapes.
-- **`src/kernel/translation.ts`** — Provides `registerTranslationPort` (global singleton injection) and the `TranslationPort` type. Tests call `registerTranslationPort(fakePort(...))` before each scenario and `registerTranslationPort(undefined)` in `afterEach` to prevent cross-test leakage.
-- **`tests/support/environment.ts`** — Provides `setEnvironment` to set process-level env vars (`NODE_VAT_RATE_DEFAULT`, `NODE_VAT_RATE_REDUCED`) that `freezeOrderLines` reads at runtime.
+- `src/modules/orders/services/snapshot.ts` — the code under test (`resolveSnapshotProducts`, `freezeOrderLines`).
+- `src/kernel/translation.ts` — supplies `registerTranslationPort` and the `TranslationPort` type used to inject the fake port.
+- `tests/support/environment.ts` — supplies `setEnvironment`, used to set the VAT rate environment variables.
 
 ## Notes
-
-- The translation port is injected via a **global mutable singleton** (`registerTranslationPort`), not constructor DI. Forgetting the `afterEach` cleanup would let a fake port leak into unrelated test files running in the same worker.
-- One test dynamically imports `@infrastructure/i18n` (`await import`) specifically to call `runWithLocale('en')` and prove the explicit locale argument wins over the ambient one—avoiding the need to restructure the module.
-- `taxClass` is **resolved** into a numeric `taxRate` and then **dropped** from the frozen product; `rateType`, by contrast, has no resolved form and passes through as-is. This asymmetry is intentional (invoices need the reason code) and is asserted explicitly.
-- Products arriving at these functions are already plain objects per the service contract; the tests do not cover the hydrated-Mongoose-document → plain-object conversion.
+- Products passed to `resolveSnapshotProducts` are assumed to be plain objects already. The tests do not cover hydrated Mongoose documents.
+- `rateType` is frozen as-is, unlike `taxClass`, which is resolved into `taxRate` and then dropped. The test comment says an invoice needs the actual reason code rather than a decimal.
+- The tests assert the exact `resolve` call: `('product', [id], candidates, undefined)`.

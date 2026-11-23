@@ -1,50 +1,42 @@
 ---
 source: src/modules/returns/module.ts
-sha256: bdb7af71b04f016d8998522db8e817d0a117617a2fc44b80af30a1e99d06ce15
-generated_at: 2026-11-08T08:00:13.115369+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:26:08.082951+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/module.ts
 
 ## Purpose
-
-Entry point (module manifest) for the **returns** module — handling customer goods returns and the EU 14-day withdrawal ("cooling-off") flow. It wires together the module's routes, jobs, config, rate limits, public webhook events, domain-event subscriptions, and personal-data collection into a single `AppModule` object consumed by the kernel.
+Manifest entry for the `returns` module (sending goods back and the EU withdrawal button). It declares the module's routes, jobs, config slice, rate limits, public webhook events, domain-event subscriptions, personal-data export, locales/templates and a test scenario, all as a default export checked with `satisfies AppModule`. The docblock states it depends on `orders`, `inventory`, `payments` and `delivery`, while `orders` knows nothing of this module.
 
 ## Key elements
-
-- **`publicEvents`** — Maps internal domain events (`RETURN_REQUESTED`, `RETURN_RECEIVED`, `RETURN_CLOSED`) to public webhook payloads (e.g. `return.requested`, `return.received`, `return.closed`). Projected by `webhooks` via `kernel/registry.ts`'s `resolvePublicEvents`; `webhooks` never imports this module directly.
-- **`export default { … } satisfies AppModule`** — The module manifest:
-  - `mounts` — Mounts the router from `./routes` at `/returns`.
-  - `jobs` — Cron/scheduled work from `./jobs`.
-  - `config` / `rateLimits` — Budget and throttling declarations from `./config` and `./rate-limits`.
-  - `subscribe` — Registers domain-event listeners:
-    - `PAYMENT_REFUNDED` (from the payments module) → triggers `closeReturn(returnId)` when the refund carries a `returnId`.
-    - `RETURN_REQUESTED` / `RETURN_DECIDED` / `RETURN_CLOSED` → dispatches customer emails via `returnService.mail*`.
-  - `personalData` — Exposes a single `returns` section that **collects** data by `userId` but deliberately provides **no `erase` hook** (returns are keyed by `orderId`).
-  - `locales` / `templates` — Filesystem paths for i18n strings and mail templates.
-  - `scenario` — Two pre-seeded "defective goods" return requests for automated test journeys.
-- **`closeReturn`** (from `./services/close`) — Conditional close logic idempotent with the goods-received request; called from the `PAYMENT_REFUNDED` subscription.
+- **`publicEvents`** (private const): maps `RETURN_REQUESTED`, `RETURN_RECEIVED` and `RETURN_CLOSED` to `toPublicEvent` projections producing `return.requested`, `return.received` and `return.closed`. Optional fields (`statedVia` on requested, `remedy` on closed) are included only when present.
+- **Default export (`AppModule`)**:
+  - `name: 'returns'`
+  - `mounts`: the `router` at `/returns`
+  - `jobs`: `returnsJobs`
+  - `config`: `[returnsConfig.slice]`
+  - `rateLimits`: `returnsRateLimits`
+  - `publicEvents`
+  - `locales` and `templates`: the `locales` and `templates` directories next to the file
+- **`subscribe()`**:
+  - On `PAYMENT_REFUNDED` with a `returnId`, calls `closeReturn(returnId)`.
+  - On `RETURN_REQUESTED`, `RETURN_DECIDED` and `RETURN_CLOSED`, calls `returnService.mailReturnRequested`, `mailReturnDecided` and `mailReturnClosed` to send the customer's mails.
+- **`personalData`**: a single `returns` section whose `collect` calls `collectPersonalData(subject.userId)`. There is no `erase`.
+- **`scenario`**: `{ shop: ['return.requested', 'return.requestedSecond'] }`. These are two defective-goods requests, each on its own order delivered today, opened through `POST /returns` so a journey can approve one and decline the other. The ids are return ids.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** — Provides the `AppModule` / `PublicEventTarget` types this manifest `satisfies`; also hosts `resolvePublicEvents` which projects `publicEvents` without importing this module.
-- **`src/kernel/events.ts`** — Source of `onDomainEvent` and `DomainEventMap` used in the `subscribe` closure and public-event type annotations.
-- **`src/modules/payments/index.ts`** — Exports `PAYMENT_REFUNDED`, the cross-module event this module listens to for refund confirmation.
-- **`src/modules.ts`** — Aggregate module registry that likely imports this default export to register the `returns` module with the kernel.
-- **`src/modules/returns/events.ts`** — Declares `RETURN_REQUESTED`, `RETURN_RECEIVED`, `RETURN_CLOSED`, `RETURN_DECIDED`; imported **directly** (not via the module barrel) per the project's barrel rule.
-- **`src/modules/returns/routes.ts`** — Supplies the Hono/router instance mounted at `/returns`.
-- **`src/modules/returns/jobs.ts`** — Supplies `returnsJobs` for scheduled work.
-- **`src/modules/returns/config.ts`** — Supplies `returnsConfig` (sliced into the manifest).
-- **`src/modules/returns/rate-limits.ts`** — Supplies `returnsRateLimits`.
-- **`src/modules/returns/services/index.ts`** — Exposes `returnService` (mail dispatch for return lifecycle events).
-- **`src/modules/returns/services/close.ts`** — Exposes `closeReturn`, the idempotent close action.
-- **`src/modules/returns/services/personal-data.ts`** — Exposes `collectPersonalData`; documents why no `erase` hook exists.
-- **`src/modules/returns/openapi.yaml`** / **`authorization.yaml`** / **`asyncapi.webhooks.yaml`** — API contract artifacts co-located with this module (not imported at runtime).
+- `src/kernel/registry.ts`: supplies the `AppModule` and `PublicEventTarget` types. Public events go through the registry's `resolvePublicEvents`, so `webhooks` never imports this module by name.
+- `src/kernel/events.ts`: supplies `onDomainEvent` and `DomainEventMap`, which type the event payloads.
+- `src/modules/payments/index.ts`: supplies `PAYMENT_REFUNDED`, the only cross-module import. `src/modules/payments/module.ts` is the sibling manifest and is not imported here.
+- `src/modules/returns/routes.ts`, `rate-limits.ts`, `config.ts`, `jobs.ts`: provide the router, budgets, config slice and jobs that are wired into the manifest.
+- `src/modules/returns/events.ts`: supplies the `RETURN_*` event constants, imported directly rather than through the module's own barrel.
+- `src/modules/returns/services/close.ts`, `services/index.ts` and `services/personal-data.ts`: provide `closeReturn`, `returnService` and `collectPersonalData`.
+- `src/modules.ts`: presumably where manifests are collected. This file does not show it.
+- `src/modules/returns/tests/integration/cancel.test.ts` and `cancel-remainder.test.ts`: integration tests for this module. This file does not show how they use it.
 
 ## Notes
-
-- **No `erase` hook.** Returns are keyed by `orderId`, not `userId`, so GDPR/account-erasure flows have nothing to delete here. Do not add an `erase` entry to `personalData` without changing the keying strategy.
-- **Barrel rule.** The events (`RETURN_*`) are imported from `./events` directly, never through this module's own barrel (`src/modules/returns/index.ts`). Follow the same pattern when adding new event constants.
-- **Idempotent close.** `closeReturn` is designed to be safe under racing: the `PAYMENT_REFUNDED` listener and the goods-received request may both attempt to close the same return.
-- **`satisfies` over `as`.** The manifest uses `satisfies AppModule` to retain the concrete literal type of `publicEvents` keys while still checking structural compatibility.
+- Imports of `./events` bypass the module barrel on purpose (CLAUDE.md, "Module barrels").
+- A return is keyed by `orderId`, not `userId`, so account erasure needs no `erase` hook (see `src/modules/returns/services/personal-data.ts`).
+- Closing a return is the same conditional move whether the `PAYMENT_REFUNDED` listener or the request that received the goods gets there first. A refund can land in the request, or later when the payment sweep completes one the provider first refused.
+- A comment in `subscribe` says the customer's mails are built from this module's own facts in a `notify` service. That file is not among the graph neighbors.

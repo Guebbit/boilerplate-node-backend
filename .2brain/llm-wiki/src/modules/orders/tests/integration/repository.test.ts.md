@@ -1,37 +1,39 @@
 ---
 source: src/modules/orders/tests/integration/repository.test.ts
-sha256: b3fdbd6156cf690e33aa015e76c3800f9ba27b3ee06585c4a85b9999b6cca2ce
-generated_at: 2026-11-08T07:08:39.251865+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8b4c3478512d9d886d69f87ee43f2bb8d4a1035461f932c9ece34def514dbfd6
+context_sha256: 4bbb319eef7e874832b708f68d3be2433e116e0e34e716c925d01148ffa8ce1e
+generated_at: 2026-11-22T06:32:06.609629+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/repository.test.ts
 
 ## Purpose
-
-Integration tests for `orderRepository` that verify three contracts: (1) `create` persists a full order with embedded product snapshots, (2) `aggregate` is a raw passthrough that does not reshape Mongo pipeline stages, and (3) `findByIdScoped` always returns a hydrated Mongoose document regardless of whether a scope is applied.
+Integration tests for `orderRepository` against a real test database. They cover inserting orders through the fixture builders, the raw `.aggregate()` passthrough that `orderService.search` is built on, and `findByIdScoped`. The aggregate cases pin that the repository does not reshape Mongo pipeline stages, so that behavior is a deliberate design rather than an untested assumption.
 
 ## Key elements
-
-- **`describe('create')`** — four tests confirming insertion returns a Mongoose doc, stores quantities, embeds a product snapshot (title + price as strings, not an ObjectId), and supports multiple line items.
-- **`describe('aggregate')`** — five tests pinning passthrough behavior: match-all, `$match` filtering, `$count`, `$addFields` with `$sum`/`$map`/`$multiply` (asserting `toMinorUnits` on the Decimal128 result), and the `$sort` + `$skip` + `$limit` pagination pattern using `DEFAULT_SORT`.
-- **`describe('findByIdScoped')`** — two tests: (a) both scoped and unscoped calls return the same hydrated shape (checks `_id` and `.toJSON` exist), and (b) a scope that does not cover the order returns `undefined`.
-- **`setupTestDb()`** — called once at module level; resets and prepares a dedicated test database.
+- `setupTestDb()`: called once at module level to provision the database for the suite.
+- `describe('create')`: checks that `createOrder` returns a Mongoose document with `_id`, `email` and `userId`. It also checks that line quantities are stored, that the full product snapshot (`title`, `price`) is embedded rather than referenced, and that multiple products in one order work.
+- `describe('aggregate')`:
+  - A match-all `[{ $match: {} }]` returns all orders. An empty pipeline is not used, because it throws `MongooseError: Aggregate has empty pipeline`.
+  - `$match` filters by `userId`.
+  - `$count` returns the document count.
+  - `$addFields` computes `totalQuantity` and `totalPrice`. `totalPrice` stays a Decimal128 and is read with `toMinorUnits(..., 'EUR')`, so 10.00 × 4 gives 4000.
+  - `$sort` with `DEFAULT_SORT`, then `$skip` and `$limit`, returns the remaining 2 of 5 orders when skipping 3.
+- `describe('findByIdScoped')`:
+  - Resolves the same hydrated Mongoose document whether or not an owner scope is passed. The test checks `_id` and that `toJSON` is a function.
+  - Resolves to a falsy result (the test asserts `toBeUndefined()`) when the scope (`ownerScope` of a different user) does not cover the order.
 
 ## Relationships
-
-- **`src/modules/orders/repository.ts`** — the module under test; all assertions target its `create`, `aggregate`, `findByIdScoped`, and `ownerScope` exports.
-- **`src/modules/orders/tests/factories.ts`** — provides `createOrder`, `makeOrder`, `toOrderItem` used to seed realistic orders.
-- **`src/modules/users/tests/factories.ts`** — `createUser` builds the owning user per test.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` builds the embedded product snapshot.
-- **`src/domain-primitives/money.ts`** — `toMinorUnits` converts the Decimal128 `totalPrice` from the `$addFields` aggregate into an integer for assertion.
-- **`src/infrastructure/persistence/search.ts`** — `DEFAULT_SORT` is used as the `$sort` stage in the pagination test, ensuring the tiebreaker contract is exercised.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises/cleans the test database before the suite runs.
+- `../../repository` (`src/modules/orders/repository.ts`): the unit under test. The tests use `create`, `aggregate`, `findByIdScoped` and `ownerScope`.
+- `src/modules/orders/tests/factories.ts`: supplies `createOrder`, `makeOrder` and `toOrderItem`.
+- `src/modules/users/tests/factories.ts`: supplies `createUser`.
+- `src/modules/products/tests/factories.ts`: supplies `createProduct`.
+- `tests/support/setup-test-db.ts`: supplies `setupTestDb`.
+- `src/domain-primitives/money.ts`: supplies `toMinorUnits`, used to read the summed Decimal128 price.
+- `src/infrastructure/persistence/search.ts`: supplies `DEFAULT_SORT`, the sort used in the pagination test.
 
 ## Notes
-
-- **Empty-pipeline guard:** Mongoose throws `Aggregate has empty pipeline` if you pass `[]`; the match-all test therefore uses `[{ $match: {} }]` as the minimal valid pipeline.
-- **Embedded snapshot, not reference:** `order.items[i].product` is a plain object (frozen snapshot), not an ObjectId — no `.populate()` is involved.
-- **`findByIdScoped` shape pin:** The tests explicitly check for `_id` and `.toJSON` because both a hydrated doc and a plain wire-shaped row serialize `id` identically; only the document-specific properties distinguish them.
-- **Pagination sort must be total:** The `$sort` stage preceding `$skip` must include a tiebreaker (enforced via `DEFAULT_SORT`); otherwise page boundaries are non-deterministic.
-- **Distinct emails in scope test:** `users.email` is unique, so the "stranger" user must be created with a non-default email to avoid a factory collision.
+- The pagination test uses `DEFAULT_SORT` because a page is only well-defined when the sort before `$skip` is total (the file's comments call this a tiebreaker).
+- `findByIdScoped` has its own block because neither TypeScript nor a response-body assertion can catch a regression to two result shapes. It is meant to be a single `findOne({ _id, ...scope })`, never the aggregation pipeline `search` uses.
+- Tests that need two users pass distinct emails, because `users.email` is unique and the factory default would collide.

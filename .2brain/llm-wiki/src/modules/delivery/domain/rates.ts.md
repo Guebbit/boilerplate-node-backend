@@ -1,43 +1,37 @@
 ---
 source: src/modules/delivery/domain/rates.ts
-sha256: c9d6e12352572473000eb6dc99193f639ffec2352633ab73e03edf6492c1cc98
-generated_at: 2026-11-14T19:40:17.757803+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5d3ed1e51ed6932d4c17f23ee6f94fc64ce5982be5de6f81b60633a71faa85d2
+context_sha256: 0dc481fdec2e69d1e3288f228491612068138f382b090715e305448b667db04a
+generated_at: 2026-11-22T04:48:57.818218+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/domain/rates.ts
 
 ## Purpose
-
-Pure-function module that defines the shop's static shipping-rate table and all price/eligibility queries over it. It exists so that shipping quotes, weight checks, and the refund ceiling for shipping are computed in exactly one place, with all money arithmetic in minor units. It lives in `domain/` (not `services/`) because it has no I/O — just a table and math over it.
+Pure shipping-rate logic over a static table of shipping methods. It lives in `domain/` (like `evaluateCheckout`) so that every shipping quote comes from one place. `GET /delivery/methods` returns this table verbatim, so `ShippingMethod` comes from this module's `openapi.yaml` schema.
 
 ## Key elements
-
-- **`StaticShippingMethod`** — `ShippingMethod` minus `currency`; the shape of a row as stored in the table.
-- **`SHIPPING_METHODS`** — `readonly` array of three rows (`standard`, `express`, `pickup`). Flat rates; `pickup` has no `maxWeight` and no `requiresAddress`.
-- **`findShippingMethod(id)`** — returns the matching row or `undefined`.
-- **`priceShippingMoney(method, itemsTotal, currency)`** — *internal*; returns a `Money` (minor-unit) value, applying `freeAbove` threshold.
-- **`priceShipping(method, itemsTotal, currency)`** — public wrapper returning the cost as a decimal string at the currency's places.
-- **`quoteMethod(method, currency)`** — pads `price`/`freeAbove` to the live currency's decimal places and stamps `currency`, producing a wire-ready `ShippingMethod`.
-- **`methodFitsWeight(method, weight)`** — checks a basket weight (grams) against the method's optional `minWeight`/`maxWeight`; absent bounds are open.
-- **`cheapestStandardShipping(itemsTotal, currency)`** — minimum delivery cost across methods where `requiresAddress` is true (i.e., excludes `pickup`); returns `"0.00"` if nothing delivers. Used as the refund ceiling per Art. 13(2) Consumer Rights Directive.
+- `StaticShippingMethod` – `ShippingMethod` minus `currency`. Currency is live config (`NODE_DEFAULT_CURRENCY`), so it is not stored in the table.
+- `SHIPPING_METHODS` – the flat-rate table:
+  - `standard`: price 5.00, free at or above 100.00, max weight 30,000, requires an address.
+  - `express`: price 15.00, tracked, max weight 5000, requires an address.
+  - `pickup`: price 0.00, no address needed, no weight ceiling.
+- `findShippingMethod(methodId)` – looks up a method by id and returns `undefined` if there is none. The caller decides what a missing method means.
+- `priceShipping(method, itemsTotal, currency)` – the cost as decimal text. It is free once `itemsTotal` reaches `freeAbove`, and the flat rate otherwise. The internal `priceShippingMoney` does the comparison in minor units, so `"100"` and `"100.00"` are equal.
+- `quoteMethod(method, currency)` – turns a table row into the wire `ShippingMethod`. It pads `price` and `freeAbove` to the currency's decimal places and adds `currency`.
+- `methodFitsWeight(method, weight)` – checks a weight in grams against `minWeight` and `maxWeight`. A missing bound is open on that side, not zero.
+- `cheapestStandardShipping(itemsTotal, currency)` – the cheapest price among methods with `requiresAddress: true`, returned as decimal text, or `0` if none qualify. It is the ceiling on what a withdrawal refunds of the shipping paid (Consumer Rights Directive Art. 13(2)).
 
 ## Relationships
-
-- **`src/domain-primitives/money.ts`** — imports `padDecimal`, `toDecimalString`, `toMinorUnits`, and the `Money` brand type; all money comparison and formatting flows through these primitives.
-- **`src/types/index.ts`** — imports the `ShippingMethod` wire type (the public API schema).
-- **`src/modules/delivery/domain/index.ts`** — barrel file re-exporting this module's public surface.
-- **`src/modules/returns/services/receive.ts`** — consumes `cheapestStandardShipping` to cap the refundable shipping portion of a withdrawal.
-- **`src/modules/cart/services/checkout.ts`** — calls `priceShipping` / `quoteMethod` during checkout to attach a shipping charge to the order.
-- **`src/modules/delivery/services/process.ts`** — uses `findShippingMethod` and `methodFitsWeight` when confirming a delivery.
-- **`src/modules/delivery/tests/unit/rates.test.ts`** / **`rates.property.test.ts`** — unit and property-based tests for the pricing and weight functions.
-- **`src/modules/delivery/tests/unit/money-reconciliation.property.test.ts`** — property tests verifying minor-unit round-trips through `priceShipping` ↔ `priceShippingMoney`.
-- **`src/modules/delivery/tests/integration/service.test.ts`** — end-to-end test exercising the delivery service that depends on this module.
+- Imports `padDecimal`, `toDecimalString`, `toMinorUnits` and the `Money` type from `src/domain-primitives/money.ts`. All price arithmetic and comparison goes through these.
+- Imports the `ShippingMethod` type from `src/types/index.ts`.
+- The doc comments name `src/modules/delivery/services/process.ts`, whose `listMethods` adds `currency` to the static methods per call.
+- Tests cover this file: `src/modules/delivery/tests/unit/rates.test.ts`, `src/modules/delivery/tests/unit/rates.property.test.ts`, `src/modules/delivery/tests/unit/money-reconciliation.property.test.ts`, and `src/modules/delivery/tests/integration/service.test.ts`.
+- The other neighbors (`src/modules/delivery/domain/index.ts`, `src/modules/delivery/domain/tracking.ts`, the cart services, `src/modules/returns/services/receive.ts`) do not interact with this file in any way visible in its content.
 
 ## Notes
-
-- All comparisons and additions are done in **minor units** (`toMinorUnits`); the table stores decimal text. `"100"` and `"100.00"` are equivalent after conversion.
-- `cheapestStandardShipping` deliberately **filters out `pickup`** (`requiresAddress: false`). Without that filter, the zero-cost pickup would always win and the refund ceiling would be meaningless.
-- `Math.min(...prices)` is cast `as Money` because `Math.min` strips the nominal brand from the `Money` type.
-- `pickup` has no `maxWeight` key at all (not `undefined` vs `0`), so `methodFitsWeight` treats it as an open upper bound — any weight is acceptable.
-- The module doc-block notes it mirrors the `openapi.yaml` schema for `GET /delivery/methods`; `quoteMethod` is the function that turns a static row into that wire shape.
+- Because `pickup` has `requiresAddress: false`, it is excluded from `cheapestStandardShipping`. Otherwise it would always win at zero.
+- When standard shipping is free because the order is large, `cheapestStandardShipping` returns `0`. A paid express upgrade then stays entirely with the shop.
+- `Math.min` drops the `Money` brand, so `cheapestStandardShipping` casts the result back to `Money`.
+- The table is intentionally flat. A zone matrix is deliberately left out.

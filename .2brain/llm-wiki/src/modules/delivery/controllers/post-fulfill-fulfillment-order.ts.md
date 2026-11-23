@@ -1,33 +1,33 @@
 ---
 source: src/modules/delivery/controllers/post-fulfill-fulfillment-order.ts
-sha256: 55cba83dc44b644625d68e930a3c1b58e67444e50aa0852fe5dbbc049c3cd37f
-generated_at: 2026-11-08T05:27:22.370940+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 55cba83dc44b644625d68e930a3c1b58e67444e50aa0852fe5dbbc049c3cd37f
+context_sha256: d20ed8776531d90a15f5260e7dd361e9130b85be2227e7c2a00943e38ea0b723
+generated_at: 2026-11-22T04:46:25.929761+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/controllers/post-fulfill-fulfillment-order.ts
 
 ## Purpose
-
-HTTP controller handler for `POST /delivery/fulfillment-orders/:id/fulfill`. Fulfills a *digital* fulfillment order — a shipment with no physical parcel that is born in the delivered state. Delegates the business logic to the delivery service and translates the result into an HTTP response.
+Express controller for `POST /delivery/fulfillment-orders/:id/fulfill`. It lets staff fulfill a digital fulfillment order, producing a shipment with no parcel that is born delivered. The controller validates the route id, delegates to the delivery service, and returns a `201 Created` response for the new shipment.
 
 ## Key elements
-
-- **`postFulfillFulfillmentOrder`** (exported) — Express route handler. Validates the `:id` route param, calls `deliveryService.fulfillFulfillmentOrder`, and returns either a 201 `Created` response with the new `Shipment` (and a `Location` header) or an error/refusal response.
+- `postFulfillFulfillmentOrder(request, response)`: the exported handler.
+  - Reads the `:id` param with `requireId`, using the not-found key `delivery.fulfillment-order-not-found`. If no id is returned, it resolves immediately and does nothing further, so `requireId` is expected to have already sent the error response.
+  - Calls `deliveryService.fulfillFulfillmentOrder(id, request.authContext, callerContextOf(request))`.
+  - If `refused(response, result)` is true, it returns without further action.
+  - Otherwise it calls `createdResponse<Shipment>` with `result.data` and the location `/delivery/shipments/{result.data.id}`.
+  - Any rejection is handled by `catchAs(response, 'postFulfillFulfillmentOrder')`.
 
 ## Relationships
-
-- **`src/modules/delivery/routes.ts`** — registers this handler against the `POST /delivery/fulfillment-orders/:id/fulfill` route.
-- **`src/modules/delivery/services/index.ts`** — provides `deliveryService.fulfillFulfillmentOrder(id, authContext, callerContext)`, the actual business logic.
-- **`src/infrastructure/http/controller.ts`** — supplies `catchAs` (maps thrown errors to HTTP responses) and `refused` (handles service-level refusal results).
-- **`src/infrastructure/http/ids.ts`** — supplies `requireId` to extract and validate the `:id` route param, responding 404 with the `delivery.fulfillment-order-not-found` code if absent.
-- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf` to build a caller-context object passed into the service.
-- **`src/infrastructure/http/response.ts`** — supplies `createdResponse` to send the 201 body and `Location` header.
-- **`src/types/index.ts`** — exports the `Shipment` type used as the response body.
+- `src/infrastructure/http/controller.ts`: supplies `refused`, which checks the service result and responds if it was refused, and `catchAs`, the error handler.
+- `src/infrastructure/http/ids.ts`: supplies `requireId`, which validates the path id.
+- `src/infrastructure/http/request.ts`: supplies `callerContextOf`, which builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: supplies `createdResponse`, which sends the 201 with the location.
+- `src/modules/delivery/services/index.ts`: supplies `deliveryService`, whose `fulfillFulfillmentOrder` does the business logic.
+- `src/types/index.ts`: supplies the `Shipment` type, imported via the `@types` alias.
+- `src/modules/delivery/routes.ts`: the routing layer that this handler is registered through. The handler's doc comment gives the route path.
 
 ## Notes
-
-- The route-param generic is `{ id?: string }` (optional) because `requireId` is responsible for the 404 guard; the handler early-returns if it is missing.
-- Both `request.authContext` *and* `callerContextOf(request)` are passed to the service — the former is the authenticated user, the latter is transport-level caller metadata.
-- On success the `Location` header points to `/delivery/shipments/:newId`, not back to the fulfillment-order resource.
-- The `catchAs` wrapper keys off the literal string `'postFulfillFulfillmentOrder'`, which is used for structured error tagging/logging.
+- The handler returns a Promise on every path (`Promise.resolve()` on early exit), so callers can await it uniformly.
+- The controller contains no business logic. It only handles HTTP concerns and relies on `authContext` being attached to the request upstream.

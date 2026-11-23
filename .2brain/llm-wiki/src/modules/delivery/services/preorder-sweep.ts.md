@@ -1,36 +1,31 @@
 ---
 source: src/modules/delivery/services/preorder-sweep.ts
-sha256: 62e30ea6daa360e311d20a7b8013e71e545a9a3d75f89c3e77d0363fba8372ec
-generated_at: 2026-11-08T05:37:46.717411+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b6aa95b433d8e33b5f31285c763c7e6a96356aa910f2712e9d21d36e962ec15c
+context_sha256: 6c9085d5f540260277bfc212bf230128ee30933b610a9ce468b7c86289665731
+generated_at: 2026-11-22T04:57:04.660241+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/preorder-sweep.ts
 
 ## Purpose
-
-Implements the daily sweep over waiting preorders: finds fulfillment orders whose expected date is imminent or passed while still on hold awaiting stock, and sends a single informational notice to the buyer that the date will be missed. It never cancels, reschedules, or prompts the buyer—silence leaves the order in the buyer's hands and lets staff handle the late order on the board.
+The daily sweep over waiting preorders. For each fulfillment order whose current expected date is a day away or already passed, with goods still not in stock and no notice yet for that date, it tells the buyer once that the date will be missed and no new date exists. The email asks nothing and cancels nothing. The buyer keeps waiting, can cancel before shipping, and staff see the late order on the board and decide whom to call.
 
 ## Key elements
-
-- **`runPreorderSweep(now?: Date)`** — Exported entry point. Iterates over `fulfillmentOrderRepository.findDatePassed(now)`, calls `noticeOne` sequentially for each order, and returns `{ notified }`. Accepts an injected `now` for test determinism.
-- **`noticeOne(fulfillmentOrderId, now)`** *(private)* — Re-reads the order inside a `runAct` transaction, re-validates status (`on_hold`), hold reason (`awaiting_stock`), and `needsDueNotice`, then calls `recordNotice`. Returns `undefined` (no mail) if any check fails or the act is refused.
-- **`PreorderSweepResult`** — Interface: `{ notified: number }`.
+- `PreorderSweepResult`: result shape, `{ notified: number }`, the count of buyers told.
+- `noticeOne(fulfillmentOrderId, now)` (internal): runs inside `runAct`. It re-reads the order in the session and proceeds only if the order is `on_hold`, its hold reason is `awaiting_stock`, and `needsDueNotice(order, now)` is true. It then calls `recordNotice(order, { reason: 'due' }, now, session)`. It returns the `SentNotice` to mail after the commit, or `undefined` if the act was refused or the checks failed.
+- `runPreorderSweep(now = new Date())` (exported): loads the candidates with `fulfillmentOrderRepository.findDatePassed(now)` and calls `noticeOne` sequentially for each order. It returns `{ notified }`, counting the orders that produced a notice.
 
 ## Relationships
-
-- **`../repository`** (`fulfillmentOrderRepository`) — Provides `findDatePassed(now)` to enumerate candidate orders and `findInSession(id, session)` to re-read an order inside the transaction.
-- **`./act`** (`runAct`) — Wraps the per-order check-and-record in a single database transaction; the buyer's mail is emitted as a commit event.
-- **`./notice`** (`recordNotice`, `SentNotice`) — Persists the notice record and produces the mail payload within the same session.
-- **`../domain`** (`needsDueNotice`) — Domain predicate that decides whether a given date has already been noticed or is still eligible.
-- **`@types`** — `FulfillmentOrderStatus` and `FulfillmentHoldReason` enums used for the status/hold-reason guard.
-- **`../jobs`** — The job scheduler that invokes `runPreorderSweep` on its daily cadence.
-- **`./index`** — Re-exports the sweep for consumers outside the services folder.
-- **`../tests/unit/reship.test.ts`** — Unit tests that exercise sweep logic with injected dates.
+- `../repository`: `fulfillmentOrderRepository` supplies the candidates (`findDatePassed`) and re-reads each one inside the transaction (`findInSession`).
+- `../domain` (`needsDueNotice`): decides whether an order needs a due notice.
+- `./act` (`runAct`): provides the per-order transaction and session. A refused result is treated as "nothing sent".
+- `./notice` (`recordNotice`, `SentNotice`): records the notice and returns what to mail after commit.
+- `@types` (`src/types/index.ts`): supplies the `FulfillmentOrderStatus` and `FulfillmentHoldReason` enums.
+- `jobs.ts` and `reship.test.ts` are graph neighbors, but this file shows no direct interaction with them. The sweep is exported from here and takes `now` as a parameter.
 
 ## Notes
-
-- **Idempotency:** `needsDueNotice` prevents a second notice for a date already recorded, so repeated runs (or overlapping schedules) are safe.
-- **Re-read as race guard:** The order is fetched again *inside* the transaction (`findInSession`) so a concurrent allocation or prior sweep run that already settled the notice is detected before writing.
-- **Scope boundary:** Only `on_hold` + `awaiting_stock` orders are eligible. Allocated-but-unshipped orders are intentionally excluded—they surface in the admin Late view instead.
-- **Sequential, not parallel:** The for-loop processes one order at a time; each notice rides its own transaction commit.
+- Idempotent: a date already noticed (`dueNoticeFor`) is not noticed again, so repeated runs are harmless.
+- Only orders `on_hold` for stock are swept. Goods already allocated but unshipped count as a short delay and appear in the admin's Late view instead.
+- Orders are processed one at a time. Each has its own transaction, and the buyer's mail goes out on each commit's event.
+- The state is re-checked inside the transaction, so a notice another run sent or an allocation that happened since the query is not acted on.

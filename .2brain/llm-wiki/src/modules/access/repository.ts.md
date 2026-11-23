@@ -1,41 +1,34 @@
 ---
 source: src/modules/access/repository.ts
-sha256: 1173eef7d019a4070f2b2fbebf25cdd18c244125625db19e465266927b9398e8
-generated_at: 2026-11-08T03:57:01.487386+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f333f4051010ac24e09e731712dba87723119e39c12bceb8523a6eebb78494d0
+context_sha256: 772f6bd68a3823d9f60833cd04e0495d5e7690441bb09880e55b9a13f2d12968
+generated_at: 2026-11-22T03:17:00.819591+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/access/repository.ts
 
 ## Purpose
-
-Data-access layer for the **tenant** and **membership** MongoDB collections. It exposes a small set of query and write primitives so that the service layer (`./services/`) can focus entirely on business invariants without repeating Mongoose boilerplate. No authorization checks or validation live here.
+The single data-access layer for the tenant and membership collections. It only shapes queries; the module header states that every invariant lives in `./services/`. It exposes two plain-object repositories that wrap the Mongoose models.
 
 ## Key elements
-
-- **`tenantRepository`** — single export for the tenant collection.
-  - `upsertBySlug(slug, name, id?)` — Create-or-return a tenant keyed on `slug`. Uses `$setOnInsert` so an existing tenant's `slug`, `name`, and `_id` are never overwritten. Returns a document (never `null`).
-
-- **`membershipRepository`** — all reads and writes against the membership collection.
-  - `findByUserId(userId)` — All role rows for one user across all places.
-  - `findOne(userId, tenantId, scope)` — A single user's row in a specific scope/tenant, or `null`.
-  - `upsertRole(userId, tenantId, scope, role, session?)` — Create-or-overwrite the role a user holds in one place. Accepts an optional Mongoose `ClientSession` to join the caller's transaction.
-  - `deleteById(id, session?)` — Remove a single row by `_id`; transaction-aware.
-  - `deleteByUserId(userId, session?)` — Cascade-delete every row for a user (hard-delete path); transaction-aware.
-  - `findByUserIds(userIds, tenantId, scope)` — Batch fetch: all memberships for a set of users in one place.
-  - `findUserIdsByRoles(tenantId, roles)` — `distinct('userId')` query restricted to `scope: 'tenant'`; returns the set of user ids holding any of the given roles. Served by the `{ tenantId, role }` compound index.
+- **`tenantRepository.upsertBySlug(slug, name, id?)`**: create-or-return a tenant keyed on `slug`. It uses `$setOnInsert` only, so an existing tenant keeps its `slug`, `name` and `_id`. The optional `id` is applied as `_id` only on insert, so a fixed id survives reseeds. It always resolves a document.
+- **`membershipRepository.findByUserId(userId)`**: all memberships a user holds.
+- **`membershipRepository.findOne(userId, tenantId, scope)`**: one membership, or `null`.
+- **`membershipRepository.upsertRole(userId, tenantId, scope, role, session?)`**: create-or-overwrite the role (`$set`) for a user in one place. It always resolves a document and can join a transaction.
+- **`membershipRepository.deleteById(id, session?)`**: delete one row by `_id`. It can join a transaction.
+- **`membershipRepository.deleteByUserId(userId, session?)`**: delete all of a user's rows (`deleteMany`). The source comment names the hard-delete cascade as its use. It can join a transaction.
+- **`membershipRepository.findByUserIds(userIds, tenantId, scope)`**: the batched version of `findOne`, using `$in`.
+- **`membershipRepository.findUserIdsByRoles(tenantId, roles)`**: `distinct('userId')` for memberships with `scope: 'tenant'` and a role in `roles`. The source comment says it is served by the `{ tenantId, role }` index.
 
 ## Relationships
-
-- **`src/modules/access/model.ts`** — Imports `membershipModel` and `tenantModel` (Mongoose models) plus the `MembershipDocument` / `TenantDocument` types used in every return signature.
-- **`src/modules/access/services/memberships.ts`** — The primary caller; applies business invariants (e.g., role validation, scope rules) and then delegates the actual query/write to this file.
-- **`src/types/index.ts`** — Provides the `AuthorizationScope` type that parameterises `findOne`, `upsertRole`, `findByUserIds`, and `findUserIdsByRoles`.
-- **`src/modules/access/tests/factories.ts`** — Supplies test data shaped to these collections for use in integration tests.
-- **`src/modules/access/tests/integration/access.test.ts`** — Exercises the repository methods end-to-end against a live MongoDB instance.
+- **`src/modules/access/model.ts`**: supplies `tenantModel` and `membershipModel` (the Mongoose models queried here) and the `TenantDocument` / `MembershipDocument` types.
+- **`src/types/index.ts`**: provides the `AuthorizationScope` type (imported via `@types`) used in the membership query signatures.
+- **`src/modules/access/services/memberships.ts`**: the module header says `./services/` carries the invariants. The session parameters are documented as joining the caller's account create/update transactions and the hard-delete cascade.
+- **`src/modules/access/tests/factories.ts`** and **`src/modules/access/tests/integration/access.test.ts`**: listed as graph neighbors; the file content shows no direct interaction with them.
 
 ## Notes
-
-- **`$setOnInsert` is deliberate.** `tenantRepository.upsertBySlug` will *never* mutate an existing tenant's fields. If a caller passes a different `name` or `id` for an already-present slug, the original document is returned unchanged.
-- **`upsert: true` + `returnDocument: 'after'`** on both upsert paths guarantees a non-null return. A plain `findOneAndUpdate` without upsert could resolve `null`; this file avoids that ambiguity by construction.
-- **Optional `session` parameters** (`ClientSession`) are the integration point for multi-document transactions (account create, account update, hard-delete cascade). Callers in the service layer are responsible for creating and passing the session.
-- **`findUserIdsByRoles` hardcodes `scope: 'tenant'`.** It is not generalised to other scopes; callers must not expect it to work for, e.g., `scope: 'project'`.
+- `tenantId` is `string | null` in the membership queries, and `null` is a valid value in those filters.
+- Transaction participation is opt-in. Writes only use a transaction if the caller passes a `ClientSession`.
+- `findUserIdsByRoles` hardcodes `scope: 'tenant'` and takes a non-null `tenantId`.
+- `deleteById` and `deleteByUserId` return `{ deletedCount?: number }`.

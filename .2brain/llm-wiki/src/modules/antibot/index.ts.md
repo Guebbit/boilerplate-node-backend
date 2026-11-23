@@ -1,27 +1,23 @@
 ---
 source: src/modules/antibot/index.ts
-sha256: 1b77a5a5bd52542c4a1cb7042bde959793b0fe6cb0c0f91db0ee09dfadd70ea8
-generated_at: 2026-11-08T05:00:12.283396+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0facc8744803abb9d7dcca634642fd1b44fbe27a93a4d5acb389015bed7180cd
+context_sha256: c82af5afe51a0ca631509a523a597ca2b2571571dcf73db93f01143433eba04b
+generated_at: 2026-11-22T04:19:14.083646+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/antibot/index.ts
 
 ## Purpose
-
-Public barrel (re-export) for the **antibot** module. It is the *only* surface a sibling module is permitted to import from (per the DDD rule in `docs/theory/stragnostic-ddd.md` §5). It exposes solely the service that the `GET /config` route composes; all internal wiring (`module.ts`, `routes.ts`, `controllers/`) stays private to the module.
+Public barrel for the antibot module. It is the only surface sibling modules may import, and it publishes the service that `GET /config` composes. Everything else the module owns (`module.ts`, `routes.ts`, `controllers/`) is internal wiring and is deliberately not exported.
 
 ## Key elements
-
-- **`export * from './service'`** — Re-exports every public symbol from `src/modules/antibot/service.ts`. This is the file's entire runtime logic.
-- **JSDoc contract** — Documents the import rule: sibling modules import *only* through this barrel; the cross-cutting gate (`humanChallengeGate`) is deliberately *not* re-exported here.
+- `export * from './service'`: the file's only statement. It re-exports the whole public API of `./service`.
 
 ## Relationships
-
-- **`src/modules/antibot/service.ts`** — The sole re-export source. All symbols consumed by callers come from this file.
-- **`src/app/config-routes.ts`** — The primary consumer; its `GET /config` handler composes the antibot service imported via this barrel.
+- `src/modules/antibot/service.ts`: the sole source of the barrel's exports. Whatever `service.ts` exports becomes the module's public surface.
+- `src/app/config-routes.ts`: consumes the module through this barrel, since `GET /config` composes the published service.
 
 ## Notes
-
-- **Do not add re-exports casually.** The file's JSDoc explicitly forbids publishing wiring internals or the middleware gate. If `account` or `tasks` need `humanChallengeGate`, they import it directly from `infrastructure/http/middlewares/human-challenge` and `infrastructure/adapters/antibot`—not through this barrel.
-- **Single-line implementation.** Despite the long doc comment, the executable surface is exactly one `export *` statement. Any behavioral change lives in `service.ts`, not here.
+- The human-challenge gate is not exported from here. It is a cross-cutting middleware (`humanChallengeGate`). `account` and `tasks` import `infrastructure/http/middlewares/human-challenge` and `infrastructure/adapters/antibot` directly, not this module.
+- Do not add exports for `module.ts`, `routes.ts`, or `controllers/` to this barrel.

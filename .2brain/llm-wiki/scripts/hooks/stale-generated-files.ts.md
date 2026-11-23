@@ -1,33 +1,35 @@
 ---
 source: scripts/hooks/stale-generated-files.ts
-sha256: 29efc5f530694d644e283cdcef906d69198d02f5b40dd6067c53c1fe7bfee6d4
-generated_at: 2026-11-08T02:51:45.497566+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:07:12.449696+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/hooks/stale-generated-files.ts
 
 ## Purpose
-
-Identifies which files a full regeneration would modify, starting exclusively from the **staged index** (not the working tree). The pre-commit hook uses this to refuse commits that contain stale generated artifacts. The approach mirrors Kubernetes' `verify-generated.sh`: export the index to a scratch directory, regenerate in that copy, and diff.
+Determines which committed files a regeneration would change. It is the core of the pre-commit hook's "refuse a stale generated file" check. It works from what is being committed rather than the working tree. The git index is exported to a scratch folder and regenerated there, and the result is compared with itself. An unsaved edit or an unstaged regenerated file on disk therefore can't make a stale commit look fresh. The module doc says the approach has the same shape as Kubernetes' `verify-generated.sh`.
 
 ## Key elements
-
-- **`StaleGeneratedOptions`** — interface describing what the check needs: the repo path, a `regenerate` callback that owns the scratch copy's environment, and an optional `indexEnvironment` override (e.g. to preserve `GIT_INDEX_FILE` during a partial `git commit -- <paths>`).
-- **`staleGeneratedFiles(options): string[]`** — exported entry point. Exports the index via `checkout-index --prefix`, inits a throwaway git repo in the scratch dir, calls `regenerate`, then returns repo-relative paths that were rewritten (`git diff --name-only`) or newly added (`git ls-files --others --exclude-standard`). Returns an empty array when everything is current. Cleans up the scratch dir in a `finally` block.
-- **`git(directory, args, env)`** (internal) — thin wrapper around `execFileSync('git', …)` returning stdout as a UTF-8 string.
-- **`paths(output)`** (internal) — splits NUL-delimited `-z` output into a path array.
+- `StaleGeneratedOptions` is the input interface:
+  - `repo`: the checkout whose index is being committed.
+  - `regenerate(tree)`: regenerates every artifact inside the scratch copy. It owns that copy's environment (linked `node_modules`, the command to run) and throws on failure.
+  - `indexEnvironment?`: the environment used for the index export. It defaults to `process.env`, so git's own `GIT_INDEX_FILE` is kept and a partial `git commit -- <paths>` exports its temporary index. Tests pass a clean one.
+- `staleGeneratedFiles(options)` is the single export. It returns repo-relative paths, or an empty array when everything is current. Its steps are:
+  1. Create a temp dir (`verify-generated-*`).
+  2. Run `git checkout-index --all --prefix=<scratch>/` in the repo, using the index environment.
+  3. Run `git init`, then `git add --all`, in the scratch dir. This gives the export its own index, and steps that call `git ls-files` (the module graph) work there.
+  4. Call `options.regenerate(scratch)`.
+  5. Return the `git diff --name-only -z` output (files rewritten) followed by `git ls-files --others --exclude-standard -z` (new files not covered by a `.gitignore`, which should have been committed).
+  6. Always delete the scratch dir in `finally`.
+- `git` and `paths` are internal helpers. `git` runs a git command via `execFileSync` and returns stdout. `paths` splits NUL-terminated `-z` output into a list.
 
 ## Relationships
-
-- **`scripts/git-base.ts`** — imports `gitEnvironment` to obtain a clean environment (no inherited `GIT_*` variables) for the scratch-repo git commands.
-- **`scripts/hooks/check-generated-fresh.ts`** — the direct consumer; this module is the core logic behind that hook's "refuse a stale generated file" check.
-- **`tests/unit/scripts/hooks/stale-generated-files.test.ts`** — unit tests that exercise `staleGeneratedFiles` by supplying a mock `regenerate` and `indexEnvironment`.
+- `scripts/git-base.ts`: supplies `gitEnvironment()`. Its result is used as the clean environment for all git commands inside the scratch repo.
+- `scripts/hooks/check-generated-fresh.ts`: the hook that consumes this module (per the module doc). It supplies `regenerate` and decides what to do with the stale paths.
+- `tests/unit/scripts/hooks/stale-generated-files.test.ts`: unit tests for this module. Per the `indexEnvironment` docs, they pass a clean environment.
 
 ## Notes
-
-- `checkout-index --all --prefix=<dir>/` requires the trailing slash; without it git errors.
-- The scratch directory is a brand-new `git init` so that `git diff` and `git ls-files` have an index to work against. This also means the module graph (anything that shells out to `git ls-files`) can resolve inside the scratch copy.
-- The check is immune to unsaved peer edits or un-staged regenerations on disk because it operates solely on the exported index.
-- The `indexEnvironment` option exists specifically so that a partial `git commit -- <paths>` (which sets `GIT_INDEX_FILE` to a temporary index) still exports the correct subset; tests pass a clean env instead.
-- Scratch directory cleanup uses `rmSync(…, { recursive: true, force: true })` in `finally`, so it runs even if `regenerate` throws.
+- The `--prefix` value needs its trailing slash.
+- Errors are not swallowed. A failing `regenerate` or git command throws, and the scratch dir is still removed.
+- The scratch folder is created under `os.tmpdir()`.
+- Only the `git init` and later steps use the clean environment. The index export deliberately uses `indexEnvironment`.

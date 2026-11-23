@@ -1,31 +1,34 @@
 ---
 source: src/modules/cart/controllers/post-reorder.ts
-sha256: 505b3dacb7481fe9517f5e2c86f6f0093e8f5c6578f4faeaef7074a8ff834162
-generated_at: 2026-11-08T05:12:37.858944+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 505b3dacb7481fe9517f5e2c86f6f0093e8f5c6578f4faeaef7074a8ff834162
+context_sha256: 942e814761bd6ed473adef161d4e68172a24d5e8968b273858507fad0a4ab15a
+generated_at: 2026-11-22T04:31:33.698349+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/controllers/post-reorder.ts
 
 ## Purpose
-
-Thin HTTP adapter for `POST /cart/reorder`. Validates the request body, delegates to `cartService.reorderIntoCart`, and maps the service result (or rejection) to an HTTP response. Exists so the cart service stays transport-agnostic while the Express layer handles parsing, auth context extraction, and status-code selection.
+Express controller for `POST /cart/reorder`. It is a thin HTTP adapter over `cartService.reorderIntoCart`. It copies one of the caller's own orders back into their cart. The order is only read, and the cart is what gets written, which is why the handler lives in the cart module.
 
 ## Key elements
-
-- **`postReorder`** (exported) — The sole export. Accepts an Express `Request<unknown, unknown, ReorderRequest>` and `Response`. Validates the body against the `ReorderBody` Zod schema, then calls `cartService.reorderIntoCart(authContext, orderId, callerContext)`. On success sends `200` with the `ReorderResponse` payload; on a service-level refusal sends `409`; on validation failure sends `422`; on unexpected errors sends `500` via `catchAs`.
+- `postReorder(request, response)` is the only export. It is an Express handler typed as `Request<unknown, unknown, ReorderRequest>`.
+  1. It validates `request.body` with `parseBody(ReorderBody, ...)` and returns early if validation fails.
+  2. It calls `cartService.reorderIntoCart(request.authContext!, body.orderId, callerContextOf(request))`.
+  3. If `refused(response, result)` handles the result, it returns early.
+  4. Otherwise it sends `successResponse<ReorderResponse>(response, result.data, 200)`.
+  5. Rejections go to `catchAs(response, 'postReorder')`.
 
 ## Relationships
-
-- **`@infrastructure/http/controller`** — Imports `parseBody` (Zod body validation + 422 short-circuit), `refused` (409 mapping for service-level denials), and `catchAs` (unified 500 handler).
-- **`@infrastructure/http/request`** — Imports `callerContextOf` to extract the per-request context (tenant/actor) passed alongside the auth token.
-- **`@infrastructure/http/response`** — Imports `successResponse` to emit the standard 200 JSON envelope.
-- **`../services`** (cart service index) — Consumes `cartService.reorderIntoCart`, the sole business-logic call.
-- **`@types`** — Imports `ReorderRequest` and `ReorderResponse` type aliases used to type the Express generics and the response payload.
-- **`routes.ts`** (cart module) — Expected to mount `postReorder` on the `POST /cart/reorder` path (not visible in this file, but implied by the module layout).
+- `@infrastructure/http/controller` (`src/infrastructure/http/controller.ts`) provides `parseBody`, `refused` and `catchAs`, which handle body validation, service refusals and error mapping.
+- `@infrastructure/http/request` (`src/infrastructure/http/request.ts`) provides `callerContextOf`, which builds the caller context passed to the service.
+- `@infrastructure/http/response` (`src/infrastructure/http/response.ts`) provides `successResponse`, which sends the 200 payload.
+- `../services` (`src/modules/cart/services/index.ts`) provides `cartService`. Its `reorderIntoCart` holds the actual logic.
+- `@types` (`src/types/index.ts`) provides the `ReorderRequest` and `ReorderResponse` types.
+- `src/modules/cart/routes.ts` is a neighbor in the dependency graph. The file does not itself reference the route registration, but the `POST /cart/reorder` route presumably wires this handler.
 
 ## Notes
-
-- The 409-vs-200 distinction is intentional: an order where every line was `removed` or `capped` is a refusal, not a successful no-op. The controller does not decide this; the service returns a refusal marker that `refused()` translates.
-- `request.authContext!` is asserted non-null — auth middleware upstream is assumed to have populated it. If that invariant is broken the controller will throw at runtime rather than return a 401.
-- `callerContextOf(request)` is a separate parameter from `authContext`, meaning the service receives both an identity claim and a scoped execution context.
+- A malformed `orderId` returns a 422 on the `orderId` body field, not a 404.
+- Each line of the result reports what happened to it, as in the cart merge. A product no longer in the catalogue is `removed`, and one at its quantity cap is `capped`.
+- If the order has nothing left to add, the response is a 409 rather than an empty 200. The comment attributes this to the service result, and the controller only forwards it via `refused`.
+- `request.authContext!` uses a non-null assertion. It assumes authentication middleware has already populated it.

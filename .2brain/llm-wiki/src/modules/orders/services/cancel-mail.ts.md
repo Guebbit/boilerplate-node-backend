@@ -1,35 +1,29 @@
 ---
 source: src/modules/orders/services/cancel-mail.ts
-sha256: 2bf883197644ad9397ff1cda01c7a77feba312653c2dd8ebe546e6abbf3a678a
-generated_at: 2026-11-14T20:42:12.630129+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T06:19:00.314805+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/cancel-mail.ts
 
 ## Purpose
-
-Handles the buyer-facing email that explains why their order was canceled. It is invoked from the `order.canceled` domain-event listener so that every cancellation path (regardless of origin) produces the same explanation, and a crash between the DB commit and the send still results in the email going out.
+Sends the buyer an explanatory email after an order is canceled. It is meant to be called from the `order.canceled` event listener. The event's `cause` selects which mail to send (via `CANCEL_CAUSES[cause].mail`). This means every cancel path produces the same explanation. A crash between the commit and the send still results in the mail being sent.
 
 ## Key elements
-
-- **`mailOrderCanceled(payload)`** — Sole export. Accepts the `order.canceled` event payload (`orderId`, `refund`, `cause`). Resolves the mail kind via `CANCEL_CAUSES[cause].mail`, then:
-  - Returns immediately if kind is `'none'` (no acknowledgement owed, or no buyer to reach).
-  - For `'reservation-expiry'`: skips `bank_transfer` orders (see Notes) and sends `holdExpiredEmail`.
-  - Otherwise sends `orderCanceledEmail`, including the `refund` detail the buyer cannot see themselves.
-  - Delegates buyer/locale/name lookup to `mailBuyerOfOrder` and enqueues via `enqueueEmail`.
+- `mailOrderCanceled({ orderId, refund, cause })` — the only export. It takes the `order.canceled` payload and returns `Promise<void>`.
+  - If the cause's mail kind is `'none'`, it resolves immediately and sends nothing.
+  - If the kind is `'reservation-expiry'`, it sends `holdExpiredEmail(locale, order)`. It skips this when `order.paymentMethod === 'bank_transfer'`.
+  - For any other kind, it sends `orderCanceledEmail(locale, name, order, order.orderNumber, refund)`. This mail tells the buyer what became of their money.
+  - Emails are queued with `enqueueEmail({ to: order.email, subject }, template, data)`. The call is fire-and-forget (`void`).
 
 ## Relationships
-
-- **`src/modules/orders/services/cancel.ts`** — Provides `CANCEL_CAUSES`, the mapping from each cancellation cause to its mail kind and description.
-- **`src/modules/orders/emails.ts`** — Provides the two email templates: `orderCanceledEmail` and `holdExpiredEmail`.
-- **`src/modules/orders/services/notify.ts`** — Provides `mailBuyerOfOrder`, which resolves the buyer's order record, locale, and name, then invokes this file's callback.
-- **`src/infrastructure/adapters/mailer.ts`** — Provides `enqueueEmail`, the transport that actually dispatches the message.
-- **`src/kernel/events.ts`** — Supplies the `DomainEventMap` type so the event payload is typed against the canonical event schema.
-- **`src/modules/orders/services/index.ts`** — Re-exports `mailOrderCanceled` for external consumers of the orders services barrel.
+- `src/modules/orders/services/cancel.ts` — supplies `CANCEL_CAUSES`, which maps each cause to a mail kind.
+- `src/modules/orders/services/notify.ts` — `mailBuyerOfOrder(orderId, cb)` loads the order and calls the callback with `(order, locale, name)`.
+- `src/modules/orders/emails.ts` — provides the `holdExpiredEmail` and `orderCanceledEmail` builders. Each returns `subject`, `template` and `data`.
+- `src/infrastructure/adapters/mailer.ts` — provides `enqueueEmail`, which queues the message.
+- `src/kernel/events.ts` — provides the `DomainEventMap['order.canceled']` payload type.
 
 ## Notes
-
-- **Bank-transfer expiry is deliberately not mailed here.** The `payments` module owns the transfer deadline and sends its own expiry notice; including it here would double-mail.
-- `enqueueEmail` never rejects — it logs its own failure internally. The `void` + eslint suppression for floating promises is intentional, not an oversight.
-- The `kind === 'none'` branch returns a resolved promise (not `undefined`) so callers can uniformly `await` or `.catch()` the result.
+- Bank-transfer expiry is deliberately not mailed here. The `payments` module owns the transfer's deadline and sends that mail itself.
+- The `no-floating-promises` lint rule is disabled on the `enqueueEmail` calls. The inline comments say `enqueueEmail` never rejects and logs its own failures.
+- A cause with its own acknowledgement, or with nobody to tell, should map to `'none'` so that nothing is sent.

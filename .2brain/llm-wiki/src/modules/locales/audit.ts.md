@@ -1,32 +1,29 @@
 ---
 source: src/modules/locales/audit.ts
-sha256: 393ab303c9817d33988b532d0ef1bb36baa3b801f31f9c68f9c72f0590816b34
-generated_at: 2026-11-08T06:20:08.506357+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:41:33.288258+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/audit.ts
 
 ## Purpose
-
-Declares the audit-action identifiers for all write operations in the locales domain (locale CRUD, locale-entry CRUD/import, batch translation updates) and merges them into the app-wide `AuditActionMap` via TypeScript module augmentation. This file exists so that compliance queries can filter on a single, well-known prefix per event rather than per code path.
+Declares the audit actions the locales module emits and registers them with the app-wide audit action type. Each action corresponds to a write that changes what users read. These rows are the only history, because reads are deliberately not audited.
 
 ## Key elements
-
-- **`localeAuditActions`** — a `const` object mapping descriptive constant names (e.g. `ADMIN_LOCALE_CREATED`) to dotted action strings (e.g. `'admin.locale.created'`). Covers nine locale/locale-entry actions plus `ADMIN_TRANSLATION_UPDATED`.
-- **Module augmentation** (`declare module '@infrastructure/observability/audit'`) — adds a `locales` key to the global `AuditActionMap` interface, typed as the union of all values in `localeAuditActions`. This makes the strings type-safe at every call site that references `AuditActionMap['locales']`.
+- `localeAuditActions`: a `const` object mapping constant names to action strings.
+  - Locale lifecycle: `ADMIN_LOCALE_CREATED`, `ADMIN_LOCALE_UPDATED`, `ADMIN_LOCALE_ACTIVATED`, `ADMIN_LOCALE_DEACTIVATED` and `ADMIN_LOCALE_DELETED`. The strings are `admin.locale.*`.
+  - Locale entries: `ADMIN_LOCALE_ENTRY_CREATED`, `ADMIN_LOCALE_ENTRY_UPDATED` and `ADMIN_LOCALE_ENTRY_DELETED`. The strings are `admin.locale_entry.*`.
+  - `ADMIN_LOCALE_ENTRY_IMPORTED` (`admin.locale_entry.imported`): one action shared by both bulk routes, with the mode recorded in metadata. This gives compliance queries a single prefix to filter on.
+  - `ADMIN_TRANSLATION_UPDATED` (`admin.translation.updated`): one action per PATCH request, covering its upserts and deletes together.
+- `declare module '@infrastructure/observability/audit'`: augments `AuditActionMap` with a `locales` key. Its type is the union of the values of `localeAuditActions`.
 
 ## Relationships
-
-- **`src/modules/locales/services/languages.ts`** — emits the `ADMIN_LOCALE_*` actions (created/updated/activated/deactivated/deleted) defined here.
-- **`src/modules/locales/services/entries.ts`** — emits the `ADMIN_LOCALE_ENTRY_*` actions (created/updated/deleted/imported) defined here.
-- **`src/modules/locales/services/translations.ts`** — emits `ADMIN_TRANSLATION_UPDATED` (the batch PATCH action) defined here.
-- **`src/modules/locales/tests/integration/update-audit.test.ts`** — integration test that asserts the audit rows written by the update flows match the action strings declared in this file.
+This file imports nothing, and the neighbor files are not imported here.
+- `src/modules/locales/services/entries.ts`, `src/modules/locales/services/languages.ts` and `src/modules/locales/services/translations.ts` are the likely emitters, matching the locale-entry, locale and translation action groups. This is inferred from the names, not visible in this file.
+- `src/modules/locales/tests/integration/update-audit.test.ts` is the integration test for the audit rows.
 
 ## Notes
-
-- **Naming contract:** action strings must be `noun.noun.verb` in snake_case segments. This is enforced by `tests/cross-cutting/audit-actions.test.ts`; a new action that deviates will fail CI.
-- **No shared enum:** the file deliberately uses an object + augmentation rather than a shared enum, following the pattern set by `modules/account/audit.ts`. Do not "refactor" to an enum without updating the cross-cutting test.
-- **`ADMIN_LOCALE_ENTRY_IMPORTED`** covers both bulk-import routes; the distinguishing mode is carried in the audit *metadata*, not the action string. Adding a separate action would fragment the "who changed the Spanish copy" query.
-- **`ADMIN_TRANSLATION_UPDATED`** represents an entire batch (upserts + deletes) as a single row. One request = one audit row, regardless of how many locales the body touched.
-- Reads are intentionally **not** audited; the rows here are the complete write history for this domain.
+- The header comment refers to `modules/account/audit.ts` for why actions are declared by augmentation rather than a shared enum.
+- Action strings must follow `noun.noun.verb`, with snake_case segments (for example `locale_entry`). The header says `tests/cross-cutting/audit-actions.test.ts` enforces this.
+- Bulk import and translation PATCH are intentionally collapsed into single actions rather than one per mode or per locale touched.
+- `as const` keeps the literal string types, which the `AuditActionMap` union relies on.

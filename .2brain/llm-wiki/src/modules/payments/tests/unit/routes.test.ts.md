@@ -1,38 +1,35 @@
 ---
 source: src/modules/payments/tests/unit/routes.test.ts
-sha256: 2139bffd555710b9fdb2765ba6806d6827b43f287e38b73fd30df08ca983a091
-generated_at: 2026-11-08T07:40:56.051438+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:06:23.422915+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/unit/routes.test.ts
 
 ## Purpose
-
-Unit test that pins the **router-level security contract** of the payments module: which endpoints exist, in what order, and which guard each one carries. It treats route order and guard presence as invariants (not just "does it work") because moving a route below the auth wall or dropping a guard would silently break production with no runtime error.
+Unit tests that pin the payments route table: which endpoints exist, their order, and which guards (auth, permissions, rate limits, idempotency) sit on each. The tests treat the route table as a security contract. Everything is authenticated at the router level except the provider webhook and `GET /methods`, which are declared above the auth wall.
 
 ## Key elements
-
-- **`describe('payment routes', …)`** — single top-level suite covering the main router and the order router.
-- **`WEBHOOK`, `METHODS`, `INTENT_BUDGET`** — named constants for the two pre-auth routes and the shared velocity-budget key.
-- **`withoutHandler(signature)`** — helper that returns a route's guard list minus the final handler, enabling direct list comparison between two routes (e.g. confirm vs. sync).
-- **Route-order test** — asserts `routeSignatures(router)` matches a hard-coded 14-entry array, so any added/reordered endpoint fails immediately.
-- **Auth-wall tests** — every route except `WEBHOOK` and `METHODS` must include `isAuth`; those two must *not*.
-- **Webhook position test** — asserts `WEBHOOK` is index 0, because `router.use(getAuth, isAuth)` applies only to routes declared after it.
-- **Admin-guard test** — filters `routeTable(router)` by permission rule (excluding the shopper-facing `checkout:Cart` rule) and asserts exactly seven admin-guarded routes.
-- **Confirm ↔ sync guard-comparison test** — asserts `POST /:id/sync`'s guards equal `POST /:id/confirm`'s minus three velocity limiters, the decline-challenge gate, and `idempotencyKey`; also asserts the shared prefix explicitly.
-- **Pooled-budget test** — verifies `POST /` (intent) and `POST /:id/sync` share `INTENT_BUDGET` and neither carries `idempotencyKey`.
-- **Order-router test** — asserts `orderRouter` exposes exactly `GET /:id/payments` and `POST /:id/payments` with their expected guard stacks.
+- `WEBHOOK` (`POST /webhook/:provider`), `METHODS` (`GET /methods`): the two routes deliberately in front of the auth wall.
+- `INTENT_BUDGET` (`payments-intent-sync`): the namespace of the rate-limit budget that `POST /` and `POST /:id/sync` share.
+- `withoutHandler(signature)`: returns a route's guard list minus the final handler, so two routes' guards can be compared directly.
+- `describe('payment routes')` tests:
+  - **Route list:** the router mounts exactly 15 endpoints in a fixed order, with the webhook first.
+  - **Auth:** every route except the webhook and methods contains `isAuth`. The webhook and methods carry neither `isAuth` nor `getAuth`.
+  - **Webhook rate limit:** the webhook carries the `payment-webhook` rate limit.
+  - **Webhook position:** the webhook is declared at index 0, before the auth wall. Moving it below the wall would silently break deliveries.
+  - **Admin guards:** the only routes with permissions other than the shopper's `checkout:Cart` are the staff reads (`GET /`, `/search`, `/refunds`, `/attention`) and the refund routes (create, sync, settle, cancel).
+  - **Sync vs confirm:** `POST /:id/confirm` has the same guards as `POST /:id/sync`, minus `INTENT_BUDGET`, plus the confirm attempt/decline limiters, `paymentDeclineChallengeGate` and `idempotencyKey`. The sync guard prefix is `getAuth`, `isAuth`, `requirePermissionGuard`, `(anonymous)`, `INTENT_BUDGET`.
+  - **Intent/sync budget:** `POST /` and `POST /:id/sync` have identical guards, neither has `idempotencyKey`, and confirm does not use `INTENT_BUDGET`.
+  - **Order router:** `orderRouter` exposes `GET /:id/payments` (`getAuth`, `isAuth`, `getOrderPayments`) and `POST /:id/payments` (`getAuth`, `isAuth`, `requirePermissionGuard`, `idempotencyKey`, `postOrderPayment`).
 
 ## Relationships
-
-- **`src/modules/payments/routes.ts`** — imports `router`; this file is the primary subject under test. All `routeSignatures`, `guardsOn`, and `routeTable` calls operate on this router instance.
-- **`src/modules/payments/order-routes.ts`** — imports `orderRouter`; the final test block asserts its two payment sub-routes and their guards.
-- **`tests/support/routes.ts`** — provides the three inspection helpers (`routeSignatures`, `routeTable`, `guardsOn`) and the `securityMock()` factory consumed by the `jest.mock` override for the rate-limit middleware.
+- `src/modules/payments/routes.ts`: provides `router`, the main table under test.
+- `src/modules/payments/order-routes.ts`: provides `orderRouter`, tested in the last case.
+- `tests/support/routes.ts` (`@tests/routes`): supplies the helpers `routeSignatures`, `routeTable`, `guardsOn` and `securityMock`. The file's `jest.mock` of `@infrastructure/http/middlewares/rate-limit` uses `securityMock` as its replacement.
 
 ## Notes
-
-- The `jest.mock` for `rate-limit` replaces the real middleware with `securityMock()`, so tests inspect guard *names* rather than executing the rate-limiter. Any new guard added to the real middleware must be mirrored here or the list-comparison tests will break.
-- Route **order is the auth mechanism**, not a guard flag. A test asserting `indexOf(WEBHOOK) === 0` is load-bearing: reordering the router without updating this test will pass CI until the webhook silently 401s in production.
-- The confirm/sync comparison uses whole-list equality (`.toEqual`) rather than individual `toContain` checks, specifically because `requireFreshAuth(…)` is an anonymous closure with no stable name to assert against.
-- `INTENT_BUDGET` is deliberately excluded from the confirm route's expected list; if a future refactor adds it to confirm, the test fails and forces a conscious decision.
+- Guards are compared by name. `requireFreshAuth(…)` is an unnamed closure, so it appears as `(anonymous)`. The test compares whole guard lists instead of naming each one.
+- `/intent` is deliberately not idempotency-keyed: the ledger would store the response, `clientSecret` included.
+- `sync` omits the velocity limiters, the decline challenge gate and `idempotencyKey`. It never accepts a `paymentMethodRef`, and it is idempotent by construction, keyed on the provider's payment reference.
+- The admin-guard test only asserts on permissions, not on which role holds them.

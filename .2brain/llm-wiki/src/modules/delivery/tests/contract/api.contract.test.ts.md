@@ -1,46 +1,48 @@
 ---
 source: src/modules/delivery/tests/contract/api.contract.test.ts
-sha256: c3284511a70ef811322279d1b71aa6699c97fa4f93f2465f458453728235fb2d
-generated_at: 2026-11-14T19:51:32.451938+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e48aee0d6caa46eb47bba4c9bd01497d1e533d0e762216e5536951642e2c8dda
+context_sha256: 5196976a43046c3cabf05961e4cebb7ac0a5bd2cfb2c7aa979d3e9bb6795ba9f
+generated_at: 2026-11-22T05:00:04.102310+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/contract/api.contract.test.ts
 
 ## Purpose
-
-Contract tests for the delivery module's ten HTTP routes, run against a real server with `setupTestDb`. Each response is automatically validated against the OpenAPI spec via the `@tests/contract` side-effect import. The file pins that every audience branch (public, owner, staff) is reachable over HTTP and returns the documented shape; business-rule correctness is deferred to unit and integration suites.
+Contract tests for the `/delivery` HTTP API. Importing `@tests/contract` makes every response get checked against the API spec automatically. The file covers ten routes for three audiences: the public methods list, the order owner's fulfillment reads, and staff-only write operations. It checks that each contract branch is reachable over real HTTP. The detailed business rules are tested in the unit and integration suites.
 
 ## Key elements
-
-- **`authenticateWithShipment()`** – Helper returning a logged-in customer plus an order that already has one closed shipment (tracking `TRK-CONTRACT1`). Used to exercise the owner-read routes.
-- **`adminWithOrder(quantity?, extras?)`** – Helper returning an admin bearer, the order ID, the fulfillment-order ID, and the product ID for a processing order. Used to drive staff write routes.
-- **`describe('GET /delivery/methods')`** – Verifies the public catalogue: always 200, all methods listed regardless of legacy query params, every method stamped with the shop currency (`EUR`).
-- **`describe('GET /orders/{id}/fulfillment-orders and /shipments')`** – Covers owner reads (items, actions, hold visibility), empty-list response for unpaid orders, staff-specific fields (`holdNote`, action flags), 404 for another customer's order, 401 without token, 404 for malformed IDs.
-- **`describe('POST /orders/{orderId}/process')`** – Confirms 200 + `status: 'processing'` + fulfillment-orders created on success; 409 `ORDER_NOT_PAID` on error.
-- **`describe('POST /delivery/fulfillment-orders/{id}/shipments')`** – Confirms 201 with `Location` header, full-ship vs. partial-ship (order stays `processing`, `fulfillmentStatus: 'partially_fulfilled'`), and tracked-method-without-code behaviour. (Truncated in source.)
-- **`setupTestDb()`** – Called at module top-level to reset the database before the suite runs.
+- `setupTestDb()`: sets up the test database for the suite.
+- `authenticateWithShipment()`: helper that logs in a customer whose `processing` order has already been fully shipped (tracking code `TRK-CONTRACT1`). It returns `{ bearer, order }`.
+- `adminWithOrder(quantity, extras)`: helper that logs in an admin who owns a `processing` order. It returns the bearer token, the order id, the first fulfillment order id and the product id.
+- `describe` blocks visible in this section:
+  - `GET /delivery/methods`:
+    - Works without authentication.
+    - Ignores query-string filters such as `?weight=`.
+    - Checks that every method is stamped with the `EUR` currency.
+  - `GET /orders/{id}/fulfillment-orders` and `/shipments`:
+    - Owner view, including per-item `actions`.
+    - Empty `items` list for an unpaid order.
+    - Staff see `holdReason`, `holdNote` and the staff actions. The buyer sees `on_hold` but never `holdNote`.
+    - 404 for another customer's order or a malformed id, and 401 with no token.
+  - `POST /orders/{orderId}/process`:
+    - Moves a paid order to `processing` and creates its fulfillment orders.
+    - Returns 409 `ORDER_NOT_PAID` for an unpaid order.
+  - `POST /delivery/fulfillment-orders/{id}/shipments`:
+    - Returns 201 with a `Location` header (`/delivery/shipments/{id}`) and moves the order to `shipped`.
+    - Shipping only some lines leaves the order `processing` and gives `partially_fulfilled`.
+    - Further cases follow (tracked method with no code yet), but are cut off in this excerpt.
 
 ## Relationships
-
-- **`tests/support/contract.ts`** – Side-effect import; auto-registers global contract assertions that validate every HTTP response against the spec.
-- **`tests/support/http.ts`** – Source of `api()`, `authenticateAs()`, `authenticateAsRole()`, `bearerForCookie()`, `loginCompleting()`; all HTTP calls in this file go through these helpers.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` resets the DB so each run starts clean.
-- **`tests/support/ids.ts`** – Provides `MISSING_ID` for malformed-ID cases.
-- **`tests/support/clock.ts`** – `freezeDate` / `advanceDate` for time-sensitive assertions (used in truncated portion).
-- **`tests/support/cookies.ts`** – `setCookie` for cookie-based auth paths.
-- **`src/modules/delivery/tests/factories.ts`** – `shipEverything`, `fulfillmentOrdersOf`, `shipmentsOf`, `paidBackorderOrder`, `paidPreorderOrder` create delivery-side fixtures.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `forceOrderStatus`, `readOrder`, `toOrderItem` create and inspect orders.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` supplies the line-item product.
-- **`src/modules/users/tests/factories.ts`** – `createAdminUser`, `PLAIN_PASSWORD` for staff auth setup.
-- **`src/modules/shop/index.ts`** – `shopDayOf` for date-window logic in delivery calculations.
-- **`src/kernel/config.ts`** – `reauthWindowSeconds` for re-authentication timing tests.
-- **`src/types/index.ts`** – `OrderStatus` enum used throughout assertions.
+- `@tests/contract` is imported only for its side effect, which is the automatic spec validation.
+- `@tests/http` provides `api`, `authenticateAs`, `authenticateAsRole` (used with `'customer'`), `bearerForCookie` and `loginCompleting`.
+- `@tests/setup-test-db` provides the DB lifecycle.
+- `@tests/ids`, `@tests/cookies` and `@tests/clock` provide `MISSING_ID`, `setCookie` and `freezeDate`/`advanceDate`. Their uses fall in the part of the file not shown.
+- The users, products, orders and delivery `tests/factories` files supply fixtures: admin users, products, orders with `forceOrderStatus`/`readOrder`/`toOrderItem`, and `fulfillmentOrdersOf`, `shipEverything`, `shipmentsOf`, `paidBackorderOrder` and `paidPreorderOrder`.
+- `@kernel/config` provides `reauthWindowSeconds`, and `@modules/shop` provides `shopDayOf`. These imports are not used in the visible section.
+- `@types` provides the `OrderStatus` enum.
 
 ## Notes
-
-- `@tests/contract` is a **side-effect import** (no named bindings); it globally attaches spec-assertion interceptors to every `api()` call. Removing it silently disables contract validation.
-- The file deliberately does **not** assert business logic (e.g., why an order can't be processed). That belongs to unit/integration tests. This file only checks shape, status code, and audience gating.
-- Partial-ship responses leave the parent order in `processing` with `fulfillmentStatus: 'partially_fulfilled'`; full-ship moves it to `shipped`. Tests assert both paths.
-- The `Idempotency-Key` header (random UUID) is required on shipment POSTs; omitting it is expected to trigger a 429 or 400 per the contract.
-- Hold `note` is asserted **absent** on the buyer's view but **present** on the staff view — an intentional information-hiding contract, not a bug.
+- Authorization is `Authorization: Bearer` from `authenticateAs`. Shipment creation also sets a random `Idempotency-Key` header.
+- Some tests deliberately seed state through factories (such as `shipEverything`) and then verify through the HTTP API. Others make the setup calls themselves over HTTP, for example placing a hold with `POST .../hold`.
+- The "empty list" test for an unpaid order shows that missing fulfillment data is returned as `{ items: [] }` with status 200, not as an error.

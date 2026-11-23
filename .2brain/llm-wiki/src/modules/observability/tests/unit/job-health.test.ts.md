@@ -1,32 +1,27 @@
 ---
 source: src/modules/observability/tests/unit/job-health.test.ts
-sha256: a48ad215a06e8e87f254c2ab9a08ee14d78de795520491a44c34c375b450962b
-generated_at: 2026-11-08T06:43:20.178602+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a3291f6dddd528bde0d423f8b324cf128c9079ea3c3eb48e026f7c3a84ff6672
+context_sha256: 4a09c2164558f9b61fd80999685a27277e672afce0f26575b665f089d69057f9
+generated_at: 2026-11-22T06:05:19.187015+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/tests/unit/job-health.test.ts
 
 ## Purpose
-
-Unit test for the `jobHealth` service function (the job half of `GET /observability/health`). Its sole job is to guarantee the **wire-shape contract**: `lastSuccessAt` must leave the function as an ISO-8601 string, not a `Date`, even though `JSON.stringify` would mask the difference. It also pins down the handling of absent timestamps and errors.
+Unit tests for `jobHealth`, the job half of `GET /observability/health`. The suite guards a wire-shape guarantee: `leases` stores `lastSuccessAt` as a `Date`, while the `ObservabilityHealth.jobs` contract declares an ISO-8601 string, like every other timestamp that endpoint reports. A leaked `Date` serialises identically through `JSON.stringify`, so a contract test would still pass. The bug only shows up when something reads the field without going through JSON.
 
 ## Key elements
-
-- **`listLeaseSummariesMock`** – a `jest.fn()` used to stub the lease-persistence layer so the test focuses purely on the shape transformation performed by `jobHealth`.
-- **`jest.mock('@infrastructure/persistence/lease', …)`** – module-level mock that swaps `listLeaseSummaries` for the above.
-- **Test: "reports a completed job as an ISO-8601 string, not a Date"** – asserts `lastSuccessAt` is the string `'2026-09-13T02:15:00.000Z'`, not a `Date` instance.
-- **Test: "carries the last error through untouched"** – asserts `lastError` passes through as-is.
-- **Test: "leaves a job that has never succeeded without a timestamp"** – asserts `lastSuccessAt` is `undefined` rather than a fabricated epoch value.
-- **Test: "answers with an empty list"** – asserts an empty array in, empty array out.
+- `listLeaseSummariesMock`: a `jest.fn()` that stands in for `listLeaseSummaries` from `@infrastructure/persistence/lease`. It is registered through `jest.mock` and set per test with `mockResolvedValue`.
+- Test: completed job. A `Date` `lastSuccessAt` comes out as an ISO string (`'2026-09-13T02:15:00.000Z'`). `lastError` is `undefined`.
+- Test: last error. A `lastError` such as `'ECONNREFUSED'` passes through unchanged.
+- Test: never-succeeded job. A summary with no `lastSuccessAt` yields `undefined` for that field. It does not yield an invented timestamp such as the epoch from `new Date(undefined)`.
+- Test: no leases. An empty summary list gives `[]`.
 
 ## Relationships
-
-- **`src/modules/observability/services/job-health.ts`** – the sole SUT; the test imports and calls its exported `jobHealth` function.
-- **`@infrastructure/persistence/lease`** – mocked out; the real implementation is exercised by the lease module's own test suite.
+- Imports `jobHealth` from `../../services/job-health` (`src/modules/observability/services/job-health.ts`), the code under test.
+- Mocks `@infrastructure/persistence/lease`, so the Mongo read is outside this suite's scope. Per the file's own comment, that read belongs to the lease suite. These tests cover only the mapping applied afterwards.
 
 ## Notes
-
-- The mock factory references `listLeaseSummariesMock` declared in module scope. Jest hoists the `jest.mock` call above the import, so the variable is available at call time despite the declaration appearing first in the file.
-- The central risk this file guards: a `Date` and its ISO string are **indistinguishable after `JSON.stringify`**, so a passing HTTP contract test would not catch a regression here. The test asserts the JS value type directly.
-- `lastSuccessAt` is deliberately optional in the output contract; the test enforces that a job with no prior success yields `undefined`, not `new Date(0)`.
+- The mock factory calls `listLeaseSummariesMock()` through an arrow function. This lets the `jest.fn` be declared above the hoisted `jest.mock` call and used inside it.
+- `lastSuccessAt` is optional in the contract because a job can be registered but never run.

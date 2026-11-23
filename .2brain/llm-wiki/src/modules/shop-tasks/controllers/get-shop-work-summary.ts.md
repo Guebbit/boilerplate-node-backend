@@ -1,29 +1,25 @@
 ---
 source: src/modules/shop-tasks/controllers/get-shop-work-summary.ts
-sha256: 16b6c64459f209fbceb752d3d73a3db86b664f3c61480a59b7c97a51b69da3a4
-generated_at: 2026-11-08T08:14:11.617201+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 85e67c3b2df2980d100277911ca21381d953f6ab5d0fc54203d4c3b59762d6f9
+context_sha256: 69c3f77d0dcf26c7b324442bc52a89e5c4c4e8c0e7cda4fb300f8b2f9e6d533e
+generated_at: 2026-11-22T07:40:44.452755+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/controllers/get-shop-work-summary.ts
 
 ## Purpose
-
-Thin HTTP controller that handles `GET /shop-tasks/summary`. It retrieves aggregate work counts (used for staff navigation badges) from the `workSummary` service and returns them as a JSON success response. All business logic lives in the service; this file only bridges the request to the response.
+Express controller for `GET /shop-tasks/summary` (staff only). It returns the counts that drive the staff navigation badges. The controller only delegates to the service and wraps the result in the standard HTTP response.
 
 ## Key elements
-
-- **`getShopWorkSummary`** (exported const) — The sole handler for `GET /shop-tasks/summary`. Reads `request.authContext` (populated by a preceding `isAuth` middleware), passes it to `workSummary()`, and on success writes the counts to the response with status 200. Failures are delegated to `catchAs`.
+- `getShopWorkSummary(request, response)`: the only export. It calls `workSummary(request.authContext!)`. On success it sends the counts with `successResponse(response, counts, 200)`. On failure it passes the error to `catchAs(response, 'getShopWorkSummary')`.
 
 ## Relationships
-
-- **`src/modules/shop-tasks/services/work-summary.ts`** — Consumes the `workSummary` service; the controller is the only caller in the module.
-- **`src/infrastructure/http/response.ts`** — Uses `successResponse` to shape the JSON body and set the status code.
-- **`src/infrastructure/http/controller.ts`** — Uses `catchAs` as the unified error handler (logs, maps status, writes the error envelope).
-- **`src/modules/shop-tasks/routes.ts`** — Registers `getShopWorkSummary` as the handler for the `/summary` route (staff-scoped).
+- `../services/work-summary`: provides `workSummary`, which takes the auth context and produces the counts. The controller adds no logic of its own.
+- `@infrastructure/http/response` (`src/infrastructure/http/response.ts`): provides `successResponse`, which formats the 200 response.
+- `@infrastructure/http/controller` (`src/infrastructure/http/controller.ts`): provides `catchAs`, the shared error handler. The label `'getShopWorkSummary'` is passed to it to identify this controller.
+- `src/modules/shop-tasks/routes.ts`: the route layer that mounts this handler on `/shop-tasks/summary`.
 
 ## Notes
-
-- `request.authContext` is asserted non-null (`!`). This is safe **only** if the route is mounted behind the `isAuth` middleware; adding this handler to an unauthenticated route will throw at runtime.
-- The controller is intentionally a one-liner: no validation, no branching. Add business rules to `workSummary` service, not here.
-- Error handling is fully delegated to `catchAs` — there is no local `try/catch` or status-code logic in this file.
+- The non-null assertion on `request.authContext!` assumes the `isAuth` middleware has already run and set the session. The route must keep that middleware in front of this handler.
+- The handler returns a promise chain instead of using `async`/`await`, and the `.catch` handles all errors.

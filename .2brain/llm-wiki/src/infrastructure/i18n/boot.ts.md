@@ -1,36 +1,34 @@
 ---
 source: src/infrastructure/i18n/boot.ts
-sha256: e82f3ada9ebcdafe4a2c1893b64d28458c665dad6d70572b83eda134508c7d36
-generated_at: 2026-11-08T03:35:49.113303+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e7696e70dfbd049342375a2097b044c040574c4a270a2cafddfbaadbc433e0a5
+context_sha256: 1fcced50b662c1c64b34e186efd18af96fdd1736a33a70e05c267b922149b944
+generated_at: 2026-11-22T02:55:03.206671+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/i18n/boot.ts
 
 ## Purpose
-
-Single entry point that initializes the one global **i18next** instance shared across the entire application. It separates the *how-to-find-locale-dirs* concern (left to each caller) from the *how-to-boot-i18next* concern (owned here), so that `app.ts`, ops scripts, and the Jest suite all end up with a consistent, fully-loaded translator.
+Brings up the single global i18next instance shared by every entry point: the real app boot, ops scripts that render email copy outside the HTTP process, and jest's global setup. Each caller decides how it locates its locale directories and passes the resolved list in. This file only registers them and initializes i18next.
 
 ## Key elements
-
-- **`bootI18n(localeDirectories, lng?)`** — the sole export. Registers the supplied directory list in the locale catalog, then calls `i18next.init` with:
-  - `lng` / `fallbackLng` / `supportedLngs` — locale policy sourced from `./catalog`.
-  - `resources` — in-memory dictionaries (no i18next backend plugin).
-  - `interpolation.escapeValue: false` — escaping is deferred to the HTML rendering sink to avoid double-escaping names and to keep plain-text email subjects unescaped.
-  - Returns the initialized `TFunction`.
-- **`@module` directive** — no default export; consumers import the named `bootI18n`.
+- `bootI18n(localeDirectories, lng = getDefaultLocale())`: the only export. It does two things:
+  - Registers the directories via `registerLocaleDirectories`.
+  - Calls `i18next.init` and returns its `Promise<TFunction>`.
+- The `init` options are:
+  - `lng`: the active language.
+  - `fallbackLng`: from `getFallbackLocale()`.
+  - `supportedLngs`: from `listSupportedLocales()`.
+  - `resources`: from `loadLocaleResources()`, so dictionaries are in memory and there is no backend.
+  - `interpolation.escapeValue: false`.
 
 ## Relationships
-
-- **`src/infrastructure/i18n/catalog.ts`** — sole runtime import. Provides `registerLocaleDirectories`, `getDefaultLocale`, `getFallbackLocale`, `listSupportedLocales`, and `loadLocaleResources`. All locale-policy decisions live in the catalog; this file only orchestrates the init call.
-- **`src/app.ts`** — production caller. Resolves locale directories via the module registry, then calls `bootI18n` during server boot (before any route handler or Zod `registerValidationMessages` runs).
-- **`scripts/ops/prepare-job.ts`** — ops-script caller. Resolves locale directories from a disk glob outside the HTTP process and calls `bootI18n` to render email copy with the same dictionaries.
-- **`tests/support/setup.ts`** — Jest global setup. Calls `bootI18n` pinned to `en` so every suite starts with a deterministic, English-only translator.
-- **`src/infrastructure/i18n/index.ts`** — package barrel that re-exports this module alongside the catalog, making `bootI18n` available to consumers of the `i18n` package.
+- `./catalog` supplies every helper used here: `registerLocaleDirectories`, `getDefaultLocale`, `getFallbackLocale`, `listSupportedLocales` and `loadLocaleResources`. `catalog` holds the locale state, and this file only wires it into i18next.
+- The doc comment describes three kinds of callers: the app's real boot, an ops script rendering email copy outside the HTTP process, and jest's global setup. Of the graph neighbors, `tests/support/setup.ts` is the jest setup (which passes `en` explicitly). `scripts/ops/reapply-erasures.ts` and `src/app/boot-rendering.ts` are related through the dependency graph, but the file content does not show how they use it.
+- `src/infrastructure/i18n/index.ts` is a graph neighbor. The content does not show whether it re-exports `bootI18n`.
 
 ## Notes
-
-- **Ordering constraint:** `bootI18n` must complete before anything calls `t()`, and in particular before `registerValidationMessages()` installs Zod's error map. Calling `t()` earlier will throw or return keys.
-- **Caller owns resolution:** This file never touches the filesystem or the module registry. Each entry point decides *how* it finds locale directories (registry, glob, or a pre-framework mock read) and passes plain absolute paths.
-- **No backend plugin:** Dictionaries are loaded in-memory via `loadLocaleResources()`; there is no i18next-backend or HTTP resource fetch at runtime.
-- **Default `lng`:** When omitted, `getDefaultLocale()` (from the catalog) is used — the value production and ops scripts expect. Only the Jest setup overrides it.
+- It must run before anything calls `t()`. The comment singles out `registerValidationMessages()`, which installs Zod's error map through `t()`.
+- `escapeValue: false` is deliberate. Values are escaped once, at the sink (the HTML template), so names are not double-escaped and plain-text subjects stay plain.
+- `lng` defaults to the catalog's default locale. Production boot and the ops script rely on that default, while jest's setup pins `en`.
+- `supportedLngs` makes i18next reject any language tag outside the supported list.

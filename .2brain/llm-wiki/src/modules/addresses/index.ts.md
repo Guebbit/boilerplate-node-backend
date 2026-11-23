@@ -1,31 +1,26 @@
 ---
 source: src/modules/addresses/index.ts
-sha256: d2648330b70b1a33e863b1bc968229db0bf211ef0da475eca0b3bdefcdbb835e
-generated_at: 2026-11-08T04:54:38.798392+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8612148c1fcb2eb19b43cea9481c9fb67ab7e98db06f1d70e6124227ecf7ef95
+context_sha256: 067d5767328ded482394ec452d93a53daf1662d5966d086bb84f3ac1c812a26c
+generated_at: 2026-11-22T04:13:38.510913+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/index.ts
 
 ## Purpose
-
-Barrel (public API) file for the **Addresses** module. It is the single import surface that sibling modules are permitted to use, enforcing the strategic-DDD rule that cross-module access goes through the module's public facade rather than reaching into its internals.
+Public barrel for the addresses module. It is documented as the only surface a sibling module may import, which keeps the module's internals encapsulated (the "published language" rule referenced in its header comment).
 
 ## Key elements
-
-- **`export * from './service'`** — Re-exports all value exports (functions, classes, constants) from the service layer.
-- **`export type * from './model'`** — Re-exports only *type* declarations (interfaces, type aliases, enums) from the domain model. No runtime values leak through.
-- **`export type * from './presenter'`** — Re-exports only *type* declarations from the presenter/view-model layer.
+- `export * from './service'`: re-exports everything from the service, both runtime values and types.
+- `export type * from './model'`: re-exports the model's types only.
+- `export type * from './presenter'`: re-exports the presenter's types only.
 
 ## Relationships
-
-- **`src/modules/addresses/service.ts`** — Source of all value exports; the functional core of the module.
-- **`src/modules/addresses/model.ts`** — Source of type-only exports (domain entities, value objects).
-- **`src/modules/addresses/presenter.ts`** — Source of type-only exports (DTOs / view-model shapes).
-- **`src/modules/cart/services/checkout.ts`**, **`src/modules/cart/tests/integration/service.test.ts`**, **`src/modules/users/tests/integration/minimise.test.ts`** — External consumers that import the Addresses module exclusively through this barrel.
+- `service.ts`: its exports are fully re-exported, so this is the only part of the module's runtime API visible through the barrel.
+- `model.ts` and `presenter.ts`: only their types are exposed. The `export type *` form means no runtime values from them pass through the barrel.
+- `src/modules/cart/services/checkout.ts`, `src/modules/cart/tests/integration/service.test.ts` and `src/modules/users/tests/integration/minimise.test.ts`: these neighbors are linked to the barrel in the dependency graph, so they are consumers from outside the module. I can't tell from this file which symbols they use.
 
 ## Notes
-
-- The `type` qualifier on the `model` and `presenter` re-exports is intentional: only compile-time shapes cross the boundary. Runtime implementations stay private to the module.
-- The header comment points to `docs/theory/strategic-ddd.md` §5 for the import rule and to `docs/modules/addresses.md` for module-level documentation.
-- Because this is a pure re-export file, there is no logic, state, or side effects here.
+- The file contains no logic, only re-exports. To change what other modules can see, edit this file.
+- Because model and presenter are re-exported as type-only, anything runtime-level that other modules need must be exported from `service.ts`.

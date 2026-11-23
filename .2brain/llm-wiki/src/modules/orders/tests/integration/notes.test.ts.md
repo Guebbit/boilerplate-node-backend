@@ -1,46 +1,55 @@
 ---
 source: src/modules/orders/tests/integration/notes.test.ts
-sha256: 93730f14cb7f4417430cad3a059e440e3e6bad5e1a4d7f1d650fd53c06f58a78
-generated_at: 2026-11-14T20:52:58.177761+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 49c3512c0f3e934e0c0eaa74876f3f0cafafccd773b8d3aab4a5212030825be1
+context_sha256: 8a8e843bb09ea5cb7a77f53ab111d210a0b6c786efbc57b3eea6712955cf5cfc
+generated_at: 2026-11-22T06:30:01.757958+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/notes.test.ts
 
 ## Purpose
-
-Integration tests for the staff-note endpoints (`POST` and `DELETE /orders/{id}/timeline/notes`) run over real HTTP against a real Mongo. They verify the full lifecycle of a note: creation, staff-only visibility, encryption at rest, inclusion in buyer data export (without author), audit logging by length only, time-based text scrubbing, erasure with the order, and withdrawal (soft delete that keeps the row but unsets text).
+Integration tests for staff notes on an order: `POST /orders/{id}/timeline/notes` and `DELETE /orders/{id}/timeline/notes/{eventId}`. They run over real HTTP and real Mongo and check that a note is staff-only, stored encrypted, scrubbed on the text-retention clock and with order erasure, included in the buyer's data export, and withdrawable by staff.
 
 ## Key elements
-
-- **`seed()`** – Creates a paid order for a signed-in buyer, returns buyer/staff bearer tokens and the order ID.
-- **`leaveNote` / `leaveStatus` / `writeNote` / `deleteStatus`** – Thin HTTP helpers around the two endpoints; `writeNote` additionally extracts the `Location` header for the DELETE path.
-- **`describe('POST /orders/{id}/timeline/notes')`** – 8 tests covering 201 response shape, staff-vs-buyer visibility, encryption at rest (raw collection contains no plaintext), order-id integrity (rejects a note whose `orderId` was tampered with in Mongo), data-export inclusion/exclusion, audit-by-length, 403 for non-staff, and 404/422 edge cases.
-- **`describe('the note's life after it is written')`** – 2 tests: text-clock retention (`NODE_ORDER_EVENT_TEXT_RETENTION_DAYS`) and scrubbing on scheduled buyer-erasure.
-- **`describe('DELETE /orders/{id}/timeline/notes/{eventId}')`** – 4 tests: 204 with row kept but text unset, audit-by-length on withdrawal, 404 on double-delete / wrong-order / wrong-row-type, and 403 for non-staff.
+- `jest.mock('@infrastructure/observability/audit', ...)`: replaces the audit port with `auditPortMock()` from `@tests/ports`. It is replaced rather than spied on.
+- `setupTestDb()` and an `afterEach` that calls `resetDomainEvents()`.
+- `NOTE`: a note containing a phone number (`0612345678`), so the redaction cases have personal data to remove.
+- `seed()`: creates a signed-in buyer, a product, a paid order, and an admin. It returns the user, order, `orderId`, and the `buyer` and `staff` bearers.
+- `leaveNote`, `leaveStatus`, `writeNote`, `deleteStatus`: helpers that POST a note, return the status, return the `Location` header, and DELETE a note.
+- `describe('POST ...')`:
+  - Returns 201 with a staff-only `note_added` entry and a `Location` pointing at the note's DELETE path.
+  - The note is visible to staff in the timeline and invisible to the buyer.
+  - The raw `orderEventModel` collection holds no plaintext.
+  - A note row moved to another order makes `orderService.readTimeline` throw, because the order id is in the associated data.
+  - `orderService.collectTimelineOf` includes the note without an `actor` field.
+  - Audit via `ordersAuditActions.ADMIN_ORDER_NOTE_ADDED` records `metadata.length` and never the text.
+  - A caller without `update:Order` gets 403 and nothing is written.
+  - An unknown order gets 404; empty text or text over 2000 characters gets 422.
+- `describe('the note's life after it is written')`:
+  - `orderService.scrubTimelineText()` removes the text of a note older than `NODE_ORDER_EVENT_TEXT_RETENTION_DAYS` and keeps the row.
+  - When the buyer's data is erased (`eraseAsScheduled` followed by `orderService.anonymizeDueOrders()`), the note's text is scrubbed too.
+- `describe('DELETE ...')`:
+  - Returns 204, unsets the text, and keeps the row in the timeline and the export.
+  - Audit via `ADMIN_ORDER_NOTE_DELETED` records the length only.
+  - A second delete returns 404, as does a non-note row (such as `created`) or a note under a different order.
+  - A caller without `update:Order` gets 403 and the text remains.
 
 ## Relationships
-
-- **`src/modules/orders/services/index.ts`** – The order service is called directly (bypassing HTTP) for service-level assertions such as timeline reads, data-export collection, text scrubbing, and order anonymisation.
-- **`src/modules/orders/model.ts`** – `orderEventModel` is used to inspect the raw Mongo collection (encryption check) and to perform deliberate tampering (order-id swap test).
-- **`src/modules/orders/audit.ts`** – `ordersAuditActions` is imported to filter observed audit events by action name.
-- **`src/infrastructure/observability/audit.ts`** – The audit port is replaced with a mock (see `tests/support/ports.ts` for the mechanism); the real implementation is never invoked.
-- **`src/kernel/events.ts`** – `resetDomainEvents()` is called in `afterEach` to clear the in-memory domain-event bus between tests.
-- **`src/modules/orders/tests/factories.ts`** – Provides `createOrder`, `toOrderItem`, and `timelineOf` for seeding and assertion.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` for order-item setup.
-- **`src/modules/users/tests/factories.ts`** – `eraseAsScheduled` to trigger the buyer-erasure flow.
-- **`src/types/index.ts`** – `OrderStatus` enum used in seed setup.
-- **`tests/support/ports.ts`** – Supplies `observePort` (audit spy) and the replacement implementation for the audit port.
-- **`tests/support/http.ts`** – `api`, `authenticateAs`, `authenticateAsRole` for real-HTTP calls.
-- **`tests/support/environment.ts`** – `setEnvironment` to configure retention-days per test.
-- **`tests/support/callers.ts`** – `asAdmin()` for service-level calls.
-- **`tests/support/checkout-modules.ts`** – `registerCheckoutModules` needed for the erasure-path test.
-- **`tests/support/setup-test-db.ts`** – Initialises the real Mongo test database.
+- **`../factories`** (orders), **`@modules/products/tests/factories`**, **`@modules/users/tests/factories`**: build orders, items and products, query the timeline, force order state (`markOrderPaidAt`, `forceOrderStatus`), and erase a user (`eraseAsScheduled`).
+- **`../../services`** (`orderService`), **`../../model`** (`orderEventModel`), **`../../audit`** (`ordersAuditActions`): the code under test. The tests also read and modify the collection directly.
+- **`@infrastructure/observability/audit`**: mocked, and `observePort` inspects the `emitAuditEvent` calls.
+- **`@kernel/events`**: `resetDomainEvents` clears state between tests.
+- **`@types`**: `OrderStatus`.
+- **`tests/support/*`**:
+  - `setup-test-db`: database lifecycle.
+  - `http`: `api`, `authenticateAs`, `authenticateAsRole`.
+  - `environment`: `setEnvironment`.
+  - `ports`: `observePort`, `auditPortMock`.
+  - `callers`: `asAdmin`.
+  - `checkout-modules`: `registerCheckoutModules`, used in the erasure test.
 
 ## Notes
-
-- The audit port is **replaced**, not spied on (see `tests/support/ports.ts` for the rationale); use `observePort(auditPort.emitAuditEvent)` to inspect calls.
-- DELETE is a soft delete: the timeline row persists with `type: 'note_added'` intact but the `text` field is unset. Tests assert the row still exists and appears in exports without text.
-- The "order-id tamper" test writes directly to Mongo via `orderEventModel.collection.updateOne` to simulate a consistency violation, then asserts the service layer rejects the row.
-- Audit events record `metadata.length` (character count) but never the note text itself—tests explicitly assert the raw audit JSON does not contain the note string.
-- `resetDomainEvents()` in `afterEach` is required because the services emit to the in-memory kernel event bus; without it, events leak across tests.
+- Audit assertions filter `emitAuditEvent` calls by action. They check that the metadata contains only the text length and that the serialized event never contains "Monday".
+- The erasure test backdates payment by about 3650 days and forces the order to `canceled`, so the erasure's claim window has passed.
+- Deleting a note unsets only its text. The timeline row and its export entry remain.

@@ -1,33 +1,32 @@
 ---
 source: src/modules/delivery/domain/lifecycle.ts
-sha256: 9266286df6ad58d08aff53d2c17c1d139f74e0f978b048f15d96004572b43082
-generated_at: 2026-11-14T19:39:34.899171+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a097ef00315beb1975605347ef54432c9ac416d96fb2597a2a303e5e6af19304
+context_sha256: aa77fb589e1a4c014b18704568b9021c6e4a0cb5f269bc8215e0d1cf0a9b5db9
+generated_at: 2026-11-22T04:48:06.020922+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/domain/lifecycle.ts
 
 ## Purpose
-
-Defines the shipment lifecycle as a pure data table (no I/O) that maps the three allowed status transitions—`deliver`, `lose`, `find`—and declares the birth status for physical parcels. Every repository write and service action validates against this table rather than spelling out statuses independently.
+Defines the shipment status lifecycle as a single pure table (no I/O) that every repository write, `actions` flag and test reads. It declares which events can move a shipment between statuses and builds the validated lifecycle object from them.
 
 ## Key elements
-
-- **`ShipmentEvent`** (type) — The union `'deliver' | 'lose' | 'find'`, the only legal transitions a shipment can undergo after birth.
-- **`SHIPMENT_EVENTS`** (const) — A `const` record mapping each event to its allowed `from` statuses and target `to` status. Annotated `satisfies Record<ShipmentEvent, LifecycleEvent<ShipmentStatus>>` so the compiler enforces completeness without widening the type.
-- **`shipmentLifecycle`** (const, export) — The validated lifecycle object produced by `defineLifecycle`. Exposes `initial: ShipmentStatus.shipped` (the birth status for a physical parcel) and the full event table. Checked once at module load.
+- `ShipmentEvent`: union type `'deliver' | 'lose' | 'find'`.
+- `SHIPMENT_EVENTS`: maps each event to the statuses it may start from and the one it lands on:
+  - `deliver`: `shipped` → `delivered`
+  - `lose`: `shipped` → `lost`
+  - `find`: `lost` → `delivered`
+  
+  It is declared `as const satisfies Record<ShipmentEvent, LifecycleEvent<ShipmentStatus>>`, so it keeps literal types and is checked against the primitive's event shape.
+- `shipmentLifecycle`: the result of `defineLifecycle<ShipmentStatus, ShipmentEvent>(...)`. It is given all `ShipmentStatus` values and `{ initial: ShipmentStatus.shipped, events: SHIPMENT_EVENTS }`. The table is checked once, at load.
 
 ## Relationships
-
-- **`src/domain-primitives/lifecycle.ts`** — Provides the `defineLifecycle` factory and the `LifecycleEvent` type that this module consumes to build and type its table.
-- **`src/types/index.ts`** — Source of the `ShipmentStatus` enum used throughout the transition definitions.
-- **`src/modules/delivery/repository.ts`** — Consumes `shipmentLifecycle` to validate writes before persisting a status change.
-- **`src/modules/delivery/services/actions.ts`** — Consults `shipmentLifecycle` when raising flags (deliver / lose / find) on a shipment.
-- **`src/modules/delivery/domain/index.ts`** — Barrel re-export for this module.
-- **`src/modules/delivery/tests/unit/lifecycle.test.ts`** — Unit-tests the transition rules and the `initial` status.
+- `src/domain-primitives/lifecycle.ts`: supplies `defineLifecycle` and the `LifecycleEvent` type that this file uses to build and type the table.
+- `src/types/index.ts`: supplies the `ShipmentStatus` enum, imported through the `@types` alias.
+- `src/modules/delivery/repository.ts` and `src/modules/delivery/services/actions.ts`: according to the file's doc comments, repository writes and `actions` flags consult `shipmentLifecycle` instead of spelling out statuses.
+- `src/modules/delivery/domain/index.ts` and `src/modules/delivery/tests/unit/lifecycle.test.ts`: graph neighbors, presumably the domain barrel and the unit test. The file itself shows no detail on how they use it.
 
 ## Notes
-
-- A **birth** (a shipment first appearing) is deliberately **not** an event here. Digital shipments are born `delivered` (see `services/cut.ts`); physical ones are born `shipped`. Birth is a write, not a lifecycle transition, so it does not appear in `SHIPMENT_EVENTS`.
-- `SHIPMENT_EVENTS` is declared `as const satisfies …`, giving literal-level typing while still enforcing the `LifecycleEvent` contract. Don't loosen to a plain object annotation.
-- The table is intentionally flat (single-source-of-truth). If a new status or transition is needed, add it here first; `repository.ts` and `actions.ts` pick it up automatically.
+- Births are not events. A digital shipment is born `delivered` (written in `src/modules/delivery/services/cut.ts`), and a physical one is born `shipped`, which is the lifecycle's `initial` status. Neither goes through this table.
+- The module doc comment points to the `the-two-records` section of `src/modules/delivery/model.ts` for background.

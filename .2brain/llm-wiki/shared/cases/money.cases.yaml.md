@@ -1,30 +1,36 @@
 ---
 source: shared/cases/money.cases.yaml
-sha256: 7b7eeb2464979a97506f002ac7ef13387e6c4831efc56634cd66b6578b714fc1
-generated_at: 2026-11-08T03:05:25.467459+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7b7eeb2464979a97506f002ac7ef13387e6c4831efc56634cd66b6578b714fc1
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:21:42.662692+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/cases/money.cases.yaml
 
 ## Purpose
-A declarative test-case table that pins the exact contracts of every money-conversion function in `money.ts`. It is the single source of truth for expected inputs/outputs (exponent lookup, text/number → minor units, minor units → decimal text, `fits`, `apportion`, `scale-by-rate`) so that any implementation or reimplementation can be validated against the same table without re-deriving edge cases.
+A shared, language-neutral table of test cases for money handling, with amounts as whole minor units. The header says the ISO 4217 exponent table itself lives in `money.ts`, and that these cases define how both sides must read it. Each case has a `name` and a `kind`, plus the inputs and expected output for that kind.
 
 ## Key elements
-- **`exponent` cases** — currency code → integer decimal-places (0–4). Establishes the ISO 4217 table *as this project interprets it*, including deliberate overrides of CLDR (`HUF`, `IDR`, `MGA`, `IQD` → 2 or 3 where `Intl` says 0). Unlisted codes and lowercase codes default to 2.
-- **`minor-text` cases** — plain decimal **text** → minor units. Digits are moved (no float), rounded half-away-from-zero on the first dropped digit. Documents that exponent form (`1e3`), leading-dot (`.5`), and non-numeric text are routed through the numeric path instead.
-- **`minor-number` cases** — a JS number → minor units via `round(value × 10^exponent)`. Rounding is half-toward-+∞. Non-finite values and `−0` resolve to 0.
-- **`decimal` cases** — minor units → the padded decimal string the API exposes.
-- **`fits` cases** — boolean check that a decimal string does not exceed the currency's allowed places.
-- **`apportion` cases** — split `total` by `weights`; floor each share, leftover assigned to the largest (first on tie) weight. Covers all-zero weights, zero total, and empty weights.
-- **`scale-by-rate` cases** — `round(amount × rate)` with half-toward-+∞; non-finite rate yields 0.
+The header documents seven case kinds, all under the top-level `cases:` list:
+
+- **`exponent`** (`currency` → `exponent`): decimal places per currency. The default is 2. JPY, KRW and ISK are 0, KWD and BHD are 3, IQD is 3, CLF is 4. Unlisted codes (`XXX`) and lowercase codes (`jpy`) get 2.
+- **`minor-text`** (`value`, `currency` → `minor`): converts decimal text to minor units by moving digits, never through floats.
+  - It rounds half away from zero on the first dropped digit only. Examples: `1.005` → 101, `-19.995` → -2000.
+  - `-0` and `-0.00` give 0.
+  - Only plain `-?digits[.digits]` takes this path. `.5` and `1e3` are read as numbers. `abc` and an empty string give 0.
+- **`minor-number`** (numeric `value`, `currency` → `minor`): `round(value * 10^exponent)`, with half rounding toward +infinity. For example, -0.5 JPY → 0. NaN, ±Infinity and negative zero give 0.
+- **`decimal`** (`minor`, `currency` → `decimal` text): converts back to API text padded to the currency's places. Examples: `19.99`, `1999` for JPY, `-19.99`, `0.00`.
+- **`fits`** (`amount` text, `currency` → boolean `fits`): true if the text has no more places than the currency allows. `NaN` and `Infinity` never fit.
+- **`apportion`** (`total`, `weights` → `shares`): floors every share, then gives the leftover to the largest weight, or to the first one on a tie.
+  - All-zero weights, a zero total and empty weights give zeros or an empty list.
+- **`scale-by-rate`** (`amount`, `rate` → `result`): `round(amount * rate)`, with half rounding toward +infinity. For example, -505 × 0.5 → -252. A non-finite rate gives 0.
 
 ## Relationships
-- **`money.ts`** — the sole consumer/implementation target. Every `kind` in this file maps to a function (or internal helper) in `money.ts`; the YAML table is the acceptance spec the module must satisfy. The ISO 4217 exponent table lives in `money.ts`; these cases assert how both sides must read it.
+The graph lists no neighbors for this file. The header only mentions the exponent table and "both sides" in prose; it names no loader or test runner.
 
 ## Notes
-- **Rounding direction differs by entry point.** `minor-text` rounds half *away from zero* (`19.995 → 2000`, `−19.995 → −2000`); `minor-number` and `scale-by-rate` round half *toward +∞* (`−0.5 → 0`, `−252.5 → −252`). This is intentional and easy to conflate.
-- **CLDR disagreements are deliberate.** HUF, IDR, COP, PKR, LBP (2 here vs 0 in CLDR) and IQD (3 here vs 0) are pinned by these cases. Do not "fix" them to match `Intl.NumberFormat` output.
-- **The `minor-text` path is strictly regex-gated**: only `-?digits[.digits]` takes the digit-moving path. Anything else (`.5`, `1e3`, `abc`, ``) falls through to numeric parsing, which can produce surprising results (e.g. `.5 → 50`, `1e3 → 100000`).
-- **Lowercase currency codes are unlisted** and fall back to exponent 2 — there is no case-insensitive lookup.
-- **`apportion` leftover tie-break** is "first on a tie," not "last" or "random"; the cases `[1,1,1] → [34,33,33]` and `[1,1] → [1,0]` make this explicit.
+- HUF, IDR, COP, PKR and LBP are 2 here although CLDR (`Intl`) says 0. IQD is 3 where CLDR says 0. MGA is also 2 where CLDR says none. Do not "correct" these to CLDR values.
+- Currency lookup is case-sensitive.
+- The `minor-text` and `minor-number` rounding rules differ. Text rounds half away from zero. Numbers round half toward +infinity. The same input can therefore give different results for negative halves.
+- The file is Prettier-style YAML with flow-mapping entries and 4-space indentation.

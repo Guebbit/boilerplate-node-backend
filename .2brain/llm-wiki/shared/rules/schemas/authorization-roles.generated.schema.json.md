@@ -1,30 +1,32 @@
 ---
 source: shared/rules/schemas/authorization-roles.generated.schema.json
-sha256: c74dc46d40139e580de5b004aec981ab6c65390335e0c17c223be1060ca548a9
-generated_at: 2026-11-14T17:46:48.583784+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c74dc46d40139e580de5b004aec981ab6c65390335e0c17c223be1060ca548a9
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:27:04.237012+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/schemas/authorization-roles.generated.schema.json
 
 ## Purpose
-
-JSON Schema (draft 2020-12) that validates the structure of an authorization-roles configuration document. It enforces the shape of the top-level object, each role entry, and the three fixed audience tiers so that any consumer (runtime loader, validation tool, or editor) can reject malformed role definitions early.
+A generated JSON Schema (draft 2020-12) that describes the shape of an authorization-roles configuration document. It defines the roles available in the system, plus the permissions granted to three built-in audiences (guest, unverified, customer). The `.generated` name suggests it is produced by tooling and not meant to be edited by hand.
 
 ## Key elements
-
-- **`version`** – numeric field identifying the schema/roles revision.
-- **`roles`** – array of role objects. Each role must carry `name`, `scope` (`"tenant"` | `"platform"`), `title`, `description`, and `sets` (string array of permission identifiers). `assignable` (boolean) is optional.
-- **`audience`** – object with exactly three required keys (`guest`, `unverified`, `customer`). Each sub-object defines `title`, `description`, and `sets` (string array) for that identity tier.
-- **`additionalProperties: false`** at every level – unknown keys are rejected, keeping the contract closed.
+- **Top level** is an object. `version` (number), `roles` and `audience` are all required. No other properties are allowed (`additionalProperties: false`).
+- **`roles`** is an array of role objects:
+  - `name`, `title` and `description` are strings.
+  - `scope` is an enum of `"tenant"` or `"platform"`.
+  - `sets` is an array of strings, and `assignable` is an optional boolean.
+  - Required: `name`, `scope`, `title`, `description`, `sets`.
+- **`audience`** is an object with three required keys: `guest`, `unverified` and `customer`.
+  - Each has the same shape: `title`, `description` and `sets` (an array of strings), all required.
+  - Extra properties are not allowed.
 
 ## Relationships
-
-No graph neighbors were detected. This file is a standalone schema artifact; other modules import it by path rather than through a tracked dependency edge.
+No graph neighbors. Nothing in the dependency graph imports or references this file, and it has no references to other files.
 
 ## Notes
-
-- The filename contains `.generated.`, signalling it is produced by a build/codegen step. Do not edit by hand; make changes to the source generator instead.
-- `scope` is a two-value enum (`tenant`, `platform`). Adding a new scope value requires a schema bump.
-- `assignable` is the **only** optional field on a role; all other role properties are required.
-- `additionalProperties: false` is applied at the top level, each role item, the audience object, and each audience tier. Any new field must be added to the schema before it can appear in data.
+- Every object level sets `additionalProperties: false`, so unknown keys fail validation.
+- `assignable` is the only optional field on a role. It is not part of the `audience` entries.
+- `sets` entries are plain strings. The schema does not say what they refer to, for example permission sets, or whether their values are validated elsewhere.
+- Changes should go through whatever generates this file, so manual edits may be overwritten. The generator is not visible here.

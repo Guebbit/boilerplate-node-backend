@@ -1,33 +1,36 @@
 ---
 source: src/modules/returns/services/cancellation-refund.ts
-sha256: 80acded9ee9a9e5c52af929ca317d1c1524cd1a2978f333b0effeea4ab7eb77b
-generated_at: 2026-11-08T08:02:25.353373+00:00
-model: ollama:qwen3.8:27b
+source_sha256: daef61710f6653af61e422fc833fac5bcf63f85a401b09707d2c8fde2424618c
+context_sha256: 68ba0d8a8e68193f1813925400306ffa6549ecac02137ad2ad1f932f07441a2e
+generated_at: 2026-11-22T07:28:29.687355+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/cancellation-refund.ts
 
 ## Purpose
-
-Computes the refund breakdown owed when cancelling a fulfillment order's remainder. It exists as a single shared computation for the two callers that need the same number: the cancel operation itself (inside its transaction) and `GET /returns/options` (which quotes the refund before anything is written).
+Computes what cancelling a fulfillment order's remainder would refund, based on the order and its other returns. It is a single computation shared by two callers: the cancel itself (inside its transaction) and `GET /returns/options`, which quotes the refund before anything is written.
 
 ## Key elements
+- `cancellationRefundOn(order, earlier, lines)`: the only export. Returns a `RefundBreakdown`.
+  - `order`: an `OrderDocument`.
+  - `earlier`: every return on the order, as the transaction reads them (`AccountedReturn[]`).
+  - `lines`: the product quantities this cancel takes (`ProductQuantity[]`).
 
-- **`cancellationRefundOn(order, earlier, lines)`** — The sole export. Takes the `OrderDocument`, the order's already-settled returns (`AccountedReturn[]`), and the product lines this cancel takes (`ProductQuantity[]`). Returns a `RefundBreakdown` by composing four domain helpers: `accountsOf` (sums what earlier returns have settled), `takesLastUnit` (flags whether this cancel consumes the final unit of a product), `shippingStillOwed` (remaining shipping liability), and `cancellationRefundFor` (assembles the final breakdown).
+How it builds the result:
+1. `accountsOf(earlier, order.currency)` summarizes what the other returns and cancels have already settled.
+2. It builds an ordered-quantity list and a product-id → unit-price map from `order.items`. Ids are compared as strings (`String(item.product._id)`).
+3. It prices each cancelled line at the order's product price, using `'0'` if the product isn't found.
+4. `takesLastUnit(ordered, [...accounts.accountedFor, ...lines])` decides whether this cancel takes the last unit.
+5. `shippingStillOwed(currency, order.shippingCost ?? '0', accounts.shippingRefunded)` gives the shipping still refundable.
+6. All of this goes to `cancellationRefundFor`, which produces the breakdown.
 
 ## Relationships
-
-- **`src/modules/orders/index.ts`** — Provides the `OrderDocument` type used as input.
-- **`src/modules/returns/domain/index.ts`** — Barrel import source for `accountsOf`, `cancellationRefundFor`, `shippingStillOwed`, `takesLastUnit`, `RefundBreakdown`, `AccountedReturn`, `ProductQuantity`.
-- **`src/modules/returns/domain/accounting.ts`** — Supplies `accountsOf` and the `AccountedReturn` type.
-- **`src/modules/returns/domain/quantities.ts`** — Supplies `ProductQuantity` and `takesLastUnit`.
-- **`src/modules/returns/domain/refund-amount.ts`** — Supplies `cancellationRefundFor`, `shippingStillOwed`, and `RefundBreakdown`.
-- **`src/modules/returns/services/cancel-remainder.ts`** — Caller 1: invokes `cancellationRefundOn` inside the cancel transaction.
-- **`src/modules/returns/services/options.ts`** — Caller 2: invokes `cancellationRefundOn` to quote the refund on `GET /returns/options` before any write.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Test that exercises this computation indirectly through the delivery/fulfillment flow.
+- **`src/modules/returns/domain/index.ts`** (re-exporting `accounting.ts`, `quantities.ts`, `refund-amount.ts`): supplies `accountsOf`, `takesLastUnit`, `shippingStillOwed`, `cancellationRefundFor` and the types `RefundBreakdown`, `AccountedReturn` and `ProductQuantity`. This file only gathers order data and passes it in. The refund rules live in the domain.
+- **`@modules/orders`** (`src/modules/orders/index.ts`, `src/modules/orders/model.ts`): provides the `OrderDocument` type. It is a type-only import.
+- **`src/modules/returns/services/cancel-remainder.ts`** and **`src/modules/returns/services/options.ts`**: the two callers described in the module doc. The cancel runs it in its transaction, and the options service uses it for the quote.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`**: listed as a graph neighbor. The file content shows no direct interaction.
 
 ## Notes
-
-- This module is purely computational — it reads order and return state and returns a number; it performs no writes and has no side effects.
-- `lines` represents what *this* cancel takes, while `earlier` represents what *previous* returns already settled. Conflating the two is the primary risk when modifying the function.
-- `productId` is coerced to `String(item.product._id)` throughout; callers must pass IDs in a form compatible with that map lookup.
+- The function is pure: it does no I/O and writes nothing. Callers supply the returns and order, so the quote and the actual cancel agree as long as they pass equivalent inputs.
+- A product missing from the order is priced at `'0'` and a missing `shippingCost` is treated as `'0'`. Neither case raises an error. Amounts are string-typed.

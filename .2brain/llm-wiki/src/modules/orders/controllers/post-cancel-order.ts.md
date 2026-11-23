@@ -1,34 +1,36 @@
 ---
 source: src/modules/orders/controllers/post-cancel-order.ts
-sha256: 48c42ebf6f876ae3ae939eccc55bf16c5a2ee70f33c5facfeb3173f11b76763d
-generated_at: 2026-11-08T06:46:52.054293+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2817fa8defea79d3b720ef9db9450f9e50fbee1626eba4d8d44a025479d6fb5b
+context_sha256: cda44a0727528165b0a6d717a2ecf284b1e0325123de2e200f960a674b74d834
+generated_at: 2026-11-22T06:09:27.920732+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/controllers/post-cancel-order.ts
 
 ## Purpose
-
-HTTP controller for `POST /orders/:id/cancel` — the single order-write operation a customer is permitted to perform. It is a thin wiring layer that validates the route params and body, extracts the caller's auth context, and delegates the actual write to `orderService.cancelOnRequestById`.
+Express controller for `POST /orders/:id/cancel`, the one order write a customer can make. It is thin wiring: it validates the id and body, then delegates to `orderService.cancelOnRequestById`, which scopes the write to the caller.
 
 ## Key elements
-
-- **`postCancelOrder`** (exported) — Express controller function. Validates the `:id` param, parses the (optional) JSON body against the Zod schema `CancelOrderByIdBody`, reads `request.authContext`, calls the service, and either refuses the response or delegates to `respondWithOrder`.
+- `postCancelOrder(request, response): Promise<void>` — the exported handler.
+  - Validates the id with `requireId`. A malformed id answers as `orders.not-found`, before the body is read.
+  - Parses the body with `parseBody(CancelOrderByIdBody, request.body ?? {}, response)`.
+  - Calls `orderService.cancelOnRequestById(id, authContext, { refund: body.refund }, callerContextOf(request))`.
+  - If `refused(response, result)` is true, it stops. Otherwise it responds via `respondWithOrder(response, result.data, authContext, 'postCancelOrder')`.
+  - Unexpected errors go through `.catch(catchAs(response, 'postCancelOrder'))`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — provides `parseBody` (Zod validation), `refused` (service-level rejection handling), and `catchAs` (unified error-to-HTTP mapping).
-- **`src/infrastructure/http/ids.ts`** — provides `requireId`, which validates the `:id` param and short-circuits with a 404 if malformed.
-- **`src/infrastructure/http/request.ts`** — provides `callerContextOf`, which packages the request into a context object passed alongside the service call.
-- **`src/modules/orders/services/index.ts`** — source of `orderService`; the controller calls `cancelOnRequestById` on it.
-- **`src/modules/orders/controllers/respond.ts`** — provides `respondWithOrder`, the shared helper that serialises the resulting order into the HTTP response.
-- **`src/modules/orders/routes.ts`** — registers `postCancelOrder` as the handler for the `POST /orders/:id/cancel` route.
-- **`src/types/index.ts`** — defines the `CancelOrderRequest` type used as the Express generics for the request body.
+- `@infrastructure/http/controller` (`src/infrastructure/http/controller.ts`) supplies `parseBody`, `refused` and `catchAs`, which handle body validation, refused service results and error responses.
+- `@infrastructure/http/ids` (`src/infrastructure/http/ids.ts`) supplies `requireId`, which validates the `:id` param.
+- `@infrastructure/http/request` (`src/infrastructure/http/request.ts`) supplies `callerContextOf`, which builds the caller context passed to the service.
+- `./respond` (`src/modules/orders/controllers/respond.ts`) supplies `respondWithOrder`, which writes the successful response.
+- `../services` (`src/modules/orders/services/index.ts`) supplies `orderService`, which enforces the cancellation rules.
+- `@types` (`src/types/index.ts`) supplies the `CancelOrderRequest` type.
+- `src/modules/orders/routes.ts` is the route wiring for this handler.
 
 ## Notes
-
-- **Body is optional.** A customer's cancel sends no body; Express leaves `request.body` as `undefined` (not `{}`). The controller guards with `request.body ?? {}` before parsing.
-- **`refund` is parsed, not read raw.** The schema enforces a boolean so that the string `"false"` (truthy in JS) cannot slip through. An absent body defaults to `{ refund: true }`.
-- **Scope semantics live in the service, not here.** A non-admin can only cancel their own order in customer-allowed statuses; an admin can cancel any order. The `refund` flag is only *honored* for admins — a customer's cancel is always refunded.
-- **Malformed ID short-circuits before body parsing**, returning a 404 (`orders.not-found`) so the client never learns the id was syntactically wrong vs. genuinely absent.
-- **`request.authContext!`** uses a non-null assertion; the contract is that the `isAuth` middleware has already run (enforced in `routes.ts`).
+- The body is optional. Express leaves `request.body` undefined when there is nothing to parse, so the controller substitutes `{}`. The schema's default (`CancelOrderByIdBody`) then turns that into `refund: true`.
+- The body is parsed rather than read raw because `refund` decides whether money goes back, and a raw `"false"` string would be truthy.
+- Authorization rules live in the service, not here. A non-admin can only cancel their own order, from the statuses the lifecycle allows a customer. An admin can cancel any order. `refund` is only honored for admins, and a customer's cancel is always refunded.
+- `request.authContext!` is a non-null assertion that relies on the `isAuth` middleware having run earlier.
+- Validation failures return `Promise.resolve()` early, after the helper has already written the response.

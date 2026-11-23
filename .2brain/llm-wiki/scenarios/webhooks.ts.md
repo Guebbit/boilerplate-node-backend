@@ -1,36 +1,38 @@
 ---
 source: scenarios/webhooks.ts
-sha256: 3566b1abb6de228b95d76ef9cc97edd1195ae17fde0675631f79fa0214c95cbb
-generated_at: 2026-11-14T17:19:06.625233+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5e76fe729ed7ff30a6de43f22189801a075eaed4ecd2f5ac0083da01d2021d3b
+context_sha256: 1f629a22e6dfbe1826155fb48cb09b4670c0e5f0441d186325138314935b5df6
+generated_at: 2026-11-22T01:50:38.782929+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/webhooks.ts
 
 ## Purpose
-
-Seeds a single demo webhook subscription (pointing at the `webhook-tester` sink) as part of the `shop` fixture dataset. It is intentionally inert by default: when `NODE_WEBHOOK_DEMO_SINK_URL` is unset it seeds nothing, so developers who never enable the `integrations` docker profile are never left with a dead subscription auto-disabling in their logs.
+Provides the webhooks module's slice of the demo dataset. It is the one `shopModules` entry that seeds nothing by default: it seeds a single demo webhook subscription pointing at a local sink (`webhook-tester`, or the frontend's Cypress listener) only when `NODE_WEBHOOK_DEMO_SINK_URL` is set. This keeps developers who never enable the `integrations` compose profile from getting a dead subscription that auto-disables in their logs.
 
 ## Key elements
-
-- **`seedWebhooksCollection`** – The seed function. Reads the sink base URL from `demoSinkConfig()`, returns `[]` immediately if unset. Otherwise upserts one subscription fixture (fixed ObjectId, `*` event types, one ring entry) via `insertIfAbsent`.
-- **`shopModule`** – The `{ seed: seedWebhooksCollection }` entry consumed by `scenarios/shop-modules.generated.ts` (regenerated via `npm run regenerate`).
-- **`WEBHOOK_SUBSCRIPTION_ID`** – Fixed ObjectId (`65e0000000000000000000a1`) making re-seeds idempotent no-ops.
-- **`WEBHOOK_SESSION_ID`** – Fixed UUID used as the path segment in the sink URL; works because `webhook-tester` runs with `AUTO_CREATE_SESSIONS=true`.
-- **`WEBHOOK_DEMO_SECRET`** – Fixed Standard-Webhooks-shaped plaintext (`whsec_…`) that decodes to a human-readable string. Chosen over `mintRingSecret()` so the plaintext is knowable for signature-verification copy-paste in the UI.
-- **`WEBHOOK_DEMO_SECRET_ID`** – Fixed UUID for the single ring entry's `id` field.
+- `seedWebhooksCollection()` — returns `Promise<SeedOutcome[]>`. Returns `[]` if the sink URL is unset. Otherwise it builds one subscription fixture and upserts it through `insertIfAbsent`.
+- `shopModule` — `{ seed: seedWebhooksCollection }`, this module's entry in the `shop` fixture table.
+- Fixed constants:
+  - `WEBHOOK_SUBSCRIPTION_ID` is the fixed `_id`, which makes re-seeding a no-op.
+  - `WEBHOOK_SESSION_ID` is the fixed session UUID appended to the URL.
+  - `WEBHOOK_DEMO_SECRET_ID` is the ring entry id.
+  - `WEBHOOK_DEMO_SECRET` is a fixed plaintext `whsec_…` secret that decodes to "demo-webhook-secret-do-not-use-in-production".
+- Fixture shape: tenant `DEPLOYMENT_TENANT_ID`, url `<sink base, trailing slashes stripped>/<session id>`, description "Demo sink (webhook-tester)", `eventTypes: ['*']`, `consecutiveFailures: 0`, and one encrypted ring secret.
 
 ## Relationships
-
-- **`scenarios/config.ts`** – `demoSinkConfig()` supplies the `NODE_WEBHOOK_DEMO_SINK_URL` value that gates whether anything is seeded.
-- **`scenarios/seed.ts`** – Provides `insertIfAbsent` (upsert helper) and the `SeedOutcome` return type.
-- **`src/kernel/access/tenant.ts`** – `DEPLOYMENT_TENANT_ID` scopes the fixture to the demo tenant.
-- **`src/modules/webhooks/repository.ts`** – `webhookSubscriptionRepository` is the Mongoose repository passed to `insertIfAbsent`.
-- **`src/modules/webhooks/secrets.ts`** – `encryptRingSecret` encrypts the fixed plaintext into the `ciphertext` field of the ring entry.
-- **`tests/integration/scenarios/webhooks-seed.test.ts`** – Integration test that exercises the seed path (likely asserts the inert default and the seeded fixture shape).
+- `scenarios/config.ts` — `demoSinkConfig()` supplies `NODE_WEBHOOK_DEMO_SINK_URL`.
+- `scenarios/seed.ts` — provides `insertIfAbsent` and the `SeedOutcome` type.
+- `src/kernel/access/tenant.ts` — provides `DEPLOYMENT_TENANT_ID`, used as the subscription's tenant.
+- `src/modules/webhooks/repository.ts` — `webhookSubscriptionRepository` is the target of the insert.
+- `src/modules/webhooks/secrets.ts` — `encryptRingSecret` encrypts the demo secret into the ring entry's `ciphertext`.
+- `tests/integration/scenarios/webhooks-seed.test.ts` — the integration test for this seed.
+- Collected into `shopModules` (`./shop-modules`) and run by `seedShop`. `npm run regenerate` picks it up, so deleting this file removes the entry.
 
 ## Notes
-
-- The ring entry's `createdAt` is set manually in this file to satisfy the subdocument type; the subdocument's own `timestamps: { createdAt: true }` stamps the same instant on insert—don't remove the explicit field without checking the type.
-- The sink URL must be `https://` (every webhook URL is) and the origin must be allow-listed in the SSRF guard (`scenarios/support/doubles/webhook-sink.ts` registers it). The sink is loopback-only; the guard refuses all other loopback addresses.
-- The secret is **demo-only** and never meant for a real ring. Its plaintext is documented in `.env-example` next to `NODE_WEBHOOK_DEMO_SINK_URL` so a developer can verify `webhook-signature` headers by hand.
+- The secret is fixed rather than made by `mintRingSecret()`. A minted plaintext exists only in the response that minted it, so the seed could never give it to `webhook-tester` for signature checks. It is demo-only, and `.env-example` documents it next to `NODE_WEBHOOK_DEMO_SINK_URL`.
+- The URL uses `https://` so the edit form can save it. It is reachable only because the development doubles (`scenarios/support/doubles/webhook-sink.ts`) register the sink's origin with `@infrastructure/adapters/ssrf-guard`. That lets this one loopback origin through, and the sink's certificate comes from the test CA in `scenarios/support/tls/`.
+- The session id is fixed because `webhook-tester`'s `AUTO_CREATE_SESSIONS=true` creates a session on the first POST, so nobody has to open the UI first.
+- `createdAt: new Date()` on the ring entry only satisfies the type. Mongoose keeps a `createdAt` that is given, so this value is the one stored.
+- The inert-by-default shape matches `scenarios/support/doubles/mail-outbox.ts`.

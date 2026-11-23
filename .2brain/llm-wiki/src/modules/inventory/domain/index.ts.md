@@ -1,32 +1,27 @@
 ---
 source: src/modules/inventory/domain/index.ts
-sha256: 8df03fa15ef71802bf5616af9683cf52041587d64e5b7d307acad13acd65baa3
-generated_at: 2026-11-08T05:58:37.409599+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:18:20.425475+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/domain/index.ts
 
 ## Purpose
-
-Barrel file for the inventory domain layer. It re-exports the pure business rules (reason→delta logic and hold-line manipulation) under a single import path, so callers never need to reach into individual domain files. The doc comment enforces the tier boundary: this layer must remain free of Express, Mongoose, and all higher tiers.
+Barrel file for the inventory module's domain layer. It re-exports the pure rules from `transitions` and `hold-lines` as a single entry point. Per its header, the domain layer is free of Express, Mongoose and every tier. It holds rules that can be tested without a database, above all the reason→delta table. It does not hold the conditional writes that enforce those rules, the ledger row, or the HTTP envelopes.
 
 ## Key elements
+- `counterDeltaFor`, `roomOn` — functions re-exported from `./transitions`.
+- `CounterDelta`, `HoldKind` — types re-exported from `./transitions`.
+- `takeFromHold`, `withAdded` — functions re-exported from `./hold-lines`.
+- `HoldLine`, `HoldTake` — types re-exported from `./hold-lines`.
 
-- `counterDeltaFor`, `roomOn` (re-exported from `./transitions`) — compute the counter delta for a given reason and check remaining room.
-- `CounterDelta`, `HoldKind` (types from `./transitions`) — structural types describing the delta result and hold classification.
-- `takeFromHold`, `withAdded` (re-exported from `./hold-lines`) — manipulate hold-line entries (consume units / append a new entry).
-- `HoldLine`, `HoldTake` (types from `./hold-lines`) — shape of a single hold line and the parameters for a take operation.
+The file defines no logic of its own.
 
 ## Relationships
-
-- **`./transitions.ts` / `./hold-lines.ts`** — the only two files this barrel re-exports from; it adds no logic of its own.
-- **`src/modules/inventory/index.ts`** — the module-level barrel that re-exports this domain barrel (plus model, repository, services) to consumers outside the inventory directory.
-- **`src/modules/inventory/services/*.ts`** (holds, levels, reserve, top-up, transition) — service-layer modules that import the domain rules through this barrel rather than importing the leaf files directly.
-- **`src/modules/inventory/model.ts` / `repository.ts`** — the persistence tier that *applies* the domain rules (e.g. writing ledger rows) but does not re-export them; it depends on the domain types, not the other way around.
-- **`src/modules/inventory/tests/unit/transitions.test.ts` / `hold-lines.test.ts`** — unit-test the leaf files in isolation, verifying the domain rules hold without a database.
+- `src/modules/inventory/domain/transitions.ts` and `src/modules/inventory/domain/hold-lines.ts` are the two files it re-exports from. Their unit tests are `src/modules/inventory/tests/unit/transitions.test.ts` and `src/modules/inventory/tests/unit/hold-lines.test.ts`.
+- The module-level files (`src/modules/inventory/index.ts`, `model.ts`, `repository.ts`) and the `services/*` files (`holds`, `levels`, `reserve`, `top-up`, `transition`, `types`) are graph neighbors, but the file content does not show how they use this barrel.
 
 ## Notes
-
-- This file contains **zero implementation**; it is purely `export … from` statements. Lint is expected to flag any import of Express, Mongoose, or a service/repository here.
-- The doc comment's "Belongs here / Not here" split is the contract for where to put new logic: if it can be tested without a DB, it goes in `transitions.ts` or `hold-lines.ts` and is surfaced through this barrel; if it involves conditional writes or HTTP envelopes, it belongs in the services or model tier instead.
+- Types are exported with `export type`, separate from the value exports.
+- Anything added to the domain layer must stay pure, with no Express, Mongoose or tier imports. The header says this is lint-guaranteed.
+- The header references `docs/understand/domain-layer.md#_1-the-folder` for more on the domain folder.

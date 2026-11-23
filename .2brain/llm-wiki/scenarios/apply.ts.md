@@ -1,54 +1,56 @@
 ---
 source: scenarios/apply.ts
-sha256: 9667ffd64d101c309a9b9cd2503de0d806dcdac1cd67eb9f46b5949d23e7a540
-generated_at: 2026-11-08T02:27:39.856254+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ba860190c786aed26c6410653a38639079e20514aeab9adc95e60226212631ff
+context_sha256: 7549e07f68303a774d4c9e9504235dac57fed730388702f9e0323311c438d787
+generated_at: 2026-11-22T01:41:44.523665+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/apply.ts
 
 ## Purpose
-
-CLI seeder invoked as `npm run scenario:apply [scenario]`. It owns **data** (as opposed to `db:sync`, which owns schema). It boots the app in-process via `createApp().boot()`, runs the named scenario's `buildScenario` against that instance, clears the cache, optionally writes a JSON description file, and shuts down. It exists so a fresh or reset database gets a coherent, flow-driven dataset without needing a live server.
+CLI runner behind `npm run scenario:apply` (and `scenario:apply:reset`). It owns seeding **data** (`db:sync` owns schema). It boots the real app in-process, applies safety gates, connects to the database, and makes a single call into `buildScenario`. The scenario contents live in the registry in `scenarios/index.ts`, not here.
 
 ## Key elements
-
-- **`seed()`** — main entry: validates the scenario name, boots the app, gates on environment / DB emptiness, calls `buildScenario`, clears cache, writes `--describe-to` output, logs completion.
-- **`bootAppInProcess()`** — dynamically imports `src/app`, calls `createApp()` then `.boot()` (never `.start()`), returns the Express instance. Stored in the module-level `app` ref so `finally` can call `.stop()`.
-- **`reset` / `scenarioArgument` / `describeTo`** — parsed from `process.argv`; `--reset` triggers `emptyDatabase()` + rate-limit counter wipe before seeding.
-- **Environment overrides** (module-top, before any dynamic import):
-  - `SCRIPTED_RATE_LIMITS` — replaces deployment budgets so hundreds of seed requests don't hit 429.
-  - `NODE_MAIL_TRANSPORT: 'log'` — prevents real SMTP sends to fictional recipients.
-  - `NODE_RABBITMQ_ENABLED: '0'` — forces inline job execution through the `log` transport.
-  - `DEMO_BANK_TRANSFER` — filled only where unset, so a real deployment's beneficiary is preserved.
-- **`deploymentRateLimitRedisUrl`** — captured *before* the rate-limit override so `--reset` can still `SCAN + DEL` the deployment's counters (never `FLUSHALL`).
-- **Cleanup in `finally`** — calls `app.stop()`, then `process.exit()`. The forced exit is required because `src/app.ts` pulls in OpenTelemetry's ESM `module.register()` loader hook (a worker-thread-backed process-lifetime hook), which keeps the event loop alive; `stop()` alone cannot unregister it.
+- **CLI flags**
+  - `--reset` empties the database first.
+  - A single positional argument names the scenario. It defaults to `DEFAULT_SCENARIO` (`shop`) and is validated with `isScenarioName`.
+  - `--describe-to=<file>` writes JSON `{ scenario, accounts, subjects }` to a file. It creates parent directories first. The file is used by the demo profile's `GET /__test/scenario` and the paired frontend's reset.
+- **`bootAppInProcess()`** — dynamically imports `../src/app`, calls `createApp()` and `boot()` only (never `start()`), stores the instance for cleanup, and returns the Express app.
+- **`seed()`** — the main flow:
+  1. Rejects an unknown scenario name with a warning and returns.
+  2. Boots the app.
+  3. Reads the seed marker.
+  4. Either rebuilds (`--reset`, or the marker is `running`) or skips (marker `done`, or the database is non-empty).
+  5. Calls `buildScenario(name, app)`.
+  6. Clears the cache.
+  7. Optionally writes the description file.
+  8. Writes the `done` marker.
+- **Rebuild path** — writes the `running` marker, calls `emptyDatabase([SEED_MARKER_COLLECTION])` to keep the marker, then calls `clearRateLimitCounters(deploymentRateLimitRedisUrl)` and logs one of three outcomes: `not-configured`, `cleared`, or Redis unreachable.
+- **Top-level gate** — if `isRelaxedEnvironment()` is true, it runs `runScript(undefined, seed, cleanup)`, where cleanup is `app?.stop()`. It then forces `process.exit(process.exitCode ?? 0)`. Otherwise it logs a refusal and exits 1.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `scenarios/index.ts` | Provides `DEFAULT_SCENARIO`, `isScenarioName`, and `buildScenario` (the registry the runner delegates to). |
-| `scenarios/accounts.ts` | Exports `seedCredentials`, written into the `--describe-to` JSON. |
-| `scenarios/rate-limits.ts` | Exports `SCRIPTED_RATE_LIMITS` and `DEMO_BANK_TRANSFER` used in the env overrides. |
-| `scenarios/support/database-snapshot.ts` | `emptyDatabase()` / `isDatabaseEmpty()` for the `--reset` path and the non-empty gate. |
-| `scenarios/support/development-doubles.ts` | Side-effect import that registers the fake payment provider and mail-log double before any model loads. |
-| `scripts/run-script.ts` | `runScript` wraps `seed()` as the CLI entry; this file overrides its default exit strategy with an explicit `process.exit()`. |
-| `src/app.ts` | Dynamically imported; `createApp().boot()` provides the middleware stack and loopback listener the scenario flows drive. |
-| `src/infrastructure/adapters/cache.ts` | `clearCache()` invalidates stale module-fixture responses after seeding; fail-open if Redis is down. |
-| `src/infrastructure/adapters/limits-redis.ts` | `limitsRedisUrl()` read once, pre-override, to target the deployment's Redis for counter cleanup. |
-| `src/infrastructure/adapters/logger.ts` | Structured logging throughout. |
-| `src/infrastructure/config/dotenv.ts` | Side-effect import (`.env` loaded before any model reads config); guarantees keys already present in `process.env` are not overwritten by later `installEnvironment` calls. |
-| `src/infrastructure/config/store.ts` | `installEnvironment` / `currentEnvironment` for the env overrides and the `DEMO_BANK_TRANSFER` filter. |
-| `src/infrastructure/http/middlewares/rate-limit-store.ts` | `clearRateLimitCounters` for the `--reset` counter wipe. |
-| `src/infrastructure/runtime/config.ts` | `isRelaxedEnvironment` / `nodeEnvironment` used in the production / public-password gates. |
-| `docker-compose.production.yml` | Context for the production-environment refusal gate; the compose `app` command chains `db:bootstrap && start`, so this seeder must exit 0 on a skip. |
+- `scenarios/index.ts` supplies `DEFAULT_SCENARIO`, `isScenarioName` and `buildScenario`, which does all the scenario work.
+- `scenarios/accounts.ts` supplies `seedCredentials`, written into the description file.
+- `scenarios/support/database-snapshot.ts` supplies the seed marker helpers (`readSeedMarker`, `writeSeedMarker`, `SEED_MARKER_COLLECTION`) and `emptyDatabase` / `isDatabaseEmpty`.
+- `scenarios/support/scripted-environment.ts` is imported for its side effects: it lifts budgets and pins the mail, broker and bank-transfer settings. It also exports `deploymentRateLimitRedisUrl`.
+- `scenarios/support/development-doubles.ts` is imported for its side effects: it registers the fake payment provider and the mail log.
+- `scripts/run-script.ts` supplies `runScript`, the wrapper that handles the environment gate and the exit code.
+- `src/app.ts` supplies `createApp()`, imported lazily.
+- `src/infrastructure/config/dotenv.ts` is imported first to load the environment.
+- `src/infrastructure/runtime/mongoose-boot.ts` is imported before any model loads, because Mongoose defaults are read at schema build.
+- `src/infrastructure/runtime/config.ts` supplies `isRelaxedEnvironment` and `nodeEnvironment`.
+- `src/infrastructure/adapters/cache.ts` supplies `clearCache()`, which returns `{ deleted, reachable }`.
+- `src/infrastructure/adapters/logger.ts` supplies `logger`.
+- `src/infrastructure/http/middlewares/rate-limit-store.ts` supplies `clearRateLimitCounters`.
 
 ## Notes
-
-- **`boot()` ≠ `start()`.** The app binds a loopback listener only, so the seed flows hit a local port rather than the deployment's `NODE_PORT`.
-- **Non-empty DB → warn and return 0, never throw.** The compose `app` entrypoint runs this before starting the server; a non-zero exit would prevent an already-seeded container from ever starting.
-- **Cache clear is fail-open.** An unreachable Redis logs a warning but does not fail the seed.
-- **Rate-limit counter cleanup is best-effort.** If the URL is unset or Redis is unreachable, a warning is logged; the seed itself still succeeds.
-- **Plain-text passwords in fixtures are intentional.** A Mongoose pre-save hook hashes them; writing a pre-hashed value here would drift from that hook and make the plaintext unrecoverable.
-- **`process.exit()` in the `finally` block is load-bearing.** Without it the OpenTelemetry worker-thread hook keeps the event loop alive forever. It is safe here only because `stop()` has already flushed async analytics/tracing transports; other `runScript` callers that never import `src/app.ts` do not need it.
+- **Import order matters.** `dotenv` comes first, then `scripted-environment`, then `mongoose-boot`, then `development-doubles`. Each must run before the modules that read what it sets.
+- **Environment gate.** It runs only when `NODE_ENV` is `development` or `test`. An unset value, `staging` and `production` all refuse with exit code 1. The check runs before `runScript` so its own environment gate does not mask the reason.
+- **Seed marker protocol.** `running` is written before the first write and `done` is the last write. A found `running` means the previous seed died, and the next boot rebuilds. The wipe keeps the marker, so a death mid-wipe is still recognised.
+- **Skip is a success.** When the database already holds data, the script logs and returns without throwing. The compose `app` command is `npm run db:bootstrap && <start the server>`, so a non-zero exit would stop the container from starting.
+- **Fail-open cache clear.** An unreachable Redis only changes the log line, and seeding still succeeds.
+- **Rate-limit reset limits.** Only Redis-held counters are reset (SCAN + DEL under the limiter's prefix, never FLUSHALL). In-memory counters in a running server are out of reach. Both of those cases only warn.
+- **Forced exit.** `process.exit()` is used because importing the app leaves handles that `stop()` cannot vouch for (the OTel SDK, third-party timers). Other `runScript` callers never boot the app and stay on `process.exitCode`.
+- **Plain-text passwords.** Passwords are left in plain text so the model's pre-save hook hashes them.
+- **Two adjacent doc comments.** The cleanup/exit comment is stacked directly above the environment-gate comment, which is a leftover of ordering rather than a separate block.

@@ -1,30 +1,26 @@
 ---
 source: src/modules/example/probes.ts
-sha256: 0d2fcf5e644542ded6e2cf7d120eb7e72ce4c062c7f1ab69ebbb696fc94daed7
-generated_at: 2026-11-08T05:51:45.984488+00:00
-model: ollama:qwen3.8:27b
+source_sha256: aed784711bf14273c1955d51286bc83de1205beaa082412ad99755ee827eed0d
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T05:10:22.130748+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/probes.ts
 
 ## Purpose
-
-Defines the example module's probe collection — a set of API requests that exercise refusal paths the OpenAPI contract cannot express (e.g. anonymous 404s, invalid ObjectId shapes). These probes are executed by the generated client-collection runner (`scripts/contracts/client-collections-bundle.ts`) to verify that the server's error responses are indistinguishable from legitimate "not found" cases. The file should be deleted once every refusal is reachable from the contract alone.
+Declares the example module's probe collection: requests that its API contract cannot describe, which the generated API client collection runs as probes. The file is meant to be deleted once every refusal the module has is reachable from its contract. Its module header points to `scripts/contracts/fragments.ts` as the related reference.
 
 ## Key elements
-
-- **`probes: Probe[]`** (exported) — The sole export. An array of three `Probe` objects imported from `@guebbit/openapi-runnable-collections`. Each entry declares `name`, `why`, `method`, `path`, and optionally `auth` / `body`.
-  1. `GET /examples/000000000000000000000000` — anonymous read of a non-existent id; expects 404 identical to a stranger's draft.
-  2. `POST /examples/000000000000000000000000/publish` (bearer) — publish on a non-existent id; expects 404 (permission check precedes state check).
-  3. `PATCH /examples/not-an-object-id` (bearer, body `{ title: 'x' }`) — edit with a string the controller cannot build an ObjectId from; expects 404, same as a valid-but-absent id.
+- `probes: Probe[]` is the only export. The `Probe` type comes from `@guebbit/openapi-runnable-collections`. It holds three probes, each with `name`, `why`, `method`, `path`, and optionally `auth` and `body`:
+  - **Read of an absent id, anonymous:** `GET /examples/000000000000000000000000`. It expects a 404, the same answer a stranger gets for someone else's draft, so the two cases can't be told apart.
+  - **Publish of an absent example:** `POST /examples/000000000000000000000000/publish` with `auth: 'bearer'`. It expects a 404 rather than a 409, because the edit-permission check runs before the legality of the move is checked.
+  - **Edit with a malformed id:** `PATCH /examples/not-an-object-id` with `auth: 'bearer'` and body `{ title: 'x' }`. It expects a 404, the same as an absent id.
 
 ## Relationships
-
-No graph neighbors are listed. At the module level the probes are consumed by the client-collection bundling script referenced in the doc comment, and the `Probe` type is supplied by `@guebbit/openapi-runnable-collections`.
+No graph neighbors. The file only imports the `Probe` type from the external package `@guebbit/openapi-runnable-collections`. The module header says the generated client collection consumes the probes.
 
 ## Notes
-
-- The `why` field on each probe is load-bearing documentation: it explains *why* the contract cannot express this request, not just what status code is expected.
-- The deletion criterion is stated in the module header: remove this file when every refusal the module can produce is reachable from its contract.
-- The third probe encodes a controller-layer invariant (Mongo ObjectId shape check) that is invisible in the contract because `Id` is typed as a plain string there.
-- See `docs/api/contract-fragmentation.md` for the broader rationale behind probes vs. contract coverage.
+- Each probe's `why` explains the expected behavior. In the first two, the contract can describe the 404 but not a request that earns one.
+- The malformed-id case exists because `Id` is a plain string in the contract. The Mongo-shaped ObjectId check lives in the controller, which refuses an id it cannot build like one that names nothing.
+- The all-zero 24-character id is used as a well-formed id that no document holds.

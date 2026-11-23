@@ -1,34 +1,35 @@
 ---
 source: src/modules/account/controllers/delete-oauth-link.ts
-sha256: d6235d0c05c8d71a9250b84336c1644a620db08a030ad09f2069f537488a9c02
-generated_at: 2026-11-08T04:00:48.195262+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d6235d0c05c8d71a9250b84336c1644a620db08a030ad09f2069f537488a9c02
+context_sha256: 75cd71b71547eb58f7b7469ac55cb3ee6a01f0fcf2da1f5da774bab6974cb5aa
+generated_at: 2026-11-22T03:20:40.940699+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/delete-oauth-link.ts
 
 ## Purpose
-
-Thin HTTP adapter for `DELETE /account/oauth/links/{provider}`. It delegates the actual unlinking to `accountService.unlinkOAuthProvider`, then returns the caller's updated list of linked OAuth providers. Exists to keep the route handler a trivial mapping between HTTP concerns and the account service.
+Express controller for `DELETE /account/oauth/links/{provider}`. It is a thin HTTP adapter over `accountService.unlinkOAuthProvider`. It disconnects one OAuth provider from the caller's account and returns the caller's updated list of links.
 
 ## Key elements
-
-- **`deleteOAuthLink(request, response)`** – The sole export. Reads `request.authContext!.id` and `request.params.provider`, calls `accountService.unlinkOAuthProvider`, and on success fetches `accountService.listOAuthLinks` and responds with the presented list (200). If `unlinkOAuthProvider` resolves to a falsy `removed` value, responds 404 with the `account.oauth.link-not-found` i18n message. Errors are funneled through `catchAs`.
+- `deleteOAuthLink(request, response)`: the exported handler. `request` is typed `Request<{ provider: string }>`.
+  1. Calls `accountService.unlinkOAuthProvider(request.authContext!.id, request.params.provider, callerContextOf(request))`.
+  2. If the service returns a falsy value (provider was not linked), responds 404 through `rejectResponse` with `t('account.oauth.link-not-found')`.
+  3. Otherwise calls `accountService.listOAuthLinks(authContext.id)`. It responds 200 with `successResponse<OAuthLinks>(response, presentOAuthLinks(links), 200)`.
+  4. Any rejection goes to `catchAs(response, 'deleteOAuthLink')`.
 
 ## Relationships
-
-- **`src/modules/account/services/index.ts`** – Consumes `accountService.unlinkOAuthProvider` (the core operation) and `accountService.listOAuthLinks` (to build the response body).
-- **`src/modules/account/presenter.ts`** – Calls `presentOAuthLinks` to shape the raw link records into the `OAuthLinks` DTO before sending.
-- **`src/modules/account/routes.ts`** – Registers this handler at the `DELETE /account/oauth/links/:provider` path (with a fresh-session guard, per the file doc comment).
-- **`src/infrastructure/http/controller.ts`** – Imports `catchAs` to convert thrown/rejected errors into a standardized error response.
-- **`src/infrastructure/http/response.ts`** – Uses `successResponse` (200 path) and `rejectResponse` (404 path).
-- **`src/infrastructure/http/request.ts`** – Uses `callerContextOf` to extract the IP/UA context passed to the service call.
-- **`src/infrastructure/i18n/context.ts` / `src/infrastructure/i18n/index.ts`** – Provides the `t()` function for the 404 message key.
-- **`src/types/index.ts`** – Imports the `OAuthLinks` type used as the response payload generic.
+- `../services` (`accountService`): supplies `unlinkOAuthProvider` and `listOAuthLinks`.
+- `../presenter`: `presentOAuthLinks` shapes the links list for the response.
+- `@infrastructure/http/response`: `successResponse` and `rejectResponse` build the HTTP responses.
+- `@infrastructure/http/controller`: `catchAs` handles errors.
+- `@infrastructure/http/request`: `callerContextOf` extracts the caller context from the request and passes it to the service.
+- `@infrastructure/i18n`: `t` translates the 404 message.
+- `@types`: provides the `OAuthLinks` response type.
+- `../routes`: mounts this handler on the route. Per the file's doc comment, the route also adds a fresh-session guard.
 
 ## Notes
-
-- The controller performs **two** service calls on the success path (`unlinkOAuthProvider` then `listOAuthLinks`). The response is the *remaining* links, not a confirmation of what was removed.
-- The non-null assertion on `request.authContext!` implies the route is always behind authentication; a missing context would crash before reaching the service.
-- `unlinkOAuthProvider` returning a falsy value (rather than throwing) is the signal for "was not linked," which maps to 404.
-- The file doc comment notes the route mounts a **fresh-session guard** (defined in `routes.ts`), treating the removal of a login method as an identity change requiring re-authentication.
+- The handler uses `request.authContext!` (non-null assertion). It relies on upstream auth middleware having set the context.
+- The fresh-session guard is applied by the route, not in this file. The doc comment says removing a way in counts as an identity change.
+- On success the response body is the full updated links list, not just the removed link.
+- On the 404 path the handler returns `undefined` after calling `rejectResponse`, so `listOAuthLinks` is not called.

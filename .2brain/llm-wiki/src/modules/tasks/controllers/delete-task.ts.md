@@ -1,30 +1,31 @@
 ---
 source: src/modules/tasks/controllers/delete-task.ts
-sha256: ba51ace1f1512d099f790af483aababc6d15e11fd412b3c6c90ff57ff29f2b37
-generated_at: 2026-11-14T22:05:42.632789+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:57:27.180491+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/tasks/controllers/delete-task.ts
 
 ## Purpose
-
-Controller for the `DELETE /tasks/:id` endpoint (staff-only). Permanently removes a task by id. It is hand-written rather than produced by the shared `createDeleteController` factory, which is reserved for modules that implement a soft/hard-delete triplet; the tasks module has no soft-delete tier.
+Express controller for `DELETE /tasks/:id` (staff, `delete:Task`). It permanently deletes a task. It is written by hand instead of using `createDeleteController`, because that factory serves the soft/hard delete triplet and the tasks module has no soft-delete tier.
 
 ## Key elements
-
-- **`deleteTask`** (exported function) — Express handler accepting `Request<{ id: string }>` and `Response`. Validates the `:id` param via `requireId` (404 with a generic "item gone" message if missing), then delegates to `taskService.removeById(id, callerContextOf(request))`. On success sends `204 No Content`; on refusal (e.g. out-of-jurisdiction) short-circuits via `refused`; on thrown error calls `catchAs(response, 'deleteTask')`.
+- `deleteTask(request, response)`: the only export. It does the following:
+  1. Validates the `:id` param with `requireId`, passing `notFound: 'generic.error-item-gone'`. If the id is invalid, `requireId` has already answered, so the controller returns `Promise.resolve()`.
+  2. Calls `taskService.removeById(id, callerContextOf(request))`.
+  3. If `refused(response, result)` returns true, it stops, since the refusal has already been written to the response. Otherwise it sends `noContentResponse` (204).
+  4. Any thrown error goes to `catchAs(response, 'deleteTask')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — imports `catchAs` (unified error handler) and `refused` (authorization-failure short-circuit).
-- **`src/infrastructure/http/ids.ts`** — imports `requireId` to extract and validate the `:id` route parameter.
-- **`src/infrastructure/http/request.ts`** — imports `callerContextOf` to derive the authenticated caller's context for the service call.
-- **`src/infrastructure/http/response.ts`** — imports `noContentResponse` to emit the `204` success response.
-- **`src/modules/tasks/services/index.ts`** — imports `taskService`, whose `removeById` method performs the actual deletion.
-- **`src/modules/tasks/routes.ts`** — registers `deleteTask` as the handler for `DELETE /tasks/:id`.
+- `src/infrastructure/http/ids.ts`: `requireId` parses and validates the route id and writes the 404 itself.
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `noContentResponse` sends the success reply.
+- `src/infrastructure/http/controller.ts`: `refused` handles a service refusal result, and `catchAs` is the error handler labelled `'deleteTask'`.
+- `src/modules/tasks/services/index.ts`: exports `taskService`, which this controller calls to do the deletion.
+- `src/modules/tasks/routes.ts`: the route that binds this handler to `DELETE /tasks/:id`. That binding is not shown in this file.
 
 ## Notes
-
-- The 404 for a missing/invalid id uses a deliberately generic error key (`'generic.error-item-gone'`) rather than distinguishing "not found" from "not yours," to avoid leaking existence information.
-- The module docstring explicitly notes *why* it is hand-written: the `createDeleteController` factory is tied to the soft/hard-delete pattern, which does not apply here.
+- A malformed, unknown or out-of-jurisdiction id all answer 404. Per the doc comment, this is the only not-found response.
+- The deletion is permanent, with no soft-delete step.
+- The handler always returns a Promise, and the early-exit path returns a resolved one.
+- The module doc comment points to `docs/modules/tasks.md#the-story` for further background.

@@ -1,31 +1,32 @@
 ---
 source: src/modules/delivery/tests/unit/tracking.test.ts
-sha256: 0b07df924575cb7e3f084c2e70fa1e3270fa165a54f184660960f0dac31d253b
-generated_at: 2026-11-08T05:47:32.887613+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0b07df924575cb7e3f084c2e70fa1e3270fa165a54f184660960f0dac31d253b
+context_sha256: 758681ad76405150c4ba1336848f4ab6923991702c5527c408efb18fbe591792
+generated_at: 2026-11-22T05:06:00.963841+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/unit/tracking.test.ts
 
 ## Purpose
-
-Unit tests for the `isAwaitingTracking` pure function, which encodes the rule "a physical, still-`shipped` parcel on a tracked method with no tracking code." The file pins down both the positive condition and the full set of boundary cases that must return `false`.
+Unit tests for `isAwaitingTracking`, the rule behind `Shipment.awaitingTracking` and the staff digest row. It pins down when a parcel counts as "awaiting tracking": physical, still `shipped`, on a tracked method, with no tracking code.
 
 ## Key elements
-
-- **`waiting`** — shared minimal fixture: `{ kind: physical, status: shipped }`. Negative cases spread and override individual fields.
-- **`describe('isAwaitingTracking')`** — single test suite with:
-  - One positive `it` asserting `true` for a physical/shipped parcel on method `'express'` with no code.
-  - One `it.each` table (6 rows) asserting `false` for: untracked method (`'standard'`), missing method (`undefined`), unknown method (`'teleport'`), code already present, delivered status, and digital fulfillment kind.
+- `waiting` — fixture of shipment facts (`kind: physical`, `status: shipped`, no `trackingCode`). It is the one case that waits, and the other cases are built from it by changing one field.
+- Positive test — `waiting` with method `'express'` returns `true`.
+- `it.each` negative table — each row expects `false`:
+  - an untracked method (`'standard'`)
+  - no method (`undefined`)
+  - an unknown method (`'teleport'`)
+  - a `trackingCode` already set (`'TRK-1'`)
+  - status `delivered`
+  - kind `digital`
 
 ## Relationships
-
-- **`src/modules/delivery/domain/tracking.ts`** — defines `isAwaitingTracking`, the function under test (imported via the domain barrel).
-- **`src/modules/delivery/domain/index.ts`** — barrel re-export that the test imports as `../../domain`.
-- **`src/types/index.ts`** — source of the `FulfillmentOrderKind` and `ShipmentStatus` enums used to build test fixtures.
+- Imports `isAwaitingTracking` from `src/modules/delivery/domain/index.ts`, the domain barrel. The function itself is implemented in `src/modules/delivery/domain/tracking.ts`.
+- Imports `FulfillmentOrderKind` and `ShipmentStatus` from `@types`, which resolves to `src/types/index.ts`. They supply the enum values used in the fixtures.
 
 ## Notes
-
-- The module doc-comment at the top is the authoritative one-line spec for the rule; the test file does not restate the full business context.
-- `'express'` is the only method treated as "tracked" in these tests; `'standard'` and `'teleport'` serve as the untracked/unknown counterparts. Adding a new tracked method name to the domain will not be caught here unless a corresponding row is added.
-- The `waiting` fixture intentionally omits `trackingCode`; the "code already set" case adds it via spread, so the fixture itself always represents the no-code state.
+- The tests rely on `'express'` being a tracked method and `'standard'` being untracked. That mapping lives in the domain code, not here.
+- Each negative row changes exactly one condition, so a failure points to the rule that broke.
+- `describe`, `it` and `expect` are used without being imported, so the test runner supplies them as globals.

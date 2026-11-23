@@ -1,41 +1,38 @@
 ---
 source: src/modules/inventory/tests/integration/hold-crash-window.test.ts
-sha256: b319388963463821151fbc3c52165b995a72ce0b8ed95bd33a2052d8093e1b3b
-generated_at: 2026-11-14T20:08:42.637307+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:26:40.212228+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/tests/integration/hold-crash-window.test.ts
 
 ## Purpose
-
-Integration test that verifies the atomicity guarantee of inventory status transitions: if a write fails partway through a hold-status claim + counter move (simulated as a dropped connection), the entire operation—including the status claim—is rolled back so a retry can re-claim and finish cleanly. Covers ship, release, releaseCommitted, reserve-unwind, and the reservation sweep interacting with a mid-reserve crash.
+Integration tests for the inventory module's crash-safety guarantee. Claiming a reservation hold's status and moving each line's stock counters happen in one transaction, so a failure partway through undoes the claim as well. A retry then finishes the job instead of seeing a closed hold and reporting "already done" while counters never moved. Each test checks that the stock level agrees with the hold's status after the failed call and after the retry.
 
 ## Key elements
-
-- **`failOnce(reason: StockMovementReason)`** – Spies on `stockLevelRepository.applyDelta`; the first call matching the given reason rejects with `'connection reset'`, subsequent calls delegate to the real implementation. Simulates a single dropped write.
-- **`levelOf(productId)`** – Reads the stock-level row and returns `{ onHand, reserved }` for assertion.
-- **`ledgerIdsOf(orderId)`** – Returns the ordered `_id`s of `stockMovementModel` rows referencing the order, used to verify the sweep didn't double-write.
-- **`itemCount()`** – Returns the current number of line items on the order's reservation hold (polling helper).
-- **`describe("a crash between the claim and the counter move")`** – Three tests (ship, release, releaseCommitted) asserting that after a failed call the hold status is unchanged and a retry reaches the correct final counters.
-- **`describe("a line whose counters refuse")`** – Verifies that when a line's preconditions fail ("the counters refused"), the hold status and all earlier lines' counters are rolled back.
-- **`describe("a checkout killed between two lines")`** – Uses a gate-based mock to hold the second line's `applyDelta` open, lets the sweep expire and release the hold, then confirms the sweep freed only the line it actually took and left the other order's reservations untouched.
-- **`describe("a rollback whose release throws")`** – A reserve fails on a missing product; the unwind's release write also throws. Asserts the hold stays `held` (not silently released) and a later sweep frees the units.
-- **`describe("a checkout unwinding while the sweep … is still finishing")`** – Gate-mocks both `applyDelta` and `reservationRepository.findByOrderId` to interleave the sweep's post-commit read with the checkout's unwind; asserts the stock-level cache ends consistent with the level row.
+- `setupTestDb()` / `afterEach(jest.restoreAllMocks)`: set up the test DB and undo spies between tests.
+- `ORDER`: a 24-character hex string used as a valid ObjectId order id.
+- `failOnce(reason)`: spies on `stockLevelRepository.applyDelta` so the first call with the given `StockMovementReason` rejects with `connection reset`. Other calls pass through to the real implementation.
+- `levelOf(productId)`: returns `{ onHand, reserved }` for a product's level row.
+- `ledgerIdsOf(orderId)`: returns ids of stock-movement rows whose `reference` is the order, oldest first.
+- `itemCount()`: returns how many lines the `ORDER` hold currently has.
+- Test groups:
+  - **Crash between claim and counter move**: covers `shipForOrder`, `releaseForOrder` and `releaseCommittedForOrder`. Each fails once, retries, and expects the final counters (`onHand` 6 or 10, `reserved` 0). The ship case also asserts the hold is still `committed` after the failure.
+  - **A line whose counters refuse**: the later line has `reserved` forced to 0. `shipForOrder` rejects with `the counters refused`, and the hold stays `held` with the earlier line's counters unchanged.
+  - **Checkout killed between two lines**: a gate holds back the second line's reserve write while the hold is expired and `runReservationSweep()` runs. The sweep releases only the line already taken. The other order's reserved units are untouched, the checkout rejects, the hold ends `released`, and the unwind gives back nothing a second time. The ledger rows are unchanged, and there are exactly 2 of them.
+  - **Rollback whose release throws**: `reserveForOrder` returns `held: false`, but the hold stays `held` with 4 reserved. After the hold is expired, the sweep frees the units.
 
 ## Relationships
-
-- **`src/modules/inventory/model.ts`** – Imports `stockLevelModel`, `reservationModel`, `stockMovementModel` for direct DB state inspection (bypassing the service layer) in assertions and for corrupting preconditions.
-- **`src/modules/inventory/repository.ts`** – Imports `reservationRepository` and `stockLevelRepository`; spies on `applyDelta` and `findByOrderId` to inject failures and gates.
-- **`src/modules/inventory/services/index.ts`** – Imports `inventoryService`; all happy-path and failing-path calls go through its `reserveForOrder`, `commitForOrder`, `shipForOrder`, `releaseForOrder`, `releaseCommittedForOrder`, and `runReservationSweep` methods.
-- **`src/modules/products/tests/factories.ts`** – Imports `createProduct` to seed stock levels (and `countersOf`, though unused in the visible portion).
-- **`src/types/index.ts`** – Imports `StockMovementReason` for the `failOnce` discriminator.
-- **`tests/support/setup-test-db.ts`** – Calls `setupTestDb()` once at module scope to initialise the in-memory Mongo for the test run.
+- `inventoryService` (`src/modules/inventory/services/index.ts`): the system under test (`reserveForOrder`, `commitForOrder`, `shipForOrder`, `releaseForOrder`, `releaseCommittedForOrder`, `runReservationSweep`).
+- `reservationRepository` and `stockLevelRepository` (`src/modules/inventory/repository.ts`): used to read hold status and level rows. `stockLevelRepository.applyDelta` is spied on to inject failures and gates.
+- `stockLevelModel`, `reservationModel`, `stockMovementModel` (`src/modules/inventory/model.ts`): used for direct DB manipulation (zeroing `reserved`, expiring a hold) and for ledger queries.
+- `createProduct` (`src/modules/products/tests/factories.ts`): creates products with an `onHand` quantity.
+- `StockMovementReason` (`src/types/index.ts`): selects which `applyDelta` call fails or waits.
+- `setupTestDb` (`tests/support/setup-test-db.ts`): DB lifecycle.
+- `src/modules/delivery/tests/unit/fulfillment.test.ts` is a graph neighbor, but this file has no visible interaction with it.
 
 ## Notes
-
-- The file mutates `stockLevelRepository` and `reservationRepository` via `jest.spyOn`; `afterEach` calls `jest.restoreAllMocks()` to prevent leakage.
-- Gate-based concurrency tests (sweep interleaving) use a `{ open?: () => void }` pattern: a promise is stored in the gate object, the mock awaits it, and the test body calls `gate.open()` to release. The release call is always placed *after* assertions to avoid releasing before the test can read state.
-- `ORDER` is a 24-char string of `'e'` (valid ObjectId shape) to avoid importing a real ObjectId generator.
-- The "counters refuse" test directly writes `reserved: 0` via `stockLevelModel.updateOne` to create the precondition mismatch—this is intentional corruption, not a bug.
-- The `failOnce` spy checks `armed && why === reason`, so only the first matching call fails; a second line of the same reason in the same call will proceed normally.
+- `failOnce` matches on the movement reason, not the product, and disarms after one rejection.
+- The mid-checkout test polls `itemCount()` every 5 ms until the first line is in the hold. It opens the gate after the assertions-relevant state is captured so no transaction hangs past teardown.
+- The tests use `toSorted()` on product ids so line order is deterministic.
+- Failures are simulated at the `applyDelta` layer, not by killing a process.

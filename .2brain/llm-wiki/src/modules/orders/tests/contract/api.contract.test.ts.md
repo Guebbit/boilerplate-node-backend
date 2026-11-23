@@ -1,46 +1,51 @@
 ---
 source: src/modules/orders/tests/contract/api.contract.test.ts
-sha256: aac62ce24846c0173bd7c2b8df8409f6168226a3968f3a91bc17a6bb641081ad
-generated_at: 2026-11-14T20:48:55.032651+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c8cd40ec24243ae9973b45951ff3c5acf7bca3a70a9c9fd946d878d464acc9f7
+context_sha256: 09e2db2397c5a2b3b79a5839c486bbba0b3ee69937215150237e9489e55b688f
+generated_at: 2026-11-22T06:24:57.932633+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/contract/api.contract.test.ts
 
 ## Purpose
-
-Contract tests for the `/orders` HTTP surface. This suite exists because no prior test exercised the API over HTTP: the list endpoint once returned `totalItems`/`totalQuantity`/`totalPrice` while `openapi.yaml` specified a single `total`, and `GET /orders/{id}` answered a different shape per caller role. Every test here asserts that the live response matches the published contract for each role.
+HTTP-level contract tests for the `/orders` resource. The suite exists because the list endpoint once returned `totalItems`/`totalQuantity`/`totalPrice` while `openapi.yaml` required a single `total`, and `GET /orders/{id}` returned a different shape per caller role. Neither was caught because no test crossed HTTP. Both role branches of `getById` are asserted for that reason.
 
 ## Key elements
-
-- **`seedOrderFor(user, status?)`** – module-level helper that creates a product, then an order with one line item (qty 2); optionally pins a status.
-- **`describe('GET /orders — the filters it now publishes')`** – verifies `status`, `userId`, and batch `id` query filters; confirms repeated `userId` still 422s (scalar, not array).
-- **`describe('GET /orders')`** – asserts list response shape per role (admin unrestricted, user scoped), that `deleted=true` is ignored for customers, that list items omit personal data (`email`, `shippingAddress`, `notes`, etc.), and that the single-order read retains `totalItems`/`totalQuantity`/`email`.
-- **`describe('GET /orders/{id}')`** – asserts both unscoped (admin) and scoped (user) paths match the contract; a parameterised case confirms a malformed id returns 404 (not 422) for each role.
-- **`describe('POST /orders/{id}/cancel')`** – covers owner cancel, admin cancel of another's order, operator cancelling a peer's order, and the reauth (401 `REAUTH_REQUIRED`) guard on stale operator sessions.
+- `seedOrderFor(user, status?)` — helper that creates a product and an order with one line (quantity 2), optionally with a given status.
+- `describe('GET /orders — the filters it now publishes')`:
+  - `status` narrows the list. The paid order is reached through `orderRepository.updateStatusIfIn`, not by writing the column.
+  - A moderator's `userId` filter is honoured, not just an admin's.
+  - `id` works as a batch filter, while a repeated `userId` still returns 422 because it stayed scalar.
+- `describe('GET /orders')`:
+  - Unrestricted (admin) and scoped (user) callers get 200. The scoped caller sees only their own orders and `meta.totalItems` is 1.
+  - `deleted=true` is ignored for a customer and returns an empty list.
+  - List items carry `id`, `totalPrice` and `actions`, and omit `email`, `userId`, `items`, `shippingAddress`, `billingAddress` and `notes`.
+  - A customer's list has the same shape and includes `orderNumber`.
+  - The single-order read keeps `totalItems`, `totalQuantity` and `email`.
+- `describe('GET /orders/{id}')`:
+  - Both the unscoped (admin) and scoped (user) paths return 200.
+  - A malformed id returns 404 for both roles, via `it.each` over `admin` and `user`.
+- `describe('POST /orders/{id}/cancel')`:
+  - An owner (`user`) can cancel their own pending order, with status `canceled`.
+  - An admin can cancel someone else's pending order.
+  - An admin can cancel an equal's (admin) order.
+  - An operator on a stale session gets 401 `REAUTH_REQUIRED` and nothing is cancelled. This test is cut off in the visible content, and the file continues beyond that point.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/contract.ts` | Side-effect import; registers contract matchers used implicitly by `api()` assertions. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the test database before the suite runs. |
-| `tests/support/http.ts` | Provides `api()`, `authenticateAs`, `authenticateAsRole`, `loginBearer` for making authenticated HTTP calls. |
-| `tests/support/clock.ts` | `freezeDate` / `advanceDate` control time for the reauth-window test. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem` build order fixtures. |
-| `src/modules/products/tests/factories.ts` | `createProduct` supplies the line-item product. |
-| `src/modules/users/tests/factories.ts` | `createUser` mints accounts for role-specific scenarios. |
-| `src/modules/orders/model.ts` | `orderEventModel`, `orderModel` referenced for typing or assertion helpers. |
-| `src/modules/orders/repository.ts` | `orderRepository` imported for direct repository access in the status-filter test. |
-| `src/modules/orders/friends/payments.ts` | `markPaid` used to mark an order paid before the cancel/reauth tests. |
-| `src/infrastructure/persistence/create-repository.ts` | `toObjectId` for id conversion. |
-| `src/types/index.ts` | `OrderStatus` enum used in `seedOrderFor` and filter assertions. |
-| `src/kernel/config.ts` | `reauthWindowSeconds` sets the reauth threshold for the 401 test. |
+- Test support:
+  - `tests/support/contract.ts` (side-effect import via `@tests/contract`).
+  - `setupTestDb()` from `tests/support/setup-test-db.ts`.
+  - `api`, `authenticateAs`, `authenticateAsRole` and `loginBearer` from `tests/support/http.ts`.
+  - `freezeDate` and `advanceDate` from `tests/support/clock.ts`.
+- Factories: `createProduct` (`src/modules/products/tests/factories.ts`), `createOrder` and `toOrderItem` (`src/modules/orders/tests/factories.ts`) and `createUser` (`src/modules/users/tests/factories.ts`), used to seed data.
+- `orderRepository` (`src/modules/orders/repository.ts`): `updateStatusIfIn` moves an order to `paid`.
+- `orderModel` and `orderEventModel` (`src/modules/orders/model.ts`), `toObjectId` (`src/infrastructure/persistence/create-repository.ts`), `markPaid` (`src/modules/orders/friends/payments.ts`), `OrderStatus` (`src/types/index.ts`) and `reauthWindowSeconds` (`src/kernel/config.ts`) are imported. The visible portion does not show how they are used.
+- `src/modules/orders/services/status.ts` is a graph neighbor, but the visible portion shows no direct import of it.
 
 ## Notes
-
-- Status transitions are reached through the repository rather than by writing the column directly; the comment explains that a status the application cannot naturally produce is not worth filtering on.
-- `id` is a **batch** filter (repeated `?id=` allowed); `userId` and `productId` are intentionally **scalar** — a repeated key must 422, not silently take the first value.
-- The `@tests/contract` import is side-effect-only (no named binding); it likely registers global expect matchers or serialises the OpenAPI spec for comparison.
-- The file's leading doc block documents the *origin* of the suite (two specific bugs it was created to pin) — useful context if someone questions why both `totalItems` and `total` shapes are asserted.
-- The reauth test uses `freezeDate()` and `reauthWindowSeconds` together; advancing the clock past that window is what triggers the 401.
+- Contract suite for the orders routes; `@tests/contract` is imported for its side effects.
+- Invoicing's download-scope tests belong to that module, so orders are seeded here with real lines but nothing is asserted about downloads.
+- Scope is proven by absence: tests add another user's order to the same collection and assert it does not appear.
+- The malformed-id 404 relies on `requireId`, which stops a `BSONError` from becoming a 422. The comment points to `get-order.ts`.
+- The operator cancel route asks for a fresh session, while the customer's own cancel is never prompted.

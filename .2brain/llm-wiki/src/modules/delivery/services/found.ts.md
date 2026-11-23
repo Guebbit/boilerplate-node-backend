@@ -1,38 +1,43 @@
 ---
 source: src/modules/delivery/services/found.ts
-sha256: 95426ef8c1afb4ff86d6971c8f8916b0629d112d46072b39f0f315bf33c0863a
-generated_at: 2026-11-08T05:35:34.387826+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a8ff22aa828509a903f5eac936b0a0dd63a101998ab9711ef5a081d65fd9b195
+context_sha256: 64bf3011a3c43de45c962f80cf15d5f3ddbe8cffec4cebc3b60db034b5a03041
+generated_at: 2026-11-22T04:54:46.052217+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/found.ts
 
 ## Purpose
-
-Handles the "found" lifecycle of a lost shipment: the moment a parcel that was marked `lost` physically arrives. It restores the shipment's units onto the origin fulfillment order, closes any owed (backorder) fulfillment orders with no refund, and releases the stock top-up — all inside a single transaction, all-or-nothing. It also exposes the read-side predicate (is this lost shipment still restorable?) so the `ShipmentActions.deliver` flag can never disagree with the act.
+Handles a `lost` shipment turning up. It decides whether the shipment can still be recorded as arrived (every unit on it is still open, per `planRestoration`) and performs the all-or-nothing restore inside the arrival's transaction. The read-side flag and the act share the same rule, so a `ShipmentActions.deliver` flag cannot disagree with `deliver`.
 
 ## Key elements
+- `planFor(shipment, orders)` (private): maps a shipment and its order's fulfillment orders into `LostShipmentFacts` and calls `planRestoration`. It returns `{ facts, restoration }`, where `restoration` is `undefined` if the shipment can't be restored.
+- `restorableIds(shipments, orderId)`: returns the set of ids of `lost` shipments whose restoration plan exists. It skips the DB lookup if none are lost.
+- `viewShipmentOf(shipment, order, authContext)`: builds the wire `Shipment` through `viewShipment`, passing whether the shipment is restorable.
+- `refuseSuperseded()` (private): throws a 409 `DELIVERY_LOST_SUPERSEDED` refusal (`delivery.lost-superseded`).
+- `closeOwed(ids, orders, session)` (private): for each owed fulfillment order, cancels the remaining lines (`withRemainderCanceled`), recomputes status, and claims it with cancel reason `found` and the hold fields unset. It then calls `announceCanceled`. If a claim fails it refuses as superseded.
+- `restoreLostShipment(shipment, at, session)`: the main act. In order, it:
+  1. Reads the order's fulfillment orders and plans the restoration.
+  2. Marks the shipment found via `shipmentRepository.markFound`.
+  3. Restores the origin fulfillment order's lines with `withRestoration` and claims it.
+  4. Closes the owed fulfillment orders.
+  5. Releases the stock-hold top-up through `orderService.releaseTopUp`. The shelf part goes back as stock, and the owed part goes as a `backorder` claim.
 
-- **`restorableIds`** *(exported)* — Given all shipments of an order, returns a `Set<string>` of lost-shipment IDs whose units are all still open. Filters to `ShipmentStatus.lost`, then checks each via `planFor`.
-- **`viewShipmentOf`** *(exported)* — Wraps `viewShipment` (from `./actions`), injecting the restorable boolean so the wire `Shipment` carries a correct `deliver` flag.
-- **`restoreLostShipment`** *(exported)* — The act. Marks the shipment found, applies `withRestoration` to the origin fulfillment order, calls `closeOwed`, and releases the stock top-up via `orderService.releaseTopUp`. Throws 409 `DELIVERY_LOST_SUPERSEDED` on any concurrency or planning failure.
-- **`planFor`** *(internal)* — Builds `LostShipmentFacts` from a shipment document and calls `planRestoration` against the order's fulfillment orders to produce a `Restoration` (or `undefined` if impossible).
-- **`closeOwed`** *(internal)* — Iterates the owed fulfillment orders, cancels each with `FulfillmentCancelReason.found`, clears hold fields, and fires `announceCanceled`.
-- **`refuseSuperseded`** *(internal)* — Shared 409 refusal helper (`DELIVERY_LOST_SUPERSEDED`).
+  It returns the now-delivered shipment.
 
 ## Relationships
-
-- **`../domain`** (`fulfillment.ts`, `lost.ts`) — Imports the pure planning functions `planRestoration`, `withRestoration`, `withRemainderCanceled`, `statusOfLines` and the types `LostShipmentFacts`, `Restoration`.
-- **`../repository`** — Uses `fulfillmentOrderRepository` (find-by-order, `claim`) and `shipmentRepository` (`markFound`).
-- **`./act`** — Reuses the generic `refuse` helper for structured error throws.
-- **`./actions`** — Delegates to `viewShipment` for building the wire representation.
-- **`./announce`** — Calls `announceCanceled` after each owed order is closed.
-- **`@modules/orders`** — Calls `orderService.releaseTopUp` to return the stock hold; consumes `OrderDocument` for the view path.
-- **`src/modules/delivery/services/deliver.ts`** — Expected caller of `restoreLostShipment` as the `lost`-branch of the deliver act.
+- **`../domain`** (`fulfillment.ts`, `lost.ts`, `index.ts`): supplies the pure logic: `planRestoration`, `statusOfLines`, `withRemainderCanceled`, `withRestoration`, and the `LostShipmentFacts` and `Restoration` types.
+- **`../repository`**: `fulfillmentOrderRepository` (`findByOrderId`, revision-checked `claim`) and `shipmentRepository`, used to mark the shipment found.
+- **`../model`**: provides the `ShipmentDocument` and `FulfillmentOrderDocument` types.
+- **`./act`**: provides `refuse`, used to raise the 409.
+- **`./actions`**: provides `viewShipment`, which `viewShipmentOf` wraps.
+- **`./announce`**: provides `announceCanceled`, called for each closed owed order.
+- **`../../orders`** (`index.ts`, `model.ts`): the orders module's service is called to return the stock-hold top-up, and `OrderDocument` is used as a type.
+- The `deliver` service (`./deliver`) is described in the module doc as the caller of the restore path, and `./read` and `./lost` are related graph neighbors. Their exact usage isn't visible in this file.
 
 ## Notes
-
-- **All-or-nothing.** If *any* unit on the shipment was already re-shipped or canceled (i.e. `planRestoration` returns `undefined`), the entire restore is refused. There is no partial path.
-- **Read/act consistency.** Both `restorableIds` (read flag) and `restoreLostShipment` (act) funnel through the same `planFor` → `planRestoration` logic, guaranteeing the flag and the outcome can't diverge.
-- **Optimistic concurrency.** Every mutation (`markFound`, `claim`) is a compare-and-swap on a revision. A failed `claim` inside `closeOwed` aborts the loop and the surrounding transaction via `refuseSuperseded`.
-- **Top-up split.** `releaseTopUp` receives two buckets per product: the shelf portion (released as stock) and the owed portion (released as a backorder claim). The split is derived from `restoration.owed`.
+- Every failure path (no plan, `markFound` miss, origin order missing, stale `claim` revision) raises the same `DELIVERY_LOST_SUPERSEDED` refusal. Because all writes share the act's `session`, a refusal rolls back the whole restore.
+- `claim` uses the order's `revision`, so concurrent changes surface as a refusal rather than a silent overwrite.
+- `restorableIds` reads without a session, so it is only a point-in-time check. `restoreLostShipment` re-plans inside the transaction.
+- The module doc points to the "lost-in-transit" section of the delivery module documentation for the detailed rules.

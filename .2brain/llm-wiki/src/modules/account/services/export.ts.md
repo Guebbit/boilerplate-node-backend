@@ -1,53 +1,45 @@
 ---
 source: src/modules/account/services/export.ts
-sha256: 3c3e9d642b73a3ccd7582cdb216830dc5eebb2e66cdfd4ad20de96b61474c011
-generated_at: 2026-11-14T18:44:45.106108+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 91a8180841fa13ce8682ac13bbceeb19c32e49ab1a7e0e447c4e8278870cdea3
+context_sha256: 52a7a8aac6461e67f6a3daf1b03d7e71961a9fe966f1481a90d54bb2355c9522
+generated_at: 2026-11-22T03:37:26.883602+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/export.ts
 
 ## Purpose
-
-Implements the account data-export lifecycle (GDPR Art. 15/20) as a background job rather than a synchronous request. `POST /account/export` records a `building` row and queues a build; `GET /account/export` reports status or streams the finished file. Enforces a single live export per account, applies a mail-budget charge before any new build, and participates in account erasure.
+Implements the "give me my data" flow (GDPR Art. 15/20) for `POST /account/export` and `GET /account/export`, as an asynchronous job rather than a single request. A request records a row and queues a build. A worker writes the file, and a mailed link downloads it. The file does not verify identity (`requireFreshAuth` does that on both routes) and does not change the account.
 
 ## Key elements
-
-- **`requestExport(userId, context)`** — POST handler. Resolves the caller's account, asks the mail budget, creates/reuses the export row, dispatches the build job (queue or inline), records an audit event, and returns `202` with the row's presentation.
-- **`readOwnExport(userId)`** — GET status handler. Returns the row's presentation, or `undefined` when the row is absent or past retention. A stale `building` row is reported as `failed`.
-- **`openOwnExport(userId, context)`** — GET download handler. Opens the `ready` file as a `Readable` stream, records a "downloaded" audit event, and returns `{ stream, requestedDay }`; returns `undefined` for any other state.
-- **`eraseExports(userId, session)`** — Implements `AfterErase` from the kernel registry. Deletes the row inside the erasure transaction; returns a post-commit thunk that removes the physical file.
-- **`settleInlineExports()`** — Test/shutdown helper. Awaits any builds running in-process via `settleWithin`, capped at 30 s.
-- **`inlineBuilds`** (module-private `Set<Promise>`) — Tracks inline builds (when no broker picks up the job) so they can be settled or observed.
-- **`insertRow(userId)`** — Inserts a `building` row; on duplicate-key race, fetches and returns the winning row with `created: false`.
-- **`rowOrRefusal(userId, email, context)`** — Core decision: returns an existing fresh `building` row, or (after consulting the mail budget) deletes a prior row and inserts a new one. A budget refusal short-circuits before deletion.
-- **`dispatch(job)`** — Publishes the job to the `ACCOUNT_EXPORT` queue channel; if no broker accepts, runs `runExportJob` inline (non-awaited) and tracks the promise in `inlineBuilds`.
-- **`EXPORT_BUILD_LIMIT_MS`** (30 min) — Staleness threshold for a `building` row.
-- **`isStale(row)`** — Returns `true` when `Date.now() - row.createdAt > EXPORT_BUILD_LIMIT_MS`.
+- `requestExport(userId, context)`: loads the caller's own account via `withOwnAccount`, then picks a row with `rowOrRefusal`. It records an audit event (`AUTH_DATA_EXPORT_REQUESTED`, with `metadata.reused` when no new row was created). It dispatches a job only for a newly created row. It returns `202` with the presented export, or the `429` budget refusal.
+- `readOwnExport(userId)`: returns the caller's export status, or `undefined` if there is none or it is past `expiresAt`. A `building` row older than the build limit reads as `failed`.
+- `openOwnExport(userId, context)`: returns `{ stream, requestedDay }` for a `ready`, unexpired export whose file exists, and audits `AUTH_DATA_EXPORT_DOWNLOADED`. In every other case it returns `undefined`.
+- `eraseExports(userId, session)`: this module's `personalData.erase`. It deletes the row inside the erasure transaction and returns an `AfterErase` step that removes the file(s) after commit. The file is cut off in the provided content, so the step's exact body isn't shown.
+- `settleInlineExports()`: waits (up to 30s) for builds running in-process. It exists for tests.
+- Internal helpers:
+  - `insertRow` creates a `building` row with file name `<id>.json` and an `expiresAt` from `exportRetentionMs()`. On a duplicate-key race it returns the winner's row with `created: false`.
+  - `dispatch` calls `dispatchJob` on `WORKER_CHANNELS.ACCOUNT_EXPORT`. If the outcome is `'inline'`, it runs `runExportJob` un-awaited and tracks the promise in `inlineBuilds`.
+  - `rowOrRefusal` and `isRow` choose between an existing row and a refusal.
+  - `isStale` and `EXPORT_BUILD_LIMIT_MS` (30 minutes) decide when a `building` row counts as failed.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/export-store.ts`** — `openExport` streams the finished JSON file; `removeExport` deletes it on replacement or erasure.
-- **`src/infrastructure/adapters/queue.ts`** — `publishToQueue` is the primary dispatch path for the build job.
-- **`src/infrastructure/adapters/logger.ts`** — `logger.error` logs inline-build failures.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` builds the `202` response; `ResponseSuccess`/`ResponseReject` are the union type all public functions return.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` logs "requested" and "downloaded" events.
-- **`src/infrastructure/persistence/mongo-errors.ts`** — `isDuplicateKey` distinguishes the race-losers in `insertRow`.
-- **`src/infrastructure/runtime/settle.ts`** — `settleWithin` bounds the wait in `settleInlineExports`.
-- **`src/domain-primitives/time.ts`** — `MINUTE_MS` constant used to derive the 30-minute build limit.
-- **`src/kernel/registry.ts`** — `AfterErase` type shapes `eraseExports`'s return; `PersonalDataSection` (referenced in the module doc) is how sibling modules contribute data sections without this file importing them.
-- **`src/modules/account/config.ts`** — `exportRetentionMs()` sets each row's `expiresAt`.
-- **`src/modules/account/audit.ts`** — `accountAuditActions` supplies the audit action identifiers.
-- **`src/modules/account/emails.ts`** — `recipientLocale` resolves the locale for the mailed link.
-- **`src/modules/account/mail-budget.ts`** — `mailRecipientRefusal` gates a new build on remaining mailbox budget.
-- **`src/modules/account/controllers/post-account-export.ts`** — HTTP controller that calls `requestExport` (with `requireFreshAuth` mounted upstream).
-- **`src/modules/account/controllers/get-account-export.ts`** — HTTP controller that calls `readOwnExport` and/or `openOwnExport`.
+- `../repository` (`accountExportRepository`) holds the row storage. `../presenter` (`presentExport`) shapes the API output.
+- `@infrastructure/adapters/job-dispatch` queues the job. `@infrastructure/adapters/export-store` provides `openExport`/`removeExport` for file access.
+- `../mail-budget` (`mailRecipientRefusal`) charges or refuses a new build against the mailbox budget. `../emails` (`recipientLocale`) picks the job's locale.
+- `@infrastructure/observability/audit` (`recordAudit`) together with `../audit` (`accountAuditActions`) record the audit events.
+- `../config` supplies `exportRetentionMs`.
+- `@infrastructure/persistence/mongo-errors` (`isDuplicateKey`) detects the insert race.
+- `@infrastructure/runtime/settle` (`settleWithin`) backs `settleInlineExports`.
+- `@infrastructure/http/response` supplies `generateSuccess` and the `ResponseSuccess`/`ResponseReject` types.
+- `@infrastructure/adapters/logger` logs inline build failures.
+- `@domain-primitives/time` supplies `MINUTE_MS`.
+- `@kernel/registry` supplies the `AfterErase` type. The header comment says personal-data sections come from each owning module's `collect` (via `PersonalDataSection`), so this module need not import every contributing sibling.
+- The controllers `get-account-export.ts` and `post-account-export.ts` are the route-facing callers.
 
 ## Notes
-
-- **Single-export invariant** is enforced by a unique index on `userId`; the duplicate-key path in `insertRow` returns the winner rather than erroring.
-- **Mail budget is charged before deletion** of a prior `ready`/`failed` row. A refusal leaves the existing download intact.
-- **Inline builds are fire-and-forget** from the caller's perspective (response returns immediately), but the promise is tracked so `settleInlineExports` and process shutdown can await it. A rejection is logged, never re-thrown.
-- **Erasure is two-phase**: the row delete is transactional; the file delete runs in the returned post-commit thunk because a file cannot participate in a MongoDB transaction.
-- **`presentExport`** (from `../presenter`) is the single mapping from row + status to the wire shape; both status and download paths go through it.
-- The module doc references `./export-job.ts` and `./personal-data-registry.ts` for the data-collection side; those files hold the `collect` logic that feeds each section's data into the export.
+- One live export per account, enforced by a unique index. A `building` row that is not stale is returned as is, with no new job and no mail charge. A `ready` or `failed` row is replaced by a new request.
+- The mail budget is checked before the old export is deleted, so a refused request leaves the existing ready export downloadable.
+- Inline builds are not killed at the 30-minute limit. A late finisher finds its row gone and deletes its own file. After a deploy that cuts off an inline build, the row stays `building` until the limit passes, and the user can then ask again.
+- `readOwnExport` and `openOwnExport` treat an expired-but-unswept row as nonexistent. A nightly reaper job deletes rows past `NODE_ACCOUNT_EXPORT_TTL_DAYS`.
+- `requestExport` skips credentials when fetching the user (`accountUserService.getById`), because the export reads the profile and never a secret.

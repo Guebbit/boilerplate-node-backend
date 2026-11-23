@@ -1,40 +1,36 @@
 ---
 source: src/modules/account/services/purge-deletions.ts
-sha256: 18bcf92fbc08e70c08220e3ee37ff8aefce76949a0972dde46a0636c71f26d9f
-generated_at: 2026-11-14T18:49:20.927293+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b19962c41c6224685a53cd5f94a7c18bd09630d3e5d103e4c47929b95edc1759
+context_sha256: f5aeb7303ff342f0abce7067e1e6c8a3b1c52c9508fb4ab01f804fca720d557f
+generated_at: 2026-11-22T03:40:25.950019+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/purge-deletions.ts
 
 ## Purpose
-
-Permanently erases accounts whose self-deletion grace period has expired. This is the step that actually discharges GDPR Art. 17; the earlier lock at deletion-request time is only a restriction. The `reap:scheduled-deletions` job invokes this function hourly.
+Erases every account whose self-deletion grace period has expired. The `reap:scheduled-deletions` job runs it hourly. Only this purge discharges GDPR Art. 17. The lock applied at request time is only a restriction.
 
 ## Key elements
-
-- **`PurgeCounts`** (exported interface) — Tallies the outcome of one run: `purged`, `skipped` (a restore won the race), and `failed` (will be retried next run).
-- **`purgeScheduledDeletions`** (exported) — Main entry point. Finds all due accounts, erases them sequentially, tallies outcomes into `PurgeCounts`, and logs a summary. Caller is responsible for registered erase hooks, booted translations, and the job lease.
-- **`purgeOne`** (private) — Erases a single account. On success: records the audit event, increments the deletion metric, sends the goodbye email (fire-and-forget). On failure: increments the failure metric and logs. Returns the outcome key.
+- `PurgeCounts` (interface): the result of one run, with `purged` (accounts erased), `skipped` (restored between the read and the erase) and `failed` (erasure threw; the account stays due and the next run retries it).
+- `purgeOne(user)` (internal): erases one account through `accountUserService.eraseScheduledDeletion` using a system caller context. It resolves to `'purged'`, `'skipped'` or `'failed'`.
+  - If the erase returns falsy, the result is `'skipped'` and nothing else happens.
+  - On success it records an audit entry for account-deletion completion, increments `authAccountDeleteTotal` with status `purged`, and sends the "account deleted" email.
+  - On a throw it increments the metric with status `failure`, logs the error, and returns `'failed'`.
+- `purgeScheduledDeletions()` (exported): reads the due accounts with `findDueScheduledDeletions(new Date())`, then runs `purgeOne` on them sequentially. It logs a summary and returns the `PurgeCounts`.
 
 ## Relationships
-
-- **`src/modules/users/friends/account.ts`** — Provides `accountUserService`, the service used to find due deletions and perform the hard erase.
-- **`src/modules/users/index.ts`** — Source of the `UserDocument` type used as the input to the erase.
-- **`src/kernel/permissions.ts`** — Supplies the system caller identity passed to the erase and audit calls.
-- **`src/infrastructure/observability/audit.ts`** — Provides the audit-recording function invoked after a successful erase.
-- **`src/modules/account/audit.ts`** — Defines the audit action constants referenced in the record.
-- **`src/modules/account/metrics.ts`** — Defines the deletion counter incremented on each outcome.
-- **`src/modules/account/emails.ts`** — Provides name formatting, locale resolution, and the post-deletion email template.
-- **`src/modules/account/services/mail.ts`** — Delivers the goodbye email at normal priority.
-- **`src/infrastructure/adapters/logger.ts`** — Structured logging for per-account failures and the run summary.
-- **`src/modules/account/jobs.ts`** — The scheduled job that owns the lease and calls into this module.
-- **`src/modules/account/services/index.ts`** — Barrel that re-exports this module's public API.
+- `src/modules/users/index.ts` and `src/modules/users/model.ts`: provide the `UserDocument` type. `src/modules/users/friends/account.ts` supplies `accountUserService`, with the due-account query and the erase operation.
+- `src/kernel/permissions.ts`: `systemCallerContext('User')` builds the caller context for the erase and the audit entry.
+- `src/infrastructure/observability/audit.ts` and `src/modules/account/audit.ts`: `recordAudit` records the audit entry, using the action constant exported by the account audit module.
+- `src/modules/account/metrics.ts`: the `authAccountDeleteTotal` counter.
+- `src/modules/account/emails.ts` and `src/modules/account/services/mail.ts`: `accountDeletedEmail`, `greetableName` and `recipientLocale` build the goodbye email, and `sendAccountMail` sends it.
+- `src/infrastructure/adapters/logger.ts`: logs per-account failures and the run summary.
+- `src/modules/account/jobs.ts`: the job runner is the intended caller. This file does not import it, so the relationship comes from the module docs.
 
 ## Notes
-
-- **Capture-before-delete pattern:** `email`, `locale`, and `name` are read from the document *before* the erase call, because the document no longer exists afterward. Any code that needs post-delete data must copy it up front.
-- **App time, not DB time:** `new Date()` is passed to the due-deletion query deliberately. In the demo environment only the application clock advances; the database clock is irrelevant.
-- **Sequential, fault-tolerant loop:** Accounts are processed one at a time with `for…of`. A single failure is counted and logged but does not abort the remaining accounts.
-- **Preconditions are the caller's:** All module-level erase hooks must be registered and i18n translations must be booted before calling `purgeScheduledDeletions`. This file does not check for either.
-- **Goodbye email is best-effort:** The `void` + eslint-disable comment makes explicit that the mail send never rejects; a failure is logged internally by the mail pipeline and does not affect the purge result.
+- The email address, locale and name are copied before the erase. After a hard delete there is no document left to read them from.
+- The email is sent fire-and-forget (`void`). `sendAccountMail` is documented as never rejecting, because `enqueueEmail` logs its own failures.
+- The due query uses app time (`new Date()`), not database time, because the demo clock moves only the app's clock.
+- The caller must register every module's erase hooks, boot translations, and hold the job's lease. This file does none of these.
+- A failed account does not stop the rest of the run.

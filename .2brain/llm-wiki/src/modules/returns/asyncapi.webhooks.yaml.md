@@ -1,32 +1,33 @@
 ---
 source: src/modules/returns/asyncapi.webhooks.yaml
-sha256: 793336535c65ce33c500138007799cdac9d35d4f0f8ebfa06d350d653605dd01
-generated_at: 2026-11-14T21:31:54.820031+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:20:37.914562+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/asyncapi.webhooks.yaml
 
 ## Purpose
-
-AsyncAPI **fragment** (not a standalone document) declaring the three webhook events the returns module publishes: `return.requested`, `return.received`, and `return.closed`. A bundler script merges this fragment into the global `webhooks/asyncapi.yaml` only while the returns module is registered, so deleting the module removes these events from the contract automatically.
+AsyncAPI fragment declaring the returns module's outbound webhook events: `return.requested`, `return.received` and `return.closed`. Each event is a Standard Webhooks envelope `{ type, timestamp, data }`. It is not a standalone document. It exists so the module's events appear in the webhook contract only while the module is present.
 
 ## Key elements
-
-- **`channels`** — Three channels, each with `x-read-rule: read:Return`, a `$ref` to `#/servers/subscriberEndpoint`, and one message.
-- **`operations`** — Three `send` actions (`webhookReturnRequested`, `webhookReturnReceived`, `webhookReturnClosed`), each mapped 1:1 to a domain-event service (`create.ts`, `receive.ts`, `close.ts`).
-- **`components.messages`** — `ReturnRequestedEvent`, `ReturnReceivedEvent`, `ReturnClosedEvent`; each wraps a payload in the Standard Webhooks envelope `{ type, timestamp, data }` with `WebhookHeaders`.
-- **`components.schemas`** — Payload objects (`ReturnRequestedPayload`, `ReturnReceivedPayload`, `ReturnClosedPayload`) and their envelope wrappers. All set `additionalProperties: false`.
+- **Channels** (`return.requested`, `return.received`, `return.closed`): each has an address equal to its name, `x-read-rule: read:Return`, and the `#/servers/subscriberEndpoint` server. Each links to one message.
+- **Operations** (`webhookReturnRequested`, `webhookReturnReceived`, `webhookReturnClosed`): all `action: send`. Each is one-to-one with a domain event of the same name. The descriptions point to `src/modules/returns/services/create.ts`, `receive.ts` and `close.ts`.
+- **Messages** (`ReturnRequestedEvent`, `ReturnReceivedEvent`, `ReturnClosedEvent`): headers are `WebhookHeaders`, and the payload is the matching envelope schema.
+- **Envelope schemas** (`Return{Requested,Received,Closed}Envelope`): `type` is a single-value enum, `timestamp` is a date-time, and `data` is the payload. `additionalProperties: false`.
+- **Payload schemas**:
+  - `ReturnRequestedPayload`: `returnId`, `orderId`, `reason`, `requestedAt`, and optional `statedVia`.
+  - `ReturnReceivedPayload`: `returnId`, `orderId`.
+  - `ReturnClosedPayload`: `returnId`, `orderId`, `refundAmount`, `currency`, and optional `remedy`.
 
 ## Relationships
-
-- **`src/modules/returns/module.ts`** — The module's `publicEvents` export is the runtime code that actually fires these events. The `GET /webhooks/events` endpoint lists this fragment only while the module is registered.
-- **`src/modules/returns/openapi.yaml`** — Payload schemas `$ref` into this file for shared domain enums: `ReturnReason`, `ReturnStatementChannel`, and `ReturnRemedy`. The bundler inlines those refs so the REST and event contracts share a single canonical list.
+- **`src/modules/returns/openapi.yaml`**: payloads `$ref` `ReturnReason`, `ReturnStatementChannel` and `ReturnRemedy` from it. The bundler copies these schemas in, so the REST and event contracts share one list of codes.
+- **`src/modules/payments/asyncapi.webhooks.yaml`**: a sibling fragment following the same pattern. The `return.closed` description tells consumers to follow the payments module's refund events for the money and to join them on the refund's `returnId`.
+- **`src/modules/returns/authorization.yaml`**: not referenced in the file's contents. The `x-read-rule: read:Return` value is presumably a rule defined there, but the file doesn't say.
 
 ## Notes
-
-- **Fragment, not a document.** It references `#/servers/subscriberEndpoint` and `#/components/schemas/WebhookHeaders`, which are declared in the global `webhooks/asyncapi.yaml`. It is meaningless on its own; only the merged output is consumable.
-- **Bundler script:** `scripts/contracts/asyncapi-section-fragments.ts` performs the merge. If you see these events "disappearing," check that the module is registered and the script ran.
-- **Withdrawal-before-dispatch edge case:** `return.requested` is immediately followed by `return.closed` (the return is "born closed"); `order.canceled` is the signal that the order was canceled, not `return.closed`.
-- **`return.closed` timing:** Can fire immediately after `return.received` (normal refund) *or* later when a payment sweep retries a previously refused refund. Consumers must not assume it arrives right after `return.received`.
-- **`return.received` atomicity:** The stock-movement and status-migration are committed together *before* the event fires; consumers can rely on both being visible.
+- The file refs `#/servers/subscriberEndpoint` and schemas such as `WebhookHeaders`, `Id`, `NonNegativeDecimalAmount` and `CurrencyCode`, which are not defined here. Per the file's header comment, `WebhookHeaders` and the server come from the top-level webhooks AsyncAPI document the fragment is merged into.
+- The bundler (`scripts/contracts/asyncapi-section-fragments.ts`) merges this fragment into `webhooks` only while the module exists. `GET /webhooks/events` lists these events only while the module is registered.
+- The module's `publicEvents` in `module.ts` is what actually fires each event.
+- A withdrawal before dispatch fires `return.requested` and then immediately `return.closed`. The return is born closed, and the money may still be owed.
+- `return.closed` is not fired when a refund could not be opened (the payment had nothing left). The return stays `received` until staff close it by hand.
+- `refundAmount` is the total the customer gets back for the return. The payment refund can be smaller if part of the payment already went back another way.

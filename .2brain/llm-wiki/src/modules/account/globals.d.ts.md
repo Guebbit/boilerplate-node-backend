@@ -1,27 +1,27 @@
 ---
 source: src/modules/account/globals.d.ts
-sha256: e21f0c94e1a928dc4d25dd30208fc81bd554c4e45cbc74c66395ea65e3427b22
-generated_at: 2026-11-14T18:36:06.624913+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7416ad01c284e6478fd6ef9217b8de0695593edd2bff73f0465cb03638641883
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T03:29:40.523345+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/globals.d.ts
 
 ## Purpose
-
-Augments the Express `Request` interface with an account-specific field (`credentialAttemptFailed`) via TypeScript declaration merging. It exists as a separate file because the infrastructure layer's `globals.d.ts` must remain module-agnostic (per `docs/theory/layers.md`), so any `Request` property that only the account module sets and reads is declared here.
+Type-only declaration file that adds an `account`-specific field to Express's `Request` interface via declaration merging. Infrastructure's global declarations must not name a module, so a field that only `account` sets and reads is declared here instead.
 
 ## Key elements
-
-- **`export {}`** — Promotes the file to a module. Without it the file is a global *script*, and `declare module 'express-serve-static-core'` would *redeclare* the module from scratch, silently erasing all properties Express's own types define on `Request`, `Response`, and `Express` across the entire program.
-- **`declare module 'express-serve-static-core'` → `interface Request`** — Adds one optional property:
-  - **`credentialAttemptFailed?: boolean`** — Set by the OAuth callback controller when a 302 redirect carries `?error=`. Read by `rate-limits.ts` credential budgets so that a "failed" OAuth attempt that still responds below 400 is counted against the caller's rate limit.
+- `export {}`: makes the file a module rather than a global script. This is required. In a script, `declare module` would redeclare `express-serve-static-core` from scratch instead of augmenting it. That would erase every property Express's own types declare on `Request`, `Response` and `Express`.
+- `declare module 'express-serve-static-core'` with `interface Request`: the augmentation block.
+- `Request.credentialAttemptFailed?: boolean`: records whether an OAuth callback failed by redirecting (a 302 carrying `?error=`). The callback controller sets it. A rate-limits module reads it in its credential budgets, so a failure that answers below 400 still spends them.
 
 ## Relationships
-
-No graph neighbors are recorded for this file. It is an ambient type declaration with no runtime imports or exports (beyond the empty `export {}`), so it does not appear in the dependency graph as a source or target.
+No graph neighbors. The file's comments mention, without any dependency edge:
+- The callback controller, which sets `credentialAttemptFailed`.
+- The rate-limits module, which reads it.
+- Infrastructure's global `Request` augmentation, which this one merges onto the same interface.
 
 ## Notes
-
-- The `export {}` is load-bearing, not boilerplate. Removing it turns the augmentation into a full redeclaration and breaks every other `Request`/`Response`/`Express` type consumer in the project.
-- This file is intentionally *not* imported by any runtime code; it is picked up by TypeScript's ambient type resolution. Do not add runtime `import`/`export` statements beyond the empty `export {}`.
+- Never remove `export {}`, and never add a top-level import in its place without keeping the file a module. Dropping it silently breaks Express typings program-wide.
+- The property is optional, so readers must treat `undefined` as "not failed".

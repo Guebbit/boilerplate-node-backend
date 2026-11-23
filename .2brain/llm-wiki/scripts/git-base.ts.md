@@ -1,31 +1,36 @@
 ---
 source: scripts/git-base.ts
-sha256: 804f89f5a899c60fddc48c62da21a4829616e1e326cabe580f119288a0b1386f
-generated_at: 2026-11-14T17:35:32.134637+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 804f89f5a899c60fddc48c62da21a4829616e1e326cabe580f119288a0b1386f
+context_sha256: ae62c39065815b0d754e0d397ad8bd9509a5f0585bfe5ac056cb1465088fec70
+generated_at: 2026-11-22T02:06:45.958032+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/git-base.ts
 
 ## Purpose
-
-Provides two shared helpers for scripts that shell out to `git`: a sanitized environment (stripping `GIT_*` variables that could silently redirect a nested invocation) and a merge-base resolver that tolerates a missing `origin/main` on fresh clones. Exists so every caller gets the same env-safety and fallback semantics without duplicating the logic.
+Shared git helpers for repo scripts. It provides a sanitized environment for nested `git` calls and a `mergeBase` resolver. The resolver finds the commit that diff-based checks should compare against, so they only look at what would actually ship.
 
 ## Key elements
-
-- **`gitEnvironment()`** (exported) — Returns a copy of `process.env` with every `GIT_*` key removed. Must be passed as `env` to any `execFileSync('git', …)` call whose `cwd`/`-C` target is not `REPO_ROOT`.
-- **`resolveRef(ref)`** (internal) — Runs `git merge-base HEAD <ref>` in `REPO_ROOT`; returns the SHA or `undefined` on failure.
-- **`mergeBase(base, scriptName, resolve?)`** (exported) — Resolves the merge-base against the given ref. Falls back from `origin/main` → `origin/HEAD` → `undefined` (skip). Any non-`origin/main` ref that fails to resolve exits with code 2. Accepts an injectable `resolve` function for test overrides.
+- **`gitEnvironment()`**: returns `process.env` with every `GIT_*` variable removed. Pass it as `env` to any `execFileSync('git', …)` whose `cwd` or `-C` is not `REPO_ROOT`. It strips:
+  - git's local env vars (`GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, …), which a hook exports and which override `cwd`/`-C`;
+  - `GIT_AUTHOR_*` and `GIT_COMMITTER_*`, which change the identity of anything the call writes;
+  - `GIT_CONFIG_*` injected settings.
+- **`resolveRef(ref)`** (private): runs `git merge-base HEAD <ref>` in `REPO_ROOT`. Returns the trimmed SHA, or `undefined` if git fails.
+- **`mergeBase(base, scriptName, resolve = resolveRef)`**: resolves the merge-base of HEAD and `base`.
+  - If `base` resolves, it returns the SHA.
+  - If `base` is an explicit ref other than `'origin/main'` and fails, it logs an error and calls `process.exit(2)`.
+  - If the default `origin/main` fails, it falls back to `origin/HEAD`.
+  - If neither resolves, it logs a "skipping" message and returns `undefined`. The caller should then skip the check.
+  - The `resolve` parameter exists so tests can inject a fake resolver.
 
 ## Relationships
-
-- Imports `REPO_ROOT` from **`scripts/modules-on-disk.ts`**.
-- Consumed by audit/doc/mutation/hook scripts: `scripts/audit/check-clean.ts`, `scripts/contracts/check-asyncapi-breaking.ts`, `scripts/docs/check-references.ts`, `scripts/docs/repo-references.ts`, `scripts/hooks/check-generated-fresh.ts`, `scripts/hooks/stale-generated-files.ts`, `scripts/mutation/run-diff.ts`, `scripts/pairing/linked-worktree.ts`, `scripts/testing/scratch-copy.ts`.
-- Unit-tested in `tests/unit/scripts/git-base.test.ts`; the fallback and env-filtering behavior is also exercised indirectly through `tests/unit/scripts/audit/check-clean.test.ts`, `tests/unit/scripts/docs/repo-references.test.ts`, `tests/unit/scripts/hooks/stale-generated-files.test.ts`, and `tests/unit/scripts/docs/code-citations.test.ts`.
+- Imports `REPO_ROOT` from `scripts/modules-on-disk.ts`.
+- The neighbor scripts that depend on it include `scripts/audit/check-clean.ts`, `scripts/contracts/check-asyncapi-breaking.ts`, `scripts/docs/check-references.ts`, `scripts/docs/repo-references.ts`, `scripts/hooks/check-generated-fresh.ts`, `scripts/hooks/stale-generated-files.ts`, `scripts/mutation/run-diff.ts`, `scripts/pairing/linked-worktree.ts` and `scripts/testing/scratch-copy.ts`. They are the likely users of `mergeBase` and `gitEnvironment`.
+- Tests: `tests/unit/scripts/git-base.test.ts` covers it directly (its comments say the test names the documented minimum set of stripped variables). Other tests under `tests/unit/scripts/` (audit, docs, hooks) cover the scripts that use it.
 
 ## Notes
-
-- The header comment states the frontend repo's `scripts/git-base.ts` carries an identical copy of `gitEnvironment()`; keep the two in sync if the filter changes.
-- `gitEnvironment()` is critical for git-hook contexts: hooks export `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, etc., which would otherwise override the `cwd`/`-C` a nested `git` call was aimed at, causing it to read the hook's repo and silently exit 0.
-- `mergeBase` returns `undefined` (not a thrown error) when *neither* `origin/main` nor `origin/HEAD` resolves, signalling the caller to **skip** the check rather than fail — useful for fresh clones with no usable remote.
-- An explicitly passed `--base=<ref>` (anything other than the literal string `origin/main`) that fails to resolve will `process.exit(2)`; the caller's specific request is never silently swapped.
+- Skipping on an unresolvable base (return `undefined`) is deliberate, so a clone without a usable `origin` doesn't fail. Callers must handle `undefined`.
+- An explicit `--base=<ref>` is never silently replaced by a fallback; it fails hard with exit code 2.
+- A nested git call that keeps the outer `GIT_*` variables can silently read the hook's own repo and still exit 0, which is why `gitEnvironment()` exists.
+- The file's comment says the FE repo's `scripts/git-base.ts` carries an identical copy of `gitEnvironment`. Keep the two in sync.

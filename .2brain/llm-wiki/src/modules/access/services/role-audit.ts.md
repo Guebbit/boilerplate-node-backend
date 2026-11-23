@@ -1,36 +1,28 @@
 ---
 source: src/modules/access/services/role-audit.ts
-sha256: 55be111b36458abbce4be4fd8608f0cf0bb33d778a125b7cce7abec906048813
-generated_at: 2026-11-08T03:58:20.534023+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 20519a616b73bdf036043be2a5b42f628d77cdcaefb0ce1ef0c97ddcfd344097
+context_sha256: 6cb8f148811da9756da42bbe1268b580ba45b0abb57be055c4faac48ecb4d7ea
+generated_at: 2026-11-22T03:18:06.140890+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/access/services/role-audit.ts
 
 ## Purpose
-
-Centralises the audit-row format for every role mutation (assign, revoke, refused attempt) so that the three call-sites in `grants.ts` emit structurally identical trail entries rather than each hand-rolling a near-identical `recordAudit` block. It exists to eliminate the drift that lets one branch silently drop a field (e.g. `role`) while the others keep it.
+Single place that defines what a role grant or revoke looks like in the audit trail, so grant, revoke, and refused-attempt writers all produce consistently shaped rows. It wraps `recordAudit` with role-specific fields and the access module's audit action names.
 
 ## Key elements
-
-- **`auditRoleChange`** — The single writer. Accepts an `AuditAction`, an `outcome` (`'success' | 'failure'`), and optional `userId`/`role` strings; calls `recordAudit` with a fixed `targetType: 'user'` and a `metadata` object that omits `role` entirely when it is `undefined` (rather than sending `undefined`).
-- **`auditRoleAssigned`** — Thin wrapper around `auditRoleChange` for a committed grant. Lower-cases `roleName` before delegating. Always passes `outcome: 'success'`.
-- **`auditRoleRevoked`** — Thin wrapper for a committed revoke. Passes `roleName` as-is (no lower-casing). Always passes `outcome: 'success'`.
-
-All three are pure "fire-and-forget" `void` functions; they do not return the audit record.
+- `auditRoleAssigned(context, userId, roleName, tenantId, scope)` — records a **committed** grant (`ROLE_ASSIGNED`, outcome `success`). Lowercases `roleName` before recording.
+- `auditRoleRevoked(context, userId, roleName, tenantId, scope)` — records a **committed** revoke (`ROLE_REVOKED`, outcome `success`). Passes `roleName` as given.
+- `auditRoleChange(context, action, outcome, userId, role, tenantId, scope)` — the shared writer for success or failure. Calls `recordAudit` with `targetType: 'user'`, `targetId: userId`, and metadata `{ role, tenantId, scope }`. `role` is left out of the metadata entirely when `undefined`. `userId` may be `undefined` (e.g. a grant refused before the account exists).
 
 ## Relationships
-
-- **`src/infrastructure/observability/audit.ts`** — Source of the `recordAudit` runtime call and the `AuditAction` type used in the `action` parameter.
-- **`src/modules/access/audit.ts`** — Supplies `accessAuditActions.ROLE_ASSIGNED` / `ROLE_REVOKED` constants passed as the `action` argument.
-- **`src/modules/access/services/grants.ts`** — The primary consumer: `assignRole` / `revokeRole` call the wrappers (or `auditRoleChange` directly for failure paths) after the transaction commits.
-- **`src/modules/access/services/index.ts`** — Barrel file; expected to re-export the three functions so callers import from the package root.
-- **`src/modules/access/services/memberships.ts`** — Sibling service; shares the same audit vocabulary and may reference `accessAuditActions` for membership-specific actions.
-- **`src/types/auth-context.ts` / `src/types/index.ts`** — Provide the `CallerContext` and `AuthorizationScope` types used in every function signature.
+- `@infrastructure/observability/audit` — supplies `recordAudit` (the actual write) and the `AuditAction` type.
+- `../audit` (`src/modules/access/audit.ts`) — supplies `accessAuditActions` (`ROLE_ASSIGNED`, `ROLE_REVOKED`).
+- `@types` (`CallerContext`, `AuthorizationScope`) — types for the caller and scope parameters; the neighbors `src/types/auth-context.ts` and `src/types/index.ts` relate to these.
+- Documentation refers to `assignRole` and `revokeRole` as the callers (the grant and revoke services, presumably in `grants.ts`/`memberships.ts`). This file does not import them.
 
 ## Notes
-
-- **Asymmetric lower-casing:** `auditRoleAssigned` calls `roleName.toLowerCase()` before delegating; `auditRoleRevoked` does not. If callers rely on the trail being uniformly normalised, this is a latent inconsistency.
-- **`tenantId: null` is meaningful** — it denotes platform-scope roles. Do not substitute `undefined`.
-- **`userId` / `role` are `string | undefined`** in `auditRoleChange` (not `string`). A `null` or `undefined` here is intentional (e.g. a grant refused before the account exists) and is handled by omitting the key from `metadata` rather than serialising an undefined value.
-- The module JSDoc explicitly references `docs/theory/authorization.md` for the design rationale.
+- The committed-success helpers exist because `assignRole`, when given a `session`, audits only its failures; the caller must invoke `auditRoleAssigned` after its transaction commits.
+- Grant lowercases the role name while revoke does not, so callers of `auditRoleRevoked` must pass the name in the form they want recorded.
+- Centralizing the row was meant to prevent drift, such as a revoke failure branch silently dropping `role` from metadata.

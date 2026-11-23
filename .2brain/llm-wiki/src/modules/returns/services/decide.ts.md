@@ -1,46 +1,44 @@
 ---
 source: src/modules/returns/services/decide.ts
-sha256: 8320c6b821952dbfb0d42ad2b08b57bb3120c2d694a699566a2faa5a6190f215
-generated_at: 2026-11-14T21:38:35.366731+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 9bf173aa6449166597dc1dec781218ef5d50bb972319a39f54d977c24ffb61dc
+context_sha256: 6e7719bc24c974d3f4b11caabf83b13df2f47893b0cbeeb8e0fe55c331fb12ba
+generated_at: 2026-11-22T07:29:36.636196+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/decide.ts
 
 ## Purpose
-
-Implements the two staff actions on a pending return request — **approve** and **decline** — as a single conditional (optimistic-lock) write. Two staff members racing on the same request cannot both succeed; the loser receives a 409. Withdrawals never pass through this file because they open already approved.
+Handles staff decisions on a return request: approve it, or decline it with a reason. Each decision is a single conditional write from `requested`, so if two staff members decide the same request concurrently, only one wins and the other is told the request was already decided. Withdrawals never come through here, since they are opened already decided.
 
 ## Key elements
-
-- **`approveReturn(id, context)`** — Public entry point. Calls the shared `decide` helper with the `approve` event and an empty stamp.
-- **`declineReturn(id, decline, context)`** — Public entry point. Validates that reason `"other"` carries a `message` (returns 422 early, before any write), then calls `decide` with a stamp containing `declineReason` / `declineMessage`.
-- **`decide(id, event, stamp, context)`** *(internal)* — The shared transactional path:
-  1. Opens a DB transaction (`withTransaction`).
-  2. Calls `returnRepository.claimStatus` to atomically move the row from the event's `from` status to its `to` status, stamping `decidedAt` and any decline fields.
-  3. On success: appends a timeline entry to the parent order, enqueues the `RETURN_DECIDED` outbox event.
-  4. On failure (row already moved / not found): falls through to `notDecidable`.
-- **`settleDecision(decided, to, id, context)`** *(internal)* — Post-commit work: nudges the outbox, reads the order to compute the `ownOrderFlag` audit metadata (non-fatal — a read error only loses the flag), records the audit row, and triggers `syncReturnStatus` projection.
-- **`notDecidable(id)`** *(internal)* — Distinguishes 404 (return does not exist) from 409 (exists but is no longer in a decidable state) for the response body.
+- `approveReturn(id, context)` — approves a return by calling `decide` with the `approve` event and an empty stamp.
+- `declineReturn(id, decline, context)` — declines a return with a reason code and an optional message. If the reason is `other` and no message is given, it returns a 422 field error (`returns.decline-message-required`) before anything is written. Otherwise it stamps `declineReason` and, when present, `declineMessage`.
+- `decide` (internal) — shared path for both decisions. Inside `withTransaction` it:
+  1. Calls `returnRepository.claimStatus` from the lifecycle's source status for the event to the target status, stamping `decidedAt`.
+  2. On a win, appends an order timeline entry (`return_approved` or `return_declined`).
+  3. Enqueues the `RETURN_DECIDED` outbox event with `returnId`, `orderId` and `decision`.
+  
+  A lost claim writes nothing and falls through to `notDecidable`.
+- `settleDecision` (internal) — runs after a won claim. It calls `nudgeOutbox()`, reads the order, records the audit row, runs `syncReturnStatus` on the order, and returns a 200 success.
+- `notDecidable` (internal) — chooses the error for a lost claim. It returns 409 (`RETURN_NOT_DECIDABLE`) if the return exists, or 404 (`returns.not-found`) if not.
 
 ## Relationships
-
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps the claim + timeline + outbox enqueue into a single atomic unit.
-- **`src/kernel/outbox.ts`** — `enqueueOutboxEvent` writes the `RETURN_DECIDED` event inside the transaction; `nudgeOutbox` is called after commit to trigger dispatch.
-- **`src/modules/orders/index.ts`** — Provides `orderService` (used to append a timeline entry on the parent order and to read the order for the audit flag) and `buyerIdOf` (extracts the buyer ID for `ownOrderFlag`).
-- **`src/modules/access/index.ts`** — `ownOrderFlag(context, buyerId)` determines whether the deciding staff member is the order's buyer; the result is stored in audit metadata.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the staff action log (approve/decline, success, target, `ownOrderFlag`).
-- **`src/modules/returns/domain/index.ts`** — Re-exports `RETURN_EVENTS` (maps event name → `{ from, to }`) and `returnLifecycle` (resolves the expected prior status via `fromOf`).
-- **`src/modules/returns/domain/lifecycle.ts`** — Source of the `returnLifecycle` helper used to derive the `from` status for the conditional write.
-- **`src/modules/returns/audit.ts`** — `returnsAuditActions` supplies the stable audit-action identifiers (`ADMIN_RETURN_APPROVED`, `ADMIN_RETURN_DECLINED`).
-- **`src/infrastructure/i18n/index.ts`** — `t()` localises user-facing error strings (409 message, 422 field error).
-- **`src/infrastructure/http/response.ts`** — `generateSuccess`, `generateReject`, and `fieldError` shape the HTTP response.
-- **`src/infrastructure/adapters/logger.ts`** — `logger` is used to log (non-fatal) failures when reading the order for the audit flag.
+- **`../repository`** (`returnRepository`) — provides `claimStatus` (the conditional write) and `findById` (used only to pick the 404 or 409).
+- **`../domain`** — `RETURN_EVENTS` supplies the target status, and `returnLifecycle` supplies the allowed source status.
+- **`@modules/orders`** — the order service writes the timeline entry inside the transaction and reads the order afterwards for the audit flag; `buyerIdOf` extracts the buyer from that order.
+- **`@modules/access`** — `ownOrderFlag` adds the `ownOrder` flag to audit metadata. It marks a staff member approving or declining their own return.
+- **`../audit`** and **`@infrastructure/observability/audit`** — `returnsAuditActions` supplies `ADMIN_RETURN_APPROVED` and `ADMIN_RETURN_DECLINED`. `recordAudit` writes the row.
+- **`@kernel/outbox`** — `enqueueOutboxEvent` commits the `RETURN_DECIDED` event with the decision. `nudgeOutbox` wakes the outbox afterwards.
+- **`@infrastructure/runtime/database`** — `withTransaction` wraps the claim, timeline and outbox writes.
+- **`@infrastructure/http/response`** — `generateSuccess`, `generateReject` and `fieldError` build the responses.
+- **`@infrastructure/i18n`** — `t` translates the error messages.
+- **`@infrastructure/adapters/logger`** — logs a failed order read in `settleDecision`.
+- **`./projection`** (`syncReturnStatus`) — updates the order's projection after the decision.
 
 ## Notes
-
-- **Race safety is at the DB level.** `claimStatus` performs a conditional UPDATE; if the row's current status no longer matches the expected `from`, the function returns `null` and no timeline, outbox, or audit writes occur.
-- **Audit is written outside the transaction.** `settleDecision` runs after `withTransaction` resolves, so a crash between commit and audit loses the audit row but not the decision.
-- **The order read for `ownOrderFlag` is best-effort.** A failure logs an error and continues; the audit row is still recorded, just without the flag.
-- **`decidedAt` is stamped in the same statement as the status change** (spread into the `stamp` passed to `claimStatus`), guaranteeing it is never written without the status transition.
-- **The `to` value comes from `RETURN_EVENTS[event].to`**, not from a widened domain type, so the event payload and timeline entry only ever carry `"approved"` or `"declined"`.
+- The claim, order timeline row and outbox event commit together. The audit row and the projection sync happen after the commit.
+- A failed order read in `settleDecision` is logged and swallowed. It costs only the `ownOrder` audit flag, never the audit row or the decision.
+- The customer's notification email is not sent here. It rides on the outbox event.
+- A decline's reason stays on the return document, where `reap:returns` owns its clock.
+- `notDecidable` runs a read after the write has already failed. It only chooses the message and does not decide the outcome.

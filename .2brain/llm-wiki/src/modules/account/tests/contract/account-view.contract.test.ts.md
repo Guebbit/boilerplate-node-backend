@@ -1,41 +1,38 @@
 ---
 source: src/modules/account/tests/contract/account-view.contract.test.ts
-sha256: ac7597087a71d8acd0ce3358dd472caaa6c145ae96a3c2a584f5c90dc4f1835b
-generated_at: 2026-11-14T18:58:55.783702+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8401b3834c053da67cc46e78b3bbb660089c0a0d9fc9f6212aaf7a5049a1ff45
+context_sha256: ca5f0d07ea444ebc49b27be728dc86bea9a4bd345e4a0554785e78fba08de848
+generated_at: 2026-11-22T03:49:31.077383+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/contract/account-view.contract.test.ts
 
 ## Purpose
-
-Contract test that verifies the `GET /account` response carries the *same* permission rules the server enforces, so a client can derive its UI state from the wire payload rather than duplicating policy. It also pins the idle-clock fields and the optimistic-concurrency (`If-Match`/ETag) semantics of `PATCH /account`.
+Contract tests for `GET /account`, which returns the caller's CASL abilities and idle-activity clock. The tests check the round trip rather than the payload shape. They pack rules on the server, unpack them the way a browser would, and then ask the rebuilt ability the same questions the server enforces. This guards against a client-side copy of the policy drifting from the server's.
 
 ## Key elements
-
-- **`abilityFrom(body, scope)`** – Rebuilds a single CASL `MongoAbility` from one scope (`tenant` or `platform`) of the response's `abilities` object, using `unpackRules` from `@casl/ability/extra`. Scopes are never merged; each is asked independently.
-- **`describe('GET /account abilities')`** block – Individual `it` cases cover:
-  - A customer's rules only permit their own rows (row-level scoping).
-  - A shop owner's rules narrow nothing within the tenant.
-  - Tenant and platform scopes stay separate in one payload (no cross-scope leak).
-  - A caller without a platform membership receives `abilities.platform` as `[]` (present, not absent).
-  - `abilities.version` equals `permissionModelVersion(PERMISSION_RULES.map(e => e.id))` — it tracks rule changes, not role changes.
-  - `grantableRoles` lists assignable tenant roles and excludes platform/`operator` and `customer`.
-  - The removed `subjects` key is **not** present in the payload.
-  - `activity.lastActiveAt` is a string; `activity.idleTimeoutSeconds` is absent for a shopper.
-  - `PATCH /account` accepts an `If-Match` tag whose *edit part* (the numeric prefix of the ETag) is unchanged, even after an intervening `GET` advanced the activity part.
-  - `PATCH /account` returns **412** when a role change (via `POST /users/:id/assign-role`) mutated the edit part before the write.
+- `abilityFrom(body, scope)` rebuilds a `MongoAbility` for one scope (`'tenant'` or `'platform'`). It calls `unpackRules` on `body.abilities[scope]` and then `createMongoAbility`. The scopes are never merged.
+- `describe('GET /account abilities')` holds the cases below:
+  - **Customer rules:** a signed-in `user` can read their own `Order` but not another user's.
+  - **Admin rules:** an `admin` can `delete` a `Product`, so the tenant rules narrow nothing.
+  - **Scope separation:** an admin who is also a platform operator gets `ObservabilitySnapshot` readable in `platform` but not in `tenant`.
+  - **Empty platform list:** a caller with no platform membership gets `abilities.platform` as `[]`, not an absent field.
+  - **Version:** `abilities.version` equals `permissionModelVersion(PERMISSION_RULES.map(e => e.id))`.
+  - **Grantable roles:** an admin's `grantableRoles` includes `manager`, `moderator` and `admin`, and excludes `operator` and `customer`.
+  - **Removed field:** `abilities` has no `subjects` property.
+  - **Activity:** `activity.lastActiveAt` is a string, and `idleTimeoutSeconds` is absent for a shopper.
+  - **Tag, benign case:** the `etag` header from an earlier read is still accepted by `PATCH /account` (via `If-Match`) after a later read (200). The header matches `"<digits>.<token>"`.
+  - **Tag, role change:** the same flow returns 412 when an admin assigns the `support` role between the read and the write.
 
 ## Relationships
-
-- **`src/kernel/permissions.ts`** — Imports `PERMISSION_RULES` and `permissionModelVersion`; the test computes the expected version stamp from the same constants the server uses, asserting the two sides agree.
-- **`tests/support/contract.ts`** — Imported as a side-effect module (`import '@tests/contract'`); no values are destructured from it.
-- **`tests/support/http.ts`** — Provides `api()` (an HTTP client factory) and `authenticateAs(role)` (returns `{ user, bearer }` for the named fixture role).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module load to seed/reset the test database before any test executes.
+- `@kernel/permissions` (`src/kernel/permissions.ts`) supplies `permissionModelVersion` and `PERMISSION_RULES`. The version test uses them to compute the expected value independently of the endpoint.
+- `@tests/contract` is imported for its side effects only, and sets up the contract-test environment.
+- `@tests/http` supplies `api()` (the HTTP client) and `authenticateAs(role)`, which returns `{ user, bearer }`.
+- `@tests/setup-test-db` supplies `setupTestDb()`, called once at module level to provision the test database.
+- The role-change test also calls `POST /users/:id/assign-role`, which belongs to another module.
 
 ## Notes
-
-- **ETag shape is `"<edit>.<activity>"`** (e.g. `"3.abc-123"`). The `If-Match` comparison on `PATCH /account` looks *only* at the edit part; the activity part (`lastActiveAt`) advances on every `GET` and must not invalidate a pending write.
-- The test that exercises the 412 path performs a real `POST /users/:id/assign-role` to mutate the edit part, proving the server-side comparison, not a client-side one.
-- `abilityFrom` casts through `as never` twice because `unpackRules` returns `Rule[]` while `createMongoAbility` expects a specific CASL rule type; this is a type-level bridge, not a runtime concern.
-- The two scopes (`tenant`, `platform`) are intentionally **never merged** into one ability; the test that asserts separation relies on an `admin` who also holds a platform `operator` membership.
+- The `admin` fixture is both a shop admin and a platform operator. The scope-separation test depends on this.
+- The tag has two parts, a body part and an edit part. A read moves the body part through `lastActiveAt`, but writes compare only the edit part. A role change moves the edit part, which is why it produces a 412.
+- `abilityFrom` casts its inputs with `as never`, because the wire payload is untyped.

@@ -1,34 +1,36 @@
 ---
 source: src/infrastructure/adapters/semantic-names.ts
-sha256: 113c24077c8323c42d1c82320981450309e7572706564c2eff3764edade0e29d
-generated_at: 2026-11-08T03:23:38.149098+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e744328ed5d1898c905e02b78390efd0142ce7609135c5dedd4680818a3901c4
+context_sha256: fad688512892766cfda1dcb085564aa8d4de2d3195360ae813af6f672af37c20
+generated_at: 2026-11-22T02:42:21.174419+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/semantic-names.ts
 
 ## Purpose
-
-Transforms the camelCase field names used in code (`actorUserId`, `statusCode`) into OpenTelemetry semantic-convention names (`user.id`, `http.response.status_code`) on structured log records before they reach Loki or a SIEM. This lets dashboards and alerts written against the OTel spec work without modification.
+Translates the camelCase field names used in code for structured logging (`actorUserId`, `statusCode`) into OpenTelemetry semantic-convention names (`user.id`, `http.response.status_code`) on the emitted log line. This lets dashboards and alerts written against the standard work unchanged in Loki, a SIEM, or any other collector.
 
 ## Key elements
-
-- **`SEMANTIC_LOG_NAMES`** (exported, readonly) — The field-name mapping table (code name → log-line name). Sourced from `./semantic-log-names.generated`, which is generated from `shared/rules/semantic-log-names.yaml`.
-- **`toSemanticNames(record)`** (exported) — Returns a new record with every top-level key renamed via `SEMANTIC_LOG_NAMES`. Special-cases two keys:
-  - `error` → decomposed into `exception.*` attributes (type, message, stacktrace, cause, details).
-  - `actorRole` → `user.roles` wrapped in a single-element array (the convention expects a list).
-- **`exceptionAttributes(error)`** (private) — Maps a single error value to the `exception.*` attribute set. Non-plain-object values become `{ 'exception.message': String(value) }`.
-- **`LogRecord`** (private type) — `Record<string, unknown>`, the shape of a log record before or after the rename.
+- `SEMANTIC_LOG_NAMES`: read-only map of code field name → log-line name, taken from the generated `semantic-log-names.generated` data (source table: `shared/rules/semantic-log-names.yaml`). It uses standard OpenTelemetry names where they exist and `app.*` where they don't. `traceId` and `spanId` map to the top-level `trace_id` and `span_id`.
+- `toSemanticNames(record)`: exported. Takes a (redacted) record and returns a new record with renamed keys. Values are untouched.
+  - `error` (when not `undefined`) is expanded into `exception.*` attributes.
+  - `actorRole` becomes `user.roles`, wrapped as a one-element array.
+  - Every other key is looked up in `SEMANTIC_LOG_NAMES` and falls back to its original name.
+- `exceptionAttributes(error)`: internal. For a non-plain-object value it returns `exception.message: String(error)`. For a plain object it maps:
+  - `name` → `exception.type`
+  - `message` → `exception.message`
+  - `stack` → `exception.stacktrace`
+  - `cause` → `exception.cause`
+  - any remaining properties → `exception.details`
 
 ## Relationships
-
-- **`src/infrastructure/object-guards.ts`** — Imports `isPlainObject`, used to distinguish a structured error object from a bare string/number when building `exception.*` attributes.
-- **`src/infrastructure/adapters/logger.ts`** — Sits on jest's `globalSetup` import chain; this is why this file is restricted to relative imports only (no barrel or absolute paths).
-- **`tests/unit/infrastructure/adapters/semantic-names.test.ts`** — Unit tests exercising `toSemanticNames` and the exception-mapping logic.
+- Imports `isPlainObject` from `../object-guards` to tell error objects from bare strings or numbers.
+- The `logger.ts` neighbor sits on jest's `globalSetup` import chain, which is why this file uses relative imports only. The file does not say how `logger.ts` calls it, but its docs describe it as applying after redaction.
+- `tests/unit/infrastructure/adapters/semantic-names.test.ts` is the unit test for this module.
 
 ## Notes
-
-- **Top-level only.** Nested objects (e.g. `metadata`, fields inside `error.cause`) are passed through untouched; renaming is the call site's responsibility.
-- **Collision guard.** If a key's semantic target is already present in the record, the original key is kept as-is rather than overwriting the caller's explicit value.
-- **`trace_id` / `span_id`** are intentionally not dotted: the OTel Logs Data Model places trace context at the record top level, and `@opentelemetry/instrumentation-winston` writes exactly those keys. Grafana's Loki→Tempo link depends on the underscored names.
-- **Custom (non-OTel) fields** are namespaced under `app.*` per the spec's guidance that producers must not squat on standard attribute names.
+- Only top-level keys are renamed. Nested objects such as `metadata` or `error.cause` keep the call site's own shape.
+- Despite the doc comment saying a field is left alone when its target name is already taken, the loop assigns without checking for collisions. A later key that maps to the same target overwrites an earlier one.
+- Keep imports relative (no path aliases), because of the `globalSetup` constraint above.
+- Edit the rename table in the YAML source, not in the generated file.

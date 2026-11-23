@@ -1,40 +1,34 @@
 ---
 source: src/modules/payments/services/intent.ts
-sha256: c5fdf56d33f16155760497964d011b9778c367fc651ae536a44625d00ecbd8d7
-generated_at: 2026-11-14T21:07:09.076565+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7b33b77a7faaf69599113d105931c2f633cf76d43f3ac2e6b84c9f94b7ed3a0f
+context_sha256: 7a155e179e4ff847296062594ff05e0a89380367e21ba9bcd264d8542efac185
+generated_at: 2026-11-22T06:51:00.739796+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/intent.ts
 
 ## Purpose
-
-Entry point for the module's money-moving flow: creates (or idempotently refreshes) a payment intent for an order, cancels a still-open intent on a specific payment, and closes any dangling intent when its order is canceled. Every code path in this file guarantees that at most one provider-side intent is ever exposed to the client for a given order.
+Handles the payment intent lifecycle for an order: creating or refreshing the intent at the payment provider (the entry point into the module's money-moving flow), and closing an open intent when it is no longer needed.
 
 ## Key elements
-
-- **`createIntent(orderId, authContext)`** — Resolves the order (buyer-scoped), confirms it is payable via `isPayable`, obtains a provider, upserts the payment row, asks the provider to prepare/resume an intent, guards against stray or racing duplicates (returns 409 `PAYMENT_IN_FLIGHT`), and returns 201 (new row) or 200 (refresh). Attaches `clientSecret` — the only field never persisted.
-- **`cancelOpenIntent(payment, reason)`** — Cancels a single payment's open provider intent. No-ops for payments with no `providerRef` or for hand-recorded (`manual`) payments. Throws `PaymentInFlightError` if the provider reports the intent already succeeded or is mid-flight.
-- **`cancelOpenIntentForOrder(orderId, expired?)`** — Best-effort close of the order's open intent. On `PaymentInFlightError` reconciles via `settleFromProvider` (refund path). Marks the payment `canceled` only after provider confirmation and only from a settleable status. Sends a transfer-expired email when the hold ran out. Never rethrows provider failures after the order is already canceled. Marked `@internal`; only the module's event subscription may invoke it.
-- **`rejectStrayIntent(provider, strayRef, orderId)`** *(internal)* — Cancels a duplicate intent the provider opened, logs the conflict, and returns a 409 `PAYMENT_IN_FLIGHT` envelope.
+- `createIntent(orderId, authContext?)` — loads the buyer's order, checks it is payable, resolves the configured provider, upserts the payment row (amount from `orderTotal`, the order's frozen currency), asks the provider to `prepare` (resuming any stored `providerRef`), attaches the provider reference, and returns the payment with `clientSecret`. Responds 201 for a newly inserted payment row and 200 on a refresh. Rejects with 409 when the order is not payable, when no provider is configured (`PAYMENT_CARD_NOT_AVAILABLE`), or when a stray intent is detected (`PAYMENT_IN_FLIGHT`).
+- `cancelOpenIntent(payment, reason)` — asks the provider to close the payment's intent. Resolves immediately if there is no `providerRef` or the payment was recorded by hand. Throws `PaymentInFlightError` if the provider says the intent already succeeded or is mid-flight.
+- `cancelOpenIntentForOrder(orderId, expired = false)` — best-effort handler for order cancellation, marked `@internal`. For a payment in a settleable status it cancels the provider intent, then sets the status to `canceled` only if it is still in a settleable status. If the cancel was caused by the hold expiring and the row has a `transferReference`, it sends `mailTransferExpired`. On `PaymentInFlightError` it reconciles through `settleFromProvider`. Any other failure is logged and not rethrown.
+- `rejectStrayIntent` (private) — cancels an unexpected second intent at the provider, logs it, and returns a 409 `PAYMENT_IN_FLIGHT`. It never rejects.
 
 ## Relationships
-
-- **`src/modules/orders/index.ts`** — Re-exports consumed here: `orderService` (for `getById` with buyer scoping), `buyerIdOf`, `orderTotal` (frozen amount), and `isPayable` (lifecycle guard). This file never re-implements order-side rules.
-- **`src/modules/orders/domain/lifecycle.ts`**, **`src/modules/orders/domain/rules.ts`**, **`src/modules/orders/domain/totals.ts`** — Underlying domain definitions that `@modules/orders` re-exports; `isPayable` gates whether an order can accept an intent, `orderTotal` freezes the amount, and `buyerIdOf` extracts the payer.
-- **`src/modules/orders/services/index.ts`** — Houses `orderService` used for the buyer-scoped `getById` call.
-- **`src/modules/payments/providers/index.ts`**, **`src/modules/payments/providers/errors.ts`** — `resolvePaymentProvider`, `providerNamed`, the `PaymentProvider` interface, and `PaymentInFlightError`. All provider I/O funnels through these.
-- **`src/modules/payments/domain/index.ts`**, **`src/modules/payments/domain/lifecycle.ts`** — `isHandRecorded` (skip provider cancel for manual payments) and `SETTLEABLE_PAYMENT_STATUSES` (status guard before writing `canceled`).
-- **`src/modules/payments/model.ts`** — `PaymentDocument` type used by `cancelOpenIntent` and the repository calls.
-- **`src/modules/payments/module.ts`** — Subscribes the order-canceled event to `cancelOpenIntentForOrder`; the sole caller of that function.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` envelope builders and `ResponseSuccess` / `ResponseReject` types.
-- **`src/infrastructure/adapters/logger.ts`** — Error logging for stray-intent refusal and best-effort cancel failures.
-- **`src/infrastructure/i18n/index.ts`**, **`src/infrastructure/i18n/context.ts`** — `t()` for user-facing error messages.
+- **Orders** (`@modules/orders`): uses `buyerIdOf`, `orderTotal` and `isPayable`, so the amount and payability rules come from the order's owner. `buyerOrderScope` (from `./scope`) limits the order lookup to the buyer.
+- **Providers** (`../providers`): `resolvePaymentProvider`, `providerNamed`, the `PaymentProvider` type and `PaymentInFlightError`.
+- **Persistence**: `paymentRepository` (`upsertIntent`, `attachProviderRef`, `findByOrderId`, `updateStatusIfIn`) and the `PaymentDocument` type from `../model`.
+- **Domain**: `isHandRecorded` and `SETTLEABLE_PAYMENT_STATUSES` from `../domain`.
+- **Sibling services**: `withActions` (`./view`), `notPayable` and `orderNotFound` (`./errors`), `mailTransferExpired` (`./notify`), `settleFromProvider` (`./settlement`).
+- **Infrastructure**: `generateSuccess`/`generateReject` for response envelopes, `t` for i18n messages, `logger` for error logging.
 
 ## Notes
-
-- **Stryker mutation-test annotations** (`// Stryker disable all` / `// Stryker restore all`) wrap every logging-only `.catch` block; these blocks are intentionally non-testable (fire-and-forget error logs).
-- **Mongoose spread pitfall:** The upsert explicitly lists `amount`, `currency`, `provider` rather than spreading the hydrated order document, because Mongoose schema paths live on the prototype and are not own enumerable properties.
-- **`cancelOpenIntentForOrder` is `@internal`** — deliberately not exposed on `paymentService`; only the module's event subscription may invoke it.
-- **201 vs 200:** The first successful call that inserts a payment row returns 201; a re-call (double-click) refreshes the same row and returns 200.
-- **`clientSecret` is the only non-persisted field** in the response; it is never read back from the database.
+- The amount comes from `orderTotal` (which includes shipping), not from the order lines alone. The currency is the order's frozen one.
+- Two backstops refuse a second intent: a different reference returned for a payment that already holds one, and a lost race between two first-time requests, detected when the conditional attach keeps the other writer's reference. In both cases the stray is canceled.
+- Fields are passed explicitly to `upsertIntent` because `order` is a hydrated Mongoose document, and spreading it would copy nothing.
+- `cancelOpenIntentForOrder` is deliberately not exposed on `paymentService`.
+- `clientSecret` is never stored. It appears only in the `createIntent` response.
+- `// Stryker disable/restore` comments exclude the logging blocks from mutation testing.

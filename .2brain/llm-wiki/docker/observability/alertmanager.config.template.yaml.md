@@ -1,35 +1,43 @@
 ---
 source: docker/observability/alertmanager.config.template.yaml
-sha256: 04e27741785f11f02af825fd495886431536d3fc2910fb4bbf6380ab4c21d21b
-generated_at: 2026-11-08T02:21:33.128649+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0ea180c8947931f752823576d8ea60bd3c7642f31f5d1a3fc63397641b61e491
+context_sha256: 87237a43de47797e17c483ff5fd83a17719b731d09eaf4a9ea04673ddfb7b8f7
+generated_at: 2026-11-22T01:31:45.242876+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/observability/alertmanager.config.template.yaml
 
 ## Purpose
-
-A Jinja-free, marker-based template for Alertmanager that is rendered into a live config at container startup. It exists because Alertmanager cannot read environment variables natively, so all operator-supplied knobs (SMTP credentials, webhook URLs, receiver names) must be baked in before the daemon reads the file. The routing logic itself is shared by every deployment; only the receiver values differ.
+Template for the Alertmanager configuration, rendered at container start by `alertmanager-render.sh`. A template is needed because Alertmanager reads no env vars and its email `to`/`from`/`smarthost` have no `_file` form, so values are substituted before the daemon starts. Routing is the same for every client; only the knobs differ. Further docs are referenced at `docs/operate/deployment-hardening.md#alert-routing`.
 
 ## Key elements
-
-- **Template markers** — `@NAME@` is a placeholder substituted with the knob's value; `# BEGIN x` … `# END x` wraps a block that is deleted entirely when knob group `x` is empty (e.g. no SMTP → the whole `email_configs` section vanishes).
-- **`route`** — groups by `alertname` (30 s wait, 5 min interval, 12 h repeat). Specific sub-routes handle:
-  - **Watchdog** heartbeat (30 s cadence, no group wait) → dedicated receiver.
-  - **`AlertmanagerNotificationsFailing`** with `integration="email"` → routed to the *other* channel (webhook) so a broken email path doesn't swallow its own failure alert.
-  - **`AlertmanagerNotificationsFailing`** (any other integration) → routed to email for the same cross-channel reason.
-  - **`severity="critical"`** → `email-and-webhook` receiver.
-- **`receivers`** — five always-present receivers: `null` (safe sink when a knob is empty), `email`, `webhook`, `email-and-webhook` (both), `heartbeat` (webhook with optional Bearer-token auth). Secrets live on disk under `@SECRETS_DIR@`.
-- **`inhibit_rules`** — suppresses secondary alerts when their root cause is already firing (e.g. `DependencyUnavailable[database]` mutes `HighErrorRate`, `HighP95Latency`, `UnhandledRejections`). `AuditSinkFailing` is deliberately excluded as a target.
+- **Template markers**
+  - `@NAME@` is replaced by the knob's value.
+  - `# BEGIN x` .. `# END x` blocks are deleted when knob group `x` is empty. Groups used: `email`, `smtp-auth`, `webhook`, `heartbeat`, `heartbeat-auth`.
+- **`global`**: `resolve_timeout: 5m`.
+- **`route`**: groups by `alertname` (wait 30s, interval 5m, repeat 12h). The default receiver is `@RECEIVER_DEFAULT@`. Sub-routes, in order:
+  - `Watchdog` goes to `@RECEIVER_WATCHDOG@` (the heartbeat), with a 0s wait, 30s group interval and 1m repeat.
+  - `AlertmanagerNotificationsFailing` with `integration="email"` goes to `@RECEIVER_NOTIFY_FAILING@`.
+  - `AlertmanagerNotificationsFailing` for any other integration goes to `@RECEIVER_DEFAULT@` (email).
+  - `severity="critical"` goes to `@RECEIVER_CRITICAL@`.
+- **`receivers`**: all are always defined, and an emptied receiver notifies no one.
+  - `null`: notifies no one.
+  - `email`: SMTP settings from `@ALERT_EMAIL_TO@`, `@ALERT_EMAIL_FROM@`, `@ALERT_SMTP_HOST@`, `@ALERT_SMTP_PORT@` and `ALERT_SMTP_REQUIRE_TLS`. The optional `smtp-auth` group adds username and `auth_password_file`.
+  - `webhook`: `url_file` from `@SECRETS_DIR@/webhook-url`.
+  - `email-and-webhook`: both of the above.
+  - `heartbeat`: webhook to `@SECRETS_DIR@/heartbeat-url`, with optional Bearer auth from `heartbeat-token`.
+- **`inhibit_rules`**:
+  - `DependencyUnavailable` for the database mutes `HighErrorRate`, `HighP95Latency` and `UnhandledRejections`.
+  - `DependencyUnavailable` for the queue mutes `QueueJobsParked` and `WebhookRetriesStalled`.
+  - `ApiDown` mutes `ApiRestarting`.
 
 ## Relationships
-
-- **`docker/observability/alertmanager-render.sh`** — renders this template: performs the `@NAME@` substitutions and strips `# BEGIN/# END` blocks whose knob groups are empty, producing the final YAML that the Alertmanager container reads.
-- **`docs/tools/prometheus.md#alert-routing`** — the human-facing documentation for the routing decisions encoded here (referenced directly in the file header comment).
+The alert names matched here (`Watchdog`, `AlertmanagerNotificationsFailing`, `DependencyUnavailable`, and so on) are the alerts that Prometheus fires. They are presumably defined in `prometheus.alert-rules.yaml` and `prometheus.infra-rules.yaml`, and Prometheus is pointed at Alertmanager through `prometheus.config.yaml` and `prometheus.production.config.yaml`. The file content itself does not show these links. No interaction with `loki.config.yaml` or `gatus.dev.config.yaml` is visible here.
 
 ## Notes
-
-- **Cross-channel failure reporting is intentional, not redundant.** An alert sent to its own broken channel is lost; the routing table deliberately sends `AlertmanagerNotificationsFailing` to the *opposite* receiver.
-- **`null` is a receiver, not a keyword.** Every receiver block is always syntactically present so the rendered YAML stays valid; "no notification" is achieved by routing to `null`, not by omitting the receiver.
-- **Inhibition labels use plain `=`** (no `equal:` keyword) because the project runs a single app instance; the comment in the file calls this out.
-- **`require_tls`** is a bare boolean marker (`ALERT_SMTP_REQUIRE_TLS`) left as a template token—rendering must substitute a `true`/`false` literal, not a string.
+- The routes work around broken notification channels. An alert about a failing channel must not be sent through that channel. Email failures are reported via the webhook, and any other channel failure (including the heartbeat) is reported by email.
+- `ALERT_SMTP_REQUIRE_TLS` in `require_tls` has no `@` delimiters, unlike the other knobs. Whether the renderer handles it differently is not visible here.
+- `AuditSinkFailing` is deliberately never an inhibit target, because a gap in the audit trail is real whatever the cause.
+- Inhibit rules have no `equal` labels, because there is only one app.
+- The `Watchdog` heartbeat is always firing and pushed every minute. Silence at the receiving end means the stack is down.

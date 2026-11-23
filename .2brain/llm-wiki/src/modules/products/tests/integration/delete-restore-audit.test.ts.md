@@ -1,38 +1,35 @@
 ---
 source: src/modules/products/tests/integration/delete-restore-audit.test.ts
-sha256: 65245898f142de4e4351c635eb5e569327b1adf662e47ac8496229c2075e6421
-generated_at: 2026-11-14T21:31:08.022051+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5b8214586a7ee5b48742dde87dd93659f8ae35a690b3deda193af44c16cdbe83
+context_sha256: 063d08a0a9bf997d47741f3b0b22fa542e97278032346691d074d79bead23288
+generated_at: 2026-11-22T07:16:06.993823+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/integration/delete-restore-audit.test.ts
 
 ## Purpose
-
-Integration tests that pin the audit events emitted by `productService.removeById` and `productService.restoreById` after the audit logic was relocated from the delete/restore controllers into the service layer. They verify that `ADMIN_PRODUCT_DELETED` (with `metadata.hardDelete` reflecting soft vs. hard) and `ADMIN_PRODUCT_RESTORED` still land with the correct action, outcome, target, and metadata.
+Integration tests pinning that `productService.removeById` and `productService.restoreById` emit the correct audit events (`ADMIN_PRODUCT_DELETED` / `ADMIN_PRODUCT_RESTORED`) through the audit port. The service writes these audit rows itself, consistent with every other module's write path.
 
 ## Key elements
-
-- **`jest.mock` factory** — replaces the `@infrastructure/observability/audit` module with `auditPortMock()` from `@tests/ports` rather than using `jest.spyOn` (CJS namespace getters are non-configurable).
-- **`describe('removeById')`** — two cases: soft delete asserts `metadata: { hardDelete: false }`; hard delete asserts `metadata: { hardDelete: true }`. Both expect `action: ADMIN_PRODUCT_DELETED`, `outcome: 'success'`, `targetType: 'product'`.
-- **`describe('restoreById')`** — one case: deletes then restores, asserting `action: ADMIN_PRODUCT_RESTORED` with the same shape (no `metadata` check).
-- **`setupTestDb()`** — one-time database reset before the suite.
-- **`afterEach(jest.restoreAllMocks)`** — teardown between tests.
+- `jest.mock('@infrastructure/observability/audit', ...)`: replaces the audit port module with `auditPortMock()` from `@tests/ports` (loaded via `jest.requireActual`).
+- `setupTestDb()`: sets up the test database for the suite.
+- `afterEach(() => jest.restoreAllMocks())`: restores mocks after each test.
+- `describe('removeById')`:
+  - Soft delete (`removeById(id, false, admin)`) emits `ADMIN_PRODUCT_DELETED` with `metadata: { hardDelete: false }`.
+  - Hard delete (`removeById(id, true, admin)`) emits `ADMIN_PRODUCT_DELETED` with `metadata: { hardDelete: true }`.
+- `describe('restoreById')`: after soft-deleting a product, `restoreById(id, admin)` emits `ADMIN_PRODUCT_RESTORED`.
+- All assertions use `expect.objectContaining` with `outcome: 'success'`, `targetType: 'product'`, and `targetId` equal to the stringified product `_id`.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/products/services/index.ts` | Exports `productService`; the `removeById` / `restoreById` methods under test. |
-| `src/modules/products/audit.ts` | Exports `productsAuditActions` enum used in every assertion. |
-| `src/infrastructure/observability/audit.ts` | The audit port module whose `emitAuditEvent` is observed; the real implementation is bypassed by the mock. |
-| `tests/support/ports.ts` | Provides `observePort` (returns a spy on the port method) and `auditPortMock()` (supplied to the mock factory). |
-| `tests/support/callers.ts` | Provides `callerContextAs('admin')` to construct the caller context passed to each service call. |
-| `src/modules/products/tests/factories.ts` | Provides `createProduct()` to seed a known product in the test DB. |
-| `tests/support/setup-test-db.ts` | Provides `setupTestDb()` for DB lifecycle. |
+- `src/infrastructure/observability/audit.ts`: the audit port whose `emitAuditEvent` is mocked and observed.
+- `src/modules/products/audit.ts`: supplies `productsAuditActions` constants used for the expected `action` values.
+- `src/modules/products/services/index.ts`: provides `productService`, the code under test.
+- `src/modules/products/tests/factories.ts`: `createProduct()` creates fixture products.
+- `tests/support/callers.ts`: `callerContextAs('admin')` builds the admin caller context.
+- `tests/support/ports.ts`: provides `auditPortMock()` and `observePort()` (wraps `emitAuditEvent` to get a spy).
+- `tests/support/setup-test-db.ts`: provides `setupTestDb`.
 
 ## Notes
-
-- **Port replacement, not spying.** The mock uses a `jest.mock` factory that returns `auditPortMock()`. This is intentional: `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS `import * as` namespace exposes. The same pattern and full reasoning live in `orders/tests/integration/create-audit.test.ts`.
-- **Design rule reference.** The module docblock cites *rule 1* of `docs/theory/module-lifecycle.md`: audit emission belongs in the service write path, not the controller. These tests exist to prevent regression of that move.
-- **Caller context.** All calls use `callerContextAs('admin')`; the tests do not exercise non-admin callers.
+- The audit port is replaced via `jest.mock` rather than `jest.spyOn`, because `spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes. Full reasoning is referenced in `src/modules/orders/tests/integration/create-audit.test.ts`.
+- In the restore test, the preliminary `removeById(id)` is called without a caller context.

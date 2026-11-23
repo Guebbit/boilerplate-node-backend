@@ -1,36 +1,43 @@
 ---
 source: src/modules/account/tests/integration/auth-hardening.test.ts
-sha256: aeae567ad6d42d5def4023fec0624deda476b370b933bfd7ecfa84e378ea3dc9
-generated_at: 2026-11-08T04:34:06.390793+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 50f10e36a9511c65dc2ae97e2bac2ce680a270d3e7536893823c4496fcfb351f
+context_sha256: 5302e7c55341d760266534570ca051168d8bd81956e778b66ab96c2b27ecc0d3
+generated_at: 2026-11-22T03:52:34.749552+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/auth-hardening.test.ts
 
 ## Purpose
-
-Integration tests for the two hardening layers on credential endpoints: the per-identity / per-address / per-block rate limiters and the antibot challenge gate. It verifies that guessing is bounded at each bucket independently, that successful logins never consume budget, and that the challenge gate arms at the correct threshold (half the identity budget spent, or a block-level budget exhausted). It exists as a module-local suite because the properties under test are owned by `account/rate-limits.ts`, not by the global error handler.
+Integration tests for the properties owned by `src/modules/account/rate-limits.ts`: the credential-endpoint rate limiter (per-identity, per-address and per-block buckets) and the antibot challenge gate (`loginChallengeGate`). The global error handler is deliberately tested elsewhere, in the root-level `tests/integration/auth-hardening.test.ts`, because every module's uncaught throws pass through it.
 
 ## Key elements
-
-- **`limitersWithBudget(identityLimit, addressLimit?)`** — Returns freshly-constructed `credentialLimiters` with configurable budgets via a reloaded `rate-limits` module. Used in the "separately" describe block where the two buckets must be set independently.
-- **`appWithBudget(identityLimit)`** — Builds a minimal Express app whose `/login` route mounts both `credentialLimiters` and `loginChallengeGate` from the *same* reload, so the gate's internal property-name lookup resolves to the limiter actually in use.
-- **`describe('credential endpoints are rate limited separately')`** — Four tests: 429 after budget exhaustion, 200s never count against the budget, per-identity isolation at a shared address, and a smoke check that the limiter is mounted on the real `POST /account/login` route (verified via the `ratelimit` response header).
-- **`describe('loginChallengeGate — rung 3 on the block budget too')`** — Verifies that spreading one failed guess across many accounts from a single /24 block arms the gate (403 + `ANTIBOT_VERIFICATION_FAILED`) even when no per-identity or per-address budget is touched.
-- **`describe('loginChallengeGate — rung 3 only once the identity budget is mostly spent')`** — Three tests covering the no-provider short-circuit, the honest-first-attempt passthrough, and the exact half-budget threshold (2 failures of 4) at which the gate returns 403.
+- `setupTestDb()` is called at file level to provide the test database.
+- `limitersWithBudget(identityLimit, addressLimit = identityLimit)` reloads the rate-limits module with small `NODE_AUTH_RATE_LIMIT_MAX` and `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX` values and returns `credentialLimiters`. The two budgets are settable separately so a case can leave one bucket with room.
+- `appWithBudget(identityLimit)` takes `credentialLimiters` and `loginChallengeGate` from a single reload and mounts them on `POST /login`, with a handler that always answers 401. Both must come from the same module instance. The gate reads the property name that the identity limiter was configured with.
+- `describe('credential endpoints are rate limited separately')` covers these cases:
+  - 429 once the budget is spent (3 allowed, then 429).
+  - Successful (200) attempts don't consume the budget (`skipSuccessfulRequests`).
+  - One account's identity budget is independent of another account's at the same address.
+  - The limiter is mounted on the real `/account/login` route, checked via the presence of the `ratelimit` (draft-7) header.
+- `describe('loginChallengeGate — rung 3 on the block budget too')` covers this case:
+  - With `NODE_ANTIBOT_PROVIDER=turnstile` and a block max of 4, one failure each from three different accounts produces 403 with code `ANTIBOT_VERIFICATION_FAILED` (credential stuffing).
+- `describe('loginChallengeGate — rung 3 only once the identity budget is mostly spent')` covers these cases:
+  - The gate never engages when no provider is set.
+  - A first attempt passes through when a provider is set.
+  - The gate challenges once failures reach half of the identity budget (the third attempt with a budget of 4).
 
 ## Relationships
-
-- **`src/modules/account/rate-limits.ts`** — The system under test. Imported dynamically inside `withReloadedRateLimits` so each test gets a fresh module instance with injected env budgets.
-- **`tests/support/rate-limit-harness.ts`** — Provides `withReloadedRateLimits`, which sets process-env values, resets the module registry, re-imports `rate-limits`, and returns the requested export. Central to keeping budgets per-test.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at the top level to seed the test database (needed by `createUser` and the real-route smoke test).
-- **`src/modules/users/tests/factories.ts`** — Supplies `createUser` and `PLAIN_PASSWORD` for the one test that exercises the actual `/account/login` endpoint.
-- **`tests/support/http.ts`** — Provides the `api()` helper (a pre-configured supertest agent) used only in the "mounted on the real login route" test.
-- **`tests/support/environment.ts`** — `setEnvironment` swaps `NODE_ANTIBOT_PROVIDER` (and related vars) per test so the challenge gate can be exercised with or without a provider.
+- `src/modules/account/rate-limits.ts` is the module under test. It is dynamically imported after each env change and exports `credentialLimiters` and `loginChallengeGate`.
+- `tests/support/rate-limit-harness.ts` provides `withReloadedRateLimits(importFn, env, select)`. It reloads the module with the given env vars so a small budget takes effect.
+- `tests/support/environment.ts` provides `setEnvironment`, which sets or unsets `NODE_ANTIBOT_PROVIDER`.
+- `tests/support/http.ts` provides `api()`, the client for the real-app `/account/login` test.
+- `src/modules/users/tests/factories.ts` provides `createUser` and `PLAIN_PASSWORD`, used only in the real-route test.
+- `tests/support/setup-test-db.ts` provides `setupTestDb`.
 
 ## Notes
-
-- Every `describe` block ends with `jest.resetModules()` in `afterEach`; without it the reloaded `rate-limits` module would leak state between tests.
-- The file deliberately tests against trivial inline handlers (401/200 JSON) rather than the real `postLogin` controller, so assertions isolate limiter/gate behavior from application logic. Only the final "mounted on the real login route" test hits the full stack.
-- `limitersWithBudget` and `appWithBudget` exist separately because the gate reads a property name set on the limiter at construction time; a second reload would produce a gate pointing at a limiter nobody is spending. They cannot be merged.
-- The `401` returned by the stub handler is intentional: the limiter counts 4xx responses as "failures" for budget purposes.
+- Most cases mount the limiters on a bare express app with a trivial handler instead of the real `postLogin`. This tests the limiter alone and avoids a database round trip per attempt.
+- Every `describe` block calls `jest.resetModules()` in `afterEach`, so each test gets a freshly constructed limiter with a clean counter state.
+- Failures are counted as 4xx responses. The handler returns 401 to stand in for a failed credential check.
+- In the per-account test, the address budget is set to 50 so that only the identity bucket is observed.
+- In the block test, per-account and per-address budgets are set to 100, so only the block budget can arm the gate.

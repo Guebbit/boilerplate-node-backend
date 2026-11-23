@@ -1,41 +1,37 @@
 ---
 source: src/modules/notifications/tests/integration/stream-cap.test.ts
-sha256: efaf8c668c9ef1b133950f18a751b59f1bedc3841e7a05221bb2d37cfb89897b
-generated_at: 2026-11-14T20:26:46.298274+00:00
-model: ollama:qwen3.8:27b
+source_sha256: bf211b1d63fce348f409f79dbef14d61f3084c455a6a270d2b093cdd551a0579
+context_sha256: f368e8100227f0323cfd8ed724de1dd736887c77d408d22aa19b6659d039f0e2
+generated_at: 2026-11-22T05:58:03.224236+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/tests/integration/stream-cap.test.ts
 
 ## Purpose
-
-Integration test for the per-account and process-wide SSE stream caps on `GET /notifications/stream`. Verifies via a real HTTP socket that an account exceeding its share is refused (429 + `Retry-After`), that closing a stream frees the slot, that one account's streams don't count against another, and that the process ceiling yields a 503.
+Integration test for the cap on held live notification streams (`GET /notifications/stream`). It runs against the real route on a real socket and checks that an account past its share is refused with a 429 and a wait, and that a closed stream frees its slot. The module doc says the request limiter counts opens but never holds, so this cap is the only thing that stops one account from holding streams open.
 
 ## Key elements
-
-- **`held: IncomingMessage[]`** – module-level array of open stream connections; destroyed in `afterEach` so `openStreamCount` returns to zero.
-- **`listening`** – the test server (from `@tests/http`) started in `beforeAll`, closed in `afterAll`.
-- **`sessionCookie(username)`** – creates a user via the factory, logs in through the API, and extracts the `__Host-session` cookie value.
-- **`Opened`** – interface carrying `status` and `headers` of a stream-open attempt (body is not read).
-- **`openStream(cookie)`** – issues a raw `http.get` to `/notifications/stream`, pushes the live response into `held`, resolves as soon as headers arrive.
-- **`describe('GET /notifications/stream, held streams')`** – three tests:
-  - Per-account cap (429, slot freed after destroy).
-  - Account isolation (one account's cap doesn't block another).
-  - Process ceiling (503 with `Retry-After`).
+- `held`: the open response streams of the current test. `afterEach` destroys them and waits until `openStreamCount()` is 0, so the module-level count starts empty for the next test.
+- `listening`: the app on a real socket, from `listen()` in `beforeAll`. `afterAll` closes all connections and the server.
+- `sessionCookie(username)`: creates a `customer` user, logs in through `POST /account/login`, and returns the `__Host-session=...` cookie. A session cookie is the only credential an `EventSource` can carry.
+- `Opened`: the status and headers of an open attempt.
+- `openStream(cookie)`: opens the stream with `http.get` and resolves once the headers arrive. It pushes the raw response onto `held` and never reads the body.
+- Tests:
+  - Past `NODE_SSE_MAX_STREAMS_PER_USER=2`, the third open gets 429 with `retry-after` >= 1. Destroying one stream and waiting for the count to drop to 1 lets a new open succeed with 200.
+  - With a limit of 1 per user, a second account can still open a stream, so one account is not charged for another's streams.
+  - With `NODE_SSE_MAX_STREAMS=1`, a second account's open gets 503 with `retry-after` >= 1.
 
 ## Relationships
-
-- **`src/modules/notifications/services/stream.ts`** – imports `openStreamCount()` to assert the live stream gauge after open/destroy cycles.
-- **`src/modules/users/tests/factories.ts`** – imports `createUser` and `PLAIN_PASSWORD` to provision authenticated test accounts.
-- **`tests/support/cookies.ts`** – imports `setCookie` to pull the session cookie from the login response header.
-- **`tests/support/environment.ts`** – imports `setEnvironment` to set `NODE_SSE_MAX_STREAMS_PER_USER` or `NODE_SSE_MAX_STREAMS` per test.
-- **`tests/support/eventually.ts`** – imports `eventually` for async-polling assertions (waiting for the count to drop after destroy).
-- **`tests/support/http.ts`** – imports `listen` (real server) and `api` (login request).
-- **`tests/support/setup-test-db.ts`** – calls `setupTestDb()` at module load to seed the test database.
+- `src/modules/notifications/services/stream.ts`: the file under test. The test imports `openStreamCount` to see how many streams the process holds and uses it as the wait condition. The caps are exercised through the HTTP route rather than by calling the service directly.
+- `src/modules/users/tests/factories.ts`: supplies `createUser` and `PLAIN_PASSWORD` for seeding accounts and logging in.
+- `tests/support/setup-test-db.ts`: `setupTestDb()` prepares the test database.
+- `tests/support/http.ts`: `api()` makes the login request and `listen()` starts the real server.
+- `tests/support/cookies.ts`: `setCookie` reads the session cookie from the login response.
+- `tests/support/environment.ts`: `setEnvironment` sets `NODE_SSE_MAX_STREAMS_PER_USER` and `NODE_SSE_MAX_STREAMS` per test.
+- `tests/support/eventually.ts`: `eventually` polls until the stream count reaches the expected value.
 
 ## Notes
-
-- Stream requests use raw `node:http` rather than the `api` helper because the response must remain open for the test's lifetime; the `api` helper would consume the body.
-- Authentication is via the `__Host-session` cookie because a browser `EventSource` cannot set custom `Authorization` headers.
-- `afterEach` destroys every held connection *and* polls `openStreamCount() === 0` before proceeding, preventing cross-test bleed.
-- The per-account cap and process ceiling are controlled by separate env vars (`NODE_SSE_MAX_STREAMS_PER_USER` vs `NODE_SSE_MAX_STREAMS`); each test sets only the one under test.
+- Slot release is asynchronous after `destroy()`, so assertions on the count must go through `eventually`.
+- A per-account refusal is 429 and a process-wide refusal is 503. Both carry a `retry-after` header.
+- Each test uses distinct usernames so accounts do not collide.

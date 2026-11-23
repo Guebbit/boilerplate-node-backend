@@ -1,43 +1,45 @@
 ---
 source: src/modules/cart/tests/integration/preorder.test.ts
-sha256: ab35cec088b0e483d12c161617020d87c08a7c86516ad9ff9b540202e5ce3422
-generated_at: 2026-11-08T05:21:55.649958+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 212fee866b0f06886d80284d95f74847c1cb2d46fe66e023b9e954a18ee617a8
+context_sha256: 7e51b0717d73c338ae1479eed7a9a8ed3c96bf0f8c31ddebbd437d2884070138
+generated_at: 2026-11-22T04:41:05.506675+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/integration/preorder.test.ts
 
 ## Purpose
-
-Integration tests that verify the cart's preorder path end-to-end: how a preorder line's availability is computed (against the backorder allowance, not shelf stock), how checkout claims the allowance while leaving the shelf untouched, how the preorder promise is frozen onto the order line, and how a basket can mix preorder and in-stock goods in a single order.
+Integration tests for how the cart treats a preorder product. They cover the availability a cart line reports (`preorder`, `insufficient_stock`, `out_of_stock`, `in_stock`) and what checkout does with a preorder: it claims the backorder allowance, leaves the shelf alone, freezes the preorder promise on the order line, and accepts a basket that mixes a preorder with ordinary goods.
 
 ## Key elements
-
-- **`nextMonth()`** – Returns an ISO string 30 days out; used as the product's `releaseDate`.
-- **`preorderProduct(limit, onHand)`** – Creates a product with a future release date, then sets its backorder limit via `inventoryService.setBackorderLimit`. Defaults to 0 shelf stock.
-- **`availabilityOf(userId)`** – Fetches the first cart line's `availability` field via `cartService.getForView`.
-- **`shopperWith(productId, quantity, email?)`** – Sets up a user (with address), adds the item to their cart, and sets shipping to `'pickup'` — the minimum state for `orderConfirm`.
-- **`describe('a preorder line')`** – Four availability-reading cases: `preorder`, `insufficient_stock`, `out_of_stock` (no allowance regardless of shelf), and `in_stock` once the release date has passed.
-- **`describe('checking out a preorder')`** – Four checkout cases: allowance claimed + promise frozen + shelf unchanged; 409 rejection when allowance is exhausted; mixed basket (preorder + in-stock) succeeds with correct per-line flags; frozen promise survives a later release-date change.
+- `setupTestDb()` and a `beforeEach` that calls `resetDomainEvents()` and `registerCheckoutModules([paymentsModule])`.
+- `nextMonth()`: an ISO release date 30 days ahead.
+- `preorderProduct(limit, onHand = 0)`: creates a product with a future `releaseDate` and sets its backorder limit through `inventoryService.setBackorderLimit`.
+- `availabilityOf(userId)`: reads `cartService.getForView(...)` and returns the availability of the first line.
+- `shopperWith(productId, quantity, email?)`: creates a user with an address and the product in their cart, and sets the shipping method to `pickup` through `cartRepository.setShippingMethod`.
+- `describe('a preorder line')`:
+  - Reads `preorder` while the allowance covers the quantity.
+  - Reads `insufficient_stock` when the quantity exceeds the allowance left.
+  - Reads `out_of_stock` with a zero allowance, even if the shelf holds 50.
+  - Returns to `in_stock` (shelf-based) once the release date is in the past.
+- `describe('checking out a preorder')`:
+  - Checkout succeeds. `inventoryService.listPreorders()` then shows `backordered: 2, held: 2, paid: 0, left: 3`. Shelf availability stays 0. The order line has `product.preorder: true` and the product's `releaseDate`.
+  - Once the allowance is full, a later shopper gets status 409 with `CART_INSUFFICIENT_STOCK` and the line `availability: 'out_of_stock'`.
+  - A mixed basket succeeds. The preorder line is flagged `true` and the ordinary line's `preorder` is `undefined`. The ordinary product's shelf availability drops from 4 to 2.
+  - The order line still says `preorder: true` after the release date is moved into the past.
 
 ## Relationships
-
-- **`src/kernel/events.ts`** – `resetDomainEvents()` in `beforeEach` clears the in-memory event bus between tests.
-- **`src/modules/cart/services/index.ts`** – `cartService` provides `addItemById`, `getForView`, and `orderConfirm` under test.
-- **`src/modules/cart/repository.ts`** – `cartRepository.setShippingMethod` sets `'pickup'` directly (bypassing the service layer) to satisfy checkout preconditions.
-- **`src/modules/inventory/index.ts`** – `inventoryService` is used to set backorder limits, inspect `listPreorders()` levels, and read shelf stock via `availableFor`.
-- **`src/modules/products/index.ts`** – `productService.updateById` is called to push a release date into the past (simulating time passing).
-- **`src/modules/products/tests/factories.ts`** – `createProduct` builds the catalogue row with `onHand` and `releaseDate`.
-- **`src/modules/addresses/tests/factories.ts`** – `giveAddress` attaches the required shipping address to a user.
-- **`src/modules/users/tests/factories.ts`** – `createUser` provisions the buyer identity.
-- **`src/modules/payments/module.ts`** – `paymentsModule` is registered (via `registerCheckoutModules`) so `orderConfirm` can complete the payment step.
-- **`src/modules/shop/index.ts`** – `shopDayOf` converts a `Date` into the shop's day-of format used when back-dating `releaseDate`.
-- **`tests/support/callers.ts`** – `testCallerContext` supplies the authenticated caller context for service calls.
-- **`tests/support/checkout-modules.ts`** – `registerCheckoutModules` wires the payments module into the checkout pipeline.
+- `cartService` (`../../services`) is the subject under test: `addItemById`, `getForView` and `orderConfirm`.
+- `cartRepository` is used only to set the shipping method to `pickup`.
+- `inventoryService` (`@modules/inventory`) sets backorder limits and checks `listPreorders` and `availableFor`.
+- `productService` (`@modules/products`) updates `releaseDate` to simulate the date passing.
+- `shopDayOf` (`@modules/shop`) formats the past release date.
+- `createProduct`, `createUser` and `giveAddress` come from the products, users and addresses test factories.
+- `testCallerContext` (`@tests/callers`), `registerCheckoutModules` (`@tests/checkout-modules`) and `setupTestDb` (`@tests/setup-test-db`) supply the test support. `paymentsModule` is registered as the only checkout module.
+- `resetDomainEvents` (`@kernel/events`) clears domain events between tests.
 
 ## Notes
-
-- `setupTestDb()` is invoked once at module scope (not in `beforeEach`); `resetDomainEvents()` and `registerCheckoutModules` run per test.
-- Preorder availability is deliberately judged against the **allowance** (backorder limit), not `onHand` shelf stock. The "out_of_stock with no allowance, however full the shelf is" test makes this contract explicit.
-- The frozen-promise test (`keeps the promise frozen when the date later passes`) confirms that once an order is confirmed, the `preorder: true` flag and `releaseDate` on the order line are immutable even if the product's release date is subsequently moved to the past.
-- The 409 rejection test uses a **different email** for the latecomer to ensure a distinct user/session, and asserts the error `code` is `CART_INSUFFICIENT_STOCK` with per-line details.
+- Preorder status is set by giving the product a future `releaseDate` and a backorder limit.
+- When a preorder is judged, the allowance counts and the shelf (`onHand`) does not.
+- The release date is written two ways: `nextMonth()` produces an ISO string, and `shopDayOf(...)` produces the value for `productService.updateById`.
+- The refusal test uses a second shopper with a fixed email (`latecomer@example.com`) so the two users don't collide.

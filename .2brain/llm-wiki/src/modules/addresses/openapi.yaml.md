@@ -1,42 +1,40 @@
 ---
 source: src/modules/addresses/openapi.yaml
-sha256: d53bfa195d0bc9c15f9de939ebca6b74256b7843dd15c8cc20ce3f1f3babb9b3
-generated_at: 2026-11-14T19:19:27.766554+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d53bfa195d0bc9c15f9de939ebca6b74256b7843dd15c8cc20ce3f1f3babb9b3
+context_sha256: 659cc48641da87ab988fd42296ceaaec034a9aa0b1b3fe41af9c03fb203515d9
+generated_at: 2026-11-22T04:14:23.362866+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 contract for the **addresses** module, defining the REST surface (`/account/addresses/*`) that manages a per-user address book. It is the authoritative schema for request/response shapes, status codes, and idempotency semantics that the route handlers in `module.ts` must satisfy.
+OpenAPI 3.1 contract for the `addresses` module: a user's saved address book under `/account/addresses`. It declares the paths, error codes, schemas and the module's contribution to the account data export. Removing the module removes its section from the export.
 
 ## Key elements
-
-- **`x-error-codes`** — module-level extension declaring `ADDRESS_BOOK_LIMIT_REACHED` (409, book full at `NODE_ADDRESS_BOOK_MAX`, default 20).
-- **`x-personal-data`** — extension describing the `addresses` section the account-data bundler injects into `POST /account/export`.
-- **Paths**
-  - `GET /account/addresses` — list the caller's book (unpaged; ≤ `NODE_ADDRESS_BOOK_MAX`).
-  - `POST /account/addresses` — create; first entry auto-defaults; supports `Idempotency-Key`.
-  - `GET /account/addresses/{addressId}` — fetch one entry.
-  - `PUT /account/addresses/{addressId}` — full replace (RFC 9110 §9.3.4; omitted optional field is cleared).
-  - `PATCH /account/addresses/{addressId}` — merge-patch (RFC 7396; accepts `application/json` *and* `application/merge-patch+json`).
-  - `DELETE /account/addresses/{addressId}` — remove; promotes oldest remaining entry to default.
-  - `PUT /account/addresses/{addressId}/default` — bodyless, idempotent pointer move (Shopify-shaped).
-- **Schemas (components/schemas)**
-  - `Address` — stored entity: `OrderAddress` fields + `label` + `default` boolean. `additionalProperties: false`.
-  - `AddressesResponse` — wrapper for the list.
-  - `CreateAddressRequest`, `ReplaceAddressRequest`, `UpdateAddressRequest` — per-verb payload shapes.
+- **`x-error-codes`**: defines `ADDRESS_BOOK_LIMIT_REACHED` (409), raised when the book already holds `NODE_ADDRESS_BOOK_MAX` entries (20 by default).
+- **`x-personal-data.addresses`**: array of `Address`. The bundler adds it to `AccountExportResponse` for `POST /account/export`.
+- **`GET /account/addresses`** (`listAddresses`): lists the caller's book, unpaged. A non-empty book always has exactly one `default` entry.
+- **`POST /account/addresses`** (`createAddress`):
+  - Takes an `Idempotency-Key` header and returns 201 with a `Location` header.
+  - The first entry becomes the default automatically. Later entries take the default only by sending `default true`, which demotes the previous holder.
+  - Declares 409 `IDEMPOTENCY_IN_FLIGHT` and `ADDRESS_BOOK_LIMIT_REACHED`, and 422 `IDEMPOTENCY_KEY_MISMATCH`.
+- **`GET /account/addresses/{addressId}`** (`getAddress`): fetches one entry.
+- **`PUT /account/addresses/{addressId}`** (`replaceAddress`): full replacement, so an omitted optional field is cleared.
+- **`PATCH /account/addresses/{addressId}`** (`updateAddress`): merge update per RFC 7396. It accepts `application/json` and `application/merge-patch+json`, and `null` clears an optional field.
+- **`DELETE /account/addresses/{addressId}`** (`deleteAddress`): returns 204. Deleting the default promotes the oldest remaining entry.
+- **`PUT /account/addresses/{addressId}/default`** (`setDefaultAddress`): bodyless and idempotent. It makes the entry the default and demotes the old default in the same write.
+- **Schemas** (`components.schemas`):
+  - `Address` is a strict object (`additionalProperties: false`) with required `id`, `fullName`, `street`, `city`, `zip`, `country` and `default`, plus an optional `label`. It is described as `OrderAddress` plus the book-specific `id` and `default`.
+  - `AddressesResponse`, `CreateAddressRequest`, `ReplaceAddressRequest` and `UpdateAddressRequest` are referenced by the paths. Their definitions fall outside the visible part of the file.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — every shared parameter (`IdempotencyKeyHeader`), response (`Unauthorized`, `Conflict`, `ValidationError`, `NotFound`, `NoContent`), header (`Location`), and schema (`Id`) is pulled in via relative `$ref` paths. This file never redefines them.
-- **`src/modules/addresses/module.ts`** — the runtime implementation that the OpenAPI `operationId`s (`listAddresses`, `createAddress`, `getAddress`, `replaceAddress`, `updateAddress`, `deleteAddress`, `setDefaultAddress`) correspond to. The module registers these routes; this file is the contract it must fulfil.
+- `src/modules/account/openapi.yaml`: all operations are tagged `Account` and sit under `/account/...`. The `x-personal-data` section is merged into the account module's `POST /account/export` response by the bundler.
 
 ## Notes
-
-- **Default is a book pointer, not an address field.** Neither `PUT` nor `PATCH` accepts a `default` key; the only way to change it is `PUT …/default`. The spec's descriptions make this explicit to prevent clients from sending it.
-- **404 is ownership-blind.** A well-formed ID belonging to another user returns the same 404 as a non-existent ID — the spec does not leak existence across accounts.
-- **Idempotency on POST only.** `409` includes both `IDEMPOTENCY_IN_FLIGHT` and `ADDRESS_BOOK_LIMIT_REACHED`; `422` covers `IDEMPOTENCY_KEY_MISMATCH` (same key, different body).
-- **PATCH dual content-type.** The endpoint advertises both `application/json` and `application/merge-patch+json` pointing at the same schema, so clients can use either content negotiation style.
-- **The file is truncated in the repo view** (the `Address` schema's property list is cut off). The full schema includes `label`, `default`, and the inherited `OrderAddress` fields; rely on the shared root for the order-address portion.
+- Operations reference shared components (`Id`, `IdempotencyKeyHeader`, `Location`, the standard error responses, `bearerAuth`) from `shared/contracts/openapi.root.yaml` via `$ref`.
+- Cross-user access returns the same 404 as an unknown or malformed id, so entries cannot be probed.
+- `default` is not accepted on PUT or PATCH. Changing the default goes through `PUT .../{addressId}/default`.
+- Operations that change the default or delete an entry affect other rows, so clients showing the book should refetch it.
+- The default invariant is maintained by the API, not the client.
+- The 422 on `createAddress` also covers reuse of an `Idempotency-Key` with a different body.

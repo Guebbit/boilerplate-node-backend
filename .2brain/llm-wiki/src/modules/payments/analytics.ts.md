@@ -1,32 +1,25 @@
 ---
 source: src/modules/payments/analytics.ts
-sha256: 5c1cd44db0c8307dce45765c11a12ae744110a876df9cf226b972ee9bb111c8e
-generated_at: 2026-11-08T07:15:49.827902+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T06:39:34.461814+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/analytics.ts
 
 ## Purpose
-
-Declares the analytics event names for the payments module and registers them with the analytics port's `AnalyticsEventMap` via TypeScript module augmentation. Importing this file gives any caller type-safe event names (a typo fails at compile time) without pulling in a published copy.
+Declares the analytics event names emitted by the payments module and registers them with the analytics port's type map. Controllers import this file directly, so event names are type-checked and a typo fails to compile. It follows the same pattern as `./audit.ts` does for audit actions.
 
 ## Key elements
-
-- **`paymentsAnalyticsEvents`** — `as const` object with three keys:
-  - `PAYMENT_SUCCEEDED` (`payment_succeeded`)
-  - `PAYMENT_DECLINED` (`payment_declined`)
-  - `PAYMENT_RECORDED_OFFLINE` (`payment_recorded_offline`)
-- **`declare module '@infrastructure/observability/analytics'`** — augments `AnalyticsEventMap` so that emitting any of the above strings type-checks against the `payments` namespace.
+- `paymentsAnalyticsEvents`: a `const` object of event-name strings:
+  - `PAYMENT_SUCCEEDED` → `'payment_succeeded'`
+  - `PAYMENT_DECLINED` → `'payment_declined'`
+  - `PAYMENT_RECORDED_OFFLINE` → `'payment_recorded_offline'`
+- Module augmentation of `@infrastructure/observability/analytics`: adds a `payments` key to `AnalyticsEventMap`. Its type is the union of the values of `paymentsAnalyticsEvents`.
 
 ## Relationships
-
-- **`services/offline.ts`** — emits `PAYMENT_RECORDED_OFFLINE`; importing this file is what lets that emit pass type-checking.
-- **`services/settlement.ts`** — emits `PAYMENT_SUCCEEDED` / `PAYMENT_DECLINED` through the provider funnel; same augmentation dependency.
-- **`tests/integration/settlement-reports.test.ts`** — asserts on the events emitted by settlement; references the same event-name constants.
+The listed neighbors (`src/modules/payments/services/offline.ts`, `src/modules/payments/services/settlement.ts`, `src/modules/payments/tests/integration/settlement-reports.test.ts`) are not referenced in this file. The only dependency it declares is the augmented `@infrastructure/observability/analytics` module. Presumably the neighbors use these event names, but that isn't visible here.
 
 ## Notes
-
-- `PAYMENT_RECORDED_OFFLINE` is intentionally **not** a `PAYMENT_SUCCEEDED` variant. It bypasses the provider funnel entirely, so folding it into the succeeded count would inflate the card-conversion metric (`succeeded / (succeeded + declined)`).
-- Follows the same augmentation pattern as `./audit.ts` (referenced in the module doc-block).
-- Event-name string values must conform to the naming rule in `docs/tools/analytics.md#naming`.
+- `PAYMENT_SUCCEEDED` and `PAYMENT_DECLINED` are the funnel's last gate. Succeeded over (succeeded + declined) is the card conversion number that a payment provider change would move.
+- `PAYMENT_RECORDED_OFFLINE` is deliberately a separate event, not a flagged `PAYMENT_SUCCEEDED`. Offline payments never went through the provider funnel, and merging them would inflate the conversion number.
+- The file's header comment points to a naming-conventions doc (`docs/understand/analytics.md#naming`), which is not a file in this repository.

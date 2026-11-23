@@ -1,55 +1,41 @@
 ---
 source: src/modules/payments/tests/integration/refund-claim.test.ts
-sha256: cc389b5131631328473a789557e0b61600ac485b650ae5732908d811d57a9be0
-generated_at: 2026-11-08T07:34:35.291091+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cc389b5131631328473a789557e0b61600ac485b650ae5732908d811d57a9be0
+context_sha256: 6c8e73c8d32ca5a7d00b316755111fbe78c2e48bbd171436c06fd5b0c40b8b6e
+generated_at: 2026-11-22T06:59:10.340710+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/refund-claim.test.ts
 
 ## Purpose
-
-Integration tests (against a real MongoDB instance) for the refund-claim lifecycle: a conditional write with a fence token guarantees only one worker claims a refund, a definite refusal is terminal, a retryable refusal backs off with a growing delay, a deregistered provider is marked `provider_removed` without further attempts, and a provider-side timeout is settled from the provider side rather than double-paid.
+Integration tests (real Mongo) for the claim step that precedes sending a refund to a payment provider. They verify that a single conditional write claims a refund record, that a fence token (the attempt timestamp) stops a slow old attempt from overwriting a newer one, that definite refusals are never resent, that retryable failures wait out a delay, that a removed provider ends a refund rather than jamming the sweep, and that a provider that forgot an idempotency key cannot cause a second refund.
 
 ## Key elements
-
-- **`paidOrder`** – Creates a user, a product (50.00 × 2), an order, pays by card, and settles outbox nudges. Returns the order ID.
-- **`paymentOf` / `firstRefund`** – Convenience lookups via `paymentRepository.findByOrderId` and `paymentModel`.
-- **`refund`** – Calls `refundOrderPayment` as an admin caller; rejects on provider refusal.
-- **`setRefundField`** – Rewrites one field of the first embedded refund via a raw `paymentModel.collection.updateOne`, forcing `updatedAt` to epoch-zero so staleness checks are deterministic.
-- **`describe('a definite refusal')`** – Verifies a `lost_or_stolen_card` reason records `status: 'failed'`, clears `nextAttemptAt`, and that `retryOpenRefunds` never re-sends.
-- **`describe('a retryable refusal')`** – Verifies the sweep skips a future `nextAttemptAt` (returns 0) and retries once it is in the past (returns 1, status → `succeeded`).
-- **`describe('a pending record')`** – Three tests:
-  - Stale-vs-fresh `attemptedAt` gating under `NODE_PAYMENT_REFUND_RETRY_MINUTES=1`.
-  - Two concurrent `claimRefund` calls: exactly one wins.
-  - A `failRefund`/`settleRefund` carrying a superseded attempt timestamp is a no-op (fence-token protection).
-- **`describe('a provider that is no longer registered')`** – A payment whose `provider` no longer matches any registered one is marked `provider_removed` after two sweeps; the reconcile sweep still processes other payments normally.
-- **`describe('a refund the provider ran but never answered')`** – With `setFakeRefundTimeout`, the sweep settles the refund as `succeeded` without issuing a second provider call; a forgotten key is adopted, not re-issued.
+- `setupTestDb()` and a `beforeEach` that calls `registerCheckoutModules([paymentsModule])`; `afterEach` resets domain events and restores jest mocks.
+- `paidOrder()` — creates a user, a 50.00 product and an order of 2 items, pays by card, settles outbox nudges, and returns `{ orderId }` (a 100.00 payment).
+- `paymentOf(orderId)` / `firstRefund(orderId)` — load the payment via `paymentRepository.findByOrderId` (throws if missing) or its first refund.
+- `refund(orderId, amount)` — refunds as an admin operator through `refundOrderPayment`; a provider refusal rejects while the record stays open.
+- `setRefundField(paymentId, field, value)` — writes `refunds.0.<field>` directly through `paymentModel.collection`, bypassing mongoose timestamps and resetting `updatedAt` to epoch.
+- Test groups:
+  - **a definite refusal** — `setFakeRefundFailure(..., 'lost_or_stolen_card')` leaves the refund `failed` with no `nextAttemptAt`; `retryOpenRefunds` does not call the provider again.
+  - **a retryable refusal** — skipped while `nextAttemptAt` is in the future (sweep returns 0), resent once it is past (returns 1, status `succeeded`).
+  - **a pending record** — resent once its attempt is stale, skipped while fresh; two concurrent `paymentRepository.claimRefund` calls yield exactly one winner; `failRefund` and `settleRefund` with an old `attempt` return `null` after a newer claim, leaving the refund `pending`.
+  - **a provider that is no longer registered** — the refund ends as `failed` / `provider_removed` without calling the provider (the test expects `attempts: 2` after two sweeps); `reconcileStalePayments` still returns 0 for a `processing` payment at the `retired` provider rather than being blocked.
+  - **a refund the provider ran but never answered** — using `setFakeRefundTimeout`, the first attempt records `provider_unavailable`. The sweep settles the refund from the provider (status `succeeded`) with only one refund made (`fakeRefundsMade()`). A following test about the provider forgetting the key (`ageFakeRefundKeys` is imported for it) is cut off in the visible content.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `scenarios/support/doubles/payments/fake.ts` | Provides `fakePaymentProvider`, `setFakeRefundFailure`, `setFakeRefundTimeout`, `fakeRefundsMade`; spied on to verify call counts. |
-| `src/modules/payments/services/index.ts` | `paymentService.retryOpenRefunds` and `paymentService.reconcileStalePayments` are the system under test. |
-| `src/modules/payments/repository.ts` | `paymentRepository.findByOrderId`, `claimRefund`, `failRefund`, `settleRefund` — the conditional-write API under test. |
-| `src/modules/payments/model.ts` | `paymentModel.collection` used for raw Mongo updates that bypass Mongoose timestamps. |
-| `src/modules/payments/module.ts` | Registered via `registerCheckoutModules([paymentsModule])` in `beforeEach`. |
-| `src/modules/payments/tests/factories.ts` | `payByCard`, `refundOrderPayment` set up the initial payment and trigger the refund. |
-| `src/kernel/outbox.ts` | `settleOutboxNudges` flushes deferred outbox entries after payment. |
-| `src/kernel/events.ts` | `resetDomainEvents` in `afterEach` prevents event leakage. |
-| `tests/support/environment.ts` | `withEnvironmentOverrides` scopes `NODE_PAYMENT_*` retry knobs per-test without mutating global state. |
-| `tests/support/callers.ts` | `asAdmin`, `callerContextAs('admin')` build the authorization context for refund calls. |
-| `tests/support/setup-test-db.ts` | `setupTestDb` spins up and tears down the real Mongo instance. |
-| `tests/support/checkout-modules.ts` | `registerCheckoutModules` wires module DI for the test. |
-| `src/modules/users/tests/factories.ts` | `createUser` seeds the buyer. |
-| `src/modules/products/tests/factories.ts` | `createProduct` seeds the line-item. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem` seed the order and its items. |
+- `scenarios/support/doubles/payments/fake.ts` — supplies `fakePaymentProvider` and controls (`setFakeRefundFailure`, `setFakeRefundTimeout`, `fakeRefundsMade`, `ageFakeRefundKeys`).
+- `src/modules/payments/services/index.ts` — exports `paymentService`, whose sweeps (`retryOpenRefunds`, `reconcileStalePayments`) are the code under test.
+- `src/modules/payments/repository.ts` — `findByOrderId`, `claimRefund`, `failRefund`, `settleRefund`.
+- `src/modules/payments/model.ts` — exports `paymentModel`, whose `collection` is used for raw writes.
+- `src/modules/payments/module.ts` — registered through `tests/support/checkout-modules.ts`.
+- `src/modules/payments/tests/factories.ts` — `payByCard`, `refundOrderPayment`.
+- `src/modules/users/tests/factories.ts`, `src/modules/products/tests/factories.ts` and `src/modules/orders/tests/factories.ts` — build the paid order fixture.
+- `src/kernel/events.ts` (`resetDomainEvents`) and `src/kernel/outbox.ts` (`settleOutboxNudges`) — test isolation and draining the outbox.
+- `tests/support/setup-test-db.ts` (database), `tests/support/environment.ts` (`withEnvironmentOverrides`), `tests/support/callers.ts` (`asAdmin`, `callerContextAs`).
 
 ## Notes
-
-- **Real Mongo, no in-memory DB.** `setupTestDb` boots a standalone instance; all reads/writes hit the wire. This is what makes the concurrent-claim and fence-token tests meaningful.
-- **`setRefundField` sets `updatedAt: new Date(0)`.** This is intentional: the sweep's staleness check compares against `updatedAt`, and forcing it to epoch-zero ensures the record is never considered "fresh" by accident. Any new test that needs a "stale" record should follow the same pattern.
-- **`withEnvironmentOverrides` is the only way to control retry timing.** Tests that omit it will use production defaults and may sleep for minutes. Always wrap the relevant assertion in this helper.
-- **Fence-token semantics:** `claimRefund` uses a conditional `findOneAndUpdate` with an `attempt` timestamp. `failRefund`/`settleRefund` carry the same timestamp back; if a newer claim has already advanced the record, both return `null` and the state is unchanged. Tests assert this by checking that the refund status remains `pending`.
-- **`NODE_PAYMENT_REFUND_RETRY_MINUTES: '0'`** means "no minimum retry delay," so the sweep fires immediately. Use `'1'` (or higher) when you need to test the wait-out window.
+- The sweep timing is controlled with the env overrides `NODE_PAYMENT_REFUND_RETRY_MINUTES` (`'0'` or `'1'`) and `NODE_PAYMENT_RECONCILE_MINUTES`.
+- Stale or retryable states are staged by writing directly to the collection (`nextAttemptAt`, `attemptedAt`, `status`, `updatedAt`) instead of waiting in real time.
+- Failures are produced either by the fake provider's controls or with `jest.spyOn(fakePaymentProvider, 'refund').mockRejectedValueOnce(...)`; `mockClear()` on a fresh spy is used to assert that no further provider calls happen.

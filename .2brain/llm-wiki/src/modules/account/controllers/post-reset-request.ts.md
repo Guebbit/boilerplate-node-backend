@@ -1,34 +1,38 @@
 ---
 source: src/modules/account/controllers/post-reset-request.ts
-sha256: 03135b9ecb9f002ec72f079b4a775fa17cb2a7319c7b07a838fee9490d947cf6
-generated_at: 2026-11-08T04:07:27.260586+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3d506ca09dbe653e0593bbe36effbd2ae579287199a0129094b4e94ae54b4aa6
+context_sha256: 47a64b4a4a9f75a4b86488cef2ed60755b2170206a6d0efc5ac0601e0a8ec293
+generated_at: 2026-11-22T03:27:05.530185+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-reset-request.ts
 
 ## Purpose
-
-HTTP adapter for `POST /account/password/reset`. It validates the request body shape, delegates to `accountService.requestPasswordReset` in a detached (fire-and-forget) call, and immediately returns `204 No Content` regardless of whether the email is registered — deliberately preventing user enumeration and timing-attack leaks.
+Express controller for `POST /account/password/reset`. It is a thin HTTP adapter over `accountService.requestPasswordReset`. It validates the body shape and then answers with the same empty response at once, whether or not the email belongs to an account. This prevents user enumeration through response content or response time.
 
 ## Key elements
-
-- **`postResetRequest`** (exported function) — The sole export. Accepts an Express `Request`/`Response` pair, validates the body against `RequestPasswordResetBody` (Zod schema), fires `accountService.requestPasswordReset` without awaiting, and sends `noContentResponse`.
-- **`parseBody(RequestPasswordResetBody, …)`** — Zod shape validation; short-circuits with an error response if the body is malformed.
-- **`callerContextOf(request)`** — Extracts caller metadata passed to the service for audit/telemetry.
-- **`void accountService.requestPasswordReset(…)`** — Deliberately un-awaited; the service owns the token write, mail enqueue, audit emit, metric, and fail-closed logic. The token value never surfaces in this file.
+- `postResetRequest(request, response)`: the only export. It handles a `Request<unknown, unknown, PasswordResetRequest>`.
+  - It validates `request.body` against the `RequestPasswordResetBody` schema (from `@api/schemas.zod`) using `parseBody`. If validation fails, it returns early, because `parseBody` has already been given `response`.
+  - It calls `accountService.requestPasswordReset(body.email, callerContextOf(request))` without awaiting it (`void`).
+  - It then sends `noContentResponse(response)`.
 
 ## Relationships
-
-- **`src/modules/account/routes.ts`** — Registers `postResetRequest` as the handler for the `POST /account/password/reset` route.
-- **`src/modules/account/services/index.ts`** — Provides the `accountService` instance whose `requestPasswordReset` method performs the actual work (lookup, token generation, mail send, audit, metrics).
-- **`src/infrastructure/http/controller.ts`** — Supplies `parseBody` for inline Zod validation.
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf` to derive the authenticated caller's context.
-- **`src/infrastructure/http/response.ts`** — Supplies `noContentResponse` (the uniform 204 reply).
-- **`src/types/index.ts`** — Defines the `PasswordResetRequest` type used in the Express generic.
+- `src/infrastructure/http/controller.ts`: provides `parseBody`, which validates the body against a Zod schema and writes the error response itself.
+- `src/infrastructure/http/request.ts`: provides `callerContextOf`, which builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: provides `noContentResponse`, which sends the uniform reply.
+- `src/modules/account/services/index.ts`: exports `accountService`. Its `requestPasswordReset` does the real work.
+- `src/types/index.ts`: supplies the `PasswordResetRequest` type for the request body.
+- `src/modules/account/routes.ts`: the route table that wires this handler to the endpoint.
 
 ## Notes
-
-- The service call is intentionally **not awaited** (`void` + floating-promise ESLint disable). Awaiting it would introduce a timing difference between registered and unregistered addresses, violating the OWASP "consistent response time" guidance.
-- `requestPasswordReset` is documented to **never reject**; a failed lookup is logged and resolves to `false`, so the `void` is safe.
-- All side-effects (token storage, email dispatch, `AUTH_PASSWORD_RESET_REQUESTED` event, metrics, audit row) live in the service layer — this file has zero business logic.
+- The service call is deliberately detached. Waiting on the lookup, token write and mail enqueue, which only happen for registered addresses, would make response time reveal which emails exist (OWASP "consistent response time").
+- Per the source comments, the service owns the following. None of it is visible from this file.
+  - the unconditional `AUTH_PASSWORD_RESET_REQUESTED` emit
+  - the metric
+  - fail-closed handling
+  - failure logging
+  - the mail send
+- The token value therefore never reaches this controller.
+- The `no-floating-promises` ESLint rule is disabled on that line, with a justification: `requestPasswordReset` is documented never to reject, since a failed lookup is logged and answers `false`.
+- Validation checks shape only. Account existence is never revealed.

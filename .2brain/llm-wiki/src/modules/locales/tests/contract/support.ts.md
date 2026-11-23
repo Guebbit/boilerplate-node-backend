@@ -1,29 +1,25 @@
 ---
 source: src/modules/locales/tests/contract/support.ts
-sha256: c53fc8248113d1655f53019a7a90b0714a0aabd8a25cd335966ed8cd9ccebe6c
-generated_at: 2026-11-08T06:27:18.653919+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c53fc8248113d1655f53019a7a90b0714a0aabd8a25cd335966ed8cd9ccebe6c
+context_sha256: a1870455d8dc9435155c5ff95f7b61b933f9ab0f5a4fc5f04410996ca6e1c93e
+generated_at: 2026-11-22T05:49:19.563873+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/tests/contract/support.ts
 
 ## Purpose
-
-Shared setup helper for the locales contract test suites. It registers a language through the real `POST /locales` route so that each contract test case starts from a known, valid state without duplicating HTTP boilerplate.
+Shared setup helper for the locales contract test suites. It registers a language through the real `POST /locales` route so tests can start from a known state, and fails loudly if that setup does not succeed.
 
 ## Key elements
-
-- **`PORTUGUESE`** — Constant object `{ tag: 'pt', name: 'Portuguese', nativeName: 'Portuguese' }` used as the default language payload for registration.
-- **`createLanguage(bearer, body?)`** — Async function that POSTs to `/locales` with the given bearer token and body (defaults to `PORTUGUESE`). Throws a descriptive `Error` if the response is not `201`; otherwise returns the `tag` string from the response body.
+- `PORTUGUESE` — default language fixture: `{ tag: 'pt', name: 'Portuguese', nativeName: 'Português' }`.
+- `createLanguage(bearer, body = PORTUGUESE)` — sends `POST /locales` with the given `Authorization` header value and body. Returns `response.body.tag` as a string. Throws an `Error` if the status is not `201`. The message includes the status and the JSON response body.
 
 ## Relationships
-
-- **`tests/support/http.ts`** — Provides the `api` helper (a configured HTTP client) that `createLanguage` uses to issue the actual `POST /locales` request.
-- **`src/modules/locales/tests/contract/api.contract.test.ts`** — Consumes `createLanguage` / `PORTUGUESE` to set up state before asserting on the locales API surface.
-- **`src/modules/locales/tests/contract/translations.contract.test.ts`** — Consumes `createLanguage` / `PORTUGUESE` to register a language before asserting on translation endpoints.
+- Imports `api` from `@tests/http` (`tests/support/http.ts`) to issue the HTTP request.
+- Intended for the sibling contract suites, `api.contract.test.ts` and `translations.contract.test.ts`, which share this setup.
 
 ## Notes
-
-- The function hard-fails (throws) on any non-201 status rather than returning a partial response; callers should not wrap it in a try/catch expecting a graceful fallback.
-- The default body is the module-level `PORTUGUESE` constant, so omitting the `body` argument in a test will always create the `pt` tag.
-- The error message interpolates the full response body as JSON — useful for debugging but can be verbose in CI logs.
+- `bearer` is passed straight to the `Authorization` header, so callers must supply the full value (e.g. including any `Bearer ` prefix).
+- Only `201` counts as success. Any other status, including a duplicate-tag conflict, throws.
+- Because it goes through the real route rather than inserting directly, a failure here points to a problem in the locale creation endpoint or in auth setup, not in the test under way.

@@ -1,37 +1,33 @@
 ---
 source: shared/cases/crypto.cases.yaml
-sha256: 6c50b5c7b401b58be2e144bb7aeb18a8ce96608f2ac1f587827ffbfd53f40835
-generated_at: 2026-11-14T17:43:56.447571+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c8c126afb7b707d7852fa36c80eead3b5cdfdaebb69d33ea46e8858947b13cd6
+context_sha256: b71d23ce9d2c321c29defd5b46afb9a26fd3ba72d0092d91adea8a71a32d0965
+generated_at: 2026-11-22T02:21:07.915755+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/cases/crypto.cases.yaml
 
 ## Purpose
-
-Shared, pre-computed crypto test vectors that let independent implementations verify they produce identical results without exchanging live secrets. Ciphertexts were sealed once by independent `node:crypto` code using fixed IVs, so each side checks its own output against the stored digest or plaintext rather than against a sibling's live computation. Every key in this file is **test-only and public**.
+Shared, language-neutral test vectors for the project's crypto primitives. Each "twin" implementation loads this file and must reproduce the expected output. Ciphertexts were sealed with a fixed IV by independent `node:crypto` code, so no implementation validates itself against its own output. All keys and secrets are TEST-ONLY and public.
 
 ## Key elements
-
-- **`cases`** — flat list of test vectors; each entry's `kind` selects the shape:
-  - **`pseudonym`** — HMAC-SHA256 under the HKDF subkey `pseudonym/v1/<purpose>`; asserts a 64-hex `digest`. Covers `log`, `rate-limit`, `idempotency` purposes and a non-ASCII (UTF-8) value.
-  - **`subkey`** — HKDF-SHA256 with empty salt and a given `info` string; asserts a 32-byte hex `key`. Covers `pseudonym/v1/log`, `pii`, `totp`, `webhook-secret` labels.
-  - **`decrypt`** — AES-256-GCM under the ring key named by the stamped `version`. `stored` is `<version>:<iv>:<tag>:<ciphertext>` (hex). `aad` is an opaque input label; `expect` is the plaintext or the literal `reject`. Covers happy-path decrypt, row/purpose mismatch rejection, version-not-in-ring rejection, tampered ciphertext, truncated tag, and multi-ring lookup by version (not list position).
-  - **`verify-password`** — argon2id PHC-string check; `expect` is `true`/`false`. Covers correct match, wrong password, self-contained (cheaper) parameters, and a non-argon2id hash.
-- **`ring`** (decrypt cases) — ordered list of `{ version, key }` entries; the `version` stamped in `stored` selects the key, regardless of list position.
+A top-level `cases:` list. Each case has a `name` and a `kind` that determines its shape:
+- **`pseudonym`**: HMAC-SHA256 under the HKDF subkey `pseudonym/v1/<purpose>`. Fields: `root`, `purpose`, `value`, `digest` (64 hex). Covers the `log`, `rate-limit` and `idempotency` purposes, which give unrelated digests for the same value. Also covers a non-ASCII value hashed as UTF-8 bytes.
+- **`subkey`**: HKDF-SHA256 with empty salt. Fields: `root`, `info`, `key` (32 bytes, hex). Covers `pseudonym/v1/log`, `pii`, `totp` and `webhook-secret`.
+- **`decrypt`**: AES-256-GCM on `stored` = `<version>:<iv>:<tag>:<ciphertext>` (hex). The key is the HKDF subkey of the ring entry named by the version, with `info` = `purpose`, and AAD-bound. Fields: `ring` (list of `{version, key}`), `purpose`, `aad`, `stored`, `expect` (plaintext, or `reject`). Positive cases cover pii, totp, webhook-secret and non-ASCII plaintext. Reject cases cover:
+  - wrong row (AAD mismatch)
+  - wrong purpose
+  - a version missing from the ring
+  - a flipped ciphertext byte
+  - a truncated auth tag
+- **`verify-password`**: argon2id PHC string. Fields: `password`, `stored`, `expect` (boolean). Covers a correct password, a wrong password, a cheaper old-parameter hash that still verifies, and a stored value that is not an argon2id PHC string, which never verifies.
 
 ## Relationships
-
-- **`shared/cases/log-redaction.cases.yaml`** — consumes the `pseudonym` cases with `purpose: log` (same root secret, same 64-hex digest) as the canonical vector for log-field redaction tests.
-- **`shared/cases/rate-limit-keys.cases.yaml`** — consumes the `pseudonym` cases with `purpose: rate-limit` as the canonical vector for rate-limit key derivation tests.
-
-Both neighbors are sibling fixtures in the same `shared/cases/` directory and rely on this file as the single source of truth for the crypto primitives they exercise.
+The neighbors `shared/cases/log-redaction.cases.yaml` and `shared/cases/rate-limit-keys.cases.yaml` are sibling case files. The `log` and `rate-limit` pseudonym purposes here correspond to those domains by name. `scripts/audit/compliance-rules.yaml` is a related graph neighbor. This file shows no direct reference to any of the three.
 
 ## Notes
-
-- All keys, roots, and IVs are **public test fixtures**; the naming (`do-not-use-in-production`) is a safety marker, not a functional constraint.
-- Fixed IVs are intentional here (deterministic vectors), **not** a pattern to copy into production sealing code.
-- `aad` in `decrypt` cases is an **opaque input string** for the test runner. Real AAD labels are built per-twin from each side's own storage layout (`<namespace>:<field path>:<owning id>`); a value in this file is not a contract on the real label format.
-- Ciphertext `stored` format is colon-delimited hex: `version : iv : tag : ciphertext`. A truncated tag (the `dc4c35ce` case) must be rejected, not accepted as a short tag.
-- For `verify-password`, the parameters encoded in the PHC string **override** any runtime default (e.g., the `m=64,t=3` case still verifies).
-- Non-ASCII values (`Zoë ☃`, `Zoë Müller`, `pässwörd ☃`) are specified as UTF-8; implementations must byte-level hash/encrypt, not rely on a locale-dependent encoding.
+- Ring lookup is by the stamped version, not by position (the ring `[v2, v1]` still opens a `v1` ciphertext).
+- `aad` is an opaque input. Each twin builds its own labels from its own storage (`<namespace>:<field path>:<owning id>`), so a case's label does not promise anything about a real one. Ciphertext never moves between twins.
+- For `verify-password`, the stored parameters win over any current default.
+- `expect: reject` means either the auth tag or the key lookup must fail.

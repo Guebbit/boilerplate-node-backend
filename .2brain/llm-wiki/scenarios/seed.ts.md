@@ -1,34 +1,30 @@
 ---
 source: scenarios/seed.ts
-sha256: 1529b8e19fa8e5b888b002f25beff3279cbd8cf6019f5d889558847027e50b9b
-generated_at: 2026-11-08T02:31:51.086031+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 25e67aa4ef62f017ec77be705c96a518bb690c1df305abfe1937bdc21a78188e
+context_sha256: f28a48b9d34e741b3e05d250201ecd5e12d1a9ee9763027152c915f30218baf6
+generated_at: 2026-11-22T01:45:32.884645+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/seed.ts
 
 ## Purpose
-
-Provides the generic "insert one fixture if it isn't already there" primitive that every scenario module uses to write seed data. It is domain-agnostic: it only knows a repository shape and a fixture with a stable key, so any module's repository satisfies it without importing domain code.
+The seeding primitive that every scenario module writes fixtures through. It defines a minimal, structural repository shape and two "insert if absent" helpers. It knows nothing about any specific domain.
 
 ## Key elements
-
-- **`SeedOutcome`** — Union type `'created' | 'skipped'`; the runner counts these to report seed activity.
-- **`SeedRepository<TFixture>`** — Structural interface requiring `findById(id)` and `create(data)`. Any module repository with these two methods is assignable.
-- **`OwnedSeedRepository<TFixture>`** — Same shape but keyed by `findByUserId(userId)` instead of `findById`. Used for fixtures (carts, wishlists, address books) that have no pinned `_id`.
-- **`insertIfAbsent<TFixture extends { _id: Types.ObjectId }>`** — Checks `findById(fixture._id)`; if absent, calls `create(fixture)`. Returns the `SeedOutcome`.
-- **`insertIfAbsentForOwner<TFixture extends { userId: Types.ObjectId }>`** — Same skip-if-present logic but checks `findByUserId(fixture.userId)` first.
-- **`insertIfAbsentBy`** *(module-private)* — Shared implementation that both public functions delegate to: `present() → existing ? 'skipped' : create(fixture) → 'created'`.
+- `SeedOutcome`: type `'created' | 'skipped'`. The runner counts these.
+- `SeedRepository<TFixture>`: needs `findById(id)` and `create(data: TFixture)`. It is generic over the fixture, so the fixture is type-checked against the repository that stores it. The previous `create: (data: never)` design needed an `as never` cast.
+- `OwnedSeedRepository<TFixture>`: needs `findByUserId(userId)` and `create(data: TFixture)`. It is for collections addressed by their owner.
+- `insertIfAbsent(repository, fixture)`: for fixtures with a pinned `_id: Types.ObjectId`. It looks the row up by `_id` string and creates it only if missing.
+- `insertIfAbsentForOwner(repository, fixture)`: the same policy for fixtures with a `userId: Types.ObjectId` and no pinned `_id`. Carts, wishlists and address books are the examples named in the source. It looks the row up by `userId`.
+- `insertIfAbsentBy` (private): the shared implementation. It calls `present()`, returns `'skipped'` if a row exists, and otherwise calls `repository.create(fixture)` and returns `'created'`.
 
 ## Relationships
-
-- **scenarios/index.ts** — Re-exports `insertIfAbsent`, `insertIfAbsentForOwner`, and the repository interfaces so scenario authors import from a single entry point.
-- **scenarios/users.ts, scenarios/products.ts, scenarios/addresses.ts, scenarios/wishlist.ts, scenarios/shop-modules.ts, scenarios/webhooks.ts, scenarios/locales.ts, scenarios/blank.ts, scenarios/example.ts, scenarios/shop.scenario.ts** — Each module's `seed` function calls `insertIfAbsent` or `insertIfAbsentForOwner` passing its own repository and fixture documents.
-- **tests/unit/scenarios/seed.test.ts** — Unit-tests the two public insert functions (created/skipped paths, hook execution, owner-keyed variant).
+- The neighbor scenario modules (`addresses`, `users`, `products`, `wishlist`, `webhooks`, `locales`, etc.) are the intended consumers. The file's header says every scenario module writes fixtures through it, and their repositories only have to satisfy the structural interfaces. Owner-keyed collections such as addresses and wishlists would use `insertIfAbsentForOwner`.
+- The runner counts the returned `SeedOutcome` values.
+- `tests/unit/scenarios/seed.test.ts` is the unit test for this file.
 
 ## Notes
-
-- **Insert, never upsert.** An existing row is always *skipped*, never rewritten. Re-running seeds does not repair data written by older fixture versions. The name "insert" is intentional to make this contract obvious to callers.
-- **`create()` over raw driver writes.** The code deliberately calls the repository's `create()` (which goes through Mongoose `save()`) so that pre-save hooks — e.g. the password-hash hook in the users repository — still execute. A bare `insertOne`/`updateOne({ upsert: true })` would bypass them.
-- **Structural, not nominal, repository typing.** `SeedRepository` and `OwnedSeedRepository` are generic over `TFixture` and structurally typed, so any repository with the right method signatures satisfies them without extending a base class.
-- **Two keying strategies.** Fixtures with a pinned `_id` use `insertIfAbsent`; fixtures identified only by ownership (one-per-user carts, wishlists, address books) use `insertIfAbsentForOwner`. The split exists because the latter group has no stable `_id` to check against.
+- The helpers never update. An existing row is skipped, so re-running does not repair a database seeded from older fixtures. This is why they are named "insert" rather than "upsert".
+- Writes go through `create()`, not `updateOne(..., { upsert: true })`, so pre-save hooks still run. The main one is the password hash, which a raw driver write would skip.
+- The existence check is a separate find followed by a create. The code has no atomicity handling between the two steps.

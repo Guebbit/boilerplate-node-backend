@@ -1,37 +1,40 @@
 ---
 source: docker/deploy-drill.sh
-sha256: 0c0994b2dd2245f88279d0391aabc6e03c1d04872d6921933101a1af182b175c
-generated_at: 2026-11-08T02:20:00.567532+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d0d9dd73a7f9219558ec81f4381cde591ed13139feb12582c2397da345140e64
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T01:29:37.517754+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/deploy-drill.sh
 
 ## Purpose
-
-End-to-end verification of `docker/deploy.sh` against the real production compose file. Spins up a throwaway client with generated secrets, then exercises four scenarios: a successful deploy, auto-rollback of a broken image, a second good deploy, and an explicit `--rollback`. All artifacts are torn down on exit regardless of outcome.
+End-to-end drill of `docker/deploy.sh` against the real production compose files (`compose.yaml` + `compose.production.yaml`), using a throwaway client with generated secrets. It proves three scenarios: a good deploy, a refused broken deploy with auto-rollback, and a deploy followed by `--rollback`. Run it with `npm run deploy:drill`.
 
 ## Key elements
-
-- **`cleanup()`** — `EXIT` trap; tears down the compose stack, removes drill images, and deletes the client/tmp directories. Skipped if `DEPLOY_DRILL_KEEP` is set. Prints final PASS/FAIL verdict.
-- **`deploy()`** — invokes `docker/deploy.sh <client> [args]`, capturing the exit code in `$deploy_code` without tripping `set -e`.
-- **`container_of` / `running_image`** — look up a service's container by compose-project label and read its image.
-- **`assert_running` / `assert_log_tail` / `assert_alive`** — the three assertion helpers: image suffix check, `deploys.log` last-line check, and `curl /livez` health check on the published loopback port.
-- **`derive()`** — builds a one-off image (`FROM <first-image>` + extra Dockerfile lines) and tracks it in `DRILL_TAGS` for cleanup.
-- **`step()` / `die()`** — heading printer and fatal-exit helper.
-- **Main body (4 steps)** — creates the client env, then runs the four deploy scenarios in order, asserting after each.
+- **Config**: `CONTAINER_ENGINE` (default `podman`), `DEPLOY_DRILL_PORT` (default `3996`), `DEPLOY_TIMEOUT` (default `300`, exported), `DEPLOY_DRILL_KEEP` (skip cleanup). The client is `deploydrill$$` under `clients/`.
+- **`cleanup` (EXIT trap)**: runs `compose down -v --remove-orphans`, force-removes leftover project containers, removes drill image tags, deletes the client dir and tmp dir. Prints `DEPLOY DRILL PASSED` only if exit code is 0 and `PASS=1`.
+- **`step` / `die`**: print a heading / fail the drill with a message.
+- **`deploy`**: runs `docker/deploy.sh <client> ...` and stores its exit code in `$deploy_code` without aborting.
+- **`container_of`, `running_image`, `assert_running`**: locate a service's container by compose labels, and check which image `app` runs (suffix match, since local builds appear as `localhost/<name>`).
+- **`assert_log_tail`**: checks the last line of `$DIR/deploys.log` is a given event for an image with a given suffix.
+- **`assert_alive`**: `curl` of `/livez` on the loopback port.
+- **`assert_worker_consuming` / `assert_heavy_worker_consuming`**: poll up to 15 times (2s apart) via `rabbitmqctl list_queues` in the `queue` container. They require exactly one consumer on `worker.email.send` (the `worker`) and on `worker.image.digest` (the `worker-heavy`).
+- **`assert_worker_scrape`**: runs Node inside the `worker` container to check `/observability/metrics` returns 401 without the bearer token and 200 with `/run/secrets/metrics_token`.
+- **`derive`**: builds a derived image from the first deployed image plus extra Dockerfile lines, and registers its tag for cleanup.
+- **Main flow**:
+  1. Refuse if the port is already answering, then create the client with random hex secrets (`openssl rand -hex 32`), empty optional integration secrets, and a `.env` using the `bundled` profile.
+  2. Deploy 1: build and start the stack, then run the assertions. The first image is read from the last line of `deploys.log`.
+  3. Check that `app`, `worker`, `worker-heavy`, `cron` and `setup` have the `*_FILE` env vars for the device-cookie and SMTP secrets and no plain secret values.
+  4. Deploy 2: a derived image whose CMD exits. Expect exit 1, an `auto-rollback` log entry, and the first image running again.
+  5. Deploy 3: a good derived image (`drill-second`).
+  6. `--rollback`: expect a `rollback` log entry for the first image, a live API and worker, and the `setup` container unchanged.
 
 ## Relationships
-
-- **`docker/deploy.sh`** — the script under test; called four times (default deploy, broken-image deploy, second-good deploy, `--rollback`).
-- **`docker-compose.production.yml`** — the production compose file used by both the drill stack and `deploy.sh`.
-- **`docs/tools/deploy-and-rollback.md`** — referenced in the header comment for operator-facing documentation of the drill.
+No graph neighbors; the dependency graph records no interactions for this file. It is a standalone script run from the repo root, and it works under the gitignored `clients/` directory.
 
 ## Notes
-
-- Default container engine is **podman** (`CONTAINER_ENGINE` env var), even though the script lives under `docker/`.
-- Default port is **3996** (`DEPLOY_DRILL_PORT`); the script dies immediately if that port is already answering `/livez`.
-- Client secrets live under `clients/deploydrill<PID>/` (gitignored); 14+ keys are generated with `openssl rand -hex 32`.
-- `PASS` is a plain counter (0 → 1) used only to decide the final message in `cleanup`; it is not a true pass/fail bit—any `die` still exits non-zero.
-- The `--rollback` step also asserts the `setup` one-shot container is **not** recreated, guarding against a regression where rollback re-runs migrations.
-- Invoke via `npm run deploy:drill` rather than running the script directly (sets up the `npm` environment).
+- It runs from the repo root (`cd "$(dirname "$0")/.."`).
+- Secret files are written with mode `0644`. The `.env` points to `smtp.invalid` and `example.com` hosts.
+- Set `DEPLOY_DRILL_KEEP` to keep the client and tmp dir for debugging; the stack teardown is skipped too.
+- Image tags used are `boilerplate-api:drill-broken` and `boilerplate-api:drill-second`.

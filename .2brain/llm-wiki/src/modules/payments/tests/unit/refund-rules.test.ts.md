@@ -1,37 +1,45 @@
 ---
 source: src/modules/payments/tests/unit/refund-rules.test.ts
-sha256: caadde0790ae825baa62a48c82089ff4e5d906576fe8ef362d554ffa712ec879
-generated_at: 2026-11-14T21:22:06.485904+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 988d6dac6fefe60c072878e3f0e13a88bc2c3c0188593ff144df034f647ddea7
+context_sha256: 86038b4e9f6f2a0b25d9700cce8b13494961c44233593c0a4c9d268fe8def08e
+generated_at: 2026-11-22T07:06:07.744210+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/unit/refund-rules.test.ts
 
 ## Purpose
-
-Unit tests for the pure refund-rule functions in the payments domain: which refunds are still open, which may be voided or settled by hand, whether a new refund exceeds the remaining amount, the legal deadline, and how open disputes (chargebacks, inquiries) gate those decisions. Exists to lock down the business logic without touching the provider or database.
+Unit tests for the pure refund rules in the payments domain: which refunds are still open, when a refund may be voided (canceled) or settled by hand, whether an unsent refund exceeds what the provider can still give back, the legal deadline of a refund, and how disputes (chargebacks and inquiries) affect all of this. The tests use plain object fixtures and need no I/O.
 
 ## Key elements
-
-- **`paymentOn(provider)`** — factory returning a 100.00 EUR payment with no refunds; used to vary only the provider field.
-- **`refundIn(facts)`** — factory returning a 30.00 EUR refund record with a given status, optional failure reason, `reversedAt`, and `providerRefundRef`.
-- **`chargeback(status, amount?)` / `inquiry(status)`** — factories producing dispute records of the respective `DisputeKind` for the dispute-rule tests.
-- **`describe('isOpenRefund')`** — parameterised table confirming which `RefundStatus` × `RefundFailureReason` combinations count as open (pending, failed-unknown, failed-declined are open; succeeded and failed-canceled are not).
-- **`describe('mayBeCanceled')`** — asserts that manual-provider refunds are cancellable while pending, card refunds only after a definitive decline (`declined`, `insufficient_funds`), and that `unknown`/`provider_unavailable` do not unlock cancellation.
-- **`describe('a refund the provider took back')`** — covers bounced refunds (`reversedAt` set): they can be settled by hand, are not voidable, and are never settled by hand when the failure reason is `disputed`.
-- **`describe('exceedsRemaining')`** — verifies that a pending refund is blocked when a previously settled refund already consumed part of the 100.00, but not when the prior refund was bounced or already carries a `providerRefundRef`.
-- **`describe('refundDueBy')`** — confirms the function simply reads `dueBy` from the record and returns `undefined` when absent.
-- **`describe('the dispute rules')`** — exercises `hasOpenChargeback`, `hasOpenDispute`, `lostToChargebacks` (cent conversion, only `lost`/`accepted` chargebacks count), and the interplay: a refund refused as `disputed` is neither cancellable nor hand-settleable while a chargeback is open, becomes hand-settleable once a lost chargeback fully covers it, and becomes voidable (but not hand-settleable) after the shop wins.
+- **Fixtures**
+  - `paymentOn(provider)`: a 100.00 EUR payment with no refunds.
+  - `refundIn(facts)`: a 30.00 EUR refund in a given status. It can carry a failure reason, `reversedAt`, `reversedAfterSettling` and `providerRefundRef`.
+  - `chargeback(status, amount = '100.00')` and `inquiry(status)`: EUR disputes of the given kind and status.
+- **`isOpenRefund`**: a table test. Pending, and failed with `unknown` or `declined`, count as open. Succeeded, and failed with `canceled`, do not.
+- **`mayBeCanceled`**
+  - A `manual` payment: a pending refund may be canceled. A succeeded or already-canceled one may not.
+  - A `stripe` payment: a refund may be canceled only after a failure of `declined` or `insufficient_funds`. `unknown`, `provider_unavailable`, `canceled` and pending do not qualify.
+- **Provider-reversed refunds** (`reversedAt` set)
+  - `mayBeSettledByHand` is true, even for an `unknown` reason.
+  - `mayBeCanceled` is false when `reversedAfterSettling` is set, and true when it is absent.
+  - A `disputed` failure reason follows the dispute rule.
+- **`exceedsRemaining`**
+  - An unsent refund that no longer fits what the provider already refunded is held.
+  - A reversed refund is ignored when computing what remains.
+  - A refund that already has a `providerRefundRef` is never held.
+- **`refundDueBy`**: returns the `dueBy` date stamped on the record, or `undefined` when there is none.
+- **Dispute rules**
+  - `hasOpenChargeback` is true for `needs_response` or `under_review` chargebacks only. Inquiries, won chargebacks, and a missing `disputes` field give false.
+  - `hasOpenDispute` also counts open inquiries.
+  - `lostToChargebacks(payment, currency)` returns minor units (cents). It sums only `lost` or `accepted` chargebacks, so `'40.00'` gives `4000`. It ignores `won` and open chargebacks, inquiries, and chargebacks in a different currency.
+  - **Refund refused as `disputed`**: it can be neither settled nor canceled while any dispute is open, whether a chargeback, an inquiry, or one of several. Once disputes are lost (any amount), won, closed, or absent, both actions are allowed.
 
 ## Relationships
-
-- **`src/modules/payments/domain/index.ts`** — barrel import; provides all eight functions under test (`isOpenRefund`, `mayBeCanceled`, `mayBeSettledByHand`, `exceedsRemaining`, `refundDueBy`, `hasOpenChargeback`, `hasOpenDispute`, `lostToChargebacks`).
-- **`src/modules/payments/domain/disputes.ts`** — source of the dispute predicates (`hasOpenChargeback`, `hasOpenDispute`, `lostToChargebacks`) that the "dispute rules" suite exercises.
-- **`src/modules/payments/domain/lifecycle.ts`** — source of the refund-lifecycle predicates (`isOpenRefund`, `mayBeCanceled`, `mayBeSettledByHand`, `exceedsRemaining`, `refundDueBy`).
-- **`src/types/index.ts`** — imported as `@types`; supplies the enums (`RefundStatus`, `RefundFailureReason`, `DisputeKind`, `DisputeStatus`) used to build test fixtures and as discriminators in assertions.
+- Imports `DisputeKind`, `DisputeStatus`, `RefundFailureReason` and `RefundStatus` from `@types` (`src/types/index.ts`).
+- Imports all functions under test from the `@modules/payments/domain` barrel (`src/modules/payments/domain/index.ts`). The dispute helpers (`hasOpenChargeback`, `hasOpenDispute`, `lostToChargebacks`) presumably come from `disputes.ts`, and the refund-state rules from `lifecycle.ts`. The test only reaches them through the barrel.
 
 ## Notes
-
-- All amounts are strings (`'100.00'`, `'30.00'`) in fixtures, but `lostToChargebacks` returns integer cents (e.g. `4000` for `'40.00'`). Tests assert the cent value directly.
-- `mayBeSettledByHand` for a `disputed`-refused refund depends on the chargeback amount covering the refund amount exactly (29.99 < 30.00 → false). This boundary is intentionally tested.
-- The test file imports from the barrel (`@modules/payments/domain`) rather than reaching into individual domain files; if a function is removed from the barrel it breaks here even if the source file still exports it.
+- The fixtures are structural objects, not model instances, so the rules take plain shapes. `disputes` is optional on a payment.
+- The `provider` string drives the cancel rule: `'manual'` is treated as hand-paid and `'stripe'` as a card, with different cancel conditions.
+- `chargeback` and `inquiry` are `const` arrow functions declared below the first `describe` blocks that use them. This works because they are only called inside test callbacks, which run after the module has loaded.

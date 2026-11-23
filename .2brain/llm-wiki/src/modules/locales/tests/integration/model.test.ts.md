@@ -1,38 +1,37 @@
 ---
 source: src/modules/locales/tests/integration/model.test.ts
-sha256: 85095a89f993fb220065976bd3f3ae08a564d3c4b1c6cd9c1d0a410ceda67ee0
-generated_at: 2026-11-14T20:23:58.173497+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 979f742e2864bf67b5a26d35f0f9f3d786473079be7f6bc67bbc6bd2f564e572
+context_sha256: 865c3f201f67759c17a892f1515fd358fc989eb5a8d31adbec0e811b43f8e4ba
+generated_at: 2026-11-22T05:50:20.948928+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/tests/integration/model.test.ts
 
 ## Purpose
-
-Integration tests that pin the serialization contract of the `locale` and `localeEntry` models on both response paths (hydrated `toJSON` and lean list), verify schema-level defaults and hooks, and guard against `_id`/`__v` leaking into API responses. They exist because 95 schemas in `openapi.yaml` declare `additionalProperties: false`, so any stray field is a contract violation, and the lean path bypasses `toJSON` entirely.
+Integration tests for the two locale Mongoose models (language and locale entry). They check that neither collection leaks `_id`/`__v` on either response path (hydrated `toJSON` and the `.lean()` search path), and that schema defaults, tag normalization, and the derived `baseLanguage` field behave as the schema defines them rather than as a fixture claims.
 
 ## Key elements
-
-- **`describe('language serialization')`** — Three tests against the locale repository's create path: (1) `toJSON` maps `_id` → `id` and strips `__v`; (2) schema defaults fill `direction`, `active`, `revision` when omitted; (3) tag is canonicalised on write (`'  PT-BR '` → `'pt-BR'`).
-- **`describe('entry serialization')`** — Two tests: (1) the search service returns a lean list where `id` is a 24-hex string and `_id`/`__v` are absent (asserted via `toBeUndefined`); (2) omitting `value` yields `''` (empty string), satisfying the wire-level `required: true`.
-- **`describe('baseLanguage')`** — Parametrised (`it.each`) over bare, regional, script, and combined tags to confirm the schema hook derives the ISO 639-1 prefix; plus one test proving the hook overwrites a caller-supplied `baseLanguage` that contradicts the tag.
-- **`setupTestDb()`** — Called at module top level to spin up a real in-memory Mongo instance.
-- **`asStub<T>()`** — Type-cast helper (from `tests/support/stub.ts`) used to index into `result.data?.items[0]` without narrowing the generic service return.
+- `setupTestDb()` — called at module level to provide the test database.
+- `describe('language serialization')`:
+  - `toJSON` exposes `id` and contains no `_id` or `__v`.
+  - Omitted fields default to `direction = LocaleDirection.ltr`, `active = true`, `revision = 0`.
+  - Tags are stored canonical (`'  PT-BR '` becomes `'pt-BR'`), so one language cannot become two rows.
+- `describe('entry serialization')`:
+  - A lean list from `localeService.searchEntries('es')` has a 24-hex `id` and no `_id` or `__v`.
+  - An entry created without `value` stores `''`, since `required: true` on a String would refuse an empty translation.
+- `describe('baseLanguage')`:
+  - A table-driven `it.each` checks derivation from the tag: `es`→`es`, `pt-BR`→`pt`, `zh-Hant`→`zh`, `zh-Hant-HK`→`zh`.
+  - A caller-supplied `baseLanguage: 'es'` on a `pt-BR` tag is overwritten to `pt`.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/locales/repository.ts` | The test imports `localeRepository` and `localeEntryRepository` from this module and calls their `create` methods as the write entry points in every test. |
-| `src/modules/locales/services/index.ts` | The test imports `localeService` from this module and calls `searchEntries` to exercise the lean-list read path (the path that bypasses `toJSON`). |
-| `src/modules/locales/factories.ts` | The test imports `makeLocale` from this module to build the input object for the `baseLanguage` parametrised tests. |
-| `src/types/index.ts` | The test imports `LocaleDirection` from this module and asserts its `ltr` member as the expected schema default. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` initialises the shared in-memory MongoDB connection. |
-| `tests/support/stub.ts` | `asStub<Record<string, unknown>>(…)` safely casts the first search-result item for property-level assertions. |
+- `src/modules/locales/repository.ts` — `localeRepository` and `localeEntryRepository` create the documents under test.
+- `src/modules/locales/services/index.ts` — `localeService` is used for the entry search that exercises the lean/transform path.
+- `src/modules/locales/factories.ts` — `makeLocale` builds the language payloads for the `baseLanguage` table.
+- `src/types/index.ts` — supplies the `LocaleDirection` enum.
+- `tests/support/setup-test-db.ts` — `setupTestDb` sets up the database.
+- `tests/support/stub.ts` — `asStub` casts the search result item to a record.
 
 ## Notes
-
-- **Two-path serialization is intentional.** The file's module doc comment explains that asserting per model (rather than trusting a shared `applySerialization` helper) is deliberate because the lean path and the `toJSON` path are structurally different.
-- **`baseLanguage` is a schema hook, not service logic.** The "overrides whatever a caller supplied" test exists to lock in that guarantee: any code path (seeds, scripts) that forgets to set it still gets the correct value, and a wrong value is silently corrected.
-- **Empty-string `value` is a design decision.** The entry test documents that an untranslated row is a valid state, and the schema default of `''` keeps the field present on the wire to satisfy `required: true`.
-- **Tag canonicalisation** (`trim` + normalise) is asserted at the repository level, meaning it is a schema/Pre-validate hook concern, not a service-layer concern.
+- The tests assert behavior in the schema itself, not in the service. The `baseLanguage` hook is meant to cover every write path (seeds, scripts), and the hook overwrites caller-supplied values.
+- The header comment gives the motivation: 95 schemas in `openapi.yaml` are `additionalProperties: false`, and the lean path bypasses `toJSON`, so serialization is asserted per model.

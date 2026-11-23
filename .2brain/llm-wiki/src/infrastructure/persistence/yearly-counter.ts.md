@@ -1,31 +1,29 @@
 ---
 source: src/infrastructure/persistence/yearly-counter.ts
-sha256: 136de4cbc9a8808a59d9fe0ba84f477d0775d0e9694eee654d9adf76ff07f902
-generated_at: 2026-11-08T03:45:38.081683+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 27f0109018851e25db6300b630bfcef0d4872b53b4fbed5c3b4dfe57495c9f62
+context_sha256: ad4c4b380d14bdf83450be5358dff4c57ffec849af2bf08e0b3abee3b2a0fd70
+generated_at: 2026-11-22T03:05:24.535666+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/yearly-counter.ts
 
 ## Purpose
-
-Provides the shared atomic counter and formatting helpers behind the `{year}-{sequence}` number scheme. Both the invoicing and orders modules use it, but each owns its own Mongoose counter collection and decides how the `session` parameter interacts with its own transactional guarantees (gaps are tolerated for orders, forbidden for invoices).
+Provides the shared yearly counter behind `{year}-{sequence}` document numbers. Each year has one counter document, incremented by a single atomic upsert. Order numbers and invoice numbers both use it. Each module supplies its own counter model and decides what `session` means for its series. Gaps are acceptable for orders and illegal for invoices.
 
 ## Key elements
-
-- **`YearlyCounterDocument`** — Mongoose document shape: `_id` is the calendar year, `seq` is the last number issued.
-- **`incrementYearlyCounter(counterModel, year, session?)`** — Atomically upserts the year's row via `findOneAndUpdate` + `$inc`, returning the new `seq`. Passing a `ClientSession` enrolls the bump in that transaction so an abort rolls the number back.
-- **`formatYearlySequence(year, sequence)`** — Renders the printable form `{year}-{NNNNNN}`, zero-padding the sequence to six digits.
-- **`SEQUENCE_WIDTH`** (6) — Constant controlling the zero-pad width; not exported.
+- `YearlyCounterDocument` — Mongoose `Document<number>` interface. `_id` is the calendar year and `seq` is the last number handed out.
+- `incrementYearlyCounter(counterModel, year, session?)` — runs `findOneAndUpdate({ _id: year }, { $inc: { seq: 1 } })` with `upsert: true` and `returnDocument: 'after'`. It creates the year's row on first use and resolves to the new `seq` (1 for the year's first document). The optional `ClientSession` ties the increment to a transaction, so an abort gives the number back.
+- `formatYearlySequence(year, sequence)` — returns `` `${year}-${sequence}` `` with the sequence zero-padded to 6 digits (`SEQUENCE_WIDTH`), e.g. `2026-000041`.
 
 ## Relationships
-
-- **`src/modules/orders/services/order-numbering.ts`** and **`src/modules/invoicing/services/numbering.ts`** — The service-layer callers that invoke `incrementYearlyCounter` (supplying their own model and session) and `formatYearlySequence` to build the final number string.
-- **`src/modules/orders/repository.ts`** and **`src/modules/invoicing/repository.ts`** — Define and own the per-module `Model<YearlyCounterDocument>` instance that is passed into `incrementYearlyCounter`; this keeps the two series in separate collections.
-- **`tests/unit/infrastructure/persistence/yearly-counter.test.ts`** — Unit tests covering the counter increment and formatting logic.
+- `src/modules/invoicing/services/numbering.ts` and `src/modules/orders/services/order-numbering.ts` are the number-generating services for the two series. By the module doc, both series use this counter.
+- `src/modules/invoicing/repository.ts` and `src/modules/orders/repository.ts` are the persistence layers of the two modules. Per the module doc, each module owns its own counter model, which it passes in as `counterModel`.
+- `tests/unit/infrastructure/persistence/yearly-counter.test.ts` is the unit test for this file.
 
 ## Notes
-
-- The counter model is **not** a module-level singleton; it is an injected parameter. Each business module must create and pass its own `Model<YearlyCounterDocument>` so order and invoice sequences never share a collection.
-- `session` is optional. Callers that need strict no-gap semantics (invoicing) must pass the active `ClientSession`; callers that tolerate gaps (orders) may omit it. The function itself is agnostic.
-- The upsert relies on `returnDocument: 'after'`; without it the first call for a new year would return `0` instead of `1`.
+- The file defines no counter collection itself. Callers must pass a model for their own series, so orders and invoices keep separate sequences.
+- Without a `session`, the increment is not part of any transaction, so an abort elsewhere cannot give the number back.
+- Rollback semantics are the caller's responsibility. This helper only forwards the session.
+- The increment and the formatting are separate functions. Callers pass the number returned by `incrementYearlyCounter` to `formatYearlySequence`.
+- A sequence wider than six digits is not truncated. `padStart` only pads.

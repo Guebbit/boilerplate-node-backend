@@ -1,35 +1,48 @@
 ---
 source: src/modules/returns/openapi.yaml
-sha256: 7f4d7df55fa28d87563365b1a5a0479c38883dc5bdbc8257c6b40f755308ea32
-generated_at: 2026-11-14T21:35:24.381818+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cd227a53c7f8ed6f317e3f64b0df1e8e1912e7b77e8fdf3a21a8664aa32f28e0
+context_sha256: cf6206d579959218d53ed0cd6b0716e1542f4dec284a88bf70ed655335bcfb54
+generated_at: 2026-11-22T07:26:33.170033+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/openapi.yaml
 
 ## Purpose
-OpenAPI 3.1.0 contract for the **returns** module: it defines the REST API surface for opening, listing, and managing product returns, EU contract withdrawals, and cancellations, along with the module's error-code vocabulary and its slice of the account data export. It is the single source of truth for the HTTP interface other code (clients, tests, documentation generators) consumes.
+This is the OpenAPI 3.1.0 contract for the `returns` module (version `0.1.0`). It defines the module's HTTP operations, its error codes, and its contribution to the account data export. It covers sending goods back, including the EU withdrawal button (a return with `reason: withdrawal`), and cancelling unshipped goods.
 
 ## Key elements
-
-- **`x-error-codes`** — Module-level error-code registry (17 codes, e.g. `RETURN_DEDUCTION_INVALID`, `RETURN_NOT_RECEIVABLE`, `RETURN_WINDOW_CLOSED`). Each maps a code to an HTTP status and a human-readable description, several citing EU directives (2019/771, 2011/83/EU).
-- **`x-personal-data`** — Declares the `returns` array that the account-export bundler injects into `POST /account/export` (`AccountExportResponse`). Items use `#/components/schemas/ExportReturn`.
-- **`paths./returns.get`** (`listReturns`) — Paginated listing. Staff see all returns; buyers see their own. Supports `orderId`, `status`, `reason`, and JSON:API-style `sort` filters. References shared `PageParam`/`PageSizeParam` from the root spec.
-- **`paths./returns.post`** (`createReturn`) — Single endpoint covering three flows: buyer withdrawal (`reason: withdrawal`), staff-opened return (`kind: return`), and pre-dispatch cancellation (`kind: cancellation`). Handles the EU "withdraw from contract" button (Art. 11a), staff `policyExceptions`, `statedVia` re-authentication, and idempotency via `Idempotency-Key`.
-- **`tags`** — Single tag `Returns` with `x-family: After the sale`, used for client-side grouping.
-- **Shared `$ref`s** — Parameters, headers, and common responses are pulled from `../../../shared/contracts/openapi.root.yaml`; local schemas (`Return`, `CreateReturnRequest`, `ReturnStatus`, `ReturnReason`, `ReturnSort`, `ReturnsResponse`, `ExportReturn`) are defined in this file's `components` section (truncated in the excerpt).
+- **`tags`**: a single `Returns` tag, in the `After the sale` family.
+- **`x-error-codes`**: the module's error catalogue, each entry with an HTTP status and a description. Examples:
+  - 422: `RETURN_DEDUCTION_INVALID`, `RETURN_REMEDY_INVALID`, `RETURN_LINES_INVALID`, `RETURN_PROOF_DATE_INVALID`, `RETURN_RESTOCK_INVALID`, `RETURN_CANCELLATION_INVALID`, `RETURN_STATEMENT_INVALID`.
+  - 409: `RETURN_NOT_RECEIVABLE`, `RETURN_PROOF_ALREADY_RECORDED`, `RETURN_REFUND_OPENED_ON_PROOF`, `RETURN_REFUND_OPEN`, `RETURN_NOT_CLOSABLE`, `RETURN_NOT_CANCELABLE`, `RETURN_NOT_DECIDABLE`, `RETURN_ORDER_NOT_RETURNABLE`, `RETURN_NOTHING_TO_CANCEL`, `RETURN_WINDOW_CLOSED`.
+- **`x-personal-data.returns`**: this module's section of the `POST /account/export` response. It is an array of `ExportReturn` (`#/components/schemas/ExportReturn`) covering every return on the account's own orders, found by `orderId`. It is empty, never absent, when nothing was returned. The bundler adds it to `AccountExportResponse`.
+- **`GET /returns`** (`listReturns`): a paginated list, `bearerAuth`, `x-cache: private-no-cache`.
+  - Staff with `read:Return` see all returns. Anyone else sees returns on their own orders.
+  - Filters: `orderId`, `status`, `reason`, and a JSON:API-style `sort` (e.g. `-createdAt,status`).
+  - Responses: 200 `ReturnsResponse`, 401, 422.
+- **`POST /returns`** (`createReturn`): the single entry point for opening a return, a withdrawal, or a cancellation.
+  - It takes an `Idempotency-Key` header and a `CreateReturnRequest` body, and answers 201 with a `Return` and a `Location` header.
+  - **`kind: return`** (the default) is for goods that have left.
+    - The buyer opens one for any reason whose deadline is open.
+    - Staff with `update:Return` open one on the buyer's behalf. It is born `approved`, and waived policy checks are recorded in `policyExceptions`.
+  - **Withdrawal after shipping**: born `approved`.
+  - **Withdrawal before dispatch**: cancels the order with a full refund and releases stock. The `Return` is born `closed`.
+  - **`kind: cancellation`**: cancels the remainder of one fulfillment order (`fulfillmentOrderId`). It is born `closed`.
+    - Staff need `create:Refund` and a fresh session (`stepUp: critical`).
+    - The buyer uses it only as part of a withdrawal.
+  - **Staff-recorded withdrawals**: staff can record a withdrawal the buyer stated outside the shop. This requires `requestedAt` and `statedVia` (`phone`, `email`, `letter`, `other`), and asks for a fresh session.
+  - **Operation `x-error-codes`**: 401 `REAUTH_REQUIRED`; 409 `IDEMPOTENCY_IN_FLIGHT`, `RETURN_NOTHING_TO_CANCEL`, `RETURN_ORDER_NOT_RETURNABLE`, `RETURN_WINDOW_CLOSED`; 422 `IDEMPOTENCY_KEY_MISMATCH`, `RETURN_CANCELLATION_INVALID`, `RETURN_LINES_INVALID`, `RETURN_STATEMENT_INVALID`, `RETURN_REMEDY_INVALID`.
+- **Local schema refs** used by the visible operations: `ReturnStatus`, `ReturnReason`, `ReturnSort`, `ReturnsResponse`, `CreateReturnRequest`, `Return`, `ExportReturn`.
 
 ## Relationships
-
-- **`src/modules/returns/module.yaml`** — Module manifest; the bundler reads it to register this OpenAPI spec, the `x-personal-data` section, and the `x-error-codes` into the assembled API.
-- **`src/modules/returns/module.ts`** — Runtime module registration (routes, middleware wiring) that the spec documents; the `operationId` values here (`listReturns`, `createReturn`) correspond to handler exports in that file.
-- **`src/modules/returns/authorization.yaml`** — Defines the permission keys referenced in this spec's descriptions (`read:Return`, `create:Refund`, `update:Return`, `update:Order`, `stepUp: critical`).
-- **`src/modules/returns/asyncapi.webhooks.yaml`** — Complementary event contract (webhooks fired on return state transitions); this file is the synchronous request/response side of the same domain.
+- The descriptions of `POST /returns` depend on order-side behavior (whether a withdrawal happens before or after dispatch, and cancelling an order with a refund). This suggests a link to `src/modules/shop/openapi.yaml`, but this is an inference: the visible content has no direct `$ref` to that file.
+- The permission names used in descriptions (`read:Return`, `update:Return`, `create:Refund`, `update:Order`) are presumably defined by `src/modules/returns/authorization.yaml`. This is also an inference.
+- No visible reference to `src/modules/returns/asyncapi.webhooks.yaml`.
 
 ## Notes
-
-- A withdrawal is **not** a separate endpoint — it is `POST /returns` with `reason: withdrawal`. The client is expected to check `Order.actions.withdraw` to decide whether to render the button; the server never exposes a day-counter.
-- `kind: cancellation` vs. `kind: return` is determined by the request body, not by a different path. Both are born `closed` or `approved` depending on whether goods have shipped.
-- Any request carrying `statedVia` (staff recording an out-of-band buyer statement) triggers a fresh-session re-auth (`REAUTH_REQUIRED`); this is a legal-act safeguard and is not optional.
-- The `x-error-codes` block is a **documentation/contract** artifact; the actual enforcement lives in the service layer. Status codes are split 422 (invalid input/semantics) vs. 409 (conflicting state).
-- `Idempotency-Key` is supported on `POST /returns` via the shared header parameter; retry-safe behavior is guaranteed only when the key is present.
+- A withdrawal is not a separate endpoint. It is a return with `reason: withdrawal`, and its outcome depends on whether the goods have shipped.
+- The server sets `requestedAt` and `statedVia` for the buyer. If the buyer sends either, the request fails with 422.
+- Only `defective` or `wrong_item` returns can have a remedy other than a refund (`RETURN_REMEDY_INVALID`). A handling deduction cannot be kept back on those reasons (`RETURN_DEDUCTION_INVALID`).
+- The client never counts days itself; the description says an order-level `actions.withdraw` flag says whether the withdraw button is offered.
+- Removing the module removes its section of the account export.

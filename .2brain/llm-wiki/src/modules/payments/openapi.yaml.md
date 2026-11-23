@@ -1,36 +1,42 @@
 ---
 source: src/modules/payments/openapi.yaml
-sha256: 324038d5edb393b70fc04f1d56612b8e230ee32b8ec51bc6c3938b624c4d889f
-generated_at: 2026-11-14T21:02:10.238646+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 710643538c02300c82d5fea1d7d1e3e370c191c0ed9b4cf5084ab1c816b141d2
+context_sha256: 0886c04a217c57a1511b6353a84a281692d5f92303ed3d1fb8f713eedcb2cd0f
+generated_at: 2026-11-22T06:46:43.179091+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 contract for the **payments** module. It declares the HTTP surface for listing payment methods, creating payment intents, listing and searching payments, and defines the module's shared error codes and the payments section of the account data export. It exists so that clients, staff tooling, and the account-export bundler all consume a single, versioned description of what the payments module exposes.
+OpenAPI 3.1.0 contract for the payments module ("payments — module contract", version `0.1.0`). It declares the module's HTTP operations, schemas, error codes and its slice of the account data export, so the bundler can merge it into the shared API contract. Payments cover payment intents, confirmation, offline payments and refunds.
 
 ## Key elements
-
-- **`tags[0]`** — `Payments` tag, annotated with `x-family: Buying`, grouping all operations in this file.
-- **`x-error-codes`** — Module-level catalogue of error codes (`PAYMENT_DECLINED`, `PAYMENT_IN_FLIGHT`, `PAYMENT_NOT_CONFIRMABLE`, `PAYMENT_NOT_REFUNDABLE`, `PAYMENT_DISPUTED`, `PAYMENT_REFUND_EXCEEDS_REMAINING`, `PAYMENT_ORDER_NOT_PAYABLE`, `PAYMENT_REFUND_NOT_OPEN`, `PAYMENT_REFUND_IN_FLIGHT`, `PAYMENT_CARD_NOT_AVAILABLE`) with their HTTP status and human-readable description. Individual operations reference subsets via their own `x-error-codes`.
-- **`x-personal-data.payments`** — Schema fragment the account-export bundler splices into `AccountExportResponse`; the `ExportPayment` array is included automatically when the module is present.
-- **`GET /payments/methods`** (`listPaymentMethods`) — Public, unauthenticated endpoint returning which payment methods (`card`, `bank_transfer`) are configured for the deployment.
-- **`GET /payments`** (`listPayments`) — Staff-listed, paged, filterable listing of all payments. Requires `display:Payment`. Supports filters for sort, `displayStatus`, method, provider, date ranges, amount range, order ID, dispute status, reference, and `transferReference` (RF creditor reference, space/case-tolerant).
-- **`POST /payments`** (`createPayment`) — Creates (or refreshes) a payment intent for the caller's `pending` order. Returns **201** for a new intent, **200** for a refresh. Requires `checkout:Cart`. Rate-limited (429) sharing a per-account budget with `POST /payments/{id}/sync`.
-- **`POST /payments/search`** (`searchPayments`) — DTO-friendly alias (`x-alias-of: listPayments`) of the staff listing with filters in a JSON body.
-- **Shared references** — Pulls parameters (`PageParam`, `PageSizeParam`), schemas (`NonNegativeDecimalAmount`, `Id`), responses (`Unauthorized`, `Forbidden`, `NotFound`, `Conflict`, `ValidationError`, `TooManyRequests`), and headers (`Location`) from `shared/contracts/openapi.root.yaml`.
+- **`tags`**: a single `Payments` tag (`x-family: Buying`) that all of the module's operations file themselves under.
+- **`x-error-codes`** (top level): the module's error catalogue, each entry with an HTTP status and description.
+  - Mostly 409s: `PAYMENT_DECLINED`, `PAYMENT_IN_FLIGHT`, `PAYMENT_NOT_CONFIRMABLE`, `PAYMENT_NOT_REFUNDABLE`, `PAYMENT_DISPUTED`, `PAYMENT_ORDER_NOT_PAYABLE`, `PAYMENT_REFUND_NOT_OPEN`, `PAYMENT_REFUND_IN_FLIGHT`, `PAYMENT_CARD_NOT_AVAILABLE`.
+  - `PAYMENT_REFUND_EXCEEDS_REMAINING` is a 422.
+- **`x-personal-data.payments`**: an array of `ExportPayment` that becomes this module's section of `POST /account/export` (`AccountExportResponse`). Removing the module removes the section.
+- **`GET /payments/methods`** (`listPaymentMethods`): public (`security: []`), cached `max-age: 60`. Lists the methods the deployment offers. `card` appears only if a card provider is configured, and `bank_transfer` only once its beneficiary and IBAN are configured. The list can be empty, which turns checkout off.
+- **`GET /payments`** (`listPayments`): staff list, newest first, requiring the `display:Payment` scope and cached `private-no-cache`.
+  - Paging and sorting use the shared `PageParam`/`PageSizeParam` and `PaymentSort`.
+  - Filters are `displayStatus`, `method`, `provider`, `createdFrom`/`createdTo`, `receivedFrom`/`receivedTo` (offline payments), `amountMin`/`amountMax`, `orderId`, `disputed`, `reference` and `transferReference` (an RF creditor reference, normalised for spaces and case).
+  - Each row carries the order's `orderNumber` and `email`, plus per-caller `actions`.
+  - Provider references and a failed refund's `failureReason` are exposed here only.
+- **`POST /payments`** (`createPayment`): requires the `checkout:Cart` scope. Freezes one of the caller's `pending` orders into a payment intent, taking the amount from the order's lines.
+  - It returns 201 for a new intent and 200 when it refreshes the existing one (one payment per order).
+  - It documents 409s (`PAYMENT_CARD_NOT_AVAILABLE`, `PAYMENT_IN_FLIGHT`, `PAYMENT_ORDER_NOT_PAYABLE`), `REAUTH_REQUIRED` on 401, and a 429 from a shared hourly budget.
+- **`POST /payments/search`** (`searchPayments`): JSON-body variant of `GET /payments` (`x-alias-of: listPayments`), using `SearchPaymentsRequest`.
+- **Referenced schemas** (defined under `#/components/schemas`): `PaymentMethodsResponse`, `PaymentsResponse`, `Payment`, `CreatePaymentRequest`, `SearchPaymentsRequest`, `PaymentSort`, `PaymentDisplayStatus`, `PaymentMethodKind`, `ExportPayment`.
 
 ## Relationships
-
-- **`src/modules/payments/authorization.yaml`** — Sibling contract file in the same module; handles the confirmation, sync, and refund operations that follow the intent created here. This file's `Payment` schema and error codes are consumed by that file's endpoints.
-- **`src/modules/payments/module.yaml`** — Module registration file; lists this `openapi.yaml` (and `authorization.yaml`) as the contract documents the bundler assembles into the combined API spec. Removing the module removes both contracts and the `x-personal-data` export section.
+- **`authorization.yaml`**: the operations here use `bearerAuth` scopes such as `display:Payment` and `checkout:Cart`. These are presumably defined there, but the visible content does not show it.
+- **`asyncapi.webhooks.yaml`**: no direct reference appears in the visible portion of this file.
 
 ## Notes
-
-- The file is truncated in the source provided; additional paths (likely confirmation, sync, refund endpoints) are expected further down but are defined or referenced in `authorization.yaml`.
-- `POST /payments` is idempotent-by-design: re-calling returns 200 with the existing intent rather than requiring an `Idempotency-Key`. The 201 vs 200 distinction is the only signal for "created" vs "refreshed".
-- `GET /payments` carries `x-cache: private-no-cache`; staff responses must not be cached by intermediaries.
-- The `transferReference` filter matches RF creditor references case- and space-insensitively but returns an empty list (not an error) for invalid codes — clients should not surface a "close match" hint.
-- `x-alias-of` on `searchPayments` is a custom annotation indicating it is functionally identical to `listPayments`; implementations should treat them as the same operation.
+- `POST /payments` deliberately needs no `Idempotency-Key`. A retry refreshes the same intent, and a stored replay would hand back the first answer's `clientSecret`.
+- `POST /payments` and `POST /payments/{id}/sync` share a single hourly rate-limit budget per account (`paymentIntentLimiter`).
+- Staff list rows return `actions.pay` as false. Paying is the payer's own step, and payers read their payments through `GET /orders/{id}/payments`.
+- A `transferReference` that is not a valid RF code returns an empty page rather than an error.
+- Operation-level `x-error-codes` lists which of the module's codes each operation can return.
+- Common parameters, schemas (`Id`, `NonNegativeDecimalAmount`), the `Location` header and the standard error responses are `$ref`'d from the shared `openapi.root.yaml` under `shared/contracts`.

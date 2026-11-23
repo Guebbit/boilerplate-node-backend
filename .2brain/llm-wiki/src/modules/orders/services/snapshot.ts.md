@@ -1,40 +1,35 @@
 ---
 source: src/modules/orders/services/snapshot.ts
-sha256: a68e851aba864283c46e289670e07b0f3ffbb4bc1178fcd8c0b6943b05d400e3
-generated_at: 2026-11-08T07:01:08.794403+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 078ca4e6d4bf5eccf3f1c4016c82813f296a325c9c346e22fb06397612f2007a
+context_sha256: 3f5fa2330c8d320c49793357adc58e92345f70585becfcc197764260993c9bcf
+generated_at: 2026-11-22T06:23:56.256987+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/snapshot.ts
 
 ## Purpose
-
-Resolves catalogue products into the frozen order-line snapshots that an order persists. It lives in the `services/` tier (not `domain/`) on purpose: it reaches into `@infrastructure/i18n` and `@kernel/translation`, which the domain tier must not touch. Every order-writing path (admin create, checkout, admin line edit) funnels through `freezeOrderLines` so that locale stamping, tax-rate resolution, and preorder detection happen in one place.
+Turns catalogue products into the frozen order line snapshots stored on an order. It lives in `services/` rather than `../domain` because it deliberately depends on infrastructure (`@infrastructure/i18n`) and `@kernel/translation`, which the domain tier must not touch.
 
 ## Key elements
-
-- **`resolveSnapshotProducts(locale, products)`** — Takes plain (non-hydrated) product objects and overlays resolved `title`/`description` translations for the given locale. Uses `runWithLocale` to bind the locale explicitly rather than reading ambient request context, because the buyer's locale can differ from the request's. Returns the same array with translated fields merged in.
-- **`freezeOrderLines(locale, products, quantities)`** — Calls `resolveSnapshotProducts`, then maps each product into an `OrderDocumentItem`. During the map it:
-  - Strips `imageUrl`, `thumbnailUrl`, and `taxClass` (no schema slot; `taxRate` is resolved separately).
-  - Keeps `rateType` (no resolved form; needed downstream by invoices).
-  - Resolves `taxRate` via `resolveTaxRate(taxClass)`.
-  - Conditionally adds a `preorder` field when `isPreorder(releaseDate, now)` is true.
-  - Stamps `locale` and pairs `quantity` by index.
+- **`resolveSnapshotProducts(locale, products)`**: Generic over `{ _id: Types.ObjectId }`. Binds `locale` with `runWithLocale`, calls `resolveTranslations('product', ids, localeCandidatesFor(locale))`, and overlays the resolved fields (`title`/`description`) onto each product. Products with no translation row come back unchanged.
+- **`freezeOrderLines(locale, products, quantities)`**: Calls `resolveSnapshotProducts`, then builds one `OrderDocumentItem` per product (`{ product, quantity, locale }`). Per line it:
+  - drops `imageUrl` and `thumbnailUrl`;
+  - removes `taxClass` and replaces it with `taxRate` from `resolveTaxRate(taxClass)`;
+  - leaves `rateType` untouched in the snapshot;
+  - adds `preorder` only when `isPreorder({ releaseDate }, new Date())` is truthy.
 
 ## Relationships
-
-- **`@infrastructure/i18n`** (`context.ts`, `catalog.ts`, `index.ts`) — Imports `runWithLocale` and `localeCandidatesFor` to bind locale and build fallback candidate list.
-- **`src/kernel/translation.ts`** — Imports `resolveTranslations` to fetch translated fields for a set of product IDs.
-- **`@modules/products`** (`index.ts`, `model.ts`, `domain/preorder.ts`, `tax.ts`) — Imports `ProductSnapshot` type, `isPreorder`, and `resolveTaxRate`.
-- **`src/modules/orders/model.ts`** — Imports `OrderDocumentItem` as the return shape of `freezeOrderLines`.
-- **`src/modules/orders/services/index.ts`** — Barrel re-exports both functions.
-- **`src/modules/orders/services/place.ts`** — Consumer of `freezeOrderLines` during order creation.
-- **`src/modules/orders/tests/unit/snapshot.test.ts`** — Unit tests for both exported functions.
+- Uses `runWithLocale` and `localeCandidatesFor` from `src/infrastructure/i18n` (exported through `src/infrastructure/i18n/index.ts`; `catalog.ts` and `context.ts` sit behind it).
+- Uses `resolveTranslations` from `src/kernel/translation.ts` for the per-locale lookup.
+- Uses `isPreorder`, `resolveTaxRate` and `ProductSnapshot` from the `src/modules/products/index.ts` public index (the preorder, tax and product model logic in `src/modules/products/domain/preorder.ts`, `src/modules/products/tax.ts` and `src/modules/products/model.ts` live behind it).
+- Returns `OrderDocumentItem` from `src/modules/orders/model.ts`.
+- Exposed through `src/modules/orders/services/index.ts`. `freezeOrderLines` is the shared builder for every order-line writer (admin create, checkout, admin line edit), and `src/modules/orders/services/place.ts` is its likely caller.
+- Covered by `src/modules/orders/tests/unit/snapshot.test.ts`.
 
 ## Notes
-
-- **Plain objects only.** Callers must pass `.toObject()` output, never hydrated Mongoose documents or `.toJSON()` results. `.toJSON()` renames `_id` → `id`, which would cause Mongoose to mint a fresh `_id` when the object is written into the embedded `items.product` path, silently breaking `orderRepository.search`'s `productId` filter.
-- **Locale is explicit, not ambient.** `runWithLocale` is used so out-of-band or async work cannot accidentally pick up a stale ambient locale from the request context.
-- **Images are never frozen.** `imageUrl`/`thumbnailUrl` are destructured out before embedding; this is a deliberate schema decision, not an oversight.
-- **`taxClass` is dropped, `rateType` is kept.** The resolved *rate* is what the order stores; `taxClass` is catalogue-side. `rateType` has no resolved counterpart and is needed later to distinguish zero-rated from exempt lines on invoices.
-- **`products` and `quantities` are positionally paired.** They must be the same length and order; there is no key-based join.
+- `products` must be plain objects, not hydrated Mongoose documents. Call `.toObject()` on documents, never `.toJSON()`. `toJSON()` turns `_id` into a string `id`, so Mongoose mints a fresh `_id` on the embedded path. That silently breaks `orderRepository.search`'s `productId` filter on `items.product._id`.
+- `locale` is bound explicitly instead of read from ambient context. The buyer's locale can differ from the locale the current request negotiated.
+- `quantities` must match `products` in order and length. The code does not check this.
+- `freezeOrderLines` does not check product visibility or sale status. A comment says checkout has already refused hidden or off-sale products, so only the release date decides `preorder`.
+- Stamping `locale` once on every line makes "an order's lines share one locale" hold by construction.

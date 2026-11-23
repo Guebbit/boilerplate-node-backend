@@ -1,32 +1,36 @@
 ---
 source: src/modules/account/tests/unit/device-cookie.test.ts
-sha256: 8903ffef28ca7b02d9450d84883602ba44ce5b873ee0fe389252c2235acbeb2c
-generated_at: 2026-11-08T04:46:20.682562+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8903ffef28ca7b02d9450d84883602ba44ce5b873ee0fe389252c2235acbeb2c
+context_sha256: 74f5924ca79886ef5e13f24a4084e03fc39a7cc011be0ccb35f0680d5cf2e7e3
+generated_at: 2026-11-22T04:04:46.290742+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/device-cookie.test.ts
 
 ## Purpose
-
-Unit tests for the familiar-device cookie module. They verify what a device token vouches for, how multiple accounts share a single cookie (ordering, deduplication, capacity), and that no verification or cookie-setting occurs without the shared secret.
+Unit tests for the familiar-device cookie rules in `src/modules/account/session/device-cookie.ts`. They cover what a token vouches for, how several accounts share one cookie, and that nothing verifies (or gets set) without the secret.
 
 ## Key elements
-
-- **`requestFor(email?, cookie?)`** — builds a stub `Request` with an optional `DEVICE_COOKIE` value in `cookies` and an optional `email` in `body`.
-- **`remembered(email, held?)`** — calls `rememberDevice` against a stub `Response`, then returns the cookie value that was set (i.e., the second argument to `response.cookie`).
-- **`beforeEach`** — sets `NODE_DEVICE_COOKIE_SECRET` to a fixed test value via `setEnvironment` so every test starts with a valid secret.
-- **`describe('a device cookie')`** — the single suite containing ten `it` blocks covering: case-insensitive email matching, negative verification, httpOnly + maxAge + opaque value, 5-account LRU eviction, idempotent repeat login, forged-token rejection vs. `presentsFailingDeviceCookie`, absent-cookie ≠ failing, no-secret behavior (both read and write paths), unparsed `request.cookies`, and missing `email` in the request body.
+- `beforeEach` sets `NODE_DEVICE_COOKIE_SECRET` to a test value through `setEnvironment`.
+- `requestFor(email, cookie?)` builds a stub Express `Request`. It carries an optional device cookie under `DEVICE_COOKIE` and an optional `body.email`.
+- `remembered(email, held?)` calls `rememberDevice` against a stub `Response` whose `cookie` is a `jest.fn()`. It returns the cookie value that was set, optionally starting from an already-held cookie.
+- The `describe('a device cookie')` cases assert that:
+  - A cookie vouches only for the account it was set for, and the email case is ignored.
+  - The cookie is `httpOnly` with a positive `maxAge`, uses the `DEVICE_COOKIE` name, and its value does not contain the account name in the clear.
+  - Up to five accounts are kept, newest first, and the sixth pushes out the first.
+  - A repeat login for the same account yields an identical cookie value.
+  - A forged value is refused by `holdsDeviceCookie` and counted as failing by `presentsFailingDeviceCookie`.
+  - No cookie at all is not a failing cookie.
+  - With the secret unset, nothing verifies and `rememberDevice` never sets a cookie on the response.
+  - A request with no parsed `cookies` is treated as carrying none and does not throw.
+  - A request that names no account is not vouched for.
 
 ## Relationships
-
-- **`src/modules/account/session/device-cookie.ts`** — the module under test. This file imports `DEVICE_COOKIE`, `holdsDeviceCookie`, `presentsFailingDeviceCookie`, and `rememberDevice` from it.
-- **`tests/support/environment.ts`** — provides `setEnvironment`, used in `beforeEach` and in the "no secret" test to control `NODE_DEVICE_COOKIE_SECRET`.
-- **`tests/support/stub.ts`** — provides `asStub`, used to construct mock `Request` and `Response` objects (express types) without a real HTTP server.
+- Exercises `DEVICE_COOKIE`, `holdsDeviceCookie`, `presentsFailingDeviceCookie` and `rememberDevice` from `src/modules/account/session/device-cookie.ts`.
+- Uses `setEnvironment` from `tests/support/environment.ts`, imported as `@tests/environment`, to set and unset the secret.
+- Uses `asStub` from `tests/support/stub.ts`, imported as `@tests/stub`, to build partial `Request` and `Response` objects.
 
 ## Notes
-
-- `presentsFailingDeviceCookie` is true only when a cookie is *present* but invalid; an entirely absent cookie returns false. This distinction is explicitly tested.
-- The "no secret" test asserts both directions: `holdsDeviceCookie` returns false **and** `rememberDevice` never calls `response.cookie`.
-- One test passes a request whose `cookies` property is `undefined` (never parsed by a middleware) to confirm the production code handles that without throwing.
-- The cookie value is asserted to be opaque (`not.toContain('ada')`)—accounts are never readable in plaintext from the cookie.
+- The tests are black-box. They read cookie values only from the mocked response `cookie` function's recorded call, never decoding the token.
+- Passing `NODE_DEVICE_COOKIE_SECRET: undefined` to `setEnvironment` simulates a missing secret.

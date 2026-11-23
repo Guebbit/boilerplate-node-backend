@@ -1,33 +1,39 @@
 ---
 source: docker/observability/alertmanager-routes-test.sh
-sha256: ed49298eef9f7fd0d765b1b62327c50e84a8e17e55e1ae0fb92aaebc2e62a33b
-generated_at: 2026-11-08T02:21:18.083239+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 676dcbe193b31e304cf78eabb02b4546d18b119371ece7818a848c8d22f88693
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T01:31:27.988180+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/observability/alertmanager-routes-test.sh
 
 ## Purpose
-
-End-to-end test script that verifies Alertmanager alert routing, inhibition rules, and config-rendering correctness. It exercises every combination of notification-channel environment knobs (email, webhook, heartbeat), confirms which receiver each alert lands on, and—where `amtool` has no static test—spins up a real Alertmanager daemon to verify inhibit rules actually suppress the expected alerts. Designed to run inside the `prom/alertmanager` image, which ships `amtool`, `alertmanager`, and `busybox`.
+A POSIX shell test script that verifies Alertmanager alert routing and inhibit rules. It renders the config template for several combinations of environment "knobs", validates each result with `amtool check-config`, and asserts which receiver each alert lands on with `amtool config routes test`. It then starts a real `alertmanager` daemon to check which alerts are inhibited. It is meant to run inside the `prom/alertmanager` image, which provides `amtool`, `alertmanager` and busybox. The header comment gives the invocation: mount the `docker/observability` directory read-only into the container and run this script with `sh` as the entrypoint (`prom/alertmanager:v0.34.1`).
 
 ## Key elements
-
-- **`render <ENV=value>…`** — Invokes `alertmanager-render.sh` to produce a concrete `alertmanager.yml` from the YAML template and the given environment, then validates the result with `amtool check-config`. Fails immediately if validation fails.
-- **`expect <receiver> <label=value>…`** — Calls `amtool config routes test --verify.receivers` against the rendered config and asserts the alert routes to the expected receiver. Prints a `FAIL` message and exits 1 on mismatch.
-- **Knob-combination scenarios** — Four rendering passes (all channels, email-only, webhook-only, all-empty) each followed by a battery of `expect` calls covering `Watchdog`, `AlertmanagerNotificationsFailing`, `ApiDown`, and `HighErrorRate`.
-- **Special-character survival check** — Renders with an email address containing `/` and `&` and a display name with `'`, then `grep`s the output YAML to confirm the values were not mangled.
-- **Inhibit-rule integration test** — Starts a real `alertmanager` daemon on `127.0.0.1:19093`, waits for readiness via `wget`, injects a set of critical/warning alerts with `amtool alert add`, sleeps 3 s, then queries `amtool alert query --inhibited` and `amtool alert query` to assert the correct alerts are suppressed (e.g. `HighErrorRate`, `QueueJobsParked`) while `AuditSinkFailing` must remain active.
-- **`trap … EXIT`** — Ensures the backgrounded daemon is killed on any exit path.
+- `render <NAME=value>...`: runs the render script with a clean environment (`env -i`, only `PATH` kept) and the given variables. It reads the config template and writes a rendered config plus a `secrets` directory under a temp work directory, then runs `amtool check-config` on the result.
+- `expect <receiver> <label=value>...`: asserts via `amtool config routes test --verify.receivers` that an alert with those labels routes to the receiver. Otherwise it prints `FAIL` and exits 1.
+- Routing scenarios:
+  - **All knobs set**: `heartbeat` for `Watchdog`. `AlertmanagerNotificationsFailing` goes to the opposite channel (`integration=email` goes to `webhook`, `integration=webhook` goes to `email`). `ApiDown` critical goes to `email-and-webhook`, and `HighErrorRate` warning goes to `email`.
+  - **Email only**, **webhook only** and **every knob empty**: unavailable channels fall back to the `null` receiver.
+- Secret-from-file scenarios:
+  - `NODE_SMTP_PASS_FILE`, `ALERT_WEBHOOK_URL_FILE` and `ALERT_HEARTBEAT_TOKEN_FILE` are read into files under the work directory's `secrets` folder.
+  - A non-empty password file turns on `auth_password_file`. An empty password file leaves SMTP auth off.
+  - An empty webhook file leaves the webhook route off.
+  - A missing named file fails the render, names the file in stderr, and is not replaced by the plain variable.
+  - Only one trailing newline is stripped from a secret.
+- Special characters: values containing `/`, `&` and `'` must survive rendering.
+- Inhibit-rules test: starts `alertmanager` on `127.0.0.1:19093` in the background, polls `/-/ready` for up to 10 seconds, and adds alerts with `amtool alert add`. It then checks `alert query --inhibited` and `alert query`.
+  - `HighErrorRate`, `HighP95Latency`, `UnhandledRejections`, `QueueJobsParked`, `WebhookRetriesStalled` and `ApiRestarting` must be inhibited, given `DependencyUnavailable` (database and queue) and `ApiDown`.
+  - `AuditSinkFailing` must stay active.
 
 ## Relationships
-
-The dependency graph records no neighbors. At runtime the script depends on two local files it loads explicitly: `alertmanager-render.sh` (config renderer) and `alertmanager.config.template.yaml` (the Jinja-like template). Both live in the same `docker/observability/` directory and are passed as positional arguments to the renderer.
+No graph neighbors are listed, so no interactions with other indexed files are recorded. The script invokes the render script and config template that sit beside it, but these are not graph neighbors.
 
 ## Notes
-
-- Must run **inside** the `prom/alertmanager` image (`docker run --entrypoint sh …`); it relies on `amtool`, `alertmanager`, `wget` (busybox), and `sh` being preinstalled.
-- Uses POSIX `sh` (not bash) and `set -eu`; no `set -o pipefail` equivalent exists in `sh`, so pipeline failures are handled via explicit `|| { …; exit 1; }` guards.
-- The inhibit test is timing-sensitive: it polls readiness for up to 10 s and then sleeps a fixed 3 s before querying. In a heavily loaded CI container the 3 s window may be insufficient for Alertmanager to evaluate inhibition.
-- `amtool config routes test` (static) does **not** evaluate inhibit rules; that is why the live-daemon section exists.
-- The script is intentionally idempotent and stateless per invocation: it `mktemp -d`s a scratch dir and cleans up via the EXIT trap.
+- It runs with `set -eu` and creates a temp dir with `mktemp -d`. The daemon is stopped by an `EXIT` trap, but the temp dir is not removed.
+- `amtool` has no static test for inhibit rules, so the script uses a live daemon. It waits a fixed `sleep 3` for the alerts to settle.
+- The daemon is started with `--cluster.listen-address=` (empty), which disables clustering.
+- `AuditSinkFailing` is intentionally never muted, because a gap in the audit trail is real whatever the cause.
+- On success it prints `alertmanager routing: ok`.

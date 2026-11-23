@@ -1,43 +1,46 @@
 ---
 source: src/modules/payments/asyncapi.webhooks.yaml
-sha256: 76e66b014b4c21625f5ca7e7742c2ab162245818ad08b65805c5d2e3f623e588
-generated_at: 2026-11-14T20:58:47.029857+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T06:40:10.478373+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/asyncapi.webhooks.yaml
 
 ## Purpose
-
-Defines the AsyncAPI contract for the payments module's outbound webhook events (`payment.*`). It is a **fragment**, not a standalone document: it depends on `#/servers/subscriberEndpoint` and `#/components/schemas/WebhookHeaders` declared in the root `webhooks/asyncapi.yaml`, and is merged into the final contract only while the payments module is registered.
+AsyncAPI fragment declaring the payments module's outbound webhook events (`payment.*`). It is not a standalone document: it references `#/servers/subscriberEndpoint` and `#/components/schemas/WebhookHeaders`, which are declared in `src/modules/webhooks/asyncapi.yaml`. The bundler (`scripts/contracts/asyncapi-section-fragments.ts`) merges it into the `webhooks` section only while the payments module exists, and `GET /webhooks/events` lists these events only while the module is registered. Each event uses the Standard Webhooks envelope `{ type, timestamp, data }`. The module's `publicEvents` (`module.ts`) is what actually fires them.
 
 ## Key elements
-
-- **`channels`** — Seven event channels, each bound to `subscriberEndpoint` and carrying a single message:
-  - `payment.succeeded` — a payment settled.
-  - `payment.failed` — a payment attempt was declined.
-  - `payment.refunded` — a refund settled (full or partial).
-  - `payment.refund_failed` — the provider refused/failed a refund.
-  - `payment.refund_reversed` — the provider clawed back a previously settled refund.
-  - `payment.dispute_opened` — the buyer's bank opened a chargeback.
-  - `payment.dispute_updated` — a known dispute's status changed.
-- **`operations`** — One `send` operation per channel; each maps 1:1 to a domain event in `payments/events.ts` (or `payments/services/refunds.ts`).
-- **`components.messages`** — Seven message objects (e.g. `PaymentSucceededEvent`), each with `WebhookHeaders` and a typed envelope payload.
-- **`components.schemas`** — Payload schemas:
-  - `PaymentEventPayload` — base `{ paymentId, orderId }`.
-  - `PaymentRefundedPayload` — adds `refundId`, `amount`, `currency`.
-  - `PaymentRefundReversedPayload` — adds `failureReason` (cross-refs `./openapi.yaml#/components/schemas/RefundFailureReason`).
-  - `PaymentRefundFailedPayload` — adds `refund` details (truncated in listing).
-  - (Dispute and other payload schemas follow the same pattern.)
+- **Channels** (all with `x-read-rule: display:Payment` and the `subscriberEndpoint` server):
+  - `payment.succeeded`: a payment settled.
+  - `payment.failed`: an attempt was declined.
+  - `payment.refunded`: a full or partial refund settled.
+  - `payment.refund_failed`: the provider refused a refund or reported one failed.
+  - `payment.refund_reversed`: the provider took back a settled refund.
+  - `payment.dispute_opened`: the buyer's bank disputed a card payment.
+  - `payment.dispute_updated`: a dispute changed (evidence sent, decided, reopened).
+- **Operations** (all `action: send`): `webhookPaymentSucceeded`, `webhookPaymentFailed`, `webhookPaymentRefunded`, `webhookPaymentRefundFailed`, `webhookPaymentRefundReversed`, `webhookPaymentDisputeOpened`, `webhookPaymentDisputeUpdated`. Each is described as one-to-one with the same-named domain event (`src/modules/payments/events.ts`).
+- **Messages** (`components.messages`): one `Payment…Event` per channel, using `WebhookHeaders` as headers and a `Payment…Envelope` schema as payload.
+- **Schemas** (`components.schemas`), as far as visible:
+  - `PaymentEventPayload`: `paymentId` and `orderId`.
+  - `PaymentRefundedPayload`: adds `refundId`, `amount`, `currency`.
+  - `PaymentRefundReversedPayload`: the same, plus `failureReason`.
+  - `PaymentRefundFailedPayload`: starts with `paymentId`, `orderId` and `refund`.
+  - All use `additionalProperties: false`.
 
 ## Relationships
-
-- **`src/modules/orders/asyncapi.webhooks.yaml`** — Sibling fragment: both reference the same `subscriberEndpoint` and `WebhookHeaders` components from the root `webhooks/asyncapi.yaml` and are merged side-by-side by the bundler into the `webhooks` section. The `orderId` field present in every payment payload is the cross-module join key to the orders domain, allowing a subscriber to correlate `payment.*` and `order.*` events.
+- `src/modules/payments/openapi.yaml`: `failureReason` in `PaymentRefundReversedPayload` refs `./openapi.yaml#/components/schemas/RefundFailureReason`, which resolves to this neighbor. The bundler copies the schema in, so the REST and event contracts share one list of codes.
+- `src/modules/payments/authorization.yaml`: the `x-read-rule: display:Payment` values on the channels name a read rule. This page does not show how that file defines it.
+- `src/modules/returns/asyncapi.webhooks.yaml`: a sibling fragment for another module that follows the same fragment pattern. No direct reference is visible.
+- `src/modules/shop-tasks/openapi.notifications.yaml`: no direct interaction is visible in this file.
 
 ## Notes
-
-- **Fragment, not document.** The file is invalid AsyncAPI on its own; it only resolves after the bundler (`scripts/contracts/asyncapi-section-fragments.ts`) injects the shared `servers` and `WebhookHeaders` from `webhooks/asyncapi.yaml`. Removing the payments module removes its events from the merged contract and from `GET /webhooks/events`.
-- **Cross-file schema ref.** `PaymentRefundReversedPayload.failureReason` uses a relative `$ref` into `./openapi.yaml` (`RefundFailureReason`). The bundler copies that schema in, so the REST and event contracts share a single enum.
-- **`x-read-rule: display:Payment`** on every channel is a convention for the event-listing UI to group events under the "Payment" read rule.
-- **Firing semantics live in the operation descriptions**, not in the schema: e.g. `payment.refund_failed` fires once per *new* refusal (not per retry), and `payment.dispute_updated` drops stale/duplicate reports. These behavioral notes are the contract for subscribers.
-- **Standard Webhooks envelope.** Every payload is wrapped in `{ type, timestamp, data }` by the module's `publicEvents` (`module.ts`); the schemas here describe only the `data` portion.
+- Deleting the payments module removes these events from the contract.
+- `payment.failed` can fire more than once per order, because a payment is retryable with another method.
+- `payment.refunded` fires once per refund (by `refundId`).
+  - Sources: an operator request, a cancel, the retry sweep, or a refund imported from the provider's dashboard.
+  - It does not fire while a hand-paid refund waits for operator confirmation.
+  - It may fire again for the same `refundId` after a `payment.refund_reversed`, once an operator marks the refund returned.
+- `payment.refund_failed` fires once per new refusal (the first, or a changed reason), not on every retry. `final` says whether retrying has ended.
+- `payment.refund_reversed`: the refund is owed again by another way. The credit note issued when it settled stays.
+- `payment.dispute_opened` fires once per dispute. No refund or credit note follows, and the shop answers in the provider's dashboard before `evidenceDueBy`.
+- `payment.dispute_updated` fires for each newer report of a known dispute. Older or repeated reports are dropped.

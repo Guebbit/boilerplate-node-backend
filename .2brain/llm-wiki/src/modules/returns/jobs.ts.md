@@ -1,28 +1,25 @@
 ---
 source: src/modules/returns/jobs.ts
-sha256: b2062f22beedb77518ddd315b0c8ecb2cd7716d5474dbaeb0219c9936d84d390
-generated_at: 2026-11-08T07:59:43.493093+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 667504586191f7a1dd1906372d9aeecf882aa01817e16a366cd87223f8d91d3d
+context_sha256: 5748452f65f752d834581aae3705987a221292178a66e543e5b7b312d27cdd76
+generated_at: 2026-11-22T07:25:27.228714+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/jobs.ts
 
 ## Purpose
-
-Declares the scheduled jobs owned by the `returns` module. Currently exposes a single job — the free-text scrub — as a `JobDeclaration` array that the runtime scheduler can pick up.
+Declares the scheduled jobs owned by the `returns` module. Currently it contains a single job: the free-text scrub, which removes or scrubs free-text data on returns. It exists so the module can hand its job declarations to the kernel's job registry.
 
 ## Key elements
-
-- **`returnsJobs`** (export, `readonly JobDeclaration[]`) — The module's job list. Contains one entry built by spreading generated metadata (`returnsJobData.reapReturns`) and binding its `run` handler to `scrubReturnText()`.
+- `returnsJobs` (exported, `readonly JobDeclaration[]`): the list of jobs `returns` owns. It has one entry, which spreads `returnsJobData.reapReturns` (generated job metadata) and sets `run` to call `scrubReturnText()`.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** — Supplies the `JobDeclaration` type that shapes each job entry (name, schedule, `run` signature, etc.).
-- **`src/modules/returns/module.ts`** — Consumes `returnsJobs` to register the module's jobs with the scheduler.
-- **`src/modules/returns/services/retention.ts`** — Provides `scrubReturnText()`, the function the job actually invokes when it fires.
+- `src/kernel/registry.ts`: provides the `JobDeclaration` type (type-only import) that each entry conforms to.
+- `src/modules/returns/services/retention.ts`: provides `scrubReturnText`, which the job's `run` callback invokes.
+- `src/modules/returns/module.ts`: a graph neighbor of this file. The file itself does not show how the two interact, but `returnsJobs` is presumably consumed there.
 
 ## Notes
-
-- Job metadata (schedule, display name, etc.) is sourced from `./jobs.generated`, a machine-generated file. Edit the generator or its config, not this file, to change scheduling.
-- The generated key is `reapReturns`, which is slightly at odds with the "free-text scrub" description; the name is historical, the behavior is the scrub.
-- The array is typed `readonly`; do not attempt to mutate it at runtime.
+- The job's data key is `reapReturns`, but the job runs `scrubReturnText`. The scheduling and metadata come from generated data, so edit the source of the generated job data rather than this file to change them.
+- `run` takes no arguments and returns whatever `scrubReturnText()` returns.
+- Scheduling details are referenced by the module comment under the "scheduled jobs" section of the ops reference docs.

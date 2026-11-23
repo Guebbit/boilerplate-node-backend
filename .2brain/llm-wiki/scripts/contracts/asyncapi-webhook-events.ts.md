@@ -1,31 +1,26 @@
 ---
 source: scripts/contracts/asyncapi-webhook-events.ts
-sha256: 182a9b062ac795844857f673cef7500932bc205ff8f55f90e60fce2ab5bfb26b
-generated_at: 2026-11-08T02:39:01.000272+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T01:53:45.935272+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/asyncapi-webhook-events.ts
 
 ## Purpose
-
-Discovers and indexes the per-module `asyncapi.webhooks.yaml` fragments so that the AsyncAPI bundler can merge them into the `webhooks` section of the spec. Enforces the same "contract leaves with the module" principle as the OpenAPI side: a deployment that omits a given module automatically omits that module's webhook channels.
+Discovers the webhook-event contract fragments that modules own (one `asyncapi.webhooks.yaml` per module that fires a public webhook) and exposes them to the contract bundler. Fragments merge only into the `webhooks` section, so a deployment without `webhooks` carries none of them, and one without `orders` carries no `order.*` channel. This keeps a module's contract leaving with the module, mirroring the OpenAPI side.
 
 ## Key elements
-
-- **`WEBHOOKS_SECTION`** — constant `'webhooks'`; the AsyncAPI top-level key these fragments merge into.
-- **`webhookEventFragments(): string[]`** — delegates to `sectionFragments(WEBHOOKS_SECTION)`; returns absolute file paths of every module's webhook fragment (shop modules first, then alphabetical).
-- **`webhookEventNames(): string[]`** — reads each fragment, extracts the keys under `channels`, and returns them flat-mapped in fragment-then-channel order. Consumed by the REST contract to populate the `eventTypes` enum without duplicating the list.
+- `webhookEventFragments()`: returns the absolute paths of every module's webhook-event fragment, shop modules first, then alphabetical. It delegates to `sectionFragments('webhooks')`.
+- `webhookEventNames()`: returns the name of every webhook event any module ships. It reads each fragment with `yaml`'s `parse` and takes the keys of its `channels` object (an empty list if `channels` is absent). Order is fragment order, then channel order within each fragment. Each event name appears once.
+- `WEBHOOKS_SECTION` (private): the `'webhooks'` section name.
 
 ## Relationships
-
-- **`scripts/contracts/asyncapi-section-fragments.ts`** — provides the generic `sectionFragments(section)` discovery helper that this module calls; the file-level merge logic lives there, not here.
-- **`scripts/contracts/openapi-bundle.ts`** — parallel concern on the OpenAPI side; both follow the same "module-owned fragment" fragmentation strategy (see `docs/api/contract-fragmentation.md`).
-- **`tests/unit/scripts/contracts/asyncapi-webhook-events.test.ts`** — unit tests exercising `webhookEventFragments` and `webhookEventNames`.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — CI mutation-testing harness that exercises this module's logic in a broader pipeline context.
+- `scripts/contracts/asyncapi-section-fragments.ts`: supplies `sectionFragments`, the generic discovery and merge logic. This file only supplies the section name.
+- `scripts/contracts/openapi-bundle.ts`: the REST contract fills the subscription `eventTypes` enum from `webhookEventNames()` rather than keeping a copy. This is inferred from the doc comment, which says the REST contract uses it.
+- `tests/unit/scripts/contracts/asyncapi-webhook-events.test.ts`: unit tests for this module.
+- `tests/unit/scripts/mutation/ci/waves.test.ts`: related to this file through the dependency graph. The file shows no direct interaction.
 
 ## Notes
-
-- Fragment YAML is parsed with the `yaml` package (`parse`), not a YAML-with-custom-tags variant; the code assumes a plain-object shape with an optional top-level `channels` key. If a fragment omits `channels`, it contributes zero event names (the `?? {}` guard).
-- Ordering matters: `webhookEventNames` preserves fragment order (shop modules first, then alphabetical) and, within each fragment, the insertion order of `Object.keys`. Downstream consumers (the REST enum) rely on this stable ordering.
-- This file is deliberately thin; all file-system globbing and merge mechanics are in `asyncapi-section-fragments.ts`. Adding a new module's webhooks only requires dropping an `asyncapi.webhooks.yaml` into that module's directory—no import change here.
+- Fragments are read synchronously with `readFileSync` and parsed with plain `yaml` `parse`, so fragments must not use custom YAML tags.
+- Event names are not de-duplicated across fragments. The "each event name once" guarantee holds only if no two fragments declare the same channel key.
+- Design rationale is referenced in the file's `@see` tag as `docs/build/contract-fragmentation.md#module-owned-webhook-events`; that path is not part of this repository's known files.

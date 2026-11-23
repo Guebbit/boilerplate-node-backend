@@ -1,50 +1,46 @@
 ---
 source: src/infrastructure/adapters/config.ts
-sha256: 6bfee5b4f3944e02ac1b2f020fe389350aca1cacca1ebabec917ec4b08ed063c
-generated_at: 2026-11-08T03:18:10.927129+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:35:37.792041+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/config.ts
 
 ## Purpose
-
-Declares typed, validated configuration slices for every infrastructure adapter (mail, queue, Redis, images, outbound, PDF, exports, anti-abuse). Each slice is a `defineConfig` block that maps environment variables to typed fields with defaults, ranges, and cross-field checks, so a misconfigured value names the adapter that owns it at parse time rather than failing at first use.
+Declares the configuration slices for the infrastructure adapters: mail, RabbitMQ, Redis, images, outbound requests, PDF rendering, the export store and the anti-abuse ladder. Each adapter gets its own slice, so an invalid value names the adapter it belongs to. Cross-field validation (`check`) catches misconfiguration at boot rather than at first use.
 
 ## Key elements
-
-- **`mailConfig`** — Mail transport selector + full SMTP account. `check` enforces that SMTP companions (user, pass, sender) are all set when a host is given, and restricts e2e runs to local sinks.
-- **`supportEmail()`** — Accessor that returns `NODE_SUPPORT_EMAIL` or throws `ConfigError`. The single source of truth for the customer-facing address.
-- **`MailConfig`** — Type alias for the parsed mail slice.
-- **`mailFilesConfig`** — Spool directory and retention hours for attachments.
-- **`queueConfig`** — RabbitMQ connection (URL, host, port, credentials) plus `NODE_QUEUE_MAX_ATTEMPTS` and retry delay shared by all queues.
-- **`redisConfig`** — Redis connection and cache prefix/enabled flags shared by cache and rate-limiter.
-- **`imageConfig`** — Pixel/dimension limits, thumbnail size, public path, quarantine path and retention. Defaults pulled from `sharedDefaults` (generated file).
-- **`outboundConfig`** — CSV of allowed ports for caller-supplied outbound requests; `check` validates each entry is a 1–65535 integer.
-- **`pdfConfig`** — Puppeteer executable path and document-store directory.
-- **`exportStoreConfig`** — Private store path for built personal-data exports.
-- **`ALTCHA_SECRET_MIN_LENGTH`** — Exported constant (16); minimum HMAC secret length for ALTCHA.
-- **`antibotConfig`** — Provider selector (`none`/`altcha`/`turnstile`), email policy + allow/deny lists, and per-provider credentials. `check` requires the matching secret/key when a specific provider is selected.
+- `mailConfig`: slice `mail`. It covers the transport (`NODE_MAIL_TRANSPORT`, default `smtp`), the SMTP account, `NODE_SUPPORT_EMAIL` and the `NODE_E2E_RUN` flag. Its `check` does two things:
+  - It requires `NODE_SMTP_USER`, `NODE_SMTP_PASS` and `NODE_SMTP_SENDER` whenever `NODE_SMTP_HOST` is set.
+  - During an e2e run on the `smtp` transport, it only accepts `localhost`, `127.0.0.1`, `::1` or `mailpit` as the host.
+- `supportEmail()`: returns `NODE_SUPPORT_EMAIL`, or throws `ConfigError` if it is unset.
+- `MailConfig`: type of the parsed mail slice.
+- `mailFilesConfig`: slice `mail-files`. Spool path and retention hours for attachments.
+- `queueConfig`: slice `queue`. RabbitMQ URL/host/port/credentials, an enabled flag, and the shared retry policy (`NODE_QUEUE_MAX_ATTEMPTS`, `NODE_QUEUE_RETRY_DELAY_SECONDS`).
+- `redisConfig`: slice `redis`. Connection settings, cache prefix and a cache-enabled flag. The connection is shared by the cache and the rate limiter.
+- `imageConfig`: slice `images`. Pixel and dimension limits, thumbnail size, public path, and quarantine path and retention. Several defaults come from `sharedDefaults.images`.
+- `outboundConfig`: slice `outbound`. `NODE_OUTBOUND_ALLOWED_PORTS` is a CSV list. `check` reports any entry that is not an integer from 1 to 65535.
+- `pdfConfig`: slice `pdf`. The Chromium executable path (`PUPPETEER_EXECUTABLE_PATH`) and the document store path.
+- `exportStoreConfig`: slice `exportStore`. Path of the private store for personal-data exports.
+- `ALTCHA_SECRET_MIN_LENGTH`: constant `16`.
+- `antibotConfig`: slice `antibot`. Provider selector, email policy (`off`, `disposable` or `mx`), allow/deny lists, and ALTCHA and Turnstile credentials. Its `check` flags the keys that the selected provider is missing.
 
 ## Relationships
-
-- **`src/app/config.ts`** — Probes this file's selectors at boot to surface unknown provider names before the server accepts traffic.
-- **`src/infrastructure/adapters/antibot-providers/index.ts`** — The provider registry imports `antibotConfig` to resolve `NODE_ANTIBOT_PROVIDER`; its resolver rejects names it does not recognise.
-- **`src/infrastructure/adapters/mail-transports.ts`** — Reads `mailConfig` to construct the chosen transport.
-- **`src/infrastructure/adapters/mail-spool.ts`** — Reads `mailFilesConfig` for spool path and retention.
-- **`src/infrastructure/adapters/cache.ts`** — Reads `redisConfig` for connection and cache switches.
-- **`src/infrastructure/adapters/image.ts` / `image-store.ts`** — Read `imageConfig` for processing limits and storage paths.
-- **`src/infrastructure/adapters/document-store.ts`** — Reads `pdfConfig` for the document store path.
-- **`src/infrastructure/adapters/export-store.ts`** — Reads `exportStoreConfig` for the export directory.
-- **`src/infrastructure/adapters/antibot.ts`** — Reads `antibotConfig` to drive the anti-abuse ladder.
-- **`src/infrastructure/adapters/antibot-providers/altcha.ts` / `turnstile.ts`** — Read their respective credential fields from `antibotConfig` and the `ALTCHA_SECRET_MIN_LENGTH` constant.
-- **`src/app/jobs.ts`** — Reads `queueConfig` for RabbitMQ connection and retry policy.
+- Built on `defineConfig`/`ConfigError` and the field helpers from `@infrastructure/config`, and on `sharedDefaults` for image defaults.
+- The sibling adapters read their own slices. The slice-to-adapter mapping below is inferred from the slice contents:
+  - `cache.ts` and the rate limiter use Redis.
+  - `antibot.ts`, `antibot-providers/altcha.ts` and `antibot-providers/turnstile.ts` use the antibot slice.
+  - `mail-spool.ts` uses `mailFilesConfig`.
+  - `image.ts` and `image-store.ts` use `imageConfig`.
+  - `document-store.ts` uses `pdfConfig`.
+  - `export-store.ts` uses `exportStoreConfig`.
+  - `job-drain.ts` relates to the queue slice.
+- The provider registry (`src/infrastructure/adapters/antibot-providers/index.ts`) imports this file. For that reason `NODE_ANTIBOT_PROVIDER` is plain text here, and the registry's resolver rejects unknown names.
+- `src/app/config.ts` probes the provider name at boot. `config-routes.ts`, `jobs.ts` and `static-assets.ts` in `src/app` are also graph neighbors. The file content does not show how they use it.
 
 ## Notes
-
-- `NODE_ANTIBOT_PROVIDER` is intentionally a plain `text` field here, not a `choice`. Valid provider names live in the registry (which imports this file), avoiding a circular dependency. The registry's resolver enforces the closed set.
-- `imageConfig` defaults come from `@infrastructure/config/defaults.generated` (`sharedDefaults`), a build-time generated module — not a hand-edited file.
-- `check` callbacks return arrays of human-readable error strings (or bare field names for `antibotConfig`). A non-empty array means the slice failed validation.
-- Fields marked `sensitive: true` are redacted in any config dump or error output.
-- `NODE_E2E_RUN` + `NODE_MAIL_TRANSPORT=smtp` restricts the SMTP host to `localhost`, `127.0.0.1`, `::1`, or `mailpit` to prevent accidental real mail delivery during test runs.
-- The `path` import is `node:path`; all directory defaults are relative (e.g. `tmp/storage/mail-spool`), not absolute.
+- `NODE_ENV=test` skips the boot check, which is why `supportEmail()` throws explicitly when the address is missing.
+- `NODE_SUPPORT_EMAIL` is declared here because the mailer reads it and infrastructure may not import a module.
+- Secrets such as the SMTP password, RabbitMQ URL and password, Redis URL and password, and the ALTCHA and Turnstile secrets are marked `sensitive`.
+- The antibot `check` requires an ALTCHA secret of at least 16 characters. For Turnstile it requires both the site key and the secret.
+- Default storage paths all live under `tmp/` (`tmp/storage/mail-spool`, `tmp/storage/documents`, `tmp/storage/exports`, `tmp/quarantine`).

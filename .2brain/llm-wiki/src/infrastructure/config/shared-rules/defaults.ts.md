@@ -1,34 +1,30 @@
 ---
 source: src/infrastructure/config/shared-rules/defaults.ts
-sha256: 4c753e098c91f11fbf4a43bdd4953c443d2a5dc9335043e73f4b02ac5afc794b
-generated_at: 2026-11-08T03:26:02.101057+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 44c4c25102ea6e9610d76b1467a1c083b5ec5eb4edc081713d9819bfcdf8d2d8
+context_sha256: f618544957dfde5821e1c9b775cfb10e9fb92d5294521a3fb3c5e28ce31b1ede
+generated_at: 2026-11-22T02:44:44.244676+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/config/shared-rules/defaults.ts
 
 ## Purpose
-
-Declares the Zod schema (`defaultsSchema`) that validates the shape of `shared/rules/defaults.yaml`. That YAML holds the plain-number runtime defaults (cache TTLs, size limits, pagination, image bounds, upload caps) from which both backends start before any environment-variable override is applied.
+Defines the Zod schema for `shared/rules/defaults.yaml`, which holds the plain-number defaults that both backends start from. Each value can be overridden by an environment variable, and the twin backend reads the same numbers.
 
 ## Key elements
-
-- **`positive`** — reusable Zod matcher: `z.int().positive()`. Applied to every "must be ≥ 1" field.
-- **`defaultsSchema`** (exported) — a `z.strictObject` wrapping a single `defaults` key. Inside, five sub-objects each use `z.strictObject` so unknown keys are rejected:
-  - `responseCache` — `devTtlMaxSeconds` (int ≥ 0) and `maxBytes` (positive int).
-  - `idempotency` — `retentionHours` (positive int).
-  - `pagination` — `pageSize` (positive int).
-  - `images` — `maxInputPixels`, `maxDimension`, `thumbnailDimension`, `quarantineRetentionHours` (all positive ints).
-  - `uploads` — `maxBytes` (positive int).
+- `defaultsSchema` (exported): a strict object with a single top-level `defaults` key. Unknown keys are rejected at every level (`z.strictObject`). Sections under `defaults`:
+  - `responseCache`: `devTtlMaxSeconds` (integer, >= 0; the longest TTL in seconds a development run may ask for) and `maxBytes` (positive; the largest body the cache stores).
+  - `idempotency`: `retentionHours` (positive; hours a stored response can be replayed).
+  - `pagination`: `pageSize` (positive; rows per page when the caller gives no limit).
+  - `images`: `maxInputPixels`, `maxDimension`, `thumbnailDimension` and `quarantineRetentionHours`. All are positive. The last is how long a quarantined upload is left alone before it counts as abandoned.
+  - `uploads`: `maxBytes` (positive; the largest upload body accepted, checked before any image decoding).
+- `positive` (module-private): `z.int().positive()`, a positive whole number, shared by almost every field.
 
 ## Relationships
-
-- **`src/infrastructure/config/shared-rules/registry.ts`** — consumes `defaultsSchema` (likely registers it alongside other shared-rule schemas so the loader in `load.ts` can validate `defaults.yaml` at boot).
-- **`tests/unit/infrastructure/config/ops-rules-schemas.test.ts`** — unit-tests the schema, asserting that valid/invalid shapes are accepted or rejected as expected.
+- `registry.ts` is a neighbor in the dependency graph, so it is presumably where this schema is consumed or registered. The file itself only exports the schema.
+- `tests/unit/infrastructure/config/ops-rules-schemas.test.ts` is the unit test that covers the schemas, which presumably includes this one.
 
 ## Notes
-
-- Every object layer is `strictObject`, so adding a new key to the YAML without updating this schema will cause a parse failure. Keep the two in lockstep.
-- `devTtlMaxSeconds` is the **only** field that permits `0` (`z.int().min(0)`); all other numeric fields require ≥ 1 via the shared `positive` matcher.
-- The module doc-comment mandates **relative imports only** (see `load.ts` for the convention); do not introduce bare-specifier imports here.
-- The twin backend reads the same YAML, so any schema change must stay compatible with both consumers.
+- Imports are relative only. The only import here is `zod`, but the module header says to follow the rule explained in `src/infrastructure/config/shared-rules/load.ts`.
+- `devTtlMaxSeconds` is the only field that may be `0`. Every other field must be at least 1.
+- All numbers must be integers (`z.int()`), so fractional values in the YAML fail validation.

@@ -1,39 +1,35 @@
 ---
 source: src/modules/inventory/routes.ts
-sha256: e4664a7a9bcb2db46c9a567423f0386db47bdff38fa38b46cfa18773df31fc5d
-generated_at: 2026-11-14T20:05:51.460059+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 34aebef7faa57243ea521fa034dc0170aa2c2f4ce8c034d59c61769a01368c8f
+context_sha256: 0564d12ad8e8713c51b46e6ffc7d26d0b8f1607af9f4d9121a97bfcd12969c42
+generated_at: 2026-11-22T05:21:02.028503+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/routes.ts
 
 ## Purpose
-Express router that maps all staff-facing inventory HTTP endpoints to their controllers. Customer-facing stock visibility is deliberately absent (it surfaces via `available` on the product resource instead). Authentication accepts both session auth and `sk_…` API keys, reflecting that warehouse/ERP integrations talk to this surface.
+Defines the Express route table for the inventory module. Every route is staff-only; there is deliberately no customer-facing route, since shoppers see stock only via `available` on the product. Routes require different permission keys: `manager` can read levels without moving stock, while `warehouse` moves stock through `create:StockMovement`.
 
 ## Key elements
-- **`router`** (exported `Router`) — the single public export of this module.
-- **Route table** (8 endpoints):
-  - `GET /levels` → `getInventoryLevels` — stock board, scarcest first.
-  - `GET /levels/:productId` → `getInventoryLevel` — single-product counters.
-  - `GET /preorders` → `getPreorderLevels` — allowance, outstanding, paid/unpaid breakdown.
-  - `PATCH /levels/:productId` → `patchInventoryLevel` — edits backorder allowance (absolute value; does not move stock).
-  - `GET /movements` → `getStockMovements` — stock ledger, newest first.
-  - `POST /levels/:productId/receive` → `postReceipt` — supplier delivery.
-  - `POST /levels/:productId/adjust` → `postAdjustment` — signed stocktake correction.
-  - `POST /reservations/sweep` → `postReservationsSweep` — on-demand expiry of stale holds.
-- **Auth chain** (`getAuth` → `isAuthOrCredential`) applied via `router.use`; every subsequent route is behind it.
-- **Permission gates** — `requirePermission('read'|'update'|'create'|'sweep', …)` narrows access per route.
-- **Idempotency gate** — `requireIdempotencyKey` applied to `receive` and `adjust` only.
+- `router` — the exported Express `Router`.
+- `router.use(getAuth, isAuthOrCredential)` — applied to all routes. It accepts either a user session or an `sk_...` API key, so warehouse systems can call the module machine-to-machine.
+- `GET /levels` — the stock board, scarcest first (`read:StockLevel` → `getInventoryLevels`).
+- `GET /levels/:productId` — one product's counters (`read:StockLevel` → `getInventoryLevel`).
+- `GET /preorders` — the preorder board: allowance, outstanding, paid vs unpaid (`read:StockLevel` → `getPreorderLevels`).
+- `GET /movements` — the ledger, newest first (`read:StockLevel` → `getStockMovements`).
+- `PATCH /levels/:productId` — edits the level; today this is only the backorder allowance (`update:StockLevel` → `patchInventoryLevel`). It is absolute, so no idempotency key is needed.
+- `POST /levels/:productId/receive` — a supplier delivery (`create:StockMovement` + required idempotency key `receive-stock` → `postReceipt`).
+- `POST /levels/:productId/adjust` — a signed stocktake correction (`create:StockMovement` + required idempotency key `adjust-stock` → `postAdjustment`).
+- `POST /reservations/sweep` — clears expired reservation holds on demand (`sweep:StockLevel` → `postReservationsSweep`).
 
 ## Relationships
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuthOrCredential`, and `requirePermission`; every route depends on all three.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — provides `requireIdempotencyKey`; invoked on the two stock-movement POST routes.
-- **`src/modules/inventory/controllers/*`** (8 files) — each route delegates its handler to one controller function in this directory.
-- **`src/modules/inventory/module.ts`** — consumer of the exported `router`; registers it into the application's route tree.
-- **`src/modules/inventory/tests/unit/routes.test.ts`** — unit-tests that the route table wires the correct middleware and controller per path/verb.
+- `src/kernel/middlewares/authorizations.ts` supplies `getAuth`, `isAuthOrCredential` and `requirePermission`.
+- `src/infrastructure/http/middlewares/idempotency.ts` supplies `requireIdempotencyKey`, configured with an `operation` name and `subjectParam: 'productId'` on the receive and adjust routes.
+- The `src/modules/inventory/controllers/*` files (`get-inventory-levels.ts`, `get-inventory-level.ts`, `get-preorder-levels.ts`, `get-stock-movements.ts`, `patch-inventory-level.ts`, `post-receipt.ts`, `post-adjustment.ts`, `post-reservations-sweep.ts`) each supply the handler for exactly one route, as listed above.
+- `src/modules/inventory/module.ts` is a neighbor in the graph, but this file shows no direct interaction with it. `src/modules/inventory/tests/unit/routes.test.ts` is the unit test for this route table.
 
 ## Notes
-- `isAuthOrCredential` (not `isAuth`) is intentional: `sk_…` API keys must reach these routes for machine-to-machine warehouse integrations.
-- Idempotency is **required** on `receive` and `adjust` (delta-based, retry-unsafe) but **absent** on `PATCH` (absolute write, naturally idempotent).
-- The sweep route uses the custom `sweep` permission verb; no preset role maps to it. The production cron (`docker/crontab` → `npm run sweep:reservations`) calls `runReservationSweep` **in-process** and never hits this route.
-- Permission keys (`read:StockLevel`, `update:StockLevel`, `create:StockMovement`, `sweep:StockLevel`) are defined in `shared/authorization-keys.generated.yaml`, not in this file.
+- The idempotency key is required on receive and adjust. A retried request must replay rather than double-count stock.
+- The sweep route is only an on-demand door. The real schedule is `npm run sweep:reservations` (`docker/crontab`), which calls `runReservationSweep` in-process and never reaches this route. It uses the `sweep` verb rather than `manage`, and no preset role is meant to reach it directly.
+- Movement writes use `StockMovement`, while level edits and reads use `StockLevel`. Editing a level changes a record without moving stock.

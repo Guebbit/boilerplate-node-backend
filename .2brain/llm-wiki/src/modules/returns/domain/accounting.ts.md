@@ -1,36 +1,31 @@
 ---
 source: src/modules/returns/domain/accounting.ts
-sha256: 398138beb1eb7aefc821c6fcaa2291921ada47afbb64c557a5efa6425538fe82
-generated_at: 2026-11-08T07:57:10.172341+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 398138beb1eb7aefc821c6fcaa2291921ada47afbb64c557a5efa6425538fe82
+context_sha256: c400970ae5d604ed20a5ed141826362a0474e5b23eb7306d33e1af2d2f43e053
+generated_at: 2026-11-22T07:22:40.316609+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/domain/accounting.ts
 
 ## Purpose
-
-Pure domain logic that answers one question: *what has the order already settled?* It tallies which units are accounted for (canceled before shipping, or physically back) and how much delivery has already been refunded, so that a service settling a new return or cancellation can determine whether it takes the **last** unit and whether a delivery refund is still owed. Keeping the rule here, free of I/O, makes it unit-testable without a database.
+Pure accounting of which units of an order are already settled (canceled before shipping, or returned) and how much delivery has already been refunded. It exists so the rule "shipping is refunded by whichever cancel or return takes the LAST unit" can be tested without a database.
 
 ## Key elements
-
-- **`AccountedReturn`** (interface) – The read-model of a single return/cancellation as accounting sees it: `kind`, `status`, optional `remedy`, `lines` (product + quantity), and optional `shippingRefund`.
-- **`OrderAccounts`** (interface) – The summary produced by `accountsOf`: `accountedFor` (settled units as `ProductQuantity[]`) and `shippingRefunded` (minor-unit string, summed).
-- **`isSettled`** (module-private) – Decides whether a return's units count as settled. Cancellations always do; regular returns only when status is in `BACK_RETURN_STATUSES` **and** the buyer did not receive the units back via a repair or replacement (`handsUnitsBack`).
-- **`accountsOf`** (exported function) – Filters an array of `AccountedReturn` down to settled ones, sums their shipping refunds in minor units via `addMoney`, and aggregates their lines via `wireLines` into an `OrderAccounts` object.
+- `AccountedReturn` (interface): a return as the accounting reads it, with `kind`, `status`, optional `remedy`, `lines` (productId and quantity), and optional `shippingRefund` (a decimal string).
+- `OrderAccounts` (interface): the result, holding `accountedFor` (a `ProductQuantity[]` of units canceled or back) and `shippingRefunded` (a summed decimal string).
+- `isSettled` (module-private): a return counts as settled if it is a `cancellation`, or if its status is in `BACK_RETURN_STATUSES` and `handsUnitsBack` is false for it.
+- `accountsOf(returns, currency)`: filters to the settled returns, sums their `shippingRefund` in minor units, and returns the `OrderAccounts`. The input must be every return on the order except the one being settled now.
 
 ## Relationships
-
-- **`src/domain-primitives/money.ts`** – Imports `addMoney`, `toMinorUnits`, `toDecimalString`, `NO_MONEY`. All monetary arithmetic in this file goes through these helpers to stay in integer minor units.
-- **`./lifecycle`** – Imports `BACK_RETURN_STATUSES` (set of statuses that count as "back") and `handsUnitsBack` (predicate for repair/replacement) at runtime; imports `ReturnKind`, `ReturnRemedy`, `ReturnStatus` as types.
-- **`./quantities`** – Imports `wireLines` (runtime) to normalise `AccountedReturn.lines` into `ProductQuantity[]`; imports `ProductQuantity` as a type.
-- **`./index.ts`** – Barrel file; re-exports this module's public API for consumers within the returns domain.
-- **`services/cancellation-refund.ts`**, **`services/receive.ts`** – Service-layer callers that use `accountsOf` to decide whether the current action settles the last unit and whether a delivery refund applies.
-- **`tests/unit/domain.test.ts`** – Unit-tests `isSettled` and `accountsOf` directly.
-- **`tests/contract/ownership-shop.contract.test.ts`** – Contract-level test that exercises the accounting rule end-to-end.
+- `src/modules/returns/domain/lifecycle.ts`: supplies `BACK_RETURN_STATUSES`, `handsUnitsBack`, and the `ReturnKind`, `ReturnRemedy` and `ReturnStatus` types.
+- `src/modules/returns/domain/quantities.ts`: `wireLines` converts the settled returns' lines into `ProductQuantity` entries, and `ProductQuantity` is the type of `accountedFor`.
+- `src/domain-primitives/money.ts`: `toMinorUnits`, `addMoney`, `toDecimalString` and `NO_MONEY` do the delivery summing in minor units rather than floats.
+- `src/modules/returns/services/cancellation-refund.ts` and `src/modules/returns/services/receive.ts`: neighbors in the dependency graph, most likely consumers that use the tally when a cancel is made or a return is received. The file itself does not show this.
+- `src/modules/returns/domain/index.ts`: a neighbor in the graph, likely the domain barrel. The file does not show this.
+- `src/modules/returns/tests/unit/domain.test.ts` and `tests/contract/ownership-shop.contract.test.ts`: neighbors in the graph, presumably test coverage of this logic.
 
 ## Notes
-
-- `isSettled` is deliberately **not exported**; the settlement rule is an internal detail. Callers interact only through `accountsOf`.
-- `shippingRefund` on `AccountedReturn` is `string | undefined`. The code coerces absence to `0` before conversion (`toMinorUnits(shippingRefund ?? 0, …)`), so callers must not rely on the field being present.
-- The `lines` field uses `{ toString(): string }` for `productId` rather than a plain `string`, allowing domain-specific ID types to be passed without widening.
-- All money math is in **integer minor units** (via the `money.ts` primitives); the returned `shippingRefunded` is a decimal string in the order's currency. No floating-point arithmetic is performed here.
+- Cancellations are always treated as settled, since they are "born closed".
+- A return with a repair or replacement remedy settles no units and refunds no delivery, because the goods stay with the buyer. This check is delegated to `handsUnitsBack`.
+- A missing `shippingRefund` counts as 0.

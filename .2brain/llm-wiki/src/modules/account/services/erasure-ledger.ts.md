@@ -1,47 +1,53 @@
 ---
 source: src/modules/account/services/erasure-ledger.ts
-sha256: 12646df0a4d2f683d6b44dd36fc42477fca155295d29742b7ea70df31d308a25
-generated_at: 2026-11-14T18:43:47.656109+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 685d1b5c05dd03a28ee5ee9c11763a53b9b2cdda2d804a7b8606484db696cd48
+context_sha256: 18c830d5468d225a832d0a61d295d6c20253e20b692e76bc88aa20fbeee214f4
+generated_at: 2026-11-22T03:36:34.621517+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/erasure-ledger.ts
 
 ## Purpose
-
-Records account erasures, deletion schedules, and cancellations in a durable ledger that outlives the oldest backup snapshot. After a database restore brings erased or locked accounts back, `reapplyErasures` replays the ledger so the operator can re-erase or re-lock them before the app opens.
+Maintains the erasure ledger: a record of which accounts were erased, scheduled for deletion, or had a deletion canceled, kept longer than the oldest backup (the `auditlogs` trail keeps 180 days and Loki 7, both shorter). After a restore of an old snapshot, `reapplyErasures` replays the ledger so erased accounts are erased again and deletion locks are restored before the app opens.
 
 ## Key elements
-
-- **`writeRow`** (private) — Inserts/upserts one `erasureledgers` row via `erasureLedgerRepository.upsert`, setting the expiry to `event date + erasureLedgerRetentionMs()`. Accepts an optional Mongoose `session` and a `purgeAt` for `scheduled` rows.
-- **`recordErasure`** — Called inside the erasure's own transaction. Writes an `erased` row stamped with the subject's `erasedAt` (or now). A transaction rollback removes the row atomically.
-- **`recordSchedule`** — Writes a `scheduled` row with the owner's requested date and the promised `purgeAt`. Joins the lock's transaction so both commit or roll back together.
-- **`recordCancellation`** — Writes a `canceled` row. Joins the cancel's transaction when one exists; the staff-cancel path calls this from an outbox handler that retries on rejection.
-- **`reapplyErasures(options: ReapplyOptions)`** — The main replay. Fetches all ledger rows since the snapshot time, groups them by user, reconciles each account (erase / re-lock / unlock), collects a `ReapplyReport`, and writes a single `recordAudit` row. Idempotent; per-account failures are logged and bucketed without halting the loop.
-- **`reapplyOne`** (private) — Reconciles one user: `erased` row → erasure via `accountUserService`; otherwise the later of `scheduled`/`canceled` decides lock vs. unlock via `accountUserService`.
-- **`ReapplyReport`** / **`ReapplyBucket`** — Type for the six outcome buckets (`erased`, `alreadyGone`, `rescheduled`, `unscheduled`, `unchanged`, `failed`), each mapping to a list of user IDs.
-- **`countsOf`** — Shorthand that converts the report's ID arrays to numeric counts for a readable log line.
+- `recordErasure(subject, session)`: the `personalData.erase` hook. Writes an `erased` row inside the erasure's transaction, so a rollback removes the row too. It uses `subject.erasedAt` (set only on a repeat after a restore) or the current time.
+- `recordSchedule(userId, requestedAt, purgeAt, session?)`: writes a `scheduled` row with the stored `purgeAt`, so a later change to the grace setting cannot move the date. It joins the lock's transaction and rejects with it.
+- `recordCancellation(userId, canceledAt, session?)`: writes a `canceled` row. It joins the cancel's transaction when there is one. A staff cancel arrives from the outbox handler, which retries a rejection until it lands.
+- `reapplyErasures(options)`: the replay. It does the following:
+  1. Loads ledger rows since `options.since`.
+  2. Groups them by account and reapplies each one in turn.
+  3. Waits for the outbox to settle.
+  4. Sweeps the held jobs of erased accounts.
+  5. Writes the restoration-log audit row.
+- `ReapplyOptions`: `since`, plus optional `by` (defaults to the OS username) and `snapshot`.
+- `ReapplyReport`: the account ids per bucket (`erased`, `alreadyGone`, `rescheduled`, `unscheduled`, `unchanged`, `failed`) and `heldJobsRemoved`.
+- `countsOf(report)`: reduces a report to counts for readable log lines.
+- Internal helpers:
+  - `writeRow` upserts a row whose expiry is the event time plus `erasureLedgerRetentionMs()`.
+  - `groupByUser` keeps one row per kind per account.
+  - `reapplyOne` decides the outcome for one account.
 
 ## Relationships
-
-- **`src/modules/account/repository.ts`** — `erasureLedgerRepository` (upsert, findSince) and the `ErasureLedgerRow` shape are the sole persistence layer for this file.
-- **`src/modules/account/config.ts`** — Provides `erasureLedgerRetentionMs`, the TTL applied to every row.
-- **`src/modules/account/model.ts`** — Defines the `ErasureLedgerKind` union (`'erased' | 'scheduled' | 'canceled'`).
-- **`src/modules/account/audit.ts`** — Supplies the audit action constant used in the restoration audit record.
-- **`src/modules/users/friends/account.ts`** — Provides the account user service consumed during replay to erase or restore deletion state.
-- **`src/kernel/permissions.ts`** — `systemCallerContext('User')` builds the operator identity passed to all replay mutations.
-- **`src/kernel/registry.ts`** — Source of the `PersonalDataSubject` type consumed by `recordErasure`.
-- **`src/infrastructure/adapters/logger.ts`** — Emits the per-account error log inside `reapplyErasures`.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the single restoration-log row at the end of a replay.
-- **`src/types/index.ts`** — Provides the `CallerContext` type.
-- **`scripts/ops/reapply-erasures.ts`** — The CLI operator that calls `reapplyErasures` and `countsOf` after a snapshot restore.
-- **`src/modules/account/services/account-deletion.ts`** — The deletion flow that calls `recordErasure`, `recordSchedule`, and `recordCancellation` within its transactions.
-- **`src/modules/account/tests/integration/erasure-ledger.test.ts`** — Integration tests covering this module's behaviour.
+- `src/modules/account/repository.ts`: its ledger repository does the persistence through `upsert` and `findSince`. `ErasureLedgerRow` is the row type.
+- `src/modules/account/model.ts`: provides `ErasureLedgerKind`.
+- `src/modules/account/config.ts`: provides `erasureLedgerRetentionMs`.
+- `src/modules/account/audit.ts`: supplies the account audit actions. The `AUTH_ERASURES_REAPPLIED` action is recorded at the end of a replay.
+- `src/infrastructure/observability/audit.ts`: provides `recordAudit`, which writes that audit row.
+- `src/modules/users/friends/account.ts`: `accountUserService` supplies `eraseAgain`, `restoreDeletionState` and `purgeHeldJobsOf`, which do the work on the user side.
+- `src/kernel/outbox.ts`: `settleOutboxNudges` is awaited before the held-jobs sweep.
+- `src/kernel/registry.ts`: provides the `PersonalDataSubject` type.
+- `src/kernel/permissions.ts`: `systemCallerContext('User')` supplies the operator context.
+- `src/types/auth-context.ts`: the file imports `CallerContext` from `@types`.
+- `src/infrastructure/adapters/logger.ts`: logs per-account and sweep failures.
+- `scripts/ops/reapply-erasures.ts`: the `ops:reapply-erasures` entry point that calls `reapplyErasures`.
+- `src/modules/account/services/account-deletion.ts`, `src/modules/account/module.ts` and `src/modules/account/tests/integration/erasure-ledger.test.ts`: listed as graph neighbors. This file does not import them, so their exact wiring is not visible here.
 
 ## Notes
-
-- **Transactional coupling is mandatory for `recordErasure`.** It must be called with the same `ClientSession` as the erasure; if the transaction rolls back, the ledger row disappears with it. `recordSchedule` and `recordCancellation` follow the same pattern when a session is supplied.
-- **`purgeAt` is persisted, not recomputed.** Storing the promised deadline in the row means a later change to the grace-period config cannot shift an already-scheduled erasure.
-- **Replay priority:** an `erased` row always wins. When both `scheduled` and `canceled` exist, the later timestamp decides — so "cancel, then re-request" correctly stays scheduled.
-- **Per-account fault isolation in `reapplyErasures`:** a thrown error for one user is caught, logged, bucketed as `failed`, and the loop continues. A rerun retries only the failed accounts (idempotent for the rest).
-- **Retention is row-relative:** each row's `expiresAt` is `event date + retentionMs`, not a global cutoff. Older rows expire naturally even if the account is still referenced.
+- Precedence: `erased` beats everything. Otherwise the later of `scheduled` and `canceled` wins, so cancel then re-request stays scheduled.
+- A scheduled row without `purgeAt` is never treated as a schedule.
+- Each account lands in exactly one bucket, except that a failed held-jobs sweep also adds the account to `failed` while it stays under `erased`. A rerun cannot redo that sweep, so restore again.
+- Failures are isolated. One account's failure is logged and counted, and the rest continue. The run is idempotent.
+- The held-jobs sweep runs after the outbox settles. Restored pending outbox rows are re-sent, and a handler may create a new mail job for an address that was just erased.
+- The audit row is written even when sweeps fail. Its outcome is `failure` if `failed` is non-empty, and its metadata holds the report ids, not addresses.

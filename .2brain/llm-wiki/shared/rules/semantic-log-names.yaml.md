@@ -1,30 +1,32 @@
 ---
 source: shared/rules/semantic-log-names.yaml
-sha256: 1dda4a96cf8fb11642ad76268e0e457dc558d1e91b26fd01a88128be18746493
-generated_at: 2026-11-08T03:11:38.591989+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c41f334b81832e7e081d165fa7642405b714c3aeb41c45321a3394c8e13f06e9
+context_sha256: 0c95844c03af7e2bb807e99f0749eb3d86ac3c2fe5ae589f772b2d352b59cdfd
+generated_at: 2026-11-22T02:28:32.622434+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/semantic-log-names.yaml
 
 ## Purpose
-
-Single source of truth mapping each camelCase log-field the code writes to the exact name that appears on the structured log line. It enforces OpenTelemetry semantic-convention names where the spec defines one and reserves the `app.*` namespace for producer-specific attributes. Consumed only by the codegen step (`npm run regenerate`) that emits `src/infrastructure/adapters/semantic-log-names.generated.ts`.
+Single source of truth mapping each camelCase field the code logs to the name it is written with in structured log lines. It uses standard OpenTelemetry semantic-convention names where the spec defines one, and `app.*` for custom attributes, so custom fields never sit on a standard namespace. `traceId` and `spanId` become top-level `trace_id` and `span_id`, matching the OpenTelemetry Logs Data Model and Grafana's Loki → Tempo link.
 
 ## Key elements
-
-- **`semanticLogNames`** – Flat map of 18 entries. Each key is the camelCase field the emitting code passes; each value is the wire name written to the log record.
-  - Standard OTel names (e.g. `service.name`, `http.request.method`, `http.response.status_code`, `client.address`, `user_agent.original`, `event.name`).
-  - `trace_id` / `span_id` – top-level (no dot) because the OTel Logs Data Model places trace context at the record root and Grafana's Loki → Tempo link reads that exact key.
-  - `app.*` names – all custom/producer-specific attributes (`app.request.id`, `app.request.duration_ms`, `app.audit.outcome`, `app.actor.*`, `app.target.*`).
-- **Codegen contract** – `npm run regenerate` reads this file and produces `src/infrastructure/adapters/semantic-log-names.generated.ts`. The generated module is the runtime accessor; the YAML is never loaded at boot.
+- `semanticLogNames`: the only top-level key, a flat map of `camelCaseField: target.name`.
+- Process and host fields: `service` → `service.name`, `pid` → `process.pid`, `hostname` → `host.name`.
+- Trace context: `traceId` → `trace_id`, `spanId` → `span_id`.
+- Request fields:
+  - Standard names: `method` → `http.request.method`, `route` → `http.route`, `statusCode` → `http.response.status_code`, `ip` → `client.address`, `userAgent` → `user_agent.original`.
+  - Custom names: `requestId` → `app.request.id`, `clientRequestId` → `app.request.client_id`, `durationMs` → `app.request.duration_ms`.
+- Audit and actor fields:
+  - Standard names: `action` → `event.name`, `actorUserId` → `user.id`.
+  - Custom names: `outcome` → `app.audit.outcome`, `actorRoleName` → `app.actor.role_name`, `actorCredentialId` → `app.actor.credential_id`, `actorScope` → `app.actor.scope`.
+- Target fields: `targetType` → `app.target.type`, `targetId` → `app.target.id`.
 
 ## Relationships
-
-- **`shared/rules/log-redaction.yaml`** – Both files operate on the same set of log fields. `semantic-log-names.yaml` decides *what the field is called* on the wire; `log-redaction.yaml` decides *which of those wire names get value-redacted* before the line is emitted. They must stay in sync: a field named here and redacted there must use the same target name.
+- `shared/rules/log-redaction.yaml` is a sibling rules file under `shared/rules/`. This file defines the names fields are written with. The redaction file presumably covers which logged fields are redacted. No direct reference between the two is visible in this file's content.
 
 ## Notes
-
-- This table is the **only** place target names live. Each calling site converts its own camelCase key to the value in this map; do not hard-code wire names elsewhere.
-- `traceId` → `trace_id` and `spanId` → `span_id` are intentionally **not** dotted (`app.trace_id` would break Loki → Tempo correlation).
-- Adding a new log field requires editing this file **and** re-running `npm run regenerate` to refresh the generated TS module. Forgetting the regen step means the new field falls back to an un-mapped (or missing) name at runtime.
+- It is not read at boot. `npm run regenerate` generates `src/infrastructure/adapters/semantic-names.ts` from it. After editing the YAML, regenerate rather than hand-editing the generated file.
+- Each side converts the case of its own field names, so this table is the only place the target names are defined.
+- Custom attributes belong under the producer's own `app.*` namespace, not under a standard one.

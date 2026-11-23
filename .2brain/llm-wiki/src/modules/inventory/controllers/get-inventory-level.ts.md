@@ -1,30 +1,32 @@
 ---
 source: src/modules/inventory/controllers/get-inventory-level.ts
-sha256: d8b2fea5f7a19c1b8137947ec27a2701e83119784cc3cbffc24b67cae5738717
-generated_at: 2026-11-08T05:57:13.859109+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d8b2fea5f7a19c1b8137947ec27a2701e83119784cc3cbffc24b67cae5738717
+context_sha256: a1bfa5a040013ca628a5999c0aa5995e554a751e6c6ac402bc322fbddd686cd2
+generated_at: 2026-11-22T05:16:41.357983+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/controllers/get-inventory-level.ts
 
 ## Purpose
-
-HTTP controller that handles `GET /inventory/levels/:productId`, returning a single product's stock counters and availability. It validates the path parameter, delegates to the inventory service, and shapes the HTTP response.
+Express controller for `GET /inventory/levels/:productId`. It returns one product's inventory counters and availability as an `InventoryLevel`.
 
 ## Key elements
-
-- **`getInventoryLevel`** (exported) — Express handler for the route. Validates `productId` via `requireId`, calls `inventoryService.getLevel(productId)`, then sends a `successResponse<InventoryLevel>` or a refusal. Catches errors through `catchAs`.
+- `getInventoryLevel(request, response)`: the only export.
+  - It validates the `productId` route param with `requireId`. On failure it returns `Promise.resolve()` and stops, because `requireId` has already handled the response.
+  - It calls `inventoryService.getLevel(productId)`.
+  - If `refused(response, result)` is true, it returns without sending a success response.
+  - Otherwise it sends `successResponse<InventoryLevel>(response, result.data)`.
+  - Rejections go to `catchAs(response, 'getInventoryLevel')`.
 
 ## Relationships
-
-- **`src/modules/inventory/routes.ts`** — Registers this handler on the `/inventory/levels/:productId` route.
-- **`src/modules/inventory/services/index.ts`** — Source of `inventoryService`, whose `getLevel` method performs the actual lookup.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs` (uniform error serialisation) and `refused` (4xx short-circuit when the service signals rejection).
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId`, which extracts and validates the `productId` param, writing a 404 (keyed `'inventory.product-not-found'`) directly to the response if absent.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, which wraps the payload in the project's standard envelope.
-- **`src/types/index.ts`** — Supplies the `InventoryLevel` type used to type the success payload.
+- `src/infrastructure/http/ids.ts`: supplies `requireId`. It is configured with `name: 'productId'` and a not-found key for a missing product.
+- `src/infrastructure/http/controller.ts`: supplies `refused`, which handles service results that were refused, and `catchAs`, which handles errors.
+- `src/infrastructure/http/response.ts`: supplies `successResponse`, which sends the success payload.
+- `src/modules/inventory/services/index.ts`: supplies `inventoryService`, whose `getLevel` does the actual lookup.
+- `src/types/index.ts`: supplies the `InventoryLevel` type (imported via the `@types` alias).
+- `src/modules/inventory/routes.ts`: the route file for this module. It is presumably where this handler is mounted, but that wiring is not shown here.
 
 ## Notes
-
-- `requireId` writes the error response itself; the subsequent `if (!productId) return Promise.resolve()` is a guard that satisfies TypeScript without emitting a second response. Don't remove it thinking it's dead code.
-- The service call is Promise-based (`.then`/`.catch`), not async/await — consistent with the rest of the controller layer.
+- The handler returns a Promise in every path. The early exit uses `Promise.resolve()`, so the return type is consistent.
+- The file contains no business logic. It only validates the id, delegates to the service, and maps the result onto the response.

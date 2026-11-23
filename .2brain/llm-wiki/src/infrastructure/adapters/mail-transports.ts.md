@@ -1,41 +1,42 @@
 ---
 source: src/infrastructure/adapters/mail-transports.ts
-sha256: 6b918ce33beda579784ae818c2824a0d049fc61b3a2e3c4155bd3058ff2ab9b3
-generated_at: 2026-11-08T03:21:23.156780+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fe948748607e0d1c55e656286711661bb11d63c106c57df4579ae45971378da5
+context_sha256: fdc8e842956d253ba750bbfcb0214f996efe64f42f898f2cf715d93f0492465d
+generated_at: 2026-11-22T02:39:57.471818+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/mail-transports.ts
 
 ## Purpose
-
-Registry that maps the `NODE_MAIL_TRANSPORT` env var to a concrete sender. Production ships only `smtp`; test doubles (`log`, `outbox`) are registered at preload or jest-setup time. The file is intentionally dependency-light (no `nodemailer`, no `ejs` at module scope) so it can load before the application boots, with the real sender deferred to first send.
+The mail transport registry: it decides how an email leaves the process, selected by `NODE_MAIL_TRANSPORT`. Production registers only `smtp`. Pretend transports (`log`, `outbox`) are test doubles that live in `scenarios/support/doubles/` and are registered by the development doubles and by jest. The file is deliberately light: it imports no `nodemailer` or `ejs` at runtime, because jest setup and the development doubles load it before the application.
 
 ## Key elements
-
-- **`OutgoingMail`** — interface describing one outgoing message: raw request, template name, translated data, and a `render()` closure that produces a full `SendMailOptions`. Recording transports never call `render()`.
-- **`MailTransportAdapter`** — the transport contract. `delivers(mail: MailConfig) → boolean` answers "does this reach a real inbox?"; `send(mail: OutgoingMail) → Promise<SentMessageInfo | undefined>` dispatches.
-- **`smtpTransport`** — the sole production adapter. `delivers` checks `NODE_SMTP_HOST`; `send` lazy-imports `./smtp-transport` and calls `sendBySmtp`.
-- **`mailTransportRegistry`** — a `createSharedProviderRegistry` instance seeded with `{ smtp: smtpTransport }`. Shared across module instances so a double registered before a jest module reset still resolves.
-- **`registerMailTransport(name, transport)`** — adds or overrides a transport by name without editing this file.
-- **`resolveMailTransport()`** — resolves the active adapter from `NODE_MAIL_TRANSPORT` (defaults to `smtp`). Throws on an unknown name rather than silently falling back.
-- **`mailDelivers(mail)`** — asks the named transport whether it reaches a real inbox; returns `false` for unknown names or unparsed slices.
-- **`mailTransportProbe`** — a `defineProbe` wrapper around `resolveMailTransport` so a typo in the env var is caught at boot instead of mid-request.
+- `OutgoingMail`: what a transport is handed. It holds the `request` envelope, the `templateName` (outbox name), the translated `data`, and a lazy `render()` that produces the nodemailer `SendMailOptions`. A transport that records name and data never calls `render`, so no render happens.
+- `MailTransportAdapter`: the transport contract.
+  - `delivers(mail: MailConfig)`: whether mail sent through this transport reaches a real inbox.
+  - `send(mail)`: hands off one message and optionally returns a `SentMessageInfo` receipt.
+- `smtpTransport` (private): `delivers` is true when `NODE_SMTP_HOST` is set. `send` dynamically imports `./smtp-transport` and calls `sendBySmtp`, so nodemailer loads on first send.
+- `DEVELOPMENT_TRANSPORTS`: `['log', 'outbox']`. These are names only, used so a refusal outside `NODE_ENV=development` can explain why `log` is unavailable. A test keeps this list equal to what `registerDoubles` registers.
+- `registerMailTransport(name, transport)`: adds or overrides a transport in the registry.
+- `resolveMailTransport()`: returns the transport named by `mailConfig().NODE_MAIL_TRANSPORT`, resolved on each send. It throws for an unknown name via `requireProvider`.
+- `mailDelivers(mail)`: asks the named transport whether it delivers. It returns `false` for an `undefined` slice or an unknown transport name.
+- `mailTransportProbe`: a boot probe, built with `defineProbe('mail-transport', resolveMailTransport)`, that surfaces a bad transport name at boot.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/config.ts`** — provides `mailConfig` and the `MailConfig` type used throughout.
-- **`src/infrastructure/adapters/smtp-transport.ts`** — lazy-imported inside `smtpTransport.send`; not loaded until first message.
-- **`src/infrastructure/runtime/provider-registry.ts`** — supplies `createSharedProviderRegistry` and `requireProvider` used to build and query the registry.
-- **`src/infrastructure/config/define.ts`** — provides `defineProbe`, used to declare `mailTransportProbe`.
-- **`src/types/index.ts`** — source of the `EmailJobPayload` type in `OutgoingMail.request`.
-- **`scenarios/support/doubles/mail-log.ts` / `mail-outbox.ts` / `register.ts`** — test doubles that call `registerMailTransport` during dev-preload or jest setup.
-- **`src/modules/account/two-factor/methods/email.ts`** — consumes `mailDelivers` (or the adapter's `delivers`) to decide whether a mail-based 2FA code actually reaches the user, rather than string-matching the transport name.
-- **`tests/unit/infrastructure/adapters/mailer-transport.test.ts`** — unit-tests the registry, resolution, and `delivers` logic.
+- `./config` supplies `mailConfig` and the `MailConfig` type, which is where `NODE_MAIL_TRANSPORT` and `NODE_SMTP_HOST` come from.
+- `@infrastructure/runtime/provider-registry` supplies `createSharedProviderRegistry` and `requireProvider`, which back the registry and the resolver.
+- `@infrastructure/config/define` supplies `defineProbe`.
+- `./smtp-transport` is lazily imported by the `smtp` transport for the actual send.
+- `@types` (`src/types/index.ts`) supplies `EmailJobPayload`, which the `request` field of `OutgoingMail` is typed from.
+- `scenarios/support/doubles/register.ts` registers the `log` and `outbox` doubles through `registerMailTransport`. `mail-log.ts` and `mail-outbox.ts` are those doubles' implementations of `MailTransportAdapter`.
+- `./mailer` is the sending side that builds `OutgoingMail` and resolves a transport. This is inferred from the neighbor list; the file does not name it.
+- `src/modules/account/two-factor/methods/email.ts` asks `mailDelivers` instead of comparing transport names.
+- `tests/unit/infrastructure/adapters/mailer-transport.test.ts` tests this behavior.
+- `src/app/config.ts` and `src/infrastructure/adapters/config.ts` are config neighbors. The file reads config only through `./config`.
 
 ## Notes
-
-- The module deliberately avoids top-level imports of `nodemailer` and `ejs` (only their *types*). Both the jest setup and the dev preload load this file before the app; adding a heavy import here would slow or break that load order.
-- `smtpTransport.send` uses a dynamic `import('./smtp-transport')` so the sender (and its transitive `nodemailer` dependency) is loaded only on first send, not at registry construction.
-- `resolveMailTransport` throws on an unknown `NODE_MAIL_TRANSPORT` value. The comment warns that falling back to `smtp` would turn a typo into real mail delivery.
-- The registry is created via `createSharedProviderRegistry` specifically so a double registered in one module instance (e.g., a preload script) is visible after `jest.resetModules()` reloads the app under test.
+- An unknown `NODE_MAIL_TRANSPORT` throws rather than falling back to `smtp`, so a typo cannot turn into mail sent for real. Naming a development double outside `NODE_ENV=development` gets a message explaining that it loads only in development.
+- The registry is created with `createSharedProviderRegistry`, so a double registered at boot survives a module reset.
+- The probe has no shape of its own. The resolver imports the config, so the config cannot import the resolver without a cycle.
+- `delivers` takes the mail slice as an argument because boot checks judge an environment they were handed (`mailConfig.readIn`), not the store's.

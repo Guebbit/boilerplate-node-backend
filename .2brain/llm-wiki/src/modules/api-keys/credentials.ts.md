@@ -1,38 +1,33 @@
 ---
 source: src/modules/api-keys/credentials.ts
-sha256: 3ac3a812226bdaaaa24032c547016a7240e22eafcc1eb031e3bc0d532f9e6b38
-generated_at: 2026-11-08T05:02:14.266120+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f97fe52e0e5628763dff336e41ff614edf1d9779ed6eeec91c8a97c5da19d126
+context_sha256: 26ec50d39e32c5be93967cdcee1c488a6ab3de1cc59893cafe95bdde0f48fcd9
+generated_at: 2026-11-22T04:21:09.221185+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/api-keys/credentials.ts
 
 ## Purpose
-
-Mints and verifies machine-to-machine API-key credentials using one-way SHA-256 hashing (via `hashToken`). The plaintext is shown to the caller exactly once at creation; only the hash and the non-secret public prefix are persisted. It deliberately avoids bcrypt/argon2 because the 256-bit `randomBytes` secret has no search space for a KDF to make expensive.
+Handles the one-way hashing half of an API key's lifecycle: minting new credentials and verifying presented ones. Keys are stored as a sha256 hash (via `hashToken`), not encrypted, because a credential is only ever verified, never re-signed with. The tokens are high-entropy (`randomBytes`), so slow hashes like bcrypt/argon2 would add per-request cost without any security benefit.
 
 ## Key elements
-
-- **`MintedApiKey`** (interface) — the return shape of a fresh credential: `plaintext`, `publicPrefix`, `hash`.
-- **`mintApiKey()`** — generates `sk_<prefix>_<secret>` (both halves base64url), computes `hashToken(plaintext)`, and returns the `MintedApiKey` triple.
-- **`parseApiKeyToken(token)`** — extracts the 8-char public prefix from a presented token by fixed-position slicing. Returns `undefined` if the token is too short, lacks the prefix, or the separator `_` is in the wrong position. Intended as a cheap first rejection before any DB lookup.
-- **`verifyApiKey(plaintext, storedHash)`** — hashes the presented plaintext with `hashToken` and compares the two digests via `constantTimeEqual`.
-- **`displayIdOf(publicPrefix)`** — builds the human/audit-safe identifier `sk_<prefix>` (never the DB `_id`).
-- **`PREFIX_BYTES` / `PUBLIC_PREFIX_LENGTH`** — 6 random bytes → always-exactly-8 base64url characters, guaranteeing fixed position for slicing.
-- **`SECRET_BYTES`** — 32 (256-bit) secret half, matching the repo-wide high-entropy token budget.
+- `mintApiKey()` returns a `MintedApiKey` (`{ plaintext, publicPrefix, hash }`). The plaintext has the form `sk_<prefix>_<secret>`, with both halves base64url. The prefix is 6 random bytes and the secret is 32 random bytes. The plaintext is meant to be shown to the caller once. The prefix and hash are what get stored.
+- `parseApiKeyToken(token)` returns `{ publicPrefix }`, or `undefined` if the token isn't one of ours. It checks the `sk_` prefix, then that a `_` follows the fixed-length prefix. It does this before any database lookup or hashing.
+- `verifyApiKey(plaintext, storedHash)` hashes the presented plaintext and compares the digest to the stored hash in constant time.
+- `displayIdOf(publicPrefix)` returns `sk_<prefix>`. This display-safe identifier is used for things like the audit trail's `actorCredentialId`, in place of the database `_id`.
+- `MintedApiKey` is the exported interface for a freshly minted key.
+- `PREFIX_BYTES`, `PUBLIC_PREFIX_LENGTH` and `SECRET_BYTES` are private constants.
 
 ## Relationships
-
-- **`@infrastructure/security/hash-token`** — provides `hashToken`; called by both `mintApiKey` (to store) and `verifyApiKey` (to compare).
-- **`@infrastructure/security/constant-time`** — provides `constantTimeEqual`, the comparison primitive in `verifyApiKey`.
-- **`@kernel/authentication`** — provides `API_KEY_TOKEN_PREFIX` (`"sk_"`), the constant prepended to every token and used by `parseApiKeyToken` and `displayIdOf`.
-- **`services/api-keys.ts`** — consumes `mintApiKey`, `verifyApiKey`, and `displayIdOf` in its CRUD/verification flows.
-- **`services/resolver.ts`** — calls `parseApiKeyToken` to extract the prefix and perform a single indexed lookup before verification.
-- **Tests** — `tests/unit/credentials.test.ts` exercises all four exports; `tests/integration/api-keys.test.ts` exercises the full mint → present → resolve → verify path.
+- `src/infrastructure/security/hash-token.ts` supplies `hashToken`, used when minting and when verifying.
+- `src/infrastructure/security/constant-time.ts` supplies `constantTimeEqual`, used in `verifyApiKey`.
+- `src/kernel/authentication.ts` supplies `API_KEY_TOKEN_PREFIX` (the `sk_` prefix), used in minting, parsing and display IDs.
+- `src/modules/api-keys/services/api-keys.ts` and `src/modules/api-keys/services/resolver.ts` are the neighboring service files in the same module. The resolver relates to the "credential-resolve path" that `parseApiKeyToken` serves as a first, cheap rejection.
+- `src/modules/api-keys/tests/unit/credentials.test.ts` and `src/modules/api-keys/tests/integration/api-keys.test.ts` are the tests that cover this module.
 
 ## Notes
-
-- The 8-char prefix is **not** secret; it exists to turn verification into one indexed lookup and to give operators a recognisable identifier. It is safe to display in logs, list views, and audit fields.
-- `parseApiKeyToken` slices by position rather than splitting on `_` because `_` is a valid base64url character and can appear inside either half of a real token.
-- `verifyApiKey` compares **digests** in constant time, not the raw plaintexts, so a length mismatch in the presented token is never observable to an attacker.
-- The plaintext is never stored or recoverable after the initial `MintedApiKey` response is returned.
+- The prefix is parsed by position, not by `split('_')`. The base64url alphabet includes `_`, so either half of a real token may contain one. This works because 6 bytes always encode to exactly 8 base64url characters, so `PUBLIC_PREFIX_LENGTH` is fixed (8). Changing `PREFIX_BYTES` means updating `PUBLIC_PREFIX_LENGTH` too.
+- The public prefix is not secret. It is stored and indexed so verification is one indexed lookup instead of a collection scan.
+- `verifyApiKey` compares digests, not plaintexts. Every comparison is therefore the same fixed length, whatever the length of the presented token.
+- The file's own doc comment cites the same hashing approach as already used by the account module's token service (`src/modules/account/services/tokens.ts`).

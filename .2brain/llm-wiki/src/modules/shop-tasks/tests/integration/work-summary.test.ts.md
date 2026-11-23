@@ -1,50 +1,36 @@
 ---
 source: src/modules/shop-tasks/tests/integration/work-summary.test.ts
-sha256: ec6f07e00d8bd9dc6778a3f7b8770e8dcf15addb114f5e8ce3f8c85be3b8ed29
-generated_at: 2026-11-14T21:58:36.320518+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ec6f07e00d8bd9dc6778a3f7b8770e8dcf15addb114f5e8ce3f8c85be3b8ed29
+context_sha256: 5cd96dda78cb766b129421e51d4d071325c17dd77f17c10ef17c08b86e42cdc8
+generated_at: 2026-11-22T07:45:52.528085+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/tests/integration/work-summary.test.ts
 
 ## Purpose
-
-Integration test for `GET /shop-tasks/summary`. Verifies that each summary count matches the total returned by the corresponding list endpoint, that role-based rules restrict which keys a caller receives, that counts update when an order changes state, and that a zero count is sent as the number `0` rather than omitted.
+Integration test for `GET /shop-tasks/summary` running against the real app and a test database. It checks that each count equals the total of the list its screen shows, that callers only see keys for screens their role may open, that an order leaving the work leaves the count, and that zero is returned as zero rather than omitted.
 
 ## Key elements
-
-- **`setupTestDb()`** — resets/initialises the test database before the suite.
-- **`afterEach(() => resetDomainEvents())`** — clears the in-memory domain-event bus between tests.
-- **`summaryFor(bearer)`** — thin wrapper that issues `GET /shop-tasks/summary` with a Bearer token.
-- **`listTotal(bearer, url)`** — fetches a list endpoint and extracts `body.meta.totalItems`; used as the "expected" count in assertions.
-- **`orderIn(status, extras?)`** — creates a fresh buyer, a product, and an order in the given `OrderStatus`; module-level `buyers` counter guarantees unique e-mail/username per call.
-- **Test cases:**
-  - *Counts match list totals (admin)* — seeds paid, processing, pending, and soft-deleted orders plus a return and a zero-stock product; asserts each summary key equals the corresponding list total, then spot-checks `salesOrders === 2` and `inventory > 0`.
-  - *One payment needing attention + one late preorder* — records an offline cash payment then a partial refund (→ `salesPayments: 1`); creates a paid preorder whose `expectedAt` is in the past (→ `salesPreorders: 1`).
-  - *Zero is sent as zero* — with no data, all five keys are present and equal `0`.
-  - *Order leaving work leaves the count* — two paid orders, one advanced to `shipped`; summary drops to `1`.
-  - *Role-restricted keys* — a `warehouse`-role caller receives only `inventory`, `returns`, `salesOrders`, `salesPreorders` (no `salesPayments`).
+- `summaryFor(bearer)`: calls the summary endpoint with an Authorization header.
+- `listTotal(bearer, url)`: fetches a list endpoint and returns `meta.totalItems`, used as the expected value for the matching summary key.
+- `orderIn(status, extras)`: creates an order in a given status for a fresh buyer (unique email/username via a module-level `buyers` counter), with one product item.
+- `afterEach(resetDomainEvents)`: clears domain events between tests; `setupTestDb()` sets up the database.
+- Tests:
+  - Admin: each key (`salesOrders`, `salesPayments`, `returns`, `salesPreorders`, `inventory`) equals the corresponding list total. It seeds paid, processing, pending and soft-deleted orders, a requested return and a zero-stock product. It also asserts `salesOrders` is 2 and `inventory` is above 0, so the agreement isn't trivially empty.
+  - One cash payment with a hand-paid refund still owed counts as 1 in `salesPayments`. One paid preorder whose `expectedAt` is in the past counts as 1 in `salesPreorders`.
+  - A fresh database returns all five keys as `0` for an admin.
+  - Moving a paid order to `shipped` drops `salesOrders` from 2 to 1.
+  - A `warehouse` caller gets exactly `inventory`, `returns`, `salesOrders` and `salesPreorders`, with no `salesPayments`.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/setup-test-db.ts` | `setupTestDb` initialises the test database before the suite. |
-| `tests/support/http.ts` | `api`, `authenticateAs`, `authenticateAsRole` provide the HTTP client and token helpers. |
-| `tests/support/callers.ts` | `asAdmin`, `callerContextAs` build service-layer caller contexts passed to payment calls. |
-| `src/kernel/events.ts` | `resetDomainEvents` is called in `afterEach` to clear the event bus between tests. |
-| `src/modules/users/tests/factories.ts` | `createUser` creates a buyer per order. |
-| `src/modules/products/tests/factories.ts` | `createProduct` seeds products for orders and the low-stock scenario. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `forceOrderStatus`, `toOrderItem` build and mutate order state. |
-| `src/modules/inventory/tests/factories.ts` | `forceStockLevel` sets a product's stock to zero for the inventory count. |
-| `src/modules/returns/tests/factories.ts` | `insertBareReturns` inserts a requested return directly. |
-| `src/modules/delivery/tests/factories.ts` | `paidPreorderOrder`, `fulfillmentOrdersOf`, `setFulfillmentOrderState` set up the late-preorder fixture. |
-| `src/modules/payments/index.ts` | `paymentService` is imported and used to record an offline cash payment. |
-| `src/modules/payments/tests/factories.ts` | `refundOrderPayment` triggers a partial refund so the payment enters the "needs attention" state. |
-| `src/types/index.ts` | `OrderStatus` enum values used when seeding orders. |
+- `@tests/setup-test-db`, `@tests/http` (`api`, `authenticateAs`, `authenticateAsRole`) and `@tests/callers` (`asAdmin`, `callerContextAs`) provide the DB setup, HTTP client, authentication and caller contexts.
+- Factories from the users, products, orders (`createOrder`, `forceOrderStatus`, `toOrderItem`), inventory (`forceStockLevel`), returns (`insertBareReturns`), delivery (`paidPreorderOrder`, `fulfillmentOrdersOf`, `setFulfillmentOrderState`) and payments (`refundOrderPayment`) modules seed the data.
+- `paymentService` from `@modules/payments` records the offline cash payment directly (`recordOfflinePayment`).
+- `resetDomainEvents` from `@kernel/events` is called after each test.
+- `OrderStatus` from `@types` supplies the status values.
+- The list endpoints it compares against are `/orders`, `/returns`, `/delivery/fulfillment-orders` and `/inventory/levels`.
 
 ## Notes
-
-- Assertions compare summary values against **live list-endpoint totals** (`listTotal`) rather than hard-coded numbers, keeping the test in lock-step with whatever the list queries return. A secondary hard-coded check (`salesOrders === 2`, `inventory > 0`) guards against both the summary and the list accidentally returning `0`.
-- The `buyers` counter is module-scoped, so it increments across tests within the file but resets per test-file run.
-- The role-visibility test asserts the **set of keys** (sorted) rather than their values, intentionally decoupling "which screens exist" from "how many rows each screen shows."
+- `salesPayments` is only compared against a literal `0` in the first test. It is verified as non-zero in the separate payment-and-preorder test.
+- Date offsets of ±86,400,000 ms (one day) are used to make the preorder's release date future and its expected date past.

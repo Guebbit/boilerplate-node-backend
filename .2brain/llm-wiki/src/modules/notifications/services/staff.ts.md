@@ -1,43 +1,36 @@
 ---
 source: src/modules/notifications/services/staff.ts
-sha256: 98717e49081a1b2e29eb8d2bec3305f4f4d20b397bcc1437ad39b5660a15a24f
-generated_at: 2026-11-08T06:33:37.930430+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 37dcbe928cd2468bc9c6862965365424ab10a885db0a2b6e790e3d65e652a899
+context_sha256: de68fc14808914d6ae8e25e34594028d1e315964c12854934e594f854ef321ec
+generated_at: 2026-11-22T05:56:01.440108+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/services/staff.ts
 
 ## Purpose
-
-Implements "work notices" for shop staff: resolves who must hear about an event (by permission-set role), writes a deduplicated notice row (the authoritative record), and optionally sends a courtesy email. A mail failure is logged and never propagated, because the written row is what matters.
+Implements "work notices" for staff: it finds the members of a shop whose role does the relevant work and who can act today, then writes one inbox notice per recipient per situation. It may also queue an email. The notice row is the notification itself. The mail is a courtesy, and a failure to queue it is logged, never raised.
 
 ## Key elements
-
-- **`StaffNotice` (type)** — Discriminated union on `route.email`. `'now'` requires a `link` (for the email); `'digest' | 'none'` do not. All variants share `tenantId`, `body`, `dedupeKey`, and optional `sets`.
-- **`staffRecipients` (exported)** — Resolves the audience: members of `tenantId` holding the given permission sets → their `StaffContact[]`. Empty `sets` means administrators only.
-- **`notifyStaff` (exported)** — Tells every eligible staff member **sequentially** (one failing write must not hide the others). Returns the count of contacts with an address; `0` signals nobody could be reached.
-- **`notifyStaffMember` (exported)** — Tells one named user (e.g., a task assignee), re-reading their contact at call time.
-- **`tell` (internal)** — Writes the notice via `notificationsCreateStaffOnce`; if it is the first write and the route says `'now'`, fires `mailNow`.
-- **`mailNow` (internal)** — Queues a single email via `enqueueEmail`. Never throws; `enqueueEmail` logs its own failures.
-- **`StaffNoticeFacts` (interface)** — Common fields every notice carries regardless of which producer module originates it.
+- `StaffNotice` (type): the input to every notice. It combines `StaffNoticeFacts` (`tenantId`, `body`, `dedupeKey`, optional `sets`) with a `route` and `link`. The type forces a `link` when `route.email` is `'now'`. For `'digest'` or `'none'` the link is optional.
+- `staffRecipients(tenantId, sets)`: asks the access module for the members holding the permission sets, then resolves them to `StaffContact[]` through the users module. An empty `sets` means administrators only. It is also used by the digest's daily rewrite.
+- `notifyStaff(notice)`: resolves recipients using `setsOfRoute(route, sets)` and tells them one after another. It returns the number of contacts who could act, whether or not they had already been told. Zero means nobody could be reached.
+- `notifyStaffMember(userId, notice)`: tells one named member, if the users module still returns them as a contact.
+- `tell` (internal): calls `notificationsCreateStaffOnce` with the body, severity, tenant, sets, `dedupeKey` and an `expiresAt` of now plus `NODE_NOTIFICATIONS_STAFF_TTL_DAYS`. If this is the first write and the route's `email` is `'now'` with a link, it sends the mail.
+- `mailNow` (internal): builds the mail with `staffNoticeEmail(locale, body, link)` and fires `enqueueEmail` without awaiting it.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `staff-routing.ts` | Imports `setsOfRoute` and the `StaffRoute`/`StaffNoticeBody`/`StaffLink` types that define routing semantics. |
-| `services/inbox.ts` | Imports `notificationsCreateStaffOnce` — the deduplicated write that makes the notice durable. |
-| `emails.ts` | Imports `staffNoticeEmail` to build the locale-aware email template and subject. |
-| `config.ts` | Imports `notificationsConfig()` for the `NODE_NOTIFICATIONS_STAFF_TTL_DAYS` value. |
-| `@modules/access` | Calls `accessService.membersHolding(tenantId, sets)` to find who does the work. |
-| `@modules/users` | Calls `userService.staffContacts(members)` to resolve email addresses and locales. |
-| `@infrastructure/adapters/mailer` | Calls `enqueueEmail` to dispatch the courtesy mail. |
-| `@domain-primitives/time` | Imports `DAY_MS` to compute the notice `expiresAt` from the configured TTL. |
+- `./inbox`: `notificationsCreateStaffOnce` does the deduplicated write. Its boolean result says whether this was the first write.
+- `../staff-routing`: provides `setsOfRoute` and the `StaffRoute`, `StaffLink` and `StaffNoticeBody` types. Producers pass in the route and link, so this file keeps no table of notice codes.
+- `../emails`: `staffNoticeEmail` renders the subject, template and data.
+- `../config`: `notificationsConfig().NODE_NOTIFICATIONS_STAFF_TTL_DAYS` sets the notice lifetime.
+- `@modules/access` (`src/modules/access/index.ts`): its `accessService` supplies the members who hold the permission sets (the roles).
+- `@modules/users` (`src/modules/users/index.ts`): its `userService` supplies the contact accounts, and it exports the `StaffContact` type.
+- `@infrastructure/adapters/mailer`: `enqueueEmail` queues the mail.
+- `@domain-primitives/time`: `DAY_MS` converts the TTL to milliseconds.
 
 ## Notes
-
-- **Sequential, not parallel:** recipients are told one after another deliberately; a parallel `Promise.all` would let one rejection mask the rest.
-- **Dedupe key shape:** `<kind>:<entity>` — guarantees one notice per situation per recipient regardless of how many times the event is delivered.
-- **`sets` on `StaffNoticeFacts` is optional:** only meaningful when the route's `sets` field is `'per-notice'`; otherwise the route carries the sets directly.
-- **`notifyStaff` return value** is the *potential* audience size (contacts with an address), not the number actually first-notified. Callers use `0` to detect "nobody reachable."
-- **`link` is required only for `'now'`** emails; digest and no-email routes never need one.
+- Recipients are told sequentially on purpose, so one failing write does not hide the others' writes behind a parallel rejection.
+- The mail is sent only when the write was the first for that `dedupeKey` and recipient, so redelivered events do not send duplicate mail.
+- `mailNow` deliberately discards the `enqueueEmail` promise. A comment in the file states that it never rejects and logs its own failure.
+- A notice stores its `sets`, and the code comments say a member's jurisdiction is read again at display time. `notifyStaffMember` relies on this.

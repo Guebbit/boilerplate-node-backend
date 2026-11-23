@@ -1,44 +1,38 @@
 ---
 source: src/modules/payments/services/disputes.ts
-sha256: 85e19c66ca913d1f7ff70cec7308d009354b8ef128db6156461a67dd2854b929
-generated_at: 2026-11-08T07:25:37.662797+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0f14e384598be98ee30306787804118d516210ba4b220d6f72f61a773a0df488
+context_sha256: b6d0afcd2af68971003f31bb676c2672297a6ec724696d26f8676e7ec3f7ad8e
+generated_at: 2026-11-22T06:49:38.457338+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/disputes.ts
 
 ## Purpose
-
-Handles provider-side dispute reports arriving via webhook delivery. It stores the dispute state on the payment, appends staff-timeline rows to the order, and announces a domain event — all within a single Mongoose transaction. A dispute here is explicitly **not** a refund: it never modifies `amountRefunded`, order status, or credit notes.
+Handles disputes (chargebacks/inquiries) as reported by the payment provider. A verified delivery carrying a dispute's state is stored on its payment, a staff timeline row is written, and events are announced, all in one transaction. The provider's report is taken from the delivery body itself, and ordering is by the stored `observedAt`, not arrival order. A dispute is not a refund: it never touches `amountRefunded`, the order status or a credit note. It only changes what a refund may do (rules live in `src/modules/payments/domain/disputes.ts`).
 
 ## Key elements
-
-- **`applyDisputeDelivery`** (exported) — Entry point. Validates that the report's currency matches the payment's (drops and warns on mismatch), converts the raw report via `recordOf`, and delegates to `storeDispute`.
-- **`storeDispute`** — Wraps the write in `announceInTransaction`: calls `paymentRepository.recordDispute`, then `appendRows`, then emits either `PAYMENT_DISPUTE_OPENED` or `PAYMENT_DISPUTE_UPDATED`. Returns `null` (no event) when the report is stale or a repeat.
-- **`recordOf`** — Converts a `ProviderDisputeState` (ISO-string dates) into a `DisputeRecord` with real `Date` objects. Stamps `closedAt` to `observedAt` when the status is in `CLOSED_DISPUTE_STATUSES`.
-- **`timelineTypes`** — Pure helper that returns which timeline entries the write earns: `dispute_opened` (first report) and/or `dispute_closed` (transitioned from open to closed). A closed→closed transition adds none.
-- **`payloadOf`** — Builds the `DisputeEventPayload` shared by both dispute events; uses `padDecimal` for the amount.
-- **`appendRows`** — Writes timeline rows **sequentially** via `orderService.appendTimeline` (a Mongoose session does not accept parallel operations).
-- **`CLOSED_DISPUTE_STATUSES`** — Readonly set (`won`, `lost`, `accepted`, `closed`) used to decide whether `closedAt` is stamped.
+- `applyDisputeDelivery(payment, report)`: exported entry point. Converts the report to a record, stores it, and logs whether it was applied or ignored as stale.
+- `disputeStanding(paymentId)`: exported. Reads the payment unscoped and returns `{ open, currency }` (whether any dispute, an inquiry included, is still open), or `undefined` if the payment is missing.
+- `recordOf`: turns a `ProviderDisputeState` into a `DisputeRecord`: dates revived, `openedAt` and `observedAt` both set from `observedAt`, `closedAt` stamped for won/lost/accepted/closed (`CLOSED_DISPUTE_STATUSES`), optional `evidenceDueBy` and `dashboardUrl`.
+- `storeDispute`: runs `announceInTransaction`: `paymentRepository.recordDispute`, then timeline rows, then the refunds-owed computation. Returns `null` when the report was stale or repeated.
+- `timelineTypes` / `appendRows`: add `dispute_opened` on a first report and `dispute_closed` when the dispute newly reads closed (closed to closed adds none), written with the session.
+- `flipsToWon`, `owedOf`, `owedAfter`: work out which refunds are owed again. This happens on a newly closed dispute or a lost-to-won flip. `owedAfter` re-reads the payment inside the transaction. `owedOf` combines `refundsOwedAfterWin` and `refundsOwedAfterDispute`, marking the latter `followsFlip: true`.
+- `payloadOf` / `announcementsOf`: build outbox announcements: `PAYMENT_DISPUTE_OPENED` (first write) or `PAYMENT_DISPUTE_UPDATED`, plus one `PAYMENT_REFUND_OWED_AFTER_DISPUTE` event per owed refund. All use the order ID as `aggregateId`.
 
 ## Relationships
-
-- **`src/kernel/outbox.ts`** — `announceInTransaction` wraps the repository write, timeline append, and event announcement in one transaction; the event is emitted only if the write succeeded.
-- **`src/modules/payments/repository.ts`** — `paymentRepository.recordDispute` persists the dispute on the payment and returns a `RecordedDispute` describing the outcome (`opened` / `updated` / `null`).
-- **`src/modules/payments/events.ts`** — Provides `PAYMENT_DISPUTE_OPENED`, `PAYMENT_DISPUTE_UPDATED` event names and the `DisputeEventPayload` type.
-- **`src/modules/payments/domain/disputes.ts`** (via `../domain`) — `isOpenDispute` is used by `timelineTypes` to decide whether a `dispute_closed` row is warranted.
-- **`src/modules/orders/index.ts`** (and `services/index.ts`) — `orderService.appendTimeline` writes the staff-timeline rows inside the same transaction session.
-- **`src/domain-primitives/money.ts`** — `padDecimal` formats the monetary amount in event payloads and timeline data.
-- **`src/modules/payments/providers/index.ts`** — Supplies the `ProviderDisputeState` type (the shape of the dispute as the delivery carried it).
-- **`src/modules/payments/model.ts`** — Supplies `DisputeRecord` and `PaymentDocument` types.
-- **`src/types/index.ts`** — `DisputeStatus` enum used for the closed-status set and comparisons.
-- **`src/infrastructure/adapters/logger.ts`** — Emits a warning on currency mismatch and an info log on successful/stale application.
+- `src/modules/payments/repository.ts` (`paymentRepository`): `recordDispute` does the conditional write, `findByOrderId` re-reads the payment in the session, `findByIdScoped` backs `disputeStanding`. `RecordedDispute` describes the write outcome.
+- `src/modules/payments/domain/index.ts`: `isOpenDispute`, `hasOpenDispute`, `bankKeptMoney`, `refundsOwedAfterDispute`, `refundsOwedAfterWin` and the `RefundOwedAfterDispute` type supply the dispute and refund rules.
+- `src/modules/payments/events.ts`: event name constants and `DisputeEventPayload`.
+- `src/kernel/outbox.ts`: `announceInTransaction` and `OutboxAnnouncement` give transactional announcement.
+- `src/modules/orders/index.ts`: `orderService`, used to write the timeline rows.
+- `src/modules/payments/model.ts` / `src/modules/payments/providers/index.ts`: `DisputeRecord`, `PaymentDocument`, `ProviderDisputeState` types.
+- `src/domain-primitives/money.ts`: `padDecimal` formats amounts for payloads and timeline data.
+- `src/infrastructure/adapters/logger.ts`: logs the outcome.
+- `src/types/index.ts`: `DisputeStatus` enum.
 
 ## Notes
-
-- **Ordering is by stored `observedAt`, not delivery arrival.** The provider's verified body is the source of truth; some providers cannot be queried later.
-- **Stale/repeat reports are a no-op.** `recordDispute` returns `null`, no timeline row is written, and no event is announced. The info log records the skip.
-- **Currency mismatch is a silent drop** (warning log, resolved `Promise`), not an error. The rationale is that all refund arithmetic lives in the payment's currency.
-- **`closedAt` is not a separate provider field.** It is derived from `observedAt` whenever the status is in `CLOSED_DISPUTE_STATUSES`.
-- **Sequential timeline writes are deliberate.** A Mongoose `ClientSession` does not accept concurrent operations, hence the `for…of` loop in `appendRows` rather than `Promise.all`.
-- Stryker mutational-testing disable/restore annotations guard the logging branches.
+- Inside a transaction the timeline rows are appended one after another, because a session does not take parallel operations.
+- The refunds-owed check reads the payment again inside the transaction, because the snapshot from the delivery predates the write.
+- A report in a different currency from the payment's is stored like any other. Only the refund arithmetic skips it (see `lostToChargebacks`), and staff check its amount in the provider's dashboard.
+- The log call is wrapped in Stryker disable/restore comments, so mutation testing skips it.

@@ -1,44 +1,41 @@
 ---
 source: src/modules/account/services/two-factor-lockout.ts
-sha256: 50169d764822db136d29832a8beffc1d368396df4fcd8a2395a1b4a1ec0a9efd
-generated_at: 2026-11-14T18:53:54.188341+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 50169d764822db136d29832a8beffc1d368396df4fcd8a2395a1b4a1ec0a9efd
+context_sha256: 48f0118ff8dce2f32ef65276448fe8c907de0ac2014813304257c3c1b0c3f9e6
+generated_at: 2026-11-22T03:43:38.116255+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/two-factor-lockout.ts
 
 ## Purpose
-
-Central verification entry point for checking a one-time code against an account's armed two-factor methods (and, as a fallback, backup codes), enforced behind a per-account wrong-code cap. Every flow that asks a signed-in user for a second-factor code routes through this file; it owns the reserve → compare → settle lifecycle and the lockout accounting.
+Checks a submitted code against an account's armed second factors (and backup codes) behind a per-account wrong-code cap. Every flow that asks for a code goes through this file, so the lockout rules live in one place.
 
 ## Key elements
-
-- **`FactorVerdict`** (exported type) — the three-way outcome of a single check: `'matched'`, `'wrong'`, or `'locked'`.
-- **`verifyArmedFactor(user, code, context)`** (exported) — reserves an MFA attempt atomically via `accountUserService.reserveMfaAttempt`, then delegates to `verifyAnyFactor`. On match, resets the counter; on lock, notifies and short-circuits without comparing.
-- **`settleVerdict(verdict, user, onMatch)`** (exported) — maps a `FactorVerdict` to an HTTP response: calls `onMatch` for success, returns a lock rejection (429) or wrong-code rejection (422).
-- **`proveSecondFactor(user, code, context)`** (exported) — the `otp` half of `POST /account/reauth`; guards on `twoFactorEnabledAt` then runs `verifyArmedFactor` → `settleVerdict`, persisting factor state on success.
-- **`withVerifiedCode<T>(userId, code, context, precondition, onMatch)`** (exported) — generic wrapper for the three self-service mutations (remove method, disable 2FA, regenerate backup codes): loads the caller, runs a caller-specific precondition, verifies the code, and applies the mutation. Catches DB errors into a `rejectDatabaseEnvelope`.
-- **`consumeBackupCode`** (internal) — hashes the code with the account's scrypt salt, constant-time-compares against every stored digest (no early exit), then atomically spends it.
-- **`verifyInOrder`** (internal) — recursively walks armed factor handlers sequentially; each handler mutates its own entry, so order and non-parallelism are invariants.
-- **`verifyAnyFactor`** (internal) — tries `verifyInOrder` first, falls back to `consumeBackupCode`.
+- `FactorVerdict` – `'matched' | 'wrong' | 'locked'`.
+- `verifyArmedFactor(user, code, context)` – reserves an attempt with one atomic write (`reserveMfaAttempt`, using `MFA_MAX_FAILURES` / `MFA_LOCK_MS`). If no reservation was made it returns `'locked'` without comparing anything. If this attempt triggered the lock, it calls `notifyLocked`. Otherwise it verifies the code, and a match resets the counter (`resetMfaAttempts`).
+- `settleVerdict(verdict, user, onMatch)` – maps a verdict to a response. `matched` runs `onMatch`, `locked` returns `rejectLocked`, and `wrong` returns `rejectWrongCode`.
+- `proveSecondFactor(user, code, context)` – the `otp` half of `POST /account/reauth`. It returns 422 if `twoFactorEnabledAt` is unset, and otherwise verifies and persists the method state with `persistTwoFactorMethods`. Per its docs, a wrong code also gives 422 and a locked account gives 429.
+- `withVerifiedCode(userId, code, context, precondition, onMatch)` – the shared shape for the caller's own 2FA actions (remove a method, disable 2FA, regenerate backup codes). It loads the caller via `withOwnAccount` and runs `precondition`, which can reject before any attempt is spent. It then verifies the code and runs `onMatch`. Errors become `rejectDatabaseEnvelope('auth', error)`.
+- Internal helpers:
+  - `verifyInOrder` walks the armed factors sequentially and stops at the first match.
+  - `verifyAnyFactor` tries the armed factors, then backup codes.
+  - `consumeBackupCode` hashes the code with the account's salt, compares it against every stored digest using `constantTimeEqual`, and spends the code via `accountUserService.spendBackupCode`.
 
 ## Relationships
-
-- **`src/modules/users/friends/account.ts`** — provides `accountUserService`, the data-layer for all MFA state mutations (reserve, reset, spend backup code, persist methods).
-- **`src/modules/account/services/two-factor-outcomes.ts`** — supplies `armedEntries` (ordered factor list), `rejectWrongCode`, `rejectLocked`, and `notifyLocked` used in the response path.
-- **`src/modules/account/two-factor/index.ts`** (barrel) — source of `MFA_LOCK_MS`, `MFA_MAX_FAILURES`, `hashBackupCode`, and the `TwoFactorMethodHandler` type.
-- **`src/modules/account/services/caller.ts`** — `withOwnAccount` loads the caller's `UserDocument` for `withVerifiedCode`.
-- **`src/infrastructure/security/constant-time.ts`** — `constantTimeEqual` used in the backup-code digest comparison loop.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` and the `ResponseSuccess` / `ResponseReject` types.
-- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseEnvelope` for the DB-error catch in `withVerifiedCode`.
-- **`src/infrastructure/i18n/index.ts`** — `t()` for the "not enabled" message in `proveSecondFactor`.
-- **`src/modules/account/services/reauth.ts`** — upstream caller of `proveSecondFactor` (the `otp` endpoint).
+- `src/modules/account/services/two-factor-outcomes.ts` supplies `armedEntries`, `rejectWrongCode`, `rejectLocked` and `notifyLocked`.
+- `src/modules/account/services/caller.ts` supplies `withOwnAccount`.
+- `src/modules/account/two-factor/index.ts` supplies `MFA_LOCK_MS`, `MFA_MAX_FAILURES`, `hashBackupCode` and the `TwoFactorMethodHandler` type. Each armed factor's handler provides `verify`.
+- `src/modules/users/friends/account.ts` (`accountUserService`) holds the persistence: `reserveMfaAttempt`, `resetMfaAttempts`, `spendBackupCode` and `persistTwoFactorMethods`.
+- `src/infrastructure/security/constant-time.ts` supplies `constantTimeEqual`.
+- `src/infrastructure/http/response.ts` and `src/infrastructure/http/errors.ts` supply `generateSuccess`, `generateReject` and `rejectDatabaseEnvelope`.
+- `src/infrastructure/i18n/index.ts` supplies `t` for the "not enabled" message.
+- `CallerContext` (from `@types`) provides the locale fallback for the lock notice.
 
 ## Notes
-
-- **Backup codes are always tried last.** A stolen backup-code list must never shadow a still-working authenticator; the ordering in `verifyAnyFactor` is intentional and non-negotiable.
-- **The backup-code digest loop never short-circuits.** All stored digests are compared before returning, so wall-clock time leaks no information about which slot (if any) matched.
-- **`verifyInOrder` is recursive on purpose.** Each handler mutates its entry (TOTP high-water mark, burned code); a losing branch must not consume anything, so strict sequential evaluation is a correctness requirement, not a style choice.
-- **Enrolment `/confirm` does not pass through this file.** It checks a factor that is not yet armed, so a miss there would not advance the lockout counter.
-- **The attempt reservation is a single atomic write.** Parallel requests cannot all read "under the cap"; the second and later callers get `reserved: false` and receive the lock response without ever comparing the code.
-- **`withVerifiedCode` is the only export that takes `userId` (a string)** rather than a pre-loaded `UserDocument`; it resolves the document itself via `withOwnAccount`.
+- The attempt is reserved before the comparison, so a parallel burst cannot all read "under the cap" together.
+- Backup codes are tried only after every armed factor has declined. Otherwise a stolen backup list could shadow a working authenticator.
+- The backup-code loop never exits early, so its timing does not reveal which stored position matched. The spend is a single conditional pull, so of two requests with the same code only one succeeds.
+- Factors are verified strictly sequentially, because each handler mutates its own entry (a replay high-water mark, a burned code) and a losing branch must not spend anything.
+- Enrolment `/confirm` deliberately does not use this file, since it checks a factor that is not armed yet.
+- `proveSecondFactor` persists a spent backup code or TOTP step itself, so the caller has nothing left to write.

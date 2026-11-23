@@ -1,33 +1,36 @@
 ---
 source: src/modules/shop/openapi.yaml
-sha256: e09818ff6d7d8c913a58464ec280075a8e8ab4252e7fa07ee7ed8d50833dc27a
-generated_at: 2026-11-08T08:20:40.336653+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b0feb22002c9b5f08edd31ce3890171b7b8a061c1d47e3cc1369ebf80cd0a1b2
+context_sha256: b380e9ec77a16b0e4bb923145f8f8b9e218831058ac8aec92645e7a121cfda82
+generated_at: 2026-11-22T07:47:19.273143+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 contract defining the single public read endpoint of the shop module: `GET /shop`. It documents the shop's immutable commerce settings (currency, ship-to countries, return address, postage payer, backorder promise, time zone) so API consumers and UI screens can discover the shop's identity without reading source.
+OpenAPI 3.1.0 contract (version `0.1.0`) for the `shop` module. It defines a single public endpoint that exposes the shop's commerce settings: currency, ship-to countries, return address, return postage payer, backorder promise and time zone.
 
 ## Key elements
-
-- **`paths./shop.get`** (`operationId: getShop`) — returns the `Shop` object. No auth (`security: []`); treated as cheap, cacheable, and unchanged without a redeploy.
-- **`Shop` schema** — required fields: `currency`, `minorUnits`, `shipToCountries`, `returnAddress`, `returnPostagePayer`, `backorderPromiseDays`, `timeZone`.
-- **`ShopAddress` schema** — the return-destination address (street/city/zip/country, optional name).
-- **`ReturnPostagePayer` schema** — enum `consumer | shop`; indicates who pays return postage.
-- **`tags`** — single tag `Shop` (family: "Running the shop").
-- **External `$ref`s** — `CurrencyCode` and `CountryCode` are pulled from `../../../shared/contracts/openapi.root.yaml`.
+- **Tag `Shop`** (family "Running the shop"): the tag this module's operations file under.
+- **`GET /shop`** (`getShop`): public (`security: []`), annotated `x-cache: "max-age: 60"`. Returns a `Shop` as `application/json`. Settings only change on redeploy.
+- **`Shop` schema**: closed object (`additionalProperties: false`) with all of these required:
+  - `currency`: ISO-4217 code, the same currency `Product.currency` reports.
+  - `minorUnits`: integer 0–4, the decimal places of the currency.
+  - `shipToCountries`: array of country codes (`NODE_SHIP_TO_COUNTRIES`). Checkout refuses a method with `requiresAddress` when the address falls outside this list.
+  - `returnAddress`: a `ShopAddress`.
+  - `returnPostagePayer`: a `ReturnPostagePayer`.
+  - `backorderPromiseDays`: integer ≥ 1. A legal value fixed by the server (CRD Art. 18(1)), not a setting.
+  - `timeZone`: IANA zone name such as `Europe/Rome`. Promised days (`releaseDate`, `restockDate`, `agreedAt`, `expectedAt`) are days on this calendar and are sent as plain days.
+- **`ShopAddress` schema**: closed object. Required fields are `street`, `city`, `zip` and `country`; `name` is optional. It is the configured return address (`NODE_RETURN_ADDRESS_*`), or the operator's postal address when none is fully set.
+- **`ReturnPostagePayer` schema**: enum `consumer | shop`. The setting is `NODE_RETURN_POSTAGE_PAYER`, and a return freezes the value it was opened under.
 
 ## Relationships
-
-- **`src/modules/shop/module.ts`** — this YAML is the declarative contract *for* that module's HTTP surface; the module implements the `getShop` operation it specifies.
-- **`src/modules/returns/module.ts`** — consumes the `returnAddress` and `returnPostagePayer` values exposed here (a return "freezes the value it was opened under," per the schema description).
+- `src/modules/returns/openapi.yaml`: the returns module is the natural consumer of `ReturnPostagePayer` and `ShopAddress`, which describe where and at whose cost goods are returned. The description says a return freezes the payer value. This file does not reference the returns file directly.
 
 ## Notes
-
-- `backorderPromiseDays` is documented as a legal constant (CRD Art. 18(1)), not a runtime setting — treat it as fixed per deployment.
-- `minorUnits` exists so clients can build price inputs correctly; amounts *received* already carry their own precision, so clients must not re-apply it.
-- Bank-transfer details are deliberately **excluded** from this endpoint; they travel on individual orders.
-- The time zone is an IANA name (e.g. `Europe/Rome`) and date-like fields elsewhere in the system are plain calendar days on that zone — no client-side conversion is expected.
+- The schemas are labeled as ones "only this module's paths reference", so they live here rather than in a shared location.
+- `CountryCode` and `CurrencyCode` are not defined here. They are `$ref`'d from a shared root contract.
+- The description points to `GET /config` (defined elsewhere) for the legal identity and Terms version.
+- Bank-transfer details are deliberately not published here. They travel on each order.
+- `currency` uses `allOf` around the `$ref` so a sibling `description` can be attached.

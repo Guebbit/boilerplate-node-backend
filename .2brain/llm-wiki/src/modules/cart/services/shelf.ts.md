@@ -1,37 +1,34 @@
 ---
 source: src/modules/cart/services/shelf.ts
-sha256: 084ce58429254c6811d7ebf9407c2876fad31d065db9e77332004d36621f5174
-generated_at: 2026-11-08T05:18:17.471973+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8c12f094644c558cb1cf08951cc63fcea4490abbb40bad34399fb222b61df980
+context_sha256: 47a8684ed0548335fe31fb9a11150ee00133c6c0ee915b6dbc1a192189bb759d
+generated_at: 2026-11-22T04:37:05.748353+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/services/shelf.ts
 
 ## Purpose
-
-Provides the "shelf" abstraction: a single read of a product's catalogue document **and** its inventory ledger units, combined into one record. All cart availability decisions (merge, wishlist, preorder checks) funnel through this file so the catalogue and ledger are fetched in exactly two queries regardless of product count.
+Reads "what is on the shelf" for a set of products: the catalogue product joined with the inventory ledger's units, fetched together so the cart merge needs only two queries per request (one to the catalogue, one to the ledger). It also turns a shelf into a `LineAvailability` using the cart domain's single precedence rule.
 
 ## Key elements
-
-- **`Shelf`** (interface) — One product's shelf: the product document (`null` = hard-deleted), the ledger's `available` units, and an optional `shelf` count (the portion the shelf covers vs. backorder/preorder spillover).
-- **`readShelf(productIds)`** — Deduplicates ids, queries `productService.findManyByIds` then `inventoryService.availableFor` (passing preorder/backorder id sets from `./preorder` helpers), and returns a `Map<string, Shelf>` preserving first-seen order.
-- **`shelfAvailability(shelf, quantity?)`** — Applies the cart's single precedence rule (via `lineAvailability` from `../domain`) to a shelf, using the ledger's count rather than any cached catalogue copy.
-- **`isListed(shelf)`** — Convenience boolean: `true` when the catalogue shows the product publicly (i.e. availability is not `'removed'`).
-- **`productAvailabilityFor(productIds)`** — Batch "is it listed / what's its state" for wishlist-style lines (no quantity); returns `Map<string, LineAvailability>` and never yields `'insufficient_stock'`.
+- **`Shelf`** (interface): one product's shelf.
+  - `product`: the lean product document, or `null` if hard-deleted. The join is unscoped, so hidden or soft-deleted products still resolve.
+  - `available`: units for sale from the ledger, or `undefined` if the product has no level row.
+  - `shelf?`: the shelf count alone, which distinguishes a line the shelf covers from one that spills. It is `undefined` for a product with no level row.
+- **`readShelf(productIds)`**: dedupes the ids, then calls `productService.findManyByIds`. It derives the preorder and backorder id sets from the catalogue result, then calls `inventoryService.availableFor`. It returns a `Map<id, Shelf>` with one entry per distinct id, in first-seen order.
+- **`shelfAvailability(shelf, quantity?)`**: calls the domain's `lineAvailability` with the shelf's product (via `availabilityProductOf`), `available`, `shelf` and `quantity`. Omit `quantity` for a wishlist line or a bare "is it listed" test.
+- **`isListed(shelf)`**: true unless the shelf's availability is `'removed'`. It applies the same test as `findPublicById`; a product that is merely off sale still counts as listed.
+- **`productAvailabilityFor(productIds)`**: `readShelf` followed by `shelfAvailability` with no quantity, for wishlist lines. It returns a `Map<id, LineAvailability>` in two queries, and the result is never `insufficient_stock`.
 
 ## Relationships
-
-- **`@modules/products`** (`productService`, `ProductDocument`) — Source of catalogue documents; `findManyByIds` is the first of the two queries.
-- **`@modules/inventory`** (`inventoryService`) — Source of ledger units; `availableFor` is the second query and receives preorder/backorder id lists.
-- **`./preorder`** (`availabilityProductOf`, `backorderIdsOf`, `preorderIdsOf`) — Transforms product data into the id subsets the inventory service needs, and adapts the raw product for `lineAvailability`.
-- **`../domain/availability`** (`lineAvailability`) — The single function that maps product + available + shelf + quantity to a `LineAvailability` enum.
-- **`../services/index.ts`** — Re-exports this module's public surface to the rest of the cart service layer.
-- **`create-repository`** (`Lean`) — Type-level: the lean (hydrated) shape of a product document.
-- **`@types`** (`LineAvailability`) — Shared enum used as the return type of availability checks.
+- **`@modules/products`** (`productService`, `ProductDocument`): supplies the catalogue read, `findManyByIds`.
+- **`@modules/inventory`** (`inventoryService`): `availableFor` supplies the ledger positions, given the preorder and backorder id sets.
+- **`./preorder`**: provides `preorderIdsOf`, `backorderIdsOf` and `availabilityProductOf`, which adapt catalogue products for the ledger query and for the availability rule.
+- **`../domain`**: provides `lineAvailability`, the precedence rule.
+- **`@types`**: provides the `LineAvailability` type.
+- **`@infrastructure/persistence/create-repository`**: provides the `Lean` type used for `product`.
 
 ## Notes
-
-- `readShelf` always produces an entry for every distinct id, even if the product was hard-deleted (`product: null`). Downstream code must handle that case.
-- The `shelf` field on the `Shelf` interface is optional and distinct from `available`: it represents the portion covered by on-shelf stock when the remainder spills into backorder or preorder. Its absence means the split is irrelevant (no spillover).
-- `productAvailabilityFor` intentionally omits `quantity`, so it can never return `'insufficient_stock'`; it is the wishlist/bare-listing path, not the cart-line path.
-- The module doc references `docs/modules/cart.md#stock-checked-in-three-places` for the broader design rationale.
+- The ledger query depends on the catalogue result, so the two reads are sequential, not parallel.
+- A `null` product means hard-deleted, and a missing `available` or `shelf` means the product has no level row.

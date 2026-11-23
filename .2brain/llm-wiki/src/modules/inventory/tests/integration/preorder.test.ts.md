@@ -1,49 +1,51 @@
 ---
 source: src/modules/inventory/tests/integration/preorder.test.ts
-sha256: 4a2b6f9dcc59c419f5e95ef9a8c422ff7c866554053a052d7bba43f6f2c1da36
-generated_at: 2026-11-08T06:07:17.189985+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a73dbff85a89a6ecf6000310e38ba182d84096efe670fb25406da7633b6b7928
+context_sha256: da73864802c4c44ae3338020445900f62f39066457c541f419c18c3530e3426a
+generated_at: 2026-11-22T05:27:33.543133+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/tests/integration/preorder.test.ts
 
 ## Purpose
-
-Integration tests that exercise the full preorder lifecycle through `inventoryService`: claiming against `backorderLimit` (never touching `onHand`), committing (payment), receiving stock into the queue, and releasing or expiring the claim. Runs against a real database via `setupTestDb`.
+Integration test suite for the preorder allowance in the inventory module. It exercises the flow through the service entry points: claiming against `backorderLimit` (not the shelf), payment stamping the queue key, a stock receipt allocating to paid holds oldest-payment-first in its own transaction, and what release or expiry gives back. It runs against a real test DB (`setupTestDb()`) and replaces the audit port with a mock.
 
 ## Key elements
-
-- **`anOrderId()`** – returns a unique, hex-padded 24-char string per call; used as the order key for holds.
-- **`levelOf(productId)`** – reads the four stock-level counters (`onHand`, `reserved`, `backordered`, `backorderLimit`) for assertions.
-- **`preorderProduct(limit)`** – creates a zero-stock, backorder-enabled product and sets its `backorderLimit`; returns the product ID.
-- **`claim(productId, quantity)`** – shorthand for a single `{ productId, quantity, kind: 'backorder' }` line item.
-- **`announced()`** – reads `PREORDER_ALLOCATED` payloads from the outbox in insertion order.
-- **`describe('reserving a preorder')`** – verifies the claim increments `backordered`, rejects over-allowance, rejects products without an allowance, never draws from `onHand`, records a `StockMovementReason.backorder` row, and rolls back on multi-line rejection.
-- **`describe('giving a preorder claim back')`** – covers `releaseForOrder`, TTL expiry sweep, `releaseCommittedForOrder`, and partial `releaseLinesForOrder`.
-- **`describe('paying for a preorder')`** – verifies `commitForOrder` stamps `committedAt` and immediately allocates if stock already arrived.
-- **`describe('a receipt serving the queue')`** – verifies FIFO-by-payment-time allocation, partial-delivery splitting, and that allocated units are not sellable in the interim.
+- **Local helpers**
+  - `anOrderId()` produces a unique 24-character hex-style order id per call.
+  - `levelOf(productId)` returns `onHand`, `reserved`, `backordered` and `backorderLimit` from the stock level.
+  - `preorderProduct(limit)` creates a product with `onHand: 0` and `allowBackorder: true`, then sets the limit via `inventoryService.setBackorderLimit`.
+  - `claim(productId, qty)` builds a line with `kind: 'backorder'`.
+  - `announced()` reads `PREORDER_ALLOCATED` outbox events (payloads, in order).
+- **`reserving a preorder`**
+  - A claim raises `backordered` and leaves `onHand` and `reserved` at 0.
+  - Over-limit requests are refused with `shortfalls` reporting `available`.
+  - A product with no allowance is refused.
+  - Stock on hand does not count as preorder room.
+  - The ledger movement has `reason: backorder` with only `backorderedDelta` set.
+  - A refused line rolls back the other lines of the same order.
+- **`giving a preorder claim back`**
+  - Covers `releaseForOrder`, expiry through `runReservationSweep` (with `NODE_RESERVATION_TTL_MINUTES: '0'`), and `releaseCommittedForOrder`.
+  - Also covers `releaseLinesForOrder` for a partial cancel inside `withTransaction`. It leaves a hold item with quantity 1 and kind `backorder`.
+  - In every case the allowance returns, not `reserved`.
+- **`paying for a preorder`**
+  - `commitForOrder` sets status `committed` and `committedAt`, the queue key.
+  - If stock arrived while the hold was unpaid, committing serves it immediately and announces `waiting: 0`.
+- **`a receipt serving the queue`**
+  - `receive` allocates oldest payment first, not oldest order.
+  - A short delivery splits the hold into a `stock` item and a remaining `backorder` item, with `waiting` set to the remainder.
+  - The converted units are not sellable in between (`available` is 0).
+  - The last visible test, which checks movement reasons, is cut off.
 
 ## Relationships
-
-- **`src/modules/inventory/services/index.ts`** – the SUT; all calls go through `inventoryService`.
-- **`src/modules/inventory/repository.ts`** – `reservationRepository`, `stockLevelRepository`, `stockMovementRepository` are read directly in assertions.
-- **`src/modules/inventory/events.ts`** – `PREORDER_ALLOCATED` event name used to query the outbox.
-- **`src/modules/inventory/audit.ts`** – imported (`inventoryAuditActions`); the audit port itself is fully mocked (see Notes).
-- **`src/kernel/outbox.ts`** – `outboxEventModel` queried to verify emitted events.
-- **`src/infrastructure/runtime/database.ts`** – `withTransaction` used to wrap `releaseLinesForOrder`.
-- **`src/types/index.ts`** – `StockMovementReason` enum for movement assertions.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` helper for fixture setup.
-- **`src/modules/products/index.ts`** – `productService` imported (available for product-side assertions if needed).
-- **`src/infrastructure/observability/audit.ts`** – module-level `jest.mock` replaces it with `auditPortMock()`.
-- **`tests/support/ports.ts`** – provides the `auditPortMock` factory and `observePort` helper.
-- **`tests/support/callers.ts`** – `testCallerContext` and `callerContextAs` for caller identity in `receive` calls.
-- **`tests/support/environment.ts`** – `withEnvironmentOverrides` used to force `NODE_RESERVATION_TTL_MINUTES=0` in the expiry test.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the real DB before tests run.
+- **Services under test:** `inventoryService` (`../../services`), plus `productService` from `@modules/products` (imported).
+- **Persistence:** reads state through `stockLevelRepository`, `stockMovementRepository` and `reservationRepository` (`../../repository`). Reads `outboxEventModel` (`@kernel/outbox`) for `PREORDER_ALLOCATED` (`../../events`). Uses `withTransaction` from `@infrastructure/runtime/database`.
+- **Fixtures:** `createProduct` from `@modules/products/tests/factories`.
+- **Test support:** `setupTestDb`, `withEnvironmentOverrides`, `observePort`, `auditPortMock`, `callerContextAs` and `testCallerContext`. `api` is also imported. The visible portion uses `testCallerContext` for `receive`.
+- **Audit:** `@infrastructure/observability/audit` is mocked with `auditPortMock()` from `tests/support/ports.ts`. `inventoryAuditActions` (`../../audit`) and `StockMovementReason` (`@types`) are imported.
 
 ## Notes
-
-- The audit port is **replaced**, not spied on: `jest.mock('@infrastructure/observability/audit', …)` returns a fresh mock via `auditPortMock()`. Do not add `jest.spyOn` on audit inside individual tests.
-- `anOrderId()` is a module-level counter, not a UUID generator. Order IDs are deterministic within a test run; tests that need distinct orders rely on the increment.
-- Queue allocation order is **by `committedAt` (payment time)**, not by order creation time. The "oldest payment first" test deliberately commits `second` before `first` to prove this.
-- `onHand` stock is explicitly **not** eligible for preorder claims, even when a `backorderLimit` is set — the "does not sell the shelf" test guards against conflating the two counters.
-- The file is truncated in the graph; the final assertion in "a receipt serving the queue" continues past the visible content (a `StockMovementReason` array check).
+- The audit port is replaced with `jest.mock` rather than spied on.
+- Receipts only find committed (paid) holds. Unpaid holds are not allocated.
+- Order ids are padded with the letter `c`, so ids from other test files do not collide.

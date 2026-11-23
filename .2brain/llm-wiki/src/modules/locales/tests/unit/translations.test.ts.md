@@ -1,28 +1,26 @@
 ---
 source: src/modules/locales/tests/unit/translations.test.ts
-sha256: a57ac1028701155e39a1fd003455832e3cea5055faf0ccb52c66386de9ee2812
-generated_at: 2026-11-08T06:29:54.861901+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a57ac1028701155e39a1fd003455832e3cea5055faf0ccb52c66386de9ee2812
+context_sha256: 580443921f310eb8dabb75d72c699bb1a5c4da78c9e89145b87c005e3c67b9a5
+generated_at: 2026-11-22T05:52:10.535024+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/tests/unit/translations.test.ts
 
 ## Purpose
-Unit tests for the `deriveSourceDigest` pure function from the locales repository. This file covers the deterministic, side-effect-free half of the translation write path — verifying that the digest is a stable, order-independent fingerprint of a translation's content.
+Unit tests for `deriveSourceDigest`, the pure (no database) part of the translation write path. Anything that touches the `locales`/`translations` collections or the registry is covered separately by Mongo-driven tests in `src/modules/locales/tests/integration/translations.test.ts`.
 
 ## Key elements
-- **`deriveSourceDigest`** (imported from `../../repository`) — the sole function under test. Expects a plain object of translation fields and returns a digest string.
-- **`describe('deriveSourceDigest')`** block containing four assertions:
-  - *Order-independence* — swapping key order in the input object yields the same digest.
-  - *Value sensitivity* — editing a field value changes the digest.
-  - *Key sensitivity* — adding a key (even with an empty-string value) changes the digest.
-  - *Determinism* — two calls with structurally identical (but separately allocated) objects produce the same digest.
+- `describe('deriveSourceDigest')` contains four tests, each checking a property of the digest computed over a map of source fields (for example `{ title, description }`):
+  - **Key order does not matter.** The same fields in a different key order produce the same digest.
+  - **Value changes matter.** Editing a value (`'Cuccia'` to `'Cuccia grande'`) changes the digest.
+  - **Added keys matter.** Adding a key changes the digest even when its value is an empty string (`description: ''`).
+  - **Determinism.** Two calls with identical content, one using a spread copy, return equal digests.
 
 ## Relationships
-- **`src/modules/locales/repository.ts`** — provides the `deriveSourceDigest` export that is the target of every test in this file.
-- **`../integration/translations.test.ts`** (referenced in the module doc comment) — the complementary integration suite that exercises the Mongo/registry-driven half of the same write path.
+- Imports `deriveSourceDigest` from `src/modules/locales/repository.ts` and tests it directly. It does not mock or exercise any other part of the repository.
 
 ## Notes
-- The file's own `@module` comment explicitly scopes it: anything that touches `locales`/`translations` collections or the registry is *not* tested here — see the integration suite instead.
-- Fixtures use short Italian strings (`'Cuccia'`, `'Comoda'`) purely as sample content; they carry no locale-specific meaning in the assertions.
-- The tests treat `deriveSourceDigest` as a pure function (no mocks, no setup/teardown, no async), consistent with its description as the "pure half" of the write path.
+- The digest is compared only for equality or inequality. The tests never check its format or length.
+- The unit tests do not cover how the digest is used to detect stale translations. Per the header comment, the write path is covered in the integration test.

@@ -1,30 +1,28 @@
 ---
 source: shared/rules/log-redaction.yaml
-sha256: 55d00882ea7d6762eef3e2c8761feb65a6e299714a97417fddcfb257ce1bad9f
-generated_at: 2026-11-14T17:46:08.050022+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 55d00882ea7d6762eef3e2c8761feb65a6e299714a97417fddcfb257ce1bad9f
+context_sha256: 5eaac92c499bf7c07c429aaadf99faaa8bd62e8f8f7d183f0a8135f6fecfbc79
+generated_at: 2026-11-22T02:26:17.880224+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/log-redaction.yaml
 
 ## Purpose
-
-Declarative rule set that defines which fields, key fragments, and URL parameters must never appear in cleartext in log lines or trace spans. It separates **credentials** (always replaced with a redaction marker) from **personal data** (handling governed by the `NODE_LOG_PERSONAL_FIELDS` env var: hash, redact, or plain).
+Declares what a log line or trace span may never carry in clear. It is a data-only rule list: key names (and URL query parameters) that must be redacted or treated as personal data. Matching is done after normalisation (lowercase, `_` and `-` dropped), so one entry covers `new_password`, `newPassword` and `new-password`.
 
 ## Key elements
-
-- **`sensitiveFields`** — Exact-match list of credential field names (passwords, tokens, API keys, card numbers, IBAN, etc.). Matching is case-insensitive and ignores `_`/`-` (e.g. `new_password`, `newPassword`, `new-password` all hit one entry). On match the value is replaced with a marker; it is **never** hashed-and-kept.
-- **`sensitiveKeyFragments`** — Substring matches (`password`, `secret`, `token`, `signature`, `otpauth`, `backupcode`) that catch compound names like `resetToken`, `webhookSecret`, `x-hub-signature`, `otpauthUrl`. Deliberately excludes `code` and any broad `code|key|link` pattern to avoid false positives on `idempotencyKey`, `statusCode`, `linkCount`.
-- **`personalFields`** — PII fields (`email`, `ip`, `phone`, `street`, `zip`, `fullname`). Treated differently from credentials: the log mode (`NODE_LOG_PERSONAL_FIELDS`) decides whether they are hashed, redacted, or left plain.
-- **`traceUrlSecrets`** — Query parameters (`code`, `state`, `email`) that a trace span must never record in its URL, covering OAuth callback one-time codes, CSRF state, and staff-search emails.
+- `sensitiveFields`: exact key names for credentials (passwords, tokens, `authorization`, `cookie`, `set-cookie`, `x-api-key`, `otp`, `jwt`, `secret`, `api_key`, `private_key`, `client_secret`, card data such as `credit_card`/`card_number`/`cvv`, `ssn`, `iban`, etc.). These are replaced with a marker, never hashed-and-kept. The generic names `key`, `linkurl`, `challenge`, `verifier` are exact-match only.
+- `sensitiveKeyFragments`: substrings that flag a key as secret: `password`, `secret`, `token`, `signature`, `otpauth`, `backupcode`. Covers spellings such as `resetToken`, `webhookSecret`, `x-hub-signature`.
+- `personalFields`: `email`, `ip`, `phone`, `street`, `zip`, `fullname`. These are not credentials; the log mode `NODE_LOG_PERSONAL_FIELDS` decides whether they are hashed, redacted or left plain.
+- `traceUrlSecrets`: query parameters no trace span may carry: `code` (OAuth callback one-time code), `state` (CSRF), `email` (staff search).
 
 ## Relationships
-
-- **`shared/rules/semantic-log-names.yaml`** — Described in this file's comments as the "twin" rule set. Both files form the same union with the `secret: true` rows of `cookies.yaml` to produce the full redaction list. Keep the two in sync when adding or removing fields.
+- `shared/rules/cookies.yaml`: cookie names are intentionally not listed here. Its `secret: true` rows are added to `sensitiveFields`, so effective redaction is this file UNION those rows. The comment says the "twin" implementation does the same.
+- `shared/rules/semantic-log-names.yaml`: no interaction is visible in this file's content.
 
 ## Notes
-
-- `key` in `sensitiveFields` is an **exact** name only. Adding it to `sensitiveKeyFragments` would redact benign fields like `idempotencyKey`, `statusCode`, `linkCount`.
-- `code` is intentionally **absent** from `sensitiveKeyFragments` (debuggers rely on reading it) but **present** in `traceUrlSecrets` (OAuth/CSRF one-time values must not leak into span URLs).
-- The `to` field (mail transition/diff key `{ from, to }`) is deliberately left readable and not listed under `personalFields`.
-- Cookie names are **not** listed here; per the file's comments they are pulled in from `cookies.yaml` (`secret: true` rows) at runtime.
+- Credentials and personal data are kept in separate lists on purpose, because only personal data is affected by the log mode.
+- Broad patterns are deliberately avoided. `key` is exact-only so it does not catch `idempotencyKey`, `statusCode` or `linkCount`. `code` is left out of the fragments because it is "the first thing a debugger reads", and no broad `code|key|link` pattern is used.
+- `to` is deliberately not personal data. It is the transition/diff key (`{ from, to }`) and stays readable, while a mail recipient is logged as `email`.
+- `code` and `state` are redacted only in trace URLs (`traceUrlSecrets`), not as general log keys.

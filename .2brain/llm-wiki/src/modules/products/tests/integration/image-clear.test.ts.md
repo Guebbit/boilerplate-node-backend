@@ -1,35 +1,35 @@
 ---
 source: src/modules/products/tests/integration/image-clear.test.ts
-sha256: 838b76541e36797a81623eb77e9c2e5295d949ae28c58f2075ee39b58de9f5e6
-generated_at: 2026-11-08T07:51:30.909566+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fbc72a2dae881ef8bb2346c6042dd4e3edc8f571360655fea289c276f20afb56
+context_sha256: 4a8a3c7fb9447ca9c695b727ad9fb2a822303d2d2045ab990ea9cde1ec6a463f
+generated_at: 2026-11-22T07:16:34.806660+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/integration/image-clear.test.ts
 
 ## Purpose
-
-Integration test for `productService.updateById` when `imageUrl: null` is passed. It verifies the field is truly *unset* in the database (not defaulted to `""`) and that the corresponding picture and thumbnail files are removed from disk — using a real temp directory and a real test database, because a mocked filesystem cannot confirm *which* files are deleted.
+Integration test for `productService.updateById` when called with `imageUrl: null`. It verifies that the image fields are truly unset in MongoDB (no placeholder written) and that the old image file and its thumbnail are deleted from disk only after the save succeeds. It uses real files in a temp directory and a real store, because a mocked store cannot show *which* files are removed.
 
 ## Key elements
-
-- **`PICTURE` / `THUMBNAIL`** – Fixed relative paths (`/images/picture-abc.png`, `/images/thumbs/v1/picture-abc.webp`) representing the files a completed image-upload pipeline would leave behind.
-- **`storedRow(id)`** – Fetches the product via `productModel.findById(id).lean()` so Mongoose does not apply schema defaults (e.g. `""` for undefined) and the assertion sees the raw stored shape.
-- **`beforeEach`** – Creates a `mkdtemp` root, writes real bytes to the picture and thumbnail paths, and points `NODE_PUBLIC_PATH` at that root via `setEnvironment`.
-- **`afterEach`** – Recursively removes the temp root.
-- **Four test cases** covering: (1) fields are absent from the stored doc, (2) both files are gone after the save, (3) files and fields are untouched when the update omits image fields, (4) no-op when the product never had an image.
+- `setupTestDb()` – sets up the test database for the suite.
+- `root` / `beforeEach` / `afterEach` – create a temp directory (`image-clear-products-*`), write fixture files for the picture and thumbnail under it, point `NODE_PUBLIC_PATH` at it via `setEnvironment`, and remove the directory after each test.
+- `PICTURE`, `THUMBNAIL` – URL paths of the fixture image and thumbnail, relative to `root`.
+- `storedRow(id)` – reads the product with `productModel.findById(id).lean()`, so the raw stored document is seen with no Mongoose defaults applied.
+- Test cases in `describe('productService.updateById — imageUrl: null')`:
+  - Clearing unsets both `imageUrl` and `thumbnailUrl` on the stored document, with no placeholder.
+  - Clearing deletes both the image file and its thumbnail from disk.
+  - An update that doesn't mention the image (`{ active: false }`) leaves the file and stored `imageUrl` untouched.
+  - Clearing on a product with no image succeeds, and `imageUrl` stays absent.
 
 ## Relationships
-
-- **`src/modules/products/services/index.ts`** – `productService.updateById` is the method under test.
-- **`src/modules/products/model.ts`** – `productModel` is used in `storedRow` to read the raw document.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` builds the initial product document in the test DB.
-- **`tests/support/callers.ts`** – `testCallerContext` supplies the caller identity required by the service.
-- **`tests/support/environment.ts`** – `setEnvironment` overrides `NODE_PUBLIC_PATH` so the service resolves file paths against the temp root.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb` bootstraps the test database connection.
+- `../../services` (`productService`) – the unit under test; `updateById(id, patch, testCallerContext)`.
+- `../../model` (`productModel`) – used to read the stored document directly.
+- `tests/factories` (`createProduct`) – creates products, optionally with `imageUrl` and `thumbnailUrl`.
+- `@tests/setup-test-db` – provides the database setup.
+- `@tests/callers` (`testCallerContext`) – the caller context passed to the service.
+- `@tests/environment` (`setEnvironment`) – redirects `NODE_PUBLIC_PATH` to the temp directory so file deletions happen there.
 
 ## Notes
-
-- The entire point of using a real temp directory (rather than mocking `fs`) is to assert *which* files are deleted. Do not replace this with `jest.mock('fs')` without rethinking the test's purpose.
-- `.lean()` is deliberate: without it Mongoose would fill in `""` for unset string fields, making the `not.toHaveProperty` assertions pass or fail depending on driver version rather than actual stored state.
-- The test only covers the `imageUrl: null` path; it does not exercise re-uploading or thumbnail regeneration.
+- The assertions use `not.toHaveProperty` on the lean document, so "unset" means the field is absent, not `null` or a default value.
+- Tests assert file existence with `existsSync` on paths under the temp `root`, so the service resolves stored URLs against `NODE_PUBLIC_PATH`.

@@ -1,41 +1,37 @@
 ---
 source: src/modules/sitemap/service.ts
-sha256: ff474da917217e1c1a20a33340d08072654517187ddfaa60ca9dc198afc186ec
-generated_at: 2026-11-14T22:00:14.003639+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2decb3a0002e365f4d17ba52c2a8b0351b99984ee28733435870f560d5881c70
+context_sha256: 6030c1190c1494c27d988b8dd6e1cf39096a5e8126d5a584d390cc46d9a2252b
+generated_at: 2026-11-22T07:49:29.956537+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/sitemap/service.ts
 
 ## Purpose
-
-The read layer for the sitemap module. It produces the list of sitemap XML files, the per-language page entries, and the per-page product entries — each entry carrying full `hreflang` alternates so a crawler learns every translation from the sitemap alone. It reads live data (product catalogue, static page list) on every call and performs no persistence, which is what lets the HTTP layer cache freely.
+Implements the sitemap's read side: which sitemap files exist and what each one lists. For every page it emits one `<url>` per served language, each carrying `hreflang` alternates for all languages plus `x-default`, so crawlers learn the translations from the sitemap alone. Nothing is stored. Every call reads the live catalogue, which is why the HTTP layer may cache responses.
 
 ## Key elements
-
-- **`sitemapService`** (exported) — the single public object consumed by the controllers.
-  - `listFiles()` — returns absolute URLs of every sitemap file the index should list: one static-page file plus one file per product "run" (count derived from `productService.countListed()` ÷ `productsPerFile`).
-  - `listPages()` — returns `SitemapItemLoose[]` for every entry in `STATIC_PAGES`, one per served language. No `lastmod` (pages are undated).
-  - `listProducts(page)` — returns `SitemapItemLoose[]` for one product file (1-based), or `null` if the page number exceeds the catalogue. Uses `updatedAt` as `lastmod`.
-- **`servedLanguages()`** (internal) — builds the `{ tags, fallback }` pair from the i18n infrastructure; `fallback` is the default locale if it is served, otherwise the first alphabetically sorted tag.
-- **`pageAddress(language, path)`** (internal) — constructs an absolute frontend URL (`NODE_FRONTEND_URL` + language segment + path). Intentionally does **not** swap an unserved language to the fallback (unlike `frontendLink`).
-- **`entriesFor(languages, path, lastmod?)`** (internal) — builds one `SitemapItemLoose` per language, each embedding the full alternates list plus an `x-default` entry.
-- **`productsPerFile(languageCount)`** (internal) — computes the max products per XML file as `⌊NODE_SITEMAP_URL_LIMIT / languageCount⌋` (minimum 1), so the file never exceeds the URL ceiling regardless of language count.
+- `sitemapService` (the only export), an object with three methods:
+  - `listFiles()` returns absolute URLs on the API's own origin (`NODE_URL` with trailing slashes stripped). It returns `/sitemap/pages.xml` followed by `/sitemap/products-N.xml` (1-based). The number of product files is `ceil(listed products / productsPerFile)`.
+  - `listPages()` returns the `STATIC_PAGES` entries, once per language, with no `lastmod`.
+  - `listProducts(page)` returns one run of public products, once per language, dated by the product's `updatedAt`. It returns `null` if the page is past the last file or the page query comes back empty.
+- `servedLanguages()` (internal) builds the language list: the served locales sorted alphabetically, plus a `fallback` tag. The fallback is the default locale if it is served, otherwise the first served locale.
+- `pageAddress(language, path)` (internal) builds `${NODE_FRONTEND_URL}/${language}[/path]`. An empty path is the home page.
+- `entriesFor(languages, path, lastmod?)` (internal) builds the `SitemapItemLoose[]` for one page. It creates one entry per language, each sharing the same `links` array (every language plus `x-default`). `lastmod` is added as an ISO string only when given.
+- `productsPerFile(languageCount)` (internal) computes `max(1, floor(NODE_SITEMAP_URL_LIMIT / languageCount))`, so a file never exceeds the URL ceiling however many languages are served.
 
 ## Relationships
-
-- **`src/infrastructure/http/config.ts`** — imports `siteConfig` for `NODE_FRONTEND_URL` (page addresses) and `NODE_URL` (sitemap file URLs).
-- **`src/infrastructure/i18n/index.ts`** — imports `listServedLocales` and `getDefaultLocale` to determine which languages appear in the sitemap and which tag `x-default` points at. (The index re-exports the helpers backed by `catalog.ts` and `served.ts`.)
-- **`src/modules/products/index.ts`** — imports `productService` (count, list) and `productPagePath` to build product entries; these are re-exported from the products module barrel (backed by `services/index.ts` and `config.ts`).
-- **`src/modules/sitemap/config.ts`** — imports `STATIC_PAGES` (the page list) and `sitemapConfig` (for `NODE_SITEMAP_URL_LIMIT`).
-- **`src/modules/sitemap/controllers/get-sitemap-index.ts`** — calls `sitemapService.listFiles()`.
-- **`src/modules/sitemap/controllers/get-sitemap-pages.ts`** — calls `sitemapService.listPages()`.
-- **`src/modules/sitemap/controllers/get-sitemap-products.ts`** — calls `sitemapService.listProducts(page)`.
-- **`src/modules/sitemap/index.ts`** — re-exports `sitemapService` for external consumers.
+- `@infrastructure/http/config` (`siteConfig`) supplies `NODE_FRONTEND_URL` for page addresses and `NODE_URL` for file addresses.
+- `@infrastructure/i18n` supplies `listServedLocales` and `getDefaultLocale`. This is the same list language negotiation uses.
+- `@modules/products` supplies the product count and paged public product queries via `productService`, plus `productPagePath(id)` for each product's path.
+- `./config` supplies `STATIC_PAGES` and `sitemapConfig()` (`NODE_SITEMAP_URL_LIMIT`).
+- The sitemap controllers (`get-sitemap-index`, `get-sitemap-pages`, `get-sitemap-products`) and `src/modules/sitemap/index.ts` sit on the consuming side of this service.
 
 ## Notes
-
-- `pageAddress` deliberately does **not** fall back an unserved language (unlike the frontend-link helper); a registered language always keeps its own address in the sitemap.
-- The `lastmod` on product entries reflects `updatedAt`, which a translation edit moves but a stock/sale change does not (stock lives in `inventory`).
-- `listProducts` guards against out-of-range page numbers *before* issuing the page query, keeping `skip` bounded by the catalogue size rather than trusting the caller.
-- `productsPerFile` floors to at least 1, so a deployment with more languages than the URL limit still emits one product per file.
+- It deliberately does not use `frontendLink`. That helper swaps a language the API doesn't serve for the fallback, but here a registered language must keep its own address.
+- `x-default` falls back to the first served language when the default isn't served. A `hreflang` target must be a page the same sitemap lists.
+- Requires no `locales` module. A deployment without one serves the deployed dictionaries plus the fallback language.
+- `listProducts` checks the page number against the listed-product count before querying, so the query's `skip` is bounded by the catalogue size and not by what the caller typed.
+- `updatedAt` moves on a translation edit but not on a sale, because stock lives in `inventory`.
+- Because the URL limit is divided across languages, adding a language shrinks the products per file and can increase the number of files.

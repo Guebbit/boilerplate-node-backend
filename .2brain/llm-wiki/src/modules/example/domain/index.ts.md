@@ -1,40 +1,35 @@
 ---
 source: src/modules/example/domain/index.ts
-sha256: 7df61bf6a879bb06078ae6c9a6de3a1543f70d50d074d2ca48f1c2c2f2c9f0e4
-generated_at: 2026-11-08T05:49:37.685804+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8b66e4694707d967cc4e423e8db8bdf3faafad98f940b7a977ee7e8426ae8ca0
+context_sha256: 47a02725fcd60021c90666c5c874a53c4e75d961c93fc6039ba52d05f40674dc
+generated_at: 2026-11-22T05:08:25.089195+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/domain/index.ts
 
 ## Purpose
-
-Barrel file that re-exports the entire public API of the `example` module's domain layer. It exists so that consumers (services, tests, the module entry point) can import domain rules from a single path without reaching into sub-files. No logic lives here — it is a pure re-export surface.
+Public barrel for the example module's domain layer. The domain layer holds pure rules only (no Express, Mongoose, or tier dependencies, enforced by lint). This file re-exports the status lifecycle and the two small facts attached to it, so the rest of the module imports from `domain` rather than from `lifecycle` directly.
 
 ## Key elements
+All re-exported from `./lifecycle`:
+- `canApply`: rule for whether an event can be applied.
+- `EXAMPLE_EVENTS`: the closed set of lifecycle events.
+- `ExampleEvent` (type): the event type.
+- `exampleActionsFor`: the actions available for a given status.
+- `initialExampleStatus`: the starting status.
+- `statusAfter`: the status resulting from applying an event.
+- `isPublished`: published-status predicate.
+- `shouldStampPublishedAt`: decides whether a published timestamp should be stamped.
+- `fitsBodyLength`: body-length check.
 
-- **Value re-exports from `./lifecycle`:**
-  - `canApply` — checks whether an event may be applied to a given status.
-  - `EXAMPLE_EVENTS` — the closed set of valid domain events.
-  - `exampleActionsFor` — maps a status to the actions available at that point.
-  - `fitsBodyLength` — validates body/length constraint.
-  - `initialExampleStatus` — returns the starting status for a new entity.
-  - `isPublished` — predicate for the "published" state.
-  - `shouldStampPublishedAt` — decides whether a transition sets the `publishedAt` timestamp.
-  - `statusAfter` — computes the next status given the current one and an event.
-- **Type re-export:**
-  - `ExampleEvent` — the union type of all valid domain events.
+The file contains no logic of its own.
 
 ## Relationships
-
-- **`./lifecycle.ts`** — sole source of every symbol re-exported here; this file adds no behavior.
-- **`src/modules/example/index.ts`** — module-level entry point; consumes the domain API so external callers get a single import path.
-- **`src/modules/example/services/actions.ts`, `crud.ts`, `owner.ts`, `transition.ts`** — service-layer modules that import domain rules (status guards, event validation, timestamp logic) to keep framework code thin.
-- **`tests/unit/domain.test.ts`** — unit tests that import through this barrel (or `./lifecycle` directly) to verify the re-exported rules.
-- **`tests/unit/lifecycle.property.test.ts`** — property-based tests targeting `lifecycle.ts`; interact with the same symbols exposed here.
+- `src/modules/example/domain/lifecycle.ts`: the sole source of every export; this file only re-exports it.
+- `src/modules/example/services/actions.ts`, `src/modules/example/services/crud.ts`, `src/modules/example/services/owner.ts`, `src/modules/example/services/transition.ts` and `src/modules/example/index.ts` sit in the dependency graph alongside it, consistent with the services consuming these rules through this barrel.
+- `src/modules/example/tests/unit/domain.test.ts` and `src/modules/example/tests/unit/lifecycle.property.test.ts` are unit and property tests covering the domain and lifecycle rules.
 
 ## Notes
-
-- The module-level doc comment encodes a hard convention: the `domain/` folder must contain **pure rules only** — no Express, Mongoose, or any other tier dependency (enforced by lint). If you see a framework import land here, it's a bug.
-- Because this file is a flat re-export of one sub-module, adding a second source file under `domain/` (e.g. `rules.ts`) would mean adding a second `export … from` block here. Until then, every export's *origin* is `lifecycle.ts`.
-- A design rationale doc is referenced at `docs/theory/domain-layer.md` for when a new module needs its own `domain/` folder.
+- Because the layer is lint-guaranteed free of Express, Mongoose and tiers, anything added here must stay pure.
+- New lifecycle exports must be added to this barrel explicitly (named re-exports, no `export *`).

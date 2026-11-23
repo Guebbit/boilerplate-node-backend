@@ -1,36 +1,37 @@
 ---
 source: scenarios/shop-modules.ts
-sha256: 28f97d394cef6f88fa2901fb00697de9fa397568fd9cd4b64882fdc4802c153d
-generated_at: 2026-11-08T02:32:05.277430+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T01:45:48.356969+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/shop-modules.ts
 
 ## Purpose
-
-Defines the per-module fixture table for the `shop` scenario — which modules are seeded, in what order, and which ones `blank` also needs. It lives in its own file (rather than inside `scenarios/index.ts`) so that `blank.ts` can read the same entries without `index.ts` and `blank.ts` importing each other.
+Defines the per-module fixture table for the `shop` scenario: the rows that exist before anyone uses the shop. It is kept separate from `scenarios/index.ts` so that `scenarios/blank.ts` can read it too, without the two files importing each other. `scenarios/index.ts` builds both `blank` and `shop` from these entries.
 
 ## Key elements
-
-- **`ShopModuleEntry` (interface)** — Shape of one table row: a `seed` function, optional `after` dependency names, a `baseline` flag (also seeded by `blank`), and an optional `driveHistoryEdit` callback that contributes a demo-history step.
-- **`shopModules` (const)** — The full table, sourced from `./shop-modules.generated` (auto-collected from each `scenarios/<module>.ts`). Typed with `satisfies Record<string, ShopModuleEntry>` so literal keys are preserved for compile-time checks in `check.ts`.
-- **`asWaveEntries` (function)** — Adapts a `ShopModuleEntry` table (or a subset) into the `WaveEntry` shape that `./waves`'s scheduling functions (`runInWaves`, `waveOrder`) consume.
-- **`historyEdits` (function)** — Returns all `driveHistoryEdit` callbacks in table order; dropping a module's entry automatically drops its history step.
-- **`baselineShopModules` (function)** — Filters `shopModules` down to entries with `baseline: true`, giving `blank.ts` its shared subset without duplicating fixture code.
+- **`ShopModuleEntry`** (interface): one table entry.
+  - `seed`: seeds the module's fixtures and returns `SeedOutcome[]`.
+  - `after?`: names of other entries this one's write depends on.
+  - `baseline?`: marks entries that `blank` also seeds.
+  - `driveHistoryEdit?`: a demo-history step this entry contributes, taking a `Caller`.
+- **`shopModules`**: the table itself. It is taken from `shopModuleFixtures` in the generated `./shop-modules.generated` module and typed with `satisfies Record<string, ShopModuleEntry>`.
+- **`asWaveEntries(entries)`**: reshapes a `shopModules`-like table into `Record<string, WaveEntry<SeedOutcome[]>>` for `runInWaves`/`waveOrder`. Each entry's `seed` becomes `run`, and `after` is carried over.
+- **`historyEdits()`**: returns every `driveHistoryEdit` function in table order, skipping entries without one.
+- **`baselineShopModules()`**: returns the subset of `shopModules` whose `baseline` is truthy.
 
 ## Relationships
-
-- **`scenarios/waves.ts`** — Provides the `WaveEntry` type; `asWaveEntries` reshapes the table into that format so `waves.ts` can schedule seeding without knowing the shop-specific shape.
-- **`scenarios/flows/client.ts`** — Provides the `Caller` type used as the parameter of `driveHistoryEdit`.
-- **`scenarios/seed.ts`** — Provides the `SeedOutcome` return type for every `seed` function.
-- **`scenarios/index.ts`** — Consumes `shopModules` (via `asWaveEntries` and `historyEdits`) to build the `shop` scenario; the module doc explicitly states `index.ts` builds both `blank` and `shop` from these entries.
-- **`scenarios/blank.ts`** — Calls `baselineShopModules` (via `asWaveEntries`) to get the subset of entries it shares with `shop`, avoiding a circular import with `index.ts`.
-- **`scenarios/shop-modules.generated`** — Supplies the `shopModuleFixtures` object that `shopModules` wraps; adding or deleting a `scenarios/<module>.ts` file adds or removes a row here.
+- **`scenarios/waves.ts`**: supplies the `WaveEntry` type that `asWaveEntries` targets. Per its docs, an `after` name missing from the table is ignored.
+- **`scenarios/seed.ts`**: supplies the `SeedOutcome` type.
+- **`scenarios/flows/client.ts`**: supplies the `Caller` type used by `driveHistoryEdit`.
+- **`scenarios/index.ts`**: builds `blank` and `shop` from these entries. The `driveHistoryEdit` doc says the history steps are run by whatever scenario calls its `Scenario.drive`.
+- **`scenarios/blank.ts`**: runs `baselineShopModules()` (via `asWaveEntries`) alongside its own fixtures.
+- **`scenarios/flows/shop-history.ts`** and **`scenarios/shop.scenario.ts`**: neighbors in the graph. This file does not reference them directly.
 
 ## Notes
-
-- `satisfies` (not a type annotation) is deliberate: an annotation would widen every key to `string`, breaking `check.ts`'s `keyof typeof shopModules` assertions.
-- `after` names that are absent from the table are silently ignored, so an entry survives the deletion of the module it waited for — no cascade required.
-- `baseline` currently applies only to `locales`. `users` is explicitly **not** baseline: `blank` seeds 13 named accounts via its own `seedNamedUsersCollection`, not the full demo user set this entry's `seed` writes.
-- Entries are never hand-listed in this file; the generated file is the single source of truth. Removing a `scenarios/<module>.ts` file removes its row automatically.
+- The table is collected from the `shopModule` export of each `scenarios/<module>.ts` rather than listed by hand, so adding or deleting a module file adds or removes its entry.
+- `shopModules` uses `satisfies` rather than an annotation on purpose. An annotation would widen the keys to `string`, and `./check.ts`'s compile-time check reads the literal keys from `keyof typeof shopModules`.
+- `historyEdits` and `baselineShopModules` first widen `shopModules` to `Record<string, ShopModuleEntry>`. The literal entry types differ from one another, so they cannot be filtered by a field that not every entry carries.
+- `locales` is currently the only `baseline` entry, because a spec that creates its own product still needs the fallback language active.
+- `users` is not baseline. `blank` seeds the 13 named accounts through `seedNamedUsersCollection`, not the full demo set that this entry's `seed` writes.
+- Orders, payments, shipments, stock movements, reservations, carts and audit entries are deliberately absent. They are what using the shop produces, not baseline fixtures.

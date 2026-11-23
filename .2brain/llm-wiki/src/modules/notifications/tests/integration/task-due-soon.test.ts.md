@@ -1,42 +1,42 @@
 ---
 source: src/modules/notifications/tests/integration/task-due-soon.test.ts
-sha256: 5be57d0e141bde3d1c353993746bb96668ab1701e58fd9eae6c917cab191e7ea
-generated_at: 2026-11-08T06:36:07.262818+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2a6b0f666526a08c70b3bab1ad7dd971f7f95c5caccc6c1d49369b7799e1ce9c
+context_sha256: aec6a31428a66faa9ccced3f3fb33703468a228aeef40dd90359f76a02f22026
+generated_at: 2026-11-22T05:58:26.993610+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/tests/integration/task-due-soon.test.ts
 
 ## Purpose
-
-Integration test for the due-soon reminder pipeline. Drives a task whose deadline is two days away through `taskService.remindDueSoon()` and verifies that (1) the right people receive exactly one bell notification and one staff mail, (2) duplicate delivery of the same domain event does not produce duplicates, (3) a privacy-category task additionally mails the support address in-thread, and (4) non-privacy contact categories stay silent.
+Integration test for the due-soon reminder, driven as production drives it: a task whose deadline is two days away, then the tasks sweep (`taskService.remindDueSoon`). It verifies that staff admins are told once, by bell notification and by mail, and that privacy-category contact requests are additionally mailed to the support mailbox while other contact categories are not.
 
 ## Key elements
-
-- **`admin()`** – Creates a fully-authenticated admin user (authenticator enabled) via `createUser`, used as the notification audience.
-- **`dueSoonBell(userId)`** – Queries `notificationsService.listVisible` scoped to the deployment tenant and filters items whose `code` is `notifications.staff.task-due-soon`.
-- **`dueSoonMails()`** – Reads the mock `enqueueEmail` call log and returns only calls whose template is `notifications.staff-notice` and whose subject starts with "Due soon".
-- **`jest.mock('@infrastructure/adapters/mailer')`** – Replaces `enqueueEmail` with a no-op mock so tests can assert on queued envelopes without real mail.
-- **`beforeEach`** – Resets the mailer mock, sets `NODE_SUPPORT_EMAIL`, clears domain events, and re-registers modules (fresh kernel state per test).
-- **Four `it` blocks** – Cover: basic bell + mail delivery, event-deduplication (calling `onTaskDueSoon` twice), privacy-request special-casing (support mailbox, `inReplyTo` threading, `[privacy]` subject tag), and silence for non-privacy categories.
+- `jest.mock('@infrastructure/adapters/mailer', ...)` replaces `enqueueEmail` with a mock, so tests assert on queued mail rather than on its copy. It is exposed as `mockEnqueueEmail`.
+- `setupTestDb()` sets up the test database.
+- `beforeEach` / `afterEach`: reset the mock, set `NODE_SUPPORT_EMAIL` to `desk@example.com`, call `resetDomainEvents()`, and call `registerModules(enabledModules)`. `afterEach` resets domain events again.
+- `admin()` creates an admin user with an authenticator enabled (`authenticatorEnabledAt`), i.e. one who "can act".
+- `dueSoonBell(userId)` lists the user's visible notifications via `notificationsService.listVisible`, using a tenant-scoped admin caller in `DEPLOYMENT_TENANT_ID`. It filters to code `notifications.staff.task-due-soon`.
+- `dueSoonMails()` filters the enqueued mails to template `notifications.staff-notice` whose subject starts with `Due soon`.
+- Test cases:
+  - **Once by bell and mail:** a system task given a deadline via `giveLife(id, 2, 10)`. Running `remindDueSoon` twice yields one bell item (`audience: 'staff'`, `kind: 'export_failed'`) and one mail to `admin@example.com`.
+  - **Duplicate event delivery:** calling `notificationsService.onTaskDueSoon` twice with the same fact yields one bell item and one mail.
+  - **Privacy request:** a `privacy` category task created via `taskService.create` and given life with `giveLife(id, 2, 30)` yields one bell item and exactly one `tasks.contact` mail. That mail goes to `desk@example.com`, has a subject containing `Contact request due soon` and `[privacy]`, and an `inReplyTo` of `<task-{id}@example.com>`.
+  - **Ordinary contact message:** an `order` category task yields no bell item and no `tasks.contact` mail, because it only has its short SLA.
 
 ## Relationships
-
-- **`src/modules/tasks/service.ts`** – Under test; `remindDueSoon()` and `create()` are the entry points that trigger the notification flow.
-- **`src/modules/tasks/tests/factories.ts`** – Provides `createSystemTask` and `giveLife` to seed a task with a known deadline offset.
-- **`src/modules/notifications/services/index.ts`** – `listVisible` reads back the bell; `onTaskDueSoon` is called directly in the deduplication test to isolate the notification layer.
-- **`src/infrastructure/adapters/mailer.ts`** – `enqueueEmail` is mocked; assertions inspect its call log for template, recipient, subject, and `inReplyTo`.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes the outbox so that event-driven work (e.g., notification creation) completes before assertions.
-- **`src/kernel/events.ts`** – `resetDomainEvents` ensures no stale domain events leak between tests.
-- **`src/kernel/permissions.ts`** – `callerInScope` builds the scoped caller passed to `listVisible`.
-- **`src/kernel/access/tenant.ts`** – `DEPLOYMENT_TENANT_ID` scopes the caller and the `onTaskDueSoon` fact.
-- **`src/kernel/registry.ts` / `src/modules.ts`** – `registerModules(enabledModules)` re-initialises the module graph each test.
-- **`tests/support/*`** – `setupTestDb`, `asRole`, `setEnvironment` provide the standard integration-test scaffolding.
+- Calls `taskService` (`src/modules/tasks`) for `create` and `remindDueSoon`, and `notificationsService` (`src/modules/notifications/services`) for `listVisible` and `onTaskDueSoon`.
+- Uses the factories `createSystemTask` and `giveLife` (`tasks/tests/factories`) and `createUser` (`users/tests/factories`).
+- Uses the test support helpers `setupTestDb`, `asRole` and `setEnvironment` (`tests/support/*`).
+- Mocks `enqueueEmail` from `src/infrastructure/adapters/mailer.ts`.
+- Uses kernel pieces:
+  - `DEPLOYMENT_TENANT_ID` (`kernel/access/tenant`)
+  - `callerInScope` (`kernel/permissions`)
+  - `settleOutboxNudges` (`kernel/outbox`), which waits for outbox-driven work to finish
+  - `resetDomainEvents` (`kernel/events`)
+  - `registerModules` (`kernel/registry`), called with `enabledModules` from `src/modules.ts`
 
 ## Notes
-
-- The deduplication test calls `notificationsService.onTaskDueSoon` directly rather than going through `taskService.remindDueSoon`, isolating the notification service's own idempotency from the task-service guard.
-- Privacy-category tasks use a **different** mail template (`tasks.contact`) than staff notices (`notifications.staff-notice`); the `dueSoonMails()` helper only counts the latter. The privacy test therefore asserts on the `tasks.contact` template explicitly.
-- The `inReplyTo` header on the privacy mail (`<task-{id}@example.com>`) ties the reminder to the original contact thread; the test asserts this format.
-- Non-privacy categories (e.g. `'order'`) produce **zero** due-soon bell items and **zero** `tasks.contact` mails — the short SLA path is the only channel, and this test confirms no due-soon artefact leaks in.
-- `mockEnqueueEmail.mockClear()` is called *after* `settleOutboxNudges` and *before* the `remindDueSoon` call in each test, so only the reminder's own mail is inspected (not any mail fired during task creation/setup).
+- Each test calls `settleOutboxNudges()` after actions and `mockEnqueueEmail.mockClear()` after setup, so only mail from the sweep is counted.
+- The `describe` title says "three days from its deadline", while the file header and `giveLife(..., 2, ...)` refer to a deadline two days away. The test code itself does not explain this difference.
+- Domain events are reset and modules re-registered for every test, so subscriptions do not leak between cases.

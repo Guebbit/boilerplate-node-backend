@@ -1,43 +1,54 @@
 ---
 source: src/modules/payments/tests/integration/refund-cancel.test.ts
-sha256: 42432f4c5b24d266728cac5f96c98977029e54cb7a4e36c6214439404fb0e462
-generated_at: 2026-11-14T21:15:38.273433+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 42432f4c5b24d266728cac5f96c98977029e54cb7a4e36c6214439404fb0e462
+context_sha256: 549208c7e10f3bbc1d3d41170e93f6c96b8c447feb29d56bf8ae3c8e8060fd61
+generated_at: 2026-11-22T06:58:49.878109+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/refund-cancel.test.ts
 
 ## Purpose
-Integration tests for the **cancel (void) refund** operation. They verify that staff can void only refunds whose money provably did not move (hand-paid `pending`, card refusal with a clear reason) while settled refunds, unclear failures, and in-flight attempts are rejected. Tests run against real MongoDB via the payment service's public API.
+Integration test (real Mongo, via the services' public API) for staff voiding a refund that must never be paid. Only refunds whose money provably did not move may be voided: a hand-paid `pending` refund and a clear card refusal. Settled refunds, unclear failures and in-flight attempts are rejected. A voided refund releases its share, sends no mail, issues no credit note and is never sent.
 
 ## Key elements
-- **`freshOrder()`** – creates a 100.00 order (2 × 50.00) with a user and product; returns `orderId`.
-- **`cashRefund()`** – records an offline cash payment then opens a 30.00 `pending` refund; returns IDs for the cancel call.
-- **`refusedRefund(reason)`** – pays by card, then triggers a provider refund that fails with the given `RefundFailureReason`.
-- **`cancel(paymentId, refundId, note?)`** – thin wrapper around `paymentService.cancelRefund` (the SUT entry point).
-- **`describe('cancelling a hand-paid refund that waits')`** – the success path: status → `failed/canceled`, `amountRefunded` resets, exactly one `PAYMENT_REFUND_CANCELED` outbox event, one audit row, one timeline entry, no `PAYMENT_REFUNDED` event, actions list updates, released share re-refundable, idempotency (409), 404 for unknown refund, display-status transitions.
-- **`describe.each(['declined','insufficient_funds'])`** – voids a clearly-refused card refund; verifies the retry sweep (`retryOpenRefunds`) never re-sends it and the attention list is empty.
-- **`describe.each(['provider_unavailable','unknown'])`** – unclear failures: cancel is refused with `PAYMENT_REFUND_IN_FLIGHT`; record and `amountRefunded` unchanged.
-- **`describe('cancelling a refund that already paid out')`** – settled refund → 409 `PAYMENT_REFUND_NOT_OPEN`.
-- **`describe('cancelling against a racing sweep')`** – race between operator cancel and the background sweep claiming the refund (truncated in source).
+- `setupTestDb()` and a `beforeEach` that registers `paymentsModule` via `registerCheckoutModules` and installs an audit sink collecting entries into `audited`. `afterEach` calls `resetDomainEvents` and `jest.restoreAllMocks`.
+- Helpers:
+  - `freshOrder`: a 100.00 order (two units at 50.00).
+  - `paymentOf`: loads the stored payment by order id.
+  - `cashRefund`: an offline cash payment with a 30.00 `pending` hand-paid refund.
+  - `refusedRefund(reason)`: a card payment whose 30.00 refund the fake provider refuses with the given `RefundFailureReason`.
+  - `stampOf`: the order's serialized payment status.
+  - `cancel`: calls `paymentService.cancelRefund` as admin.
+- Test groups:
+  - **Hand-paid refund that waits**:
+    - Closes the record as `failed` with reason `canceled`, sets `amountRefunded` back to `0.00`, and writes one `PAYMENT_REFUND_CANCELED` outbox event, one `admin.payment.refund_canceled` audit row and one `refund_canceled` timeline row. The timeline row does not contain the operator's note.
+    - Emits no `PAYMENT_REFUNDED` event.
+    - `actions.cancelRefund` lists the refund while open and is empty after cancel. `displayStatus` stays `succeeded`.
+    - The released share can be refunded again (100.00).
+    - A second cancel gives 409 `PAYMENT_REFUND_NOT_OPEN` and writes no audit.
+    - The refund cannot be settled by hand afterwards.
+    - An unknown refund id gives 404.
+    - After cancelling and then settling a full refund, `displayStatus` is `refunded`.
+  - **Card refund refused as `declined` or `insufficient_funds`** (`describe.each`): cancel succeeds. `retryOpenRefunds` does not call the provider's `refund`, and `listAttention` is empty. Runs with `NODE_PAYMENT_REFUND_RETRY_MINUTES=0`.
+  - **Card refund left unclear as `provider_unavailable` or `unknown`** (`describe.each`): 409 `PAYMENT_REFUND_IN_FLIGHT`, state unchanged (`amountRefunded` stays `30.00`), and `cancelRefund` is not offered.
+  - **Already paid out**: 409 `PAYMENT_REFUND_NOT_OPEN`, and `amountRefunded` stays `30.00`.
+  - **Racing sweep**: expects 409 `PAYMENT_REFUND_IN_FLIGHT` when the record was claimed in between. The rest of this group is not visible here.
 
 ## Relationships
-- **`src/modules/payments/services/index.ts`** – `paymentService` is the system under test (`cancelRefund`, `getForOrder`, `settleRefundByHand`, `retryOpenRefunds`, `listAttention`).
-- **`src/modules/payments/repository.ts`** – used to read persisted payment state after each operation for assertions.
-- **`src/modules/payments/events.ts`** – `PAYMENT_REFUNDED` / `PAYMENT_REFUND_CANCELED` used as outbox query keys.
-- **`src/modules/payments/module.ts`** – registered in `beforeEach` via `registerCheckoutModules`.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges()` triggers async dispatch; `outboxEventModel` counts emitted events.
-- **`src/kernel/events.ts`** – `resetDomainEvents()` in `afterEach` to prevent cross-test leakage.
-- **`src/infrastructure/observability/audit.ts`** – `registerAuditSink` collects `AuditEntry` rows for assertions.
-- **`scenarios/support/doubles/payments/fake.ts`** – `fakePaymentProvider`, `setFakeRefundFailure` simulate card-provider outcomes.
-- **`src/modules/payments/tests/factories.ts`** – `payByCard`, `refundOrderPayment` set up payment/refund preconditions.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`, `timelineOf` for order setup and timeline assertions.
-- **`src/modules/orders/index.ts`** – provides the order service used to read API-serialised payment status.
-- **`src/modules/users/tests/factories.ts`**, **`src/modules/products/tests/factories.ts`** – create the user and product fixtures.
+- `@modules/payments/services` (`paymentService`): `cancelRefund`, `settleRefundByHand`, `getForOrder`, `retryOpenRefunds`, `listAttention`, `recordOfflinePayment`.
+- `@modules/payments/repository`: `paymentRepository` is used to read stored payment state.
+- `@modules/payments/events`: provides the `PAYMENT_REFUNDED` and `PAYMENT_REFUND_CANCELED` event names, checked against `outboxEventModel` in `@kernel/outbox`.
+- `@kernel/outbox`: `settleOutboxNudges` flushes outbox events before assertions.
+- `@kernel/events`: `resetDomainEvents` is called in `afterEach`.
+- `@modules/payments/module`: registered through `registerCheckoutModules`.
+- `@scenarios/support/doubles/payments/fake`: `fakePaymentProvider` (spied on) and `setFakeRefundFailure` (forces a refusal reason). `addFakeExternalRefund` is imported there too.
+- `@infrastructure/observability/audit`: `registerAuditSink` captures audit entries.
+- `@modules/payments/tests/factories` (`payByCard`, `refundOrderPayment`) and `@modules/payments/tests/deliver` (`deliver`): payment test helpers.
+- `@modules/orders` (`orderService`) and `@modules/orders/tests/factories` (`createOrder`, `toOrderItem`, `timelineOf`, `markOrderPaidAt`): order setup and timeline reads.
+- `@modules/users/tests/factories` and `@modules/products/tests/factories`: create the user and product for each order.
 
 ## Notes
-- Tests hit **real MongoDB** (`setupTestDb`); only the external card provider is faked.
-- The audit sink is re-registered and cleared in `beforeEach`; individual tests can re-reset `audited = []` mid-test to isolate a second call.
-- `withEnvironmentOverrides` sets `NODE_PAYMENT_REFUND_RETRY_MINUTES: '0'` so the sweep runs synchronously in the refused-card scenarios.
-- `deliver` and `stampOf` are imported/defined but their usage falls in the truncated tail of the file.
-- The file exercises the service's **public API** exclusively—no direct repository mutations—so it guards against regressions at the orchestration layer.
+- The test caller is always an admin (`asAdmin()` plus `callerContextAs('admin')`).
+- Failures are asserted through `asReject(...)` for `status` and `errors[0].code`.
+- `stampOf`, `deliver`, `markOrderPaidAt` and `addFakeExternalRefund` are imported or defined in the visible portion but not used there. They may be used in the part of the file that is not shown.

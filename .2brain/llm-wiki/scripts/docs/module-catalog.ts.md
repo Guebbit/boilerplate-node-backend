@@ -1,37 +1,34 @@
 ---
 source: scripts/docs/module-catalog.ts
-sha256: 15cc6228f10c0b25b62014051a85a25f1c24e275e833cc7f46c1799964ff3d9d
-generated_at: 2026-11-08T02:49:23.629378+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 89cb2de16f03b801007dc140bf64050f0aee3dfa54055167013c7459989b31aa
+context_sha256: 03e1c9b4035b581a007b6009271d10c62a0a0f64bcdf4caab08150151387efb9
+generated_at: 2026-11-22T02:04:39.310265+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/docs/module-catalog.ts
 
 ## Purpose
-
-Derives a module catalogue—grouped list of modules with their deeper pages—from the `module.yaml` descriptors and the Markdown files beside them. Produces two outputs that would otherwise be hand-maintained: the "Every module" Markdown block for `docs/modules/index.md` and the `/modules/` sidebar structure for VitePress. A new module appears in the correct group and position simply by declaring its `group` and `summary` in its descriptor.
+Builds the module catalogue for the docs: each module's group, subdomain, summary and deeper pages, all derived from `module.yaml` descriptors and the Markdown files in the modules docs folder. It feeds both the "Every module" block of the modules start page and the `/modules/` VitePress sidebar, so a new module shows up in the right place just by declaring a `group` and a `summary`. Everything is pure except `readCatalog`, the single disk read.
 
 ## Key elements
-
-- **`CatalogEntry` / `CatalogPage`** — the data shape: one module with name, group, subdomain, summary, and its deeper pages (stem + sidebar title).
-- **`GROUPS`** — ordered array of the three group definitions (`foundation`, `shop`, `example`) with heading text and blurb; controls section order and content in both outputs.
-- **`readCatalog(modulesRoot, pagesRoot)`** — the single disk-reading function. Reads all descriptors via `readAllModuleDescriptors`, scans the pages directory for `.md` files, and attaches each page to the module whose name is a prefix of the stem (excluding stems that are themselves module names). Returns entries in descriptor order.
-- **`renderModuleList(entries)`** — pure; emits the Markdown bullet-list block (one `###` section per non-empty group, one bullet per module with optional "Deeper:" links).
-- **`moduleSidebar(entries)`** — pure; emits a `SidebarSection[]` array (VitePress-compatible) with an Overview entry, then one section per group containing module items and nested page items.
-- **`pageLinkOf` / `titleOf`** — small helpers. `pageLinkOf` redirects the `example` group to the theory-page section; `titleOf` extracts the first `# ` heading from a page file, falling back to the stem.
-- **`SidebarItem` / `SidebarSection`** — exported interfaces describing the VitePress sidebar shape.
+- `CatalogEntry` / `CatalogPage`: one module (`name`, `group`, `subdomain`, `summary`, `pages`) and one deeper page (`stem`, `title`).
+- `readCatalog(modulesRoot, pagesRoot)`: reads descriptors via `readAllModuleDescriptors`, lists `*.md` stems in `pagesRoot` (sorted), and attaches each page to its owning module. Page titles come from the first `# ` heading, falling back to the stem. Returns one entry per module, in descriptor order.
+- `pageOwner(stem, names)`: returns the module a page belongs to. It picks the longest module name that the stem starts with as `<name>-`, and returns `undefined` if the stem is itself a module name or matches no module.
+- `renderModuleList(entries)`: Markdown for the "Every module" block. Each group gets a `###` heading, a blurb and one bullet per module, with a link, the summary and a "Deeper:" list of pages.
+- `moduleSidebar(entries)`: returns `SidebarSection[]`, starting with an "Overview" section and followed by one non-collapsed section per group. Each module is an item, with its deeper pages as child items.
+- `SidebarItem` / `SidebarSection`: sidebar shape types.
+- Internal `GROUPS` constant: fixes the presentation order (foundation, shop, example) and each group's heading and blurb. Groups with no members are skipped.
 
 ## Relationships
-
-- **`scripts/docs/module-descriptor.ts`** — imports `readAllModuleDescriptors` and the `ModuleDescriptor` type; all group/subdomain/summary data originates there.
-- **`docs/.vitepress/config.mts`** — consumer of `moduleSidebar` output (the `/modules/` sidebar array).
-- **`docs/modules/index.md`** — consumer of `renderModuleList` output (the "Every module" section).
-- **`tests/unit/scripts/docs/module-catalog.test.ts`** — unit-tests the pure functions by supplying a virtual entry list; exercises `readCatalog` with a fixture directory.
-- **`tests/unit/scripts/modules/new-module-needs-nothing.test.ts`** — verifies that adding a new module descriptor requires no changes to this file (i.e., the catalogue adapts automatically).
+- `scripts/docs/module-descriptor.ts`: supplies `readAllModuleDescriptors` and the `ModuleDescriptor` type, which provides the `group`, `subdomain` and `summary` fields.
+- `docs/.vitepress/config.mts`: consumes the sidebar for `/modules/`.
+- `scripts/docs/generate-module-graph.ts`: a graph neighbor of this file. The visible code shows no direct interaction.
+- `tests/unit/scripts/docs/module-catalog.test.ts`: tests the pure functions with a virtual module list.
+- `tests/unit/scripts/modules/new-module-needs-nothing.test.ts`: a graph neighbor, presumably checking that a new module needs no manual registration. The visible code does not show how.
 
 ## Notes
-
-- **`readCatalog` is the only impure function.** Everything downstream (`renderModuleList`, `moduleSidebar`, `bullet`, `inGroup`) is a pure transform on `CatalogEntry[]`, which is what makes the rest trivially testable without disk I/O.
-- **The `example` group is special-cased** in both `pageLinkOf` and `moduleSidebar`: it links to `theory/modules.md#the-module-template` rather than to a `docs/modules/example.md` page, because that module has no dedicated page.
-- **Page attribution rule:** a file `X-topic.md` in `docs/modules/` is attributed to module `X` only if `X-topic` is *not* itself a module name. This prevents e.g. `api-keys.md` from being swallowed by a hypothetical `api` module.
-- **Group order is fixed** (`foundation` → `shop` → `example`) by the `GROUPS` constant, not by the descriptor's order. Adding a new group value to `module.yaml` without adding it to `GROUPS` will silently drop that module from both outputs.
+- The `example` group has no page of its own. Its links point to the "the module template" section of the understand-section modules page, via a relative `../` path in the bullet list and as an absolute `/understand/modules#the-module-template` path in the sidebar.
+- `pageOwner` uses the longest-name match so `shop-tasks-notices` goes to `shop-tasks`, not `shop`. A stem equal to a module name, such as `api-keys`, is never treated as a deeper page of a shorter module like `api`.
+- Entries from `readCatalog` are not sorted. Alphabetical order is applied per group at render time, by `inGroup`.
+- A missing `pagesRoot` is tolerated, and the module then has no deeper pages.

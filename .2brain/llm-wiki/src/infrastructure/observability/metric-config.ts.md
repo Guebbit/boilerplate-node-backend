@@ -1,32 +1,29 @@
 ---
 source: src/infrastructure/observability/metric-config.ts
-sha256: 99c9a3534e7d21041ed331f66730bb672e2b0f3b3555238fa6a056b9fa21c58a
-generated_at: 2026-11-08T03:39:41.298282+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a76a4ea9c150fc12c01f1d4d1e7586bb4b8bffab2b6ebb7b165726e7fd4eeec4
+context_sha256: dfcef920dc6dc1562e76bea8c124449a1ece72a5e3485f4ffd7a875951fae6e8
+generated_at: 2026-11-22T02:58:45.350000+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/observability/metric-config.ts
 
 ## Purpose
-
-Adapts the `as const` metric definitions (generated from `shared/rules/metrics.yaml` into `metrics.generated.ts`) into the constructor-option objects that `prom-client` expects. It is a pure mapping layer—no side effects, no registry access.
+Converts a metric's data entry (defined in `shared/rules/metrics.yaml` and generated into a TypeScript data module) into the options object a prom-client constructor accepts. Because the generated data is `as const` (readonly arrays), the file also bridges the readonly-vs-mutable gap for histogram `buckets`. It never touches a registry; registration (`registers`, `collect`) stays at the call site.
 
 ## Key elements
+- `MetricData<TLabel>` (internal interface): the shape every metric has: `name`, `help`, and optional readonly `labelNames`.
+- `base` (internal): returns `name` and `help`, and includes `labelNames` only when present.
+- `counterConfig(data)`: returns a `CounterConfiguration<TLabel>` to spread into `new Counter({ ... })`.
+- `gaugeConfig(data)`: returns a `GaugeConfiguration<TLabel>` to spread into `new Gauge({ ... })`.
+- `histogramConfig(data)`: requires `buckets: readonly number[]` in addition to the base data. It returns a `HistogramConfiguration<TLabel>` with `buckets` copied into a mutable array.
 
-- **`MetricData<TLabel>`** (internal) – Shared shape: `name`, `help`, optional `labelNames`.
-- **`base(data)`** (internal) – Extracts `name`, `help`, and conditionally `labelNames` from a `MetricData` entry.
-- **`counterConfig(data)`** – Returns a `CounterConfiguration<TLabel>` ready to spread into `new Counter({ ... })`.
-- **`gaugeConfig(data)`** – Returns a `GaugeConfiguration<TLabel>` ready to spread into `new Gauge({ ... })`.
-- **`histogramConfig(data)`** – Returns a `HistogramConfiguration<TLabel>`; in addition to the base fields it copies the `buckets` array into a new mutable `number[]`.
+All three helpers are generic over `TLabel extends string`, defaulting to `never` for unlabelled metrics.
 
 ## Relationships
-
-- **Consumers** (`metrics-cache`, `metrics-http`, `metrics-outbox`, `metrics-process`, `metrics-queue`, `metrics-rate-limit`, `security-events`, `command-metrics`) call these three functions to obtain constructor options, then pass the result to `new Counter/Gauge/Histogram` and register the metric.
-- **`metrics-registry.ts`** – Provides the `Registry` instance that consumers register metrics into. This file deliberately does not import or mutate a registry.
-- **`metric-config.test.ts`** – Unit tests verifying the shape of each exported config, including the buckets copy behavior.
+- The neighbor modules in `src/infrastructure/observability/` (`metrics-cache.ts`, `metrics-database.ts`, `metrics-http.ts`, `metrics-outbox.ts`, `metrics-process.ts`, `metrics-queue.ts`, `metrics-rate-limit.ts`, `security-events.ts`) and `src/infrastructure/persistence/command-metrics.ts` are in its dependency neighborhood. They are the metric definitions that would pass their `infrastructureMetricData` entries through these helpers when building prom-client metrics.
+- `metrics-registry.ts` relates to it on the registration side. This file deliberately leaves registering to callers.
+- `tests/unit/infrastructure/observability/metric-config.test.ts` is its unit test.
 
 ## Notes
-
-- `buckets` is spread-copied (`[...data.buckets]`) because the generated data is `readonly number[]` while prom-client requires a mutable `number[]`. Mutating the result will not affect the source data.
-- `labelNames` is omitted from the output object entirely when the metric has no labels (conditional spread), so consumers can spread the config without a `labelNames: undefined` key.
-- Registration (calling `registry.register(metric)`) and any `collect` callbacks are always the caller's responsibility—this module is stateless.
+- The `labelNames` key is omitted from the result when the data has none, rather than being set to `undefined`.

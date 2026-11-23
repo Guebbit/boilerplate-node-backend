@@ -1,34 +1,31 @@
 ---
 source: src/modules/observability/services/index.ts
-sha256: 29a9ba782612f86acfbd515739b18cf0fe5102dff9d31207ed141fe556a5de80
-generated_at: 2026-11-08T06:41:06.933077+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 29a9ba782612f86acfbd515739b18cf0fe5102dff9d31207ed141fe556a5de80
+context_sha256: c1000288e6dff6dc3187dd2fbfd500e130b800751c3d80ced023236fdac20b40
+generated_at: 2026-11-22T06:03:14.434292+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/services/index.ts
 
 ## Purpose
-
-Barrel file for the observability services layer. It aggregates every service function and shared type into a single `observabilityService` object so that controllers and the module-level barrel (`src/modules/observability/index.ts`) have one stable import point for all health, streaming, and snapshot logic.
+Barrel file for the observability module's services. It re-publishes the live SSE feed, the full health payload builder, and the shared process reader behind a single `observabilityService` object, so the rest of the module imports from one place.
 
 ## Key elements
-
-- **`observabilityService`** (const) — the sole value export; a flat object bundling eight service members:
-  - `buildObservabilityPayload` / `streamObservabilityMetrics` (from `stream.ts`) — SSE streaming and one-shot metrics payload.
-  - `buildObservabilityHealth` (from `health.ts`) — full `/observability/health` response shape.
-  - `jobHealth` (from `job-health.ts`) — lease-side health probes.
-  - `dependencyHealth` / `overallStatus` (from `dependency-health.ts`) — adapter-side checks and roll-up.
-  - `processSnapshot` (from `process-snapshot.ts`) — shared process-level reader (memory, CPU, uptime).
-  - `queueHealth` (from `parked-jobs.ts`) — queue-side status for parked jobs.
-- **Type re-exports** — `DependencyHealth`, `ProcessMemorySnapshot`, `ProcessSnapshot` are re-exported so consumers can `import type` them from this barrel without reaching into individual files.
+- `observabilityService`: a plain object exposing the module's payloads and probes:
+  - `buildObservabilityPayload`, `streamObservabilityMetrics` (from `stream.ts`): the live SSE metrics feed.
+  - `buildObservabilityHealth` (from `health.ts`): the full `GET /observability/health` payload.
+  - `jobHealth` (from `job-health.ts`): the lease side of health.
+  - `dependencyHealth`, `overallStatus` (from `dependency-health.ts`): the adapter side of health and overall status computation.
+  - `queueHealth` (from `parked-jobs.ts`): the queue side of health.
+  - `processSnapshot` (from `process-snapshot.ts`): the process reader shared by all payloads.
+- Type re-exports: `DependencyHealth`, `ProcessMemorySnapshot`, `ProcessSnapshot`.
 
 ## Relationships
-
-- **Consumed by** the three observability controllers (`get-observability-events`, `get-observability-health`, `get-observability-metrics-overview`) and by `src/modules/observability/index.ts`, both of which import `observabilityService` (or its individual members) to wire routes.
-- **Re-exports from** the six sibling service files (`stream.ts`, `health.ts`, `job-health.ts`, `dependency-health.ts`, `process-snapshot.ts`, `parked-jobs.ts`); this file adds no logic of its own beyond the aggregation object.
-- **Tested indirectly** via `src/modules/observability/tests/unit/get-observability-events.test.ts`, which exercises the streaming path that flows through `streamObservabilityMetrics`.
+- Aggregates the sibling services `stream.ts`, `health.ts`, `job-health.ts`, `dependency-health.ts`, `parked-jobs.ts` and `process-snapshot.ts`. It contains no logic of its own.
+- The controllers (`get-observability-events.ts`, `get-observability-health.ts`, `get-observability-metrics-overview.ts`) and the module's `index.ts` are graph neighbors that consume or re-export this service surface.
+- `src/modules/observability/tests/unit/get-observability-events.test.ts` is a related unit test.
 
 ## Notes
-
-- The file is purely declarative — no side effects at import time beyond the named imports. Safe to import for tree-shaking in non-observability entry points.
-- Because `observabilityService` is a single const, consumers can destructure (`const { jobHealth } = observabilityService`) or import the whole object; the individual named exports do **not** exist at the top level. Code that does `import { jobHealth } from './services'` will get `undefined`.
+- Only types are re-exported by name. Runtime access to the functions goes through the `observabilityService` object.
+- Per the module doc, `health.ts` is built from `job-health.ts`, `dependency-health.ts` and `parked-jobs.ts`.

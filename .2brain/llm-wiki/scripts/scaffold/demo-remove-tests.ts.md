@@ -1,38 +1,34 @@
 ---
 source: scripts/scaffold/demo-remove-tests.ts
-sha256: b3f3c183ee13ddc028fc921d6b6aabffaeec7a51930559ee9e233e7304c8cb75
-generated_at: 2026-11-14T17:40:29.975588+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 99fcd86a8fe75b7d55254978b06af81ee80bc81e59464bed2c4d537af347c2ec
+context_sha256: ff397cd83274b434999a32abe52f6f3838c341eab9f243018ad0a07467ca74bf
+generated_at: 2026-11-22T02:15:08.514947+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/scaffold/demo-remove-tests.ts
 
 ## Purpose
-
-The test-removal step of the `demo-remove` scaffold. Given a set of module names whose folders have already been deleted, it finds every test file that imports (directly or transitively) one of those modules—or declares a `// requires-module:` dependency on one—and deletes the file. It runs iteratively so that tests importing a now-deleted test file are also caught, and it returns one `RemovalNote` per deleted file.
+Implements the test step of module removal (`demo-remove.ts`). After a module's folder is deleted, this deletes every test file that imports it, declares `// requires-module:` for it, or imports another test that was itself deleted. Whole-file deletion is safe because foundation tests keep shop-dependent cases in separate files, so other coverage isn't lost.
 
 ## Key elements
-
-- **`removeResidueTests(repoRoot, names)`** — exported entry point. Collects all `.ts` test files, resolves their import specifiers against the removed-module targets (module folders, scenario fixtures, doubles), checks `// requires-module:` annotations, then loops until no new deletions appear. Returns `RemovalNote[]`.
-- **`testRoots(repoRoot)`** — builds the list of directories to scan: the top-level `tests/` tree plus each surviving module's own `tests/` folder (discovered via `modulesWith`).
-- **`walkTypeScript(directory)`** — recursive collector of all `.ts` file paths under a directory.
-- **`SPECIFIER_PATTERNS`** — three line-anchored regexes that extract specifiers from `import … from`, bare `import "…"`, and `jest.mock`/`import()`/`require()` calls. Anchoring prevents matching specifiers that merely appear inside string literals.
-- **`REQUIRES_MODULE`** — regex for the `// requires-module: a, b` comment convention.
-- **`requiredModules(source)` / `specifiersOf(source)`** — thin extractors returning the list of names or specifiers in a source string.
-- **`resolveSpecifier(specifier, importer, repoRoot)`** — maps a specifier to an absolute path, handling `@modules/`, `@scenarios/`, `@tests/`, and relative paths; returns `undefined` for bare package names.
-- **`isGone(resolved, gone)`** — true if the resolved path equals or sits inside one of the removed targets (folder, file, or `file.` prefix).
+- `removeResidueTests(repoRoot, names)` — the only export. Collects test files, computes a fixpoint of deletions, unlinks them, and returns a `RemovalNote[]` (`file` relative to repo root, `detail: 'deleted — imports or requires a removed module'`).
+- `testRoots` — test locations: `<repo>/tests` plus each surviving module's `tests/` folder (found via `modulesWith(modulesDirectory, 'tests')`). Only existing directories are kept.
+- `walkTypeScript` — recursively lists `.ts` files under a directory.
+- `SPECIFIER_PATTERNS` / `specifiersOf` — line-anchored regexes extracting specifiers from `import`/`export ... from`, side-effect `import`, and `jest.mock`/`requireActual`/`doMock`/`import()`/`require()` calls.
+- `REQUIRES_MODULE` / `requiredModules` — parse `// requires-module: a, b` comment lines (comma-separated module names).
+- `resolveSpecifier` — maps `@modules/…`, `@scenarios/…`, `@tests/…` (to `tests/support/`) and relative paths to absolute paths; packages return `undefined`.
+- `isGone` — true if a resolved path equals, is under, or is an extension-variant (`target.`) of a removed path.
 
 ## Relationships
-
-- **`scripts/scaffold/demo-remove-registry.ts`** — source of the `RemovalNote` type that `removeResidueTests` returns.
-- **`scripts/modules-on-disk.ts`** — provides `modulesWith`, used to discover which surviving modules have their own `tests/` folder.
-- **`scripts/scaffold/demo-remove-modules.ts`** — sibling scaffold step (module-folder deletion) that runs before this file; its deletions are the inputs here.
-- **`tests/unit/scripts/scaffold/demo-remove-tests.test.ts`** — unit tests exercising `removeResidueTests`.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — CI wave mutation test that exercises the scaffold pipeline including this step.
+- `scripts/modules-on-disk.ts` — supplies `modulesWith`, used to find surviving modules' `tests/` folders.
+- `scripts/scaffold/demo-remove-registry.ts` — supplies the `RemovalNote` type that is returned.
+- `scripts/scaffold/demo-remove-modules.ts` — sibling removal step; this one runs after module folders are already deleted (`names` are removed modules whose folders are gone).
+- `tests/unit/scripts/scaffold/demo-remove-tests.test.ts` — unit tests for this file.
+- `tests/unit/scripts/mutation/ci/waves.test.ts` — listed as a graph neighbor; the file itself shows no interaction with it.
 
 ## Notes
-
-- Deletion is **cascading**: once a test file is marked deleted, its path (minus `.ts`) is pushed onto the `gone` list, so a later file that imports it is also removed in the same or a subsequent loop iteration.
-- The "gone" targets include not just `src/modules/<name>/` but also `scenarios/<name>.ts` and `scenarios/support/doubles/<name>/`, because tests that only use a module's fixtures as sample data are equally orphaned.
-- `SPECIFIER_PATTERNS` is deliberately line-anchored so that a fixture string quoting an import (e.g., in this file's own tests or an ESLint rule's test input) is **not** mistaken for a real import.
-- The `// requires-module:` comment is the sole mechanism for declaring a dependency on a module without a static import; it must be a full-line comment and lists comma-separated module names.
+- The "gone" set starts as each removed module's `src/modules/<name>`, `scenarios/<name>`, and `scenarios/support/doubles/<name>` paths; each deleted test file (minus `.ts`) is added, so transitive importers are caught on later passes.
+- Regexes are anchored to line starts so fixtures that merely quote an import inside a string (ESLint rule inputs, this script's own tests) aren't mistaken for real imports.
+- Files are only unlinked after the fixpoint loop completes.
+- `requires-module` is the escape hatch for tests that depend on a module without importing it (e.g., those driving the kernel through the shop's subjects and roles).

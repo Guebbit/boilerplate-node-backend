@@ -1,43 +1,33 @@
 ---
 source: scripts/contracts/fragments.ts
-sha256: 90671b4d77e8270b562a0e0947a36707b1aeec9074746a0cccdbbe1fbb85963d
-generated_at: 2026-11-08T02:41:03.642920+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f846c0ef74c2c16abca50f3e937ae2bdc4256905d1c9488cc73c08583e4b232f
+context_sha256: 018f325fb30e1d96649e6e69bb8c4759ba376322f3209b9e67e23e3f33fd1cd4
+generated_at: 2026-11-22T01:55:55.234836+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/fragments.ts
 
 ## Purpose
-
-Typed, cache-free disk readers for the two per-module contract files (`openapi.yaml` and `authorization.yaml`). It exists so every build step shares one set of interfaces and load functions instead of each declaring its own throwaway shape for the few keys it inspects.
+Single place where build steps read a module's contract fragments (`openapi.yaml` and `authorization.yaml`) from disk, so each step doesn't declare its own throwaway type for the few keys it uses. Readers take a root directory or a file path, never a cache, so tests can feed scratch trees.
 
 ## Key elements
-
-- **`DeclaredTag`** — one entry under a fragment's top-level `tags:` (name, optional description, optional `x-family`).
-- **`TAG_FAMILY_OF_GROUP`** — read-only map from a module's `group` value (`foundation`, `shop`, `example`) to the API-docs family name used as the default tag group.
-- **`DeclaredSection`** — shape of one `x-personal-data` export section (optional `required`, optional `schema`).
-- **`OpenApiFragment`** — the subset of `openapi.yaml` the build steps read: `tags`, `paths` (with per-operation `tags` and `x-cache`), `components.schemas`, `x-error-codes`, `x-personal-data`. All keys optional.
-- **`readOpenApiFragment(file)`** — parses a single YAML file into `OpenApiFragment`; empty file → `{}`.
-- **`readModuleFragment(modulesRoot, module)`** — convenience wrapper that resolves `<modulesRoot>/<module>/openapi.yaml` and delegates to `readOpenApiFragment`.
-- **`AuthorizationRule` / `AuthorizationSet` / `AuthorizationFragment`** — the fields of `authorization.yaml` the build steps read (`action`/`subject`/`module` per rule; `name`/`module`/`rules` per set).
-- **`readAuthorizationFragment(file)`** — parses an `authorization.yaml`; missing file → `{ rules: [], sets: [] }`; absent keys default to empty arrays.
+- `DeclaredTag` — one entry of a fragment's top-level `tags:` (`name`, optional `description`, optional `x-family`).
+- `TAG_FAMILY_OF_GROUP` — maps a module `group` from `module.yaml` (`foundation`→`Core`, `shop`→`Shop`, `example`→`Example`) to the API-docs family used when a tag names none. The scaffolder also writes it into a new module's own tags.
+- `DeclaredSection` — an export section for `POST /account/export` (`required`, `schema`).
+- `OpenApiFragment` — a module's `openapi.yaml` as the build sees it. Every key is optional: `tags`, `paths` (reduced to each operation's `tags` and `x-cache`), `components.schemas`, `x-error-codes`, `x-personal-data`.
+- `readOpenApiFragment(file)` — parses one OpenAPI-shaped YAML file. An empty file returns `{}`. It throws if the file is missing.
+- `readModuleFragment(modulesRoot, module)` — reads `<modulesRoot>/<module>/openapi.yaml` via `readOpenApiFragment`.
+- `AuthorizationRule` (`action`, `subject`, `module`), `AuthorizationSet` (`name`, `module`, `rules` as `action:Subject` keys), `AuthorizationFragment` (`rules`, `sets`) — the types for an `authorization.yaml`.
+- `readAuthorizationFragment(file)` — reads an `authorization.yaml`-shaped file. It returns `{ rules: [], sets: [] }` if the file is absent, and defaults missing `rules` or `sets` to `[]`.
 
 ## Relationships
-
-- **`scripts/contracts/openapi-bundle.ts`** — consumes `OpenApiFragment` / `DeclaredTag` to merge multiple module fragments into a single OpenAPI bundle.
-- **`scripts/contracts/authorization-bundle.ts`** — consumes `AuthorizationFragment` to assemble the combined authorization model.
-- **`scripts/contracts/personal-data-assembly.ts`** — reads `x-personal-data` sections (`DeclaredSection`) from fragments.
-- **`scripts/contracts/root-assembly.ts`** — orchestrates reading fragments across all modules before bundling.
-- **`scripts/contracts/openapi-extensions.ts`** — interprets extension keys (`x-error-codes`, `x-tagGroups`) that appear in `OpenApiFragment`.
-- **`scripts/contracts/asyncapi-section-fragments.ts`** — sibling fragment reader for AsyncAPI files; shares the same "read-only subset" philosophy.
-- **`scripts/contracts/analytics-browser-events.ts`** — consumes fragment `paths` tags to correlate analytics events with API operations.
-- **`scripts/scaffold/apply.ts`** — writes new module fragments; `TAG_FAMILY_OF_GROUP` supplies the default `x-family` it stamps onto generated tags.
-- **`scripts/scaffold/templates-contract.ts`** / **`demo-remove-authorization.ts`** — scaffold helpers that produce or modify the `authorization.yaml` shapes defined here.
-- **`tests/cross-cutting/cache-policy-declared.test.ts`** — exercises `x-cache` values surfaced through `OpenApiFragment.paths`.
+The neighbor files are the contract-assembly and scaffold steps and one test. They sit on the dependency graph around this module, and it is presumably the shared reader they use. Only what the file itself shows is stated here:
+- The `TAG_FAMILY_OF_GROUP` doc comment says the scaffolder uses it, which fits the `scripts/scaffold/*` neighbors.
+- `x-cache` in the `paths` shape matches `tests/cross-cutting/cache-policy-declared.test.ts`, and `x-personal-data` matches `personal-data-assembly.ts`. The file itself does not name either.
+- `authorization-bundle.ts` and `scripts/scaffold/demo-remove-authorization.ts` are the likely consumers of the authorization types.
 
 ## Notes
-
-- **No caching by design.** The module deliberately reads from disk on every call so that tests can point at scratch directory trees. A module-keyed cache would return stale data when the test swaps the file.
-- **Intentionally narrow shapes.** `OpenApiFragment` and `AuthorizationFragment` capture only the fields build steps actually read; they are *not* full OpenAPI / authorization schemas. Do not expect `info`, `servers`, or other top-level keys.
-- **Empty-file semantics differ.** `readOpenApiFragment` treats an empty YAML file as `{}` (valid, declares nothing). `readAuthorizationFragment` treats a *missing* file as `{ rules: [], sets: [] }`, and defaults absent top-level keys to empty arrays.
-- **`TAG_FAMILY_OF_GROUP` is a `Readonly` constant map**, not a function. Adding a new module group requires adding an entry here *and* in `module.yaml`.
+- Parsing uses the `yaml` package (YAML 1.2). Results are cast with `as`, so nothing is validated at runtime. For example, `DeclaredSection.schema` is `unknown` and "its shape is checked where it is used".
+- The two readers differ on missing files. `readAuthorizationFragment` tolerates absence, while `readOpenApiFragment` does not check and will throw.
+- `readAuthorizationFragment` does not guard against an empty file. An empty `authorization.yaml` parses to `null`, so reading `.rules` on it would throw, unlike the OpenAPI reader, which falls back to `{}`.

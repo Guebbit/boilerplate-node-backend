@@ -1,31 +1,27 @@
 ---
 source: src/modules/delivery/authorization.yaml
-sha256: e4cdc50cb7e3db6dee38129aa7015cde3de44e94bddd054a9c31db330e7d59af
-generated_at: 2026-11-08T05:25:59.816422+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e4cdc50cb7e3db6dee38129aa7015cde3de44e94bddd054a9c31db330e7d59af
+context_sha256: bec46f384971cb83c51c7e3287554120de3579a05bba6660d35955be907158fd
+generated_at: 2026-11-22T04:44:56.326397+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/authorization.yaml
 
 ## Purpose
-
-Declares the authorization rules and role sets for the delivery module. It defines which actions a tenant-scoped principal may perform against `Shipment` (update and start) and groups them into named sets that other modules or identity providers reference when granting permissions.
+Declares the delivery module's authorization rules (action/subject permissions) and groups them into named permission sets. It defines who may act on shipments and on the start of order fulfillment.
 
 ## Key elements
-
-- **`rules.update:Shipment`** — Tenant-scoped permission covering the full operational lifecycle of a shipment: cutting from a fulfillment order, recording arrival, correcting tracking codes, reporting loss/damage, and holding or releasing a fulfillment order.
-- **`rules.start:Shipment`** — Tenant-scoped permission to begin fulfilling a paid order (the `paid → processing` transition). Intentionally separate from a broader `update:Order` rule so the warehouse can start work without owning the order record.
-- **`sets.DeliveryManagement`** — Groups `update:Shipment` under a single grantable set.
-- **`sets.DeliveryStart`** — Groups `start:Shipment` under a single grantable set.
+- **Rule `update:Shipment`** (module `delivery`, scope `tenant`): covers cutting a shipment from a fulfillment order, recording arrival, correcting a tracking code, reporting a parcel lost or damaged, and holding or releasing a fulfillment order.
+- **Rule `start:Shipment`** (module `delivery`, scope `tenant`): begins fulfilling a paid order, i.e. the move into `processing` before any parcel exists.
+- **Set `DeliveryManagement`**: contains `update:Shipment`.
+- **Set `DeliveryStart`**: contains `start:Shipment`.
 
 ## Relationships
-
-- **`src/modules/delivery/module.ts`** — Consumes this file at module initialization to register the delivery module's authorization rules with the platform's authorization engine.
-- **`src/modules/delivery/openapi.yaml`** — The OpenAPI spec defines the HTTP endpoints (e.g., `POST /orders/{id}/process`) whose access is governed by the rules declared here.
-- **`src/modules/example/authorization.yaml`** — Serves as the reference template; this file mirrors its top-level `rules` / `sets` structure and field vocabulary.
+- `src/modules/example/authorization.yaml` is a sibling authorization file. It appears to follow the same `rules` / `sets` layout, but this file doesn't reference it.
+- `src/modules/delivery/openapi.yaml` is the delivery module's API spec. The comments in this file say `start:Shipment` gates `POST /orders/{id}/process`.
 
 ## Notes
-
-- The `start:Shipment` rule is deliberately **narrower** than `update:Order`. The `paid → processing` state transition is `system`-only in `orders/domain/lifecycle.ts`; this rule exists solely to gate `POST /orders/{id}/process`, which internally calls `markProcessing` in `orders/services/status.ts`. Do not collapse it into a generic order-update permission.
-- Rule identifiers follow the `action:Subject` convention (e.g., `update:Shipment`, `start:Shipment`) and are referenced by name inside `sets[].rules`.
-- All rules in this file carry `scope: tenant`, meaning they apply at the multi-tenant boundary rather than per-organization or per-user.
+- `start:Shipment` is deliberately narrower than `update:Order`. It lets the warehouse begin work on a paid order without granting broad access to the order record.
+- Per the file's comments, `paid → processing` is `system`-only in `src/modules/orders/domain/lifecycle.ts`. The `POST /orders/{id}/process` endpoint calls `markProcessing` in `src/modules/orders/services/status.ts`.
+- Rules are referenced in sets as `action:Subject` strings, for example `update:Shipment`.

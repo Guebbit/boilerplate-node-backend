@@ -1,39 +1,44 @@
 ---
 source: scenarios/support/doubles/mail-outbox.ts
-sha256: ef2b0376fb7db596c774b4c0aa5e2eacbe3a201572a0759727a9130d2ba35688
-generated_at: 2026-11-14T17:17:21.602802+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6665e8ef924358d65bf0593059bdab66216467ed0a3e54d53ba9fcb1c4b35e0f
+context_sha256: 6b6e7aae994f74b719a08ef03bd59f7b19c83db2eaa8213754522c988068c150
+generated_at: 2026-11-22T01:47:17.822585+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/support/doubles/mail-outbox.ts
 
 ## Purpose
-
-A test double that replaces real email delivery in demo and test contexts. Instead of dispatching a message, it records every send in a module-level in-memory array so that the demo's `GET /__test/emails` endpoint or a test spec can inspect what "would have" been sent. It implements the `MailTransportAdapter` contract and is registered via `./register`.
+A test-only `outbox` mail transport. Instead of sending email, it records each send in an in-memory list. The demo's `GET /__test/emails` endpoint and tests can read that list back, for example to extract a password-reset token. It is never shipped.
 
 ## Key elements
-
-- **`DemoOutboxEmail`** — Interface describing one recorded send: `to`, `subject`, `template` (the template name, not rendered HTML), optional `token`, optional `locale`, `lines` (primitive template variables as `key: value` strings), and optional `attachments` (filenames only, never bytes).
-- **`outbox`** — Module-level `DemoOutboxEmail[]`; not persisted, so a process restart clears it.
-- **`recordDemoEmail(request, templateName, data)`** — Appends (actually `unshift`s, so newest-first) one entry. Extracts the token either from a bare `data.token` variable or from a `#token=` fragment in `data.linkUrl`. Filters `lines` to string/number values only.
-- **`readDemoOutbox()`** — Returns a shallow copy of the array so callers cannot mutate the live outbox.
-- **`clearDemoOutbox()`** — Empties the array; called between e2e specs to prevent leakage.
-- **`outboxMailTransport`** — The `MailTransportAdapter` object: `delivers` always resolves `true`; `send` calls `recordDemoEmail` and resolves `undefined` (no network I/O).
+- `DemoOutboxEmail`: the shape of one recorded send, with these fields:
+  - `to`
+  - `subject`
+  - `template`: the template name, not rendered HTML.
+  - `token?`
+  - `locale?`
+  - `lines`: `key: value` strings for each string or number template variable.
+  - `attachments?`: filenames only, never the bytes.
+- `recordDemoEmail(request, templateName, data)`: builds a `DemoOutboxEmail` and puts it at the front of the outbox (newest first).
+  - `token` comes from `data.token`, or else from the `#token=` fragment of `data.linkUrl` (URL-decoded).
+  - `locale` comes from `data.locale`.
+- `readDemoOutbox()`: returns a copy of the outbox, so callers cannot mutate the live list.
+- `clearDemoOutbox()`: empties the outbox, intended to run between e2e specs.
+- `outboxMailTransport`: the `MailTransportAdapter` implementation.
+  - `delivers()` always returns `true`.
+  - `send()` calls `recordDemoEmail` and resolves with `undefined`.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/mail-transports.ts`** — Provides the `MailTransportAdapter` interface that `outboxMailTransport` satisfies.
-- **`src/types/index.ts`** — Provides the `EmailJobPayload` type used to shape the `request` parameter in `recordDemoEmail`.
-- **`scenarios/support/doubles/register.ts`** — Wires `outboxMailTransport` into the demo's dependency graph in place of a real transport.
-- **`scenarios/support/demo.ts`** — Exposes the recorded outbox over `GET /__test/emails`, calling `readDemoOutbox`.
-- **`tests/unit/scenarios/mail-outbox.test.ts`** — Unit-tests the recording, token extraction, and clear logic in isolation.
-- **`tests/support/journey-mail.ts`** — Journey-level helper that reads `readDemoOutbox` to assert on sent mail during e2e flows.
-- **`tests/unit/infrastructure/adapters/mailer-transport.test.ts`** — Exercises the mailer pipeline with this transport as the adapter under test.
+- Implements `MailTransportAdapter` from `src/infrastructure/adapters/mail-transports.ts`.
+- Takes `EmailJobPayload` from `src/types/index.ts` for the request type.
+- `scenarios/support/doubles/register.ts` registers it as the `outbox` transport.
+- Presumably, `scenarios/support/demo.ts` and `tests/support/journey-mail.ts` read the outbox through `readDemoOutbox` and `clearDemoOutbox`. The file's own docs name the demo's `/__test/emails` reader but not these files specifically.
+- Covered by `tests/unit/scenarios/mail-outbox.test.ts` and `tests/unit/infrastructure/adapters/mailer-transport.test.ts`.
 
 ## Notes
-
-- The outbox records the template **name** and raw variables; it never renders HTML. Specs assert on `template` and `lines`, not on markup.
-- `token` extraction handles two shapes: a top-level `data.token` string, or a `#token=` fragment embedded in `data.linkUrl` (URL-decoded). The bare variable wins if both are present.
-- `lines` intentionally excludes objects, arrays, and booleans—only `string` and `number` values appear. Specs needing complex data must read the raw `data` elsewhere.
-- `attachments` stores only filenames. The actual spooled files are discarded on the send path (matching real-send behavior), so this is the sole trace available to a demo-mode spec.
-- `delivers` unconditionally returns `true`: the contract is "the mail can be read back," not "the mail left the building."
+- The outbox is module-level state and is not persisted. A process restart clears it.
+- Nothing is rendered. The suite asserts on the template name and data, never on HTML.
+- `delivers: true` is deliberate: a second factor that mails a code counts as available because a person can read the mail in the outbox.
+- A non-string `to` is stringified before recording.
+- Attachment bytes are not kept. The send path discards the spooled files after sending, so the filenames are the only trace left.

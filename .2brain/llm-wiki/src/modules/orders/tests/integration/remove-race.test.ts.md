@@ -1,36 +1,32 @@
 ---
 source: src/modules/orders/tests/integration/remove-race.test.ts
-sha256: 587cd58cfb338cbed012a32d218ac4cd5bd5ec999a2759a01730e98f15ac3cda
-generated_at: 2026-11-08T07:08:27.080856+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 587cd58cfb338cbed012a32d218ac4cd5bd5ec999a2759a01730e98f15ac3cda
+context_sha256: 9407c8169de1d983d0e68a19bdf25e3cb5ba2cebb09af77ce4f6e948ebafb5f2
+generated_at: 2026-11-22T06:31:50.362542+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/remove-race.test.ts
 
 ## Purpose
-
-Integration tests that verify `remove` correctly handles race conditions: if a settlement, reopen, or concurrent delete commits *after* `remove` read the document but *before* it issues its conditional write, the delete must abort with the appropriate error instead of destroying the order. Runs against a real MongoDB instance.
+Integration test (real Mongo) for the hard-delete service `remove`. It verifies that a change committing after `remove` has read `status` and `paidAt` from the order it was handed (a settlement, a reopen, or a concurrent delete) still stops the delete. The write itself is conditional on the order being canceled and unpaid, and a miss is answered from a fresh read.
 
 ## Key elements
-
-- **`canceledOrder()`** — Helper that creates a user, a product, and a canceled/unpaid order, then reads the order back. Returns both the order document and its string ID.
-- **`describe('remove: a hard delete')`** — Four cases:
-  - *Settlement race*: calls `markOrderPaidAt` after the order snapshot is taken; expects `409 ORDER_INVOICED` and the order to still exist.
-  - *Reopen race*: calls `forceOrderStatus(id, 'pending')` after the snapshot; expects `409 ORDER_NOT_CANCELED` and the order to still exist.
-  - *Concurrent-delete race*: performs a full `remove` (deleting the doc), then calls `remove` again with the original stale snapshot; expects `404`.
-  - *Happy path*: calls `remove` on a stale-but-still-valid canceled/unpaid order; expects `success: true` and the document gone.
+- `setupTestDb()`: called at module level to set up the test database.
+- `canceledOrder()`: local helper. It creates a user, a product (`onHand: 10`) and an order with one item (quantity 3) in `canceled` status. It then re-reads the order with `readOrder`, the way `removeById` does, and returns `{ order, orderId }`. It throws `'order vanished'` if the read returns nothing.
+- Test suite `remove: a hard delete`, with four cases:
+  - **Settlement race:** `markOrderPaidAt` runs after the read, so `remove(order, true)` returns 409 `ORDER_INVOICED` and the order still exists.
+  - **Reopen race:** `forceOrderStatus(orderId, 'pending')` makes it return 409 `ORDER_NOT_CANCELED`, and the order still exists.
+  - **Concurrent delete:** the order is removed first, then `remove` is called with the stale copy. It returns 404.
+  - **Happy path:** a canceled, unpaid order is deleted. `result.success` is true and a subsequent `readOrder` finds no order.
 
 ## Relationships
-
-- **`src/modules/orders/services/remove.ts`** — The service under test; its `remove` export is the function being exercised.
-- **`src/modules/orders/tests/factories.ts`** — Supplies `createOrder`, `forceOrderStatus`, `toOrderItem`, `markOrderPaidAt`, and `readOrder` used to set up and inspect order state.
-- **`src/modules/products/tests/factories.ts`** — Supplies `createProduct` for the product attached to the test order.
-- **`src/modules/users/tests/factories.ts`** — Supplies `createUser` for the order owner.
-- **`tests/support/response.ts`** — Supplies `asReject`, a type-narrowing helper that extracts the rejection payload from a `remove` result for assertion.
-- **`tests/support/setup-test-db.ts`** — Supplies `setupTestDb`, which spins up a real Mongo instance for the test process.
+- `../../services/remove`: the unit under test. It is always called as `remove(order, true)` with a stale in-memory order document.
+- `@modules/orders/tests/factories`: supplies `createOrder`, `toOrderItem`, `forceOrderStatus`, `markOrderPaidAt` and `readOrder`. The last three are used to change or inspect DB state behind the stale copy.
+- `@modules/users/tests/factories` (`createUser`) and `@modules/products/tests/factories` (`createProduct`): provide the fixtures for the order.
+- `@tests/response` (`asReject`): narrows the result to a rejection so `status` and `errors[0].code` can be asserted.
+- `@tests/setup-test-db`: provides the `setupTestDb` lifecycle.
 
 ## Notes
-
-- The "race" is simulated by mutating the document in the DB *after* the snapshot is captured but *before* `remove` is called. The stale snapshot is then handed to `remove`, mimicking the window where another transaction committed in the meantime.
-- `forceOrderStatus` and `markOrderPaidAt` are factory-level mutation helpers that write directly to the DB, bypassing normal business-flow services — this is intentional to model an external concurrent writer.
-- The file uses real MongoDB (via `setupTestDb`), not an in-memory mock, so conditional-write semantics (e.g., `findAndDelete` with a filter) are tested for real.
+- The race is simulated deterministically. The stale `order` is read first, then the DB is mutated directly, then `remove` is called. No real concurrency is involved.
+- The second argument `true` passed to `remove` is not explained in this file.

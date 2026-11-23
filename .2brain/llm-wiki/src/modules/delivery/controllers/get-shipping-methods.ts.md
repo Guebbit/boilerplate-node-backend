@@ -1,28 +1,26 @@
 ---
 source: src/modules/delivery/controllers/get-shipping-methods.ts
-sha256: 5a57ed6bf61227db7b1f3ff688d9221aad71856115230e24768f471f90200026
-generated_at: 2026-11-08T05:26:56.379993+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5a57ed6bf61227db7b1f3ff688d9221aad71856115230e24768f471f90200026
+context_sha256: 6b50f48dbf63625fd14ccdb3ee7e4f312897fb57a58f7247614d90c739ee2b8c
+generated_at: 2026-11-22T04:46:02.189155+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/controllers/get-shipping-methods.ts
 
 ## Purpose
-
-Express route handler for `GET /delivery/methods`. Returns the full list of shipping methods the shop offers (flat rates, free-above thresholds, etc.). Deliberately public so a guest can see shipping costs before deciding to sign up.
+Express controller for `GET /delivery/methods`. It returns the shipping methods the shop offers, including flat rates and free-above thresholds. The endpoint is public, so guests can see shipping costs before signing up.
 
 ## Key elements
-
-- **`getShippingMethods`** *(exported const)* — The sole handler. Calls `deliveryService.listMethods()`, then wraps the (always-present) `result.data` in `successResponse<ShippingMethodsResponse>` and sends it back. No branching, no error path — `listMethods` is documented to always succeed.
+- `getShippingMethods(request, response)`: the exported handler. It calls `deliveryService.listMethods()` and sends `result.data` through `successResponse<ShippingMethodsResponse>`. It never sends an error response.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to shape the HTTP reply.
-- **`src/modules/delivery/services/index.ts`** — Imports `deliveryService` and calls its `listMethods()` method to fetch the data.
-- **`src/types/index.ts`** — Imports the `ShippingMethodsResponse` type to parameterize the response generic.
-- **`src/modules/delivery/routes.ts`** — Registers this handler on the `GET /delivery/methods` route (implied by the module docblock; the routes file wires the endpoint to this function).
+- `src/infrastructure/http/response.ts`: provides `successResponse`, which formats the HTTP response.
+- `src/modules/delivery/services/index.ts`: provides `deliveryService`. `listMethods()` supplies the data.
+- `src/types/index.ts`: provides the `ShippingMethodsResponse` type, which is the response payload shape.
+- `src/modules/delivery/routes.ts`: the routes file that wires this handler to `GET /delivery/methods`. This page does not show the registration itself.
 
 ## Notes
-
-- **No `?weight=` filter by design.** The full list is always returned. Weight-fit validation is the job of the write-side endpoints (`PUT /cart/shipping-method`, `POST /cart/checkout`), which check against the actual basket server-side. Clients read this list and let those endpoints tell them which methods are actually usable.
-- Because `listMethods()` is guaranteed to succeed, the controller has no `try/catch` and no failure branch — adding one would be dead code.
+- The handler deliberately has no `?weight=` filter. The query string was client-supplied and advisory only. The real weight-fit check runs server-side in `PUT /cart/shipping-method` and `POST /cart/checkout`, against the actual basket. Clients get the full list here and let those write endpoints say which methods the basket can use.
+- `listMethods` is treated as always successful, so `data` is always set. The code relies on this and does no error handling.
+- The `request` parameter is unused.

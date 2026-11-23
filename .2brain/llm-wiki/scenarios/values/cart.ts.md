@@ -1,25 +1,21 @@
 ---
 source: scenarios/values/cart.ts
-sha256: 3cd4bde6eb1cea83f3015ec9964beb15e123fb921d449a86864ad0244df8a164
-generated_at: 2026-11-08T02:36:03.875515+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3cd4bde6eb1cea83f3015ec9964beb15e123fb921d449a86864ad0244df8a164
+context_sha256: 3710050abb21d2e719759f008be1c9ee8c969ab5db51a38be9eb6c242d87068b
+generated_at: 2026-11-22T01:50:08.844678+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/values/cart.ts
 
 ## Purpose
-
-Provides the example/test values for the **cart** collection in the generated API client. It exists so that integration or scenario tests have a consistent, typed payload to exercise the cart endpoint.
+Supplies the `cart` example values used by the generated API client collections. It is a small data-only module that declares what sample values to use for cart-related properties.
 
 ## Key elements
-
-- **`collectionValues`** (exported const, typed `CollectionValues`) — The sole export. Resolves to `{ byProperty: { quantity: 2 } }`, representing a minimal cart scenario where the only meaningful property under test is `quantity`.
+- `collectionValues` (exported const, typed `CollectionValues`): `{ byProperty: { quantity: 2 } }`. It sets the example value of any property named `quantity` to `2`.
 
 ## Relationships
-
-- **`scenarios/collection-values.ts`** — Supplies the `CollectionValues` type that `collectionValues` is annotated against. This file is the type contract; `cart.ts` is one concrete implementation of it.
+- Imports the `CollectionValues` type from `scenarios/collection-values.ts` (type-only import), which defines the shape this export must match.
 
 ## Notes
-
-- The object shape `{ byProperty: { … } }` is a convention of the `CollectionValues` type, not a domain concept — "byProperty" is a key in the test harness, not a cart field.
-- Only `quantity` is specified; any other cart properties are expected to be omitted (i.e. default/undefined) in the scenario.
+- Values are keyed by property name (`byProperty`), not by full path, so the `quantity` value applies wherever a property of that name appears in the cart collection.

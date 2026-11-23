@@ -1,41 +1,35 @@
 ---
 source: scripts/contracts/openapi-document.ts
-sha256: c2d3384bfad4d50ab6c45bb2c0845e1b20a2f2e0ac8a3b59d1512fb3557ca0fb
-generated_at: 2026-11-14T17:27:24.465566+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0d919cdff011a595de225b47baefa8e0849ef1ff62a06d996fac1204c36e100d
+context_sha256: a7eb7db4b01fed43285f93bcffd66325392d7bff0ce76bbe290deea21e318cb2
+generated_at: 2026-11-22T01:58:20.627886+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/openapi-document.ts
 
 ## Purpose
-
-Shared type definitions and two utility functions that every OpenAPI bundler step depends on. It defines the `OpenApiDocument` type (an OpenAPI 3.1 document augmented with the project's vendor extensions), the `Step` function signature, and provides the single YAML parse guard and the single operation-walk so no step re-implements either.
+Shared foundation for the contract-bundling steps that operate on the bundled `openapi.yaml`. It defines the document type, the list of HTTP methods an operation can sit under, a parse guard, and a single walk over all operations, so no step keeps its own copy of "what an OpenAPI document looks like". Types and the method list come from `openapi-types`; YAML parsing uses `yaml`.
 
 ## Key elements
-
-- **`OpenApiDocument`** — `OpenAPIV3_1.Document<OperationExtensions>` intersected with `RootExtensions`. The canonical document type all steps read and mutate.
-- **`Step`** — `(document: OpenApiDocument) => void`. The contract every bundler step implements; it edits the parsed document in place.
-- **`Operation`** / **`OperationEntry`** — typed views of a single operation and of `{ route, method, operation }` respectively.
-- **`OperationExtensions`** — vendor keys an operation may carry: `x-cache`, `x-module`, `x-error-codes`.
-- **`RootExtensions`** — vendor keys on the document root: `x-app-level-responses`, `x-app-level-headers`, `x-image-upload-types`, `x-error-codes`, `x-tagGroups`.
-- **`AppLevelResponse`** / **`ErrorCodeEntry`** — shapes for the root-level `x-app-level-responses` and `x-error-codes` maps.
-- **`HTTP_METHODS`** — readonly array of all `OpenAPIV3.HttpMethods` values; used by `operationsOf` and `securityOpenMethods` to enumerate only real operations.
-- **`WRITE_METHODS`** — `['post', 'put', 'patch', 'delete']`; the methods a client may send a body to.
-- **`isHttpMethod(key)`** — type-guard distinguishing a method key from other path-item keys (`parameters`, `summary`, `$ref`).
-- **`parseOpenApi(bundled)`** — parses YAML text into `OpenApiDocument`; throws a descriptive `Error` if the result is not a plain object.
-- **`operationsOf(document)`** — flattens `document.paths` into `OperationEntry[]` (one entry per `paths.<route>.<method>` that holds an operation object).
-- **`securityOpenMethods(pathItem)`** — returns the upper-cased methods on a path item whose operation declares `security: []` (no authentication required).
+- `OpenApiDocument`: an OpenAPI 3.1 document (`OpenAPIV3_1.Document`) extended with the vendor keys the steps read and write.
+  - Operation-level: `x-cache`, `x-module` (stamped by the bundler), `x-error-codes` (codes by HTTP status).
+  - Root-level: `x-app-level-responses`, `x-app-level-headers`, `x-image-upload-types`, `x-error-codes`, `x-tagGroups`. The `unknown`-typed ones are validated by the step that reads them.
+- `Step`: `(document: OpenApiDocument) => void`. A bundler step that edits the parsed document in place. The bundler parses once, runs the steps in order, then stringifies once.
+- `Operation` and `OperationEntry`: an operation object, and an operation paired with its `route` and `method`.
+- `AppLevelResponse`: an entry of `x-app-level-responses`, with the shared `response` name and `appliesTo` (`'all' | 'requestBody' | 'requestBodyOrBodyless'`).
+- `ErrorCodeEntry`: an error code's `status`, `description` and optional `scope: 'app'`. `app` marks a code any operation may send. Every code without it must be listed on at least one operation's `x-error-codes`.
+- `HTTP_METHODS`: the methods a path item may hold an operation under, taken from `OpenAPIV3.HttpMethods`.
+- `WRITE_METHODS`: `post`, `put`, `patch`, `delete`, the methods a client may send a body to.
+- `isHttpMethod(key)`: type guard telling HTTP-method keys apart from `parameters`, `summary`, `$ref` and similar.
+- `parseOpenApi(bundled)`: parses YAML text and throws `[openapi] the bundled document did not parse to an object.` unless the result is a non-array object.
+- `operationsOf(document)`: flattens `paths.<route>.<method>` into `OperationEntry[]`.
+- `securityOpenMethods(pathItem)`: upper-case methods whose operation declares `security: []`, in `HTTP_METHODS` order.
 
 ## Relationships
-
-- **`openapi-bundle.ts`** — the orchestrator that calls `parseOpenApi` once, then runs an array of `Step` values in sequence and stringifies the result. Every other contract file is one of those steps.
-- **`openapi-extensions.ts`** — a step that reads and writes the `OperationExtensions` / `RootExtensions` keys defined here.
-- **`permission-security.ts`** — a step that consumes `securityOpenMethods` to identify auth-exempt operations.
-- **`analytics-browser-events.ts`**, **`cookie-auth.ts`**, **`fill-enum.ts`**, **`generate-redirect-query.ts`**, **`generate-request-content-types.ts`**, **`image-upload-encoding.ts`**, **`prune-unused.ts`**, **`response-headers.ts`** — individual `Step` implementations that import `OpenApiDocument`, `Operation`, `HTTP_METHODS`, `WRITE_METHODS`, `operationsOf`, or `isHttpMethod` from this file.
+The neighbors listed are the `scripts/contracts/*` step modules (analytics-browser-events, cookie-auth, fill-enum, generate-redirect-query, generate-request-content-types, image-upload-encoding, openapi-bundle, openapi-extensions, permission-security, prune-unused, response-headers) and their unit tests under `tests/unit/scripts/contracts/`. They sit in the dependency graph around this file, which is the common base for the document type, `Step` and operation walking. The file itself imports only `openapi-types` and `yaml`.
 
 ## Notes
-
-- `parseOpenApi` does **not** validate the document against an OpenAPI schema; structural checking is deferred to whichever step first reads a given key. A malformed document will therefore fail at the step that touches the bad field, not at parse time.
-- `securityOpenMethods` treats only `security: []` (an empty array) as "no auth". An operation that *omits* the `security` field, or lists schemes like `[{}, bearerAuth]`, is **not** considered open.
-- The `Step` type mutates the document in place and returns `void`. The bundler parses once, runs steps sequentially, and stringifies once — steps never see YAML text.
-- Types and the `HttpMethods` enum are re-exported from `openapi-types` (the same package Modelina already depends on), so no step maintains its own copy of the OpenAPI shape.
+- `parseOpenApi` does only a shallow object check, then casts to `OpenApiDocument`. The steps that read each extension check its structure.
+- `securityOpenMethods` counts only an empty `security` array. An omitted `security`, or a list of schemes such as `[{}, bearerAuth]`, does not count as "no sign-in".
+- `operationsOf` skips path-item keys that are not HTTP methods, so `parameters`, `summary` and `$ref` never collect responses.

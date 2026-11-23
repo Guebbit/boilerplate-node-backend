@@ -1,42 +1,41 @@
 ---
 source: src/modules/notifications/staff-routing.ts
-sha256: cfca7cf3cc9ecf1a9f71b24b705845d08ed6ee9c7e9a3f257b50a1c3002b63cf
-generated_at: 2026-11-08T06:34:25.728778+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 80fd27db72d1ef3f8b95df851bba180928a3f5fb225f10615df53e1c70c2b3d1
+context_sha256: d3bbaf9ddcaeaaa13dd3f02bbc3a1ca032d7ee0cfe166c160025370314ef5ddb
+generated_at: 2026-11-22T05:56:51.185530+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/staff-routing.ts
 
 ## Purpose
-
-Defines the routing table for the six staff work notices that ship with every project: which permission sets are told, whether the notice earns an email (and of what class), and which frontend screen it links to. It is the single reference for auditing "who is told" for foundation notices. Modules that add their own notices keep their own table and pass it in per call; this file lists none of them.
+Central routing table for "work notices" sent to staff: which permission sets are told, whether the notice is mailed, how severe it is, and which frontend page it links to. It exists so "who is told" for the notices every project has can be audited in one file. Modules with their own notices keep their own table and pass it in per call; this file lists none of theirs.
 
 ## Key elements
-
-- **`StaffRoute`** – Interface for one notice's routing: `sets` (permission-set names, `'per-notice'`, or `[]` for admins-only), `email` (`'now' | 'digest' | 'none'`), and `severity`.
-- **`StaffLink`** – A frontend page reference: `template` (path, no locale) + `parameters`.
-- **`StaffNoticeBody`** – Type guard extracting `NotificationBody` entries whose code matches `` `${string}.staff.${string}` ``.
-- **`STAFF_ROUTES`** – `const satisfies Record<FoundationStaffCode, StaffRoute>` mapping the six `notifications.staff.*` codes to their `StaffRoute`. Compile-time guarantee that every foundation code has a route.
-- **`setsOfRoute(route, named?)`** – Resolves the effective permission sets: returns `named` for `'per-notice'` routes, otherwise the route's static list. Defaults to `[]` (admins-only) when no sets are named.
-- **`staffLinkOf(body)`** – Maps a notice body to its `StaffLink`. Dispatches on code; task-family codes use the internal `taskLink` helper (honors an optional `work` path from the opener). `outbox-dead` is excluded by the parameter type.
-- **`callerHoldsAnySet(caller, sets)`** – Returns `true` if the caller is unrestricted or holds at least one of the given permission sets (delegates to `holdsSet`).
+- `StaffRoute`: routing shape: `sets` (permission set names, or `'per-notice'` when the producer names them), `email` (`'now' | 'digest' | 'none'`), and `severity`.
+- `StaffLink`: a frontend page as a path `template` (no locale) plus `parameters` for its placeholders.
+- `StaffNoticeBody`: the `NotificationBody` variants whose code matches `<module>.staff.<name>`.
+- `STAFF_ROUTES`: the six built-in notices, typed `satisfies Record<FoundationStaffCode, StaffRoute>` so a missing code fails compilation:
+  - `webhook-disabled`: `WebhookManagement` set, no email, warning.
+  - `task-opened`: per-notice, email now, info.
+  - `task-overdue`: per-notice, email now, warning.
+  - `task-due-soon`: per-notice, email now, info.
+  - `task-assigned`: per-notice, no email, info.
+  - `outbox-dead`: empty sets (administrators only), no email, error.
+- `setsOfRoute(route, named)`: returns the route's sets, or the producer's `named` sets for a `per-notice` route. With none named, the result is empty, meaning administrators only, never everyone.
+- `staffLinkOf(body)`: maps a notice body to a `StaffLink`. Webhook-disabled goes to the webhook subscription page. Task-opened, task-overdue and task-due-soon go to the opener's `work` path if given, otherwise to the task page. Task-assigned always goes to the task page. `outbox-dead` is excluded from its type.
+- `callerHoldsAnySet(caller, sets)`: true if the caller is `unrestricted` or holds any of the sets, evaluated at call time.
 
 ## Relationships
-
-- **`src/infrastructure/http/frontend-link.ts`** – Imports `FRONTEND_LINK_RULES.staffPages` as the canonical path templates for staff screens (`PAGES`).
-- **`src/kernel/ability.ts`** – Imports `holdsSet`, used inside `callerHoldsAnySet` to check a caller's current role membership.
-- **`src/modules/notifications/model.ts`** – Imports `NotificationBody` and `NotificationCode` types used to build `StaffNoticeBody` and `FoundationStaffCode`.
-- **`src/types/index.ts` / `src/types/auth-context.ts`** – Source of `NotificationSeverity` and `Caller` types consumed by the route definitions and permission check.
-- **`src/modules/notifications/services/staff.ts`** – Downstream consumer that reads `STAFF_ROUTES`, calls `setsOfRoute` and `callerHoldsAnySet` to decide delivery.
-- **`src/modules/notifications/services/inbox.ts` / `services/subscribers.ts`** – Sibling services in the same barrel (`services/index.ts`) that use the routing metadata to populate inbox or subscriber channels.
-- **`src/shop-tasks/staff-routing.ts`** – A parallel module with its own routing table for shop-task notices; follows the same `StaffRoute` / `StaffLink` shape but is not imported here.
-- **`src/modules/notifications/tests/unit/staff-routing.test.ts`** – Unit tests exercising the exports in this file.
+- Reads the staff page templates from `FRONTEND_LINK_RULES` in `src/infrastructure/http/frontend-link.ts`.
+- Uses `holdsSet` from `src/kernel/ability.ts` for permission checks.
+- Takes `NotificationBody` and `NotificationCode` types from `src/modules/notifications/model.ts`, and `Caller` and `NotificationSeverity` from `src/types/index.ts` (the `@types` alias).
+- Per its docs, other modules supply their own routing tables with each call. `src/modules/shop-tasks/staff-routing.ts` is a sibling in the graph, presumably one such table.
+- The notifications services (`src/modules/notifications/services/staff.ts`, `inbox.ts`, `subscribers.ts`, `index.ts`) and `src/modules/notifications/emails.ts` are graph neighbors, and `src/modules/notifications/tests/unit/staff-routing.test.ts` covers this file.
 
 ## Notes
-
-- **`'per-notice'` sentinel.** When `sets` is the string `'per-notice'`, the caller must supply the actual set names via `setsOfRoute`. An empty `named` array on a `'per-notice'` route resolves to admins-only, not "everyone."
-- **Empty array ≠ everyone.** `sets: []` explicitly means *administrators only* (e.g. `outbox-dead`). Do not confuse with the `'per-notice'` default.
-- **Email class is a policy, not a toggle.** `'now'` fires one mail per recipient at write time; `'digest'` folds into a daily summary; `'none'` means inbox-bell only. The decision is encoded once in `STAFF_ROUTES` and enforced downstream.
-- **`outbox-dead` has no `StaffLink`.** Its code is excluded from `staffLinkOf`'s parameter type; the frontend maps the dead-letter page itself.
-- **Contact-message exception.** The comments note that `notifyTaskStaff` (in `services/staff.ts`) suppresses the `'now'` mail for contact-message tasks, making the bell the sole channel. This override lives outside this file.
-- **`work` param is opaque.** `taskLink` passes a caller-supplied `work` path through untouched; this module never validates or interprets it.
+- Mail rule: `now` only where someone must act soon (money, a legal clock, security). Everything else is inbox-only.
+- For contact messages, the file's comments say `notifyTaskStaff` makes `task-opened` and `task-overdue` bell-only, with the mail going to the main mailbox instead. That logic is not in this file.
+- An empty `sets` list means administrators only.
+- `digest` is part of the `email` type, but no built-in route uses it.
+- Because the check runs when the caller asks, a member who loses a role stops seeing the notice.

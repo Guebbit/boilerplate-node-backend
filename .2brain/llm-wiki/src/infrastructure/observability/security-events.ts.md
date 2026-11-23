@@ -1,34 +1,32 @@
 ---
 source: src/infrastructure/observability/security-events.ts
-sha256: 216a692f1d35eab5e9881a3e6df65a8a2c28662ee0e5158a72fe92af9596f39e
-generated_at: 2026-11-08T03:41:19.735293+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0b1c25ef864aad9aaca00617ddc364958a1ac786fae9a37f0bfbf276516e1b59
+context_sha256: 3479931a8d68a98f717ec674114a4a3a8a294a94bf1ae7e015f32964af860b3c
+generated_at: 2026-11-22T03:00:36.837127+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/observability/security-events.ts
 
 ## Purpose
-
-Defines the `security.*` audit-action counters and the single recording function that pairs each counter increment with an audit log entry. It exists so that a rate-based alert (Prometheus `increase()`) and the forensic audit trail always agree on how many attacks occurred.
+Pairs each `security.*` audit action that names an attack on a credential with a Prometheus counter. The audit entry is the evidence and the counter is what an alert rule can watch. Both are emitted together in one call, so the log and the metric cannot disagree on how many events occurred.
 
 ## Key elements
-
-- **`securityEventsTotal`** (Counter) — the main counter, labelled by `event` (the audit-action string). Registered to the shared `metricsRegistry`.
-- **`staleCredentialsTotal`** (Counter) — counts refused expired/revoked credentials. Metric-only by design (no paired audit entry) because frequent FE token expiry would flood the audit log.
-- **`SecurityEventAction`** (type) — `Extract<AuditAction, 'security.${string}'>`; bounds the valid label values so they never leak request data.
-- **`registerSecurityEvents(actions)`** — pre-sets each action's series to 0 (`inc(…, 0)`) so a post-restart `increase()` alert fires on the first event. Callers (module `audit.ts` files) invoke this to register their own `security.*` actions. Core actions (`TOKEN_INVALID_SIGNATURE`, `TOKEN_MALFORMED`, `API_KEY_REVOKED`) are registered at module load.
-- **`recordSecurityEvent(context, action, metadata?)`** — increments `securityEventsTotal` and calls `recordAudit` with `actorUserId: 'anonymous'`, `actorRole: 'anonymous'`, `outcome: 'failure'`, and any extra metadata.
+- `securityEventsTotal`: a `prom-client` `Counter` registered on `metricsRegistry`, labelled by `event`. The label is the audit action string and is bounded by `SecurityEventAction`, never request data.
+- `staleCredentialsTotal`: a `Counter` for refused credentials a customer plausibly still holds, such as expired or revoked sessions and keys. It is a counter plus a log line only, with no stored audit row.
+- `SecurityEventAction`: a type, the `security.*` subset of `AuditAction`. It covers the guards' own actions plus any a module declares and registers.
+- `registerSecurityEvents(actions)`: increments each action's series by 0, so an `increase()` alert sees the first event after a restart. A module that records an attack calls it from its own `audit.ts`.
+- `recordSecurityEvent(context, action, metadata?)`: increments `securityEventsTotal` for the action, then calls `recordAudit`. The audit entry has actor user and role `'anonymous'`, outcome `'failure'`, and optional `metadata`.
 
 ## Relationships
-
-- **`src/infrastructure/observability/audit.ts`** — imports `recordAudit`, `coreAuditActions`, and the `AuditAction` base type; `SecurityEventAction` is a narrowed extraction of it. `recordSecurityEvent` delegates the log-write to `recordAudit`.
-- **`src/infrastructure/observability/metrics-registry.ts`** — both counters register into the shared `metricsRegistry` instance.
-- **`src/infrastructure/observability/metric-config.ts`** — provides `counterConfig()` to spread shared metric metadata (name, help, etc.) into each Counter constructor.
-- **`src/types/index.ts`** — source of the `CallerContext` type accepted by `recordSecurityEvent`.
+- `src/infrastructure/observability/audit.ts` provides `recordAudit`, `coreAuditActions` and the `AuditAction` type.
+- `src/infrastructure/observability/metrics-registry.ts` provides `metricsRegistry`, where both counters register.
+- `src/infrastructure/observability/metric-config.ts` provides `counterConfig`, which builds the counter options for both counters.
+- `src/types/index.ts` provides `CallerContext` (imported via `@types`). `src/types/auth-context.ts` is a neighbor, but this file does not show how it relates.
+- Per the header comment, other modules' `audit.ts` files (such as `src/modules/observability/audit.ts` and `src/modules/payments/audit.ts`) call `registerSecurityEvents` for their own `security.*` actions. The visible code does not show which modules actually do.
+- `src/kernel/middlewares/authorizations.ts` is a graph neighbor. The file itself does not show how it uses this module.
 
 ## Notes
-
-- The counter and audit entry are emitted **together** in `recordSecurityEvent`; they are never written independently, so a rule and a log query will always match.
-- `staleCredentialsTotal` is intentionally **not** paired with an audit entry — treat it as a volume signal, not an incident record.
-- `registerSecurityEvents` must be called **before** the first `recordSecurityEvent` for a given action, or the Prometheus `increase()` function will treat the series as "missing" and the alert will miss the first event after a restart.
-- The `event` label is always a compile-time-known `SecurityEventAction` value, never free-form request data — this keeps the cardinality bounded.
+- At import time, the module pre-registers `SECURITY_TOKEN_INVALID_SIGNATURE`, `SECURITY_TOKEN_MALFORMED` and `SECURITY_API_KEY_REVOKED`.
+- `recordSecurityEvent` always records the actor as anonymous, so it fits refused requests that have no authenticated identity.
+- `staleCredentialsTotal` is only declared and exported here. No increment helper exists in this file.

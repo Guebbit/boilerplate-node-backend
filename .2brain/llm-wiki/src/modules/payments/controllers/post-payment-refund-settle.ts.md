@@ -1,31 +1,34 @@
 ---
 source: src/modules/payments/controllers/post-payment-refund-settle.ts
-sha256: c4576cc4a59e284dfbf289d9dd062e3502ea0157091a5d0742af7424e44a8994
-generated_at: 2026-11-08T07:18:25.668286+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c4576cc4a59e284dfbf289d9dd062e3502ea0157091a5d0742af7424e44a8994
+context_sha256: 5ce1fd43cc810858f4827ac1f677e2d04a235b0d888cfac4a780d0106f0991ca
+generated_at: 2026-11-22T06:42:10.436857+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/controllers/post-payment-refund-settle.ts
 
 ## Purpose
-
-Express controller for `POST /payments/:id/refunds/:refundId/settle`. It lets an operator confirm that a refund's funds have been returned outside the application, then responds with the settled refund object. The handler validates both path IDs, delegates to the payment service, and formats the success or error response.
+Express controller for `POST /payments/:id/refunds/:refundId/settle`. It lets an operator confirm that a refund's money went back outside the application (a manual settlement), and responds with the refund that was settled.
 
 ## Key elements
-
-- **`postPaymentRefundSettle`** (exported) – The sole handler. Extracts `paymentId` and `refundId` from the path, calls `paymentService.settleRefundByHand`, resolves the specific refund via `paymentService.refundOf`, and sends a 200 with the refund body. On service refusal it short-circuits via `refused`; on unexpected errors it delegates to `catchAs`.
+- `postPaymentRefundSettle(request, response)`: the exported handler.
+  - Validates both `id` and `refundId` path params with `requireId`, using the `payments.not-found` error key. It returns early if either is invalid (`requireId` handles the response).
+  - Calls `paymentService.settleRefundByHand(paymentId, refundId, request.authContext, callerContextOf(request))`.
+  - If `refused(response, result)` reports a refusal, it stops there.
+  - Otherwise it reads the settled refund with `paymentService.refundOf(result.data, refundId, request.authContext)` and sends it with `successResponse(response, refund, 200)`.
+  - Rejections go to `catchAs(response, 'postPaymentRefundSettle')`.
 
 ## Relationships
-
-- **`src/modules/payments/services/index.ts`** – Primary dependency; calls `paymentService.settleRefundByHand` and `paymentService.refundOf`.
-- **`src/infrastructure/http/controller.ts`** – Supplies the `catchAs` (error-to-response) and `refused` (service-rejection check) helpers.
-- **`src/infrastructure/http/ids.ts`** – Supplies `requireId` for safe extraction/validation of the two path parameters.
-- **`src/infrastructure/http/request.ts`** – Supplies `callerContextOf` to pass operator context into the service call.
-- **`src/infrastructure/http/response.ts`** – Supplies `successResponse` for the final 200 reply.
-- **`src/modules/payments/routes.ts`** – Registers this handler on the `POST /payments/:id/refunds/:refundId/settle` route (handler is consumed there; not imported by this file).
+- `src/infrastructure/http/ids.ts`: `requireId` parses and validates the `id` and `refundId` params.
+- `src/infrastructure/http/controller.ts`: `refused` handles service refusals, and `catchAs` handles thrown errors.
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `successResponse` writes the 200 response.
+- `src/modules/payments/services/index.ts`: supplies `paymentService`, which provides `settleRefundByHand` and `refundOf`.
+- `src/modules/payments/routes.ts`: mounts this handler. Per the file header, the route carries the `create:Refund` permission and the fresh-session requirement.
+- `src/modules/payments/providers/index.ts`: no direct interaction is visible in this file.
 
 ## Notes
-
-- The null-check after `refundOf` is defensive and annotated as unreachable on a success path; it throws a plain `Error` that will be caught by the `catchAs` handler.
-- `request.authContext` is read directly (not via an imported helper), implying the route layer or middleware attaches it before this handler runs.
-- The promise chain uses `.then()/.catch()` rather than `async/await`, consistent with the surrounding controller style.
+- Authorization (`create:Refund`, fresh session) is enforced at the route, not here.
+- The service itself refuses a refund that has no final answer yet and one that has already been settled. This controller only relays those refusals via `refused`.
+- The `if (!refund) throw ...` branch is commented as unreachable on success. The settled refund should always be on the returned payment.

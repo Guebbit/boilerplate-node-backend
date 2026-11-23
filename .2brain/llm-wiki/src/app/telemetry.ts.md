@@ -1,33 +1,31 @@
 ---
 source: src/app/telemetry.ts
-sha256: f6b2fc8e19d6f6928171784abebb9cf089e5559f7b9e67cfd0db68e8aadcd196
-generated_at: 2026-11-08T03:14:38.480142+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7ea844d31ba7aff8c7f31f4e1a0f64cf4106e881b814a1d142cdab2aab8dc5f6
+context_sha256: 96474351fd91fc59acdabba55eafd6fc083514c2b391ed2492e480881a75797a
+generated_at: 2026-11-22T02:31:59.512536+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/app/telemetry.ts
 
 ## Purpose
-
-Installs a single Express middleware that records per-request latency (histogram) and in-flight request count (gauge) as Prometheus metrics. It must be mounted **before** all route definitions so the timing wraps the full handler chain.
+Installs Prometheus HTTP metrics on an Express app: per-request latency and an in-flight request gauge. It is meant to be mounted before the routes so the timer wraps the handler instead of running after it.
 
 ## Key elements
-
-- **`installTelemetry(app: Express): void`** — the sole export. Registers a middleware that:
-  - Increments the in-flight gauge on request start, decrements it on the response's `close` event.
-  - On the response's `finish` event, computes elapsed time via `process.hrtime.bigint()` and calls `recordRequestMetric` with method, route label, status code, and duration in ms.
-- **`@infrastructure/observability/metrics-http`** — source of all four metric primitives (`getRouteLabel`, `recordRequestMetric`, `incrementInflight`, `decrementInflight`). This file contains no metric definitions; it is purely the wiring layer.
+- `installTelemetry(app: Express): void` is the only export. It registers one middleware via `app.use` that does the following:
+  - Calls `incrementInflight()` and records a start time with `process.hrtime.bigint()`.
+  - Registers `decrementInflight` on the response's `close` event, using `once`.
+  - Registers a `finish` listener on the response, using `once`. It computes the elapsed time in milliseconds and calls `recordRequestMetric({ method, route, statusCode, durationMs })`. The route comes from `getRouteLabel(request)`.
+  - Calls `next()`.
 
 ## Relationships
-
-- **`src/app.ts`** — caller; invokes `installTelemetry` during app setup, before route registration.
-- **`src/infrastructure/observability/metrics-http.ts`** — provides the metric recording helpers and the `getRouteLabel` utility that resolves the Express route template from `request.route`.
-- **`tests/unit/app/telemetry.test.ts`** — unit tests covering the middleware's increment/decrement and recording behavior.
-- **`package.json`** — defines the `@infrastructure` path alias used by the import.
+- `src/infrastructure/observability/metrics-http.ts` supplies `getRouteLabel`, `recordRequestMetric`, `incrementInflight` and `decrementInflight`. This file only wires them to the request lifecycle. It does not define the metrics themselves.
+- `src/app.ts` is a graph neighbor and presumably calls `installTelemetry`. That call is not visible in this file.
+- `tests/unit/app/telemetry.test.ts` is the unit test for this module.
+- `package.json` is a graph neighbor. This file shows no direct interaction with it.
 
 ## Notes
-
-- **`close` vs `finish` for the gauge:** `decrementInflight` is bound to `response.once('close', …)`, *not* `'finish'`. Aborted or streamed (e.g. SSE) responses never emit `finish`, so using it would leak the gauge. `close` always fires.
-- **Route label timing:** `getRouteLabel(request)` is called inside the `finish` handler, not at the top of the middleware. `request.route` is only populated after Express finishes routing; reading it in the middleware body would require guessing the template from the raw path.
-- **`once` listeners:** Both event registrations use `.once()` to avoid double-decrementing or double-recording if the event somehow fires more than once.
-- **No filtering:** The middleware applies to *every* path that hits the Express app (including 404s), because it runs before routing.
+- The in-flight gauge is decremented on `close`, not `finish`. Aborted requests and streamed responses such as SSE never emit `finish`, so decrementing there would leave the gauge permanently too high. `close` always fires.
+- Latency and the metric record are emitted on `finish`. Requests that abort or stream without finishing are therefore counted in the gauge but get no latency record.
+- The route label is read inside the `finish` listener, not in the middleware body. `request.route` is only populated during routing. Reading it earlier would mean guessing the template from the path, which gives unbounded label values for paths the app doesn't serve.
+- The middleware must be registered before the routes so it wraps handlers.

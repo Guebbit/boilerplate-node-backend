@@ -1,31 +1,29 @@
 ---
 source: src/modules/sitemap/controllers/get-sitemap-products.ts
-sha256: 6202541f03a256bf35ee3d3253cf313c9b3e5b8d00b2069e1961538eeab6a043
-generated_at: 2026-11-14T21:59:36.559079+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:48:34.556193+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/sitemap/controllers/get-sitemap-products.ts
 
 ## Purpose
-
-HTTP controller that handles `GET /sitemap/products-{page}.xml`. It validates the page number, fetches the corresponding catalogue slice from the sitemap service, and streams the result as an XML sitemap response. It exists to isolate the request-parsing/validation logic from the service and the XML serialization.
+Express controller for `GET /sitemap/products-{page}.xml`. It serves one numbered page of the public product catalogue as a sitemap XML file, as listed by the sitemap index. Any file name the index would not list returns 404.
 
 ## Key elements
-
-- **`PAGE_NUMBER`** — Module-level regex (`/^[1-9]\d*$/`) enforcing a positive integer with no sign, leading zeros, or padding. Used before numeric conversion.
-- **`getSitemapProducts`** *(exported)* — Express handler. Validates `request.params.page` against `PAGE_NUMBER` and `Number.isSafeInteger`; calls the service to list products for that page; on a successful non-null result delegates to `sendXml`; on missing data or invalid input sends a 404 via `rejectResponse`; on thrown errors delegates to `catchAs`.
+- `getSitemapProducts(request, response)` — the exported handler.
+  - Validates `request.params.page`. It must match `PAGE_NUMBER` (`/^[1-9]\d*$/`: positive whole number, no sign, no leading zeros) and convert to a safe integer. Otherwise it responds 404 via `rejectResponse`.
+  - Calls `sitemapService.listProducts(page)`. A falsy result produces a 404. Otherwise it calls `sendXml(response, entries, new SitemapStream())`.
+  - Rejections from the service are handled by `.catch(catchAs(response, 'getSitemapProducts'))`.
+- `PAGE_NUMBER` — module-private regex for the page format.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, which wraps `.catch` to log and emit a standard error response.
-- **`src/infrastructure/http/response.ts`** — Provides `rejectResponse`, used to short-circuit with a 404 (invalid page or no entries).
-- **`src/modules/sitemap/service.ts`** — Source of product data; the controller imports `sitemapService` and calls its `listProducts` method to retrieve entries for the given page.
-- **`src/modules/sitemap/controllers/send-xml.ts`** — `sendXml(response, entries, stream)` serializes the entries into an XML sitemap and writes them to the response.
-- **`src/modules/sitemap/routes.ts`** — Registers this handler as the GET controller for the products-sitemap route.
+- `src/modules/sitemap/service.ts` — supplies the entries for the requested page through `sitemapService.listProducts`. A falsy return means the page doesn't exist.
+- `src/modules/sitemap/controllers/send-xml.ts` — `sendXml` serializes the entries through a `SitemapStream` and writes the XML response.
+- `src/infrastructure/http/response.ts` — `rejectResponse` sends the 404 responses.
+- `src/infrastructure/http/controller.ts` — `catchAs` builds the error handler for failed service calls, labelled `'getSitemapProducts'`.
+- `src/modules/sitemap/routes.ts` — the route that mounts this handler (only inferred from the neighbor graph and the `:page` route param; the file itself doesn't show the wiring).
 
 ## Notes
-
-- Validation is deliberately strict: `"01"`, `"-1"`, `"1.0"`, and empty strings all produce a 404 before any DB call. The `Number.isSafeInteger` guard prevents a digit-string exceeding 2⁵³ from reaching the database as an absurd `skip` offset.
-- The handler uses a promise chain (`.then`/`.catch`) rather than `async/await`; the 404 branches return `undefined`, which Express ignores.
-- The `SitemapStream` instance is created inline per request rather than shared, so each response builds its own stream.
+- The safe-integer check exists because a very long digit string would otherwise reach the database as a huge `skip`.
+- On a validation failure the handler returns `undefined` synchronously. On the happy path it returns the promise chain.
+- A 404 is used for both malformed page numbers and pages beyond the catalogue. Neither case returns a 400.

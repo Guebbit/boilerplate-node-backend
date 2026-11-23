@@ -1,30 +1,34 @@
 ---
 source: src/modules/payments/tests/unit/transfer-reference.test.ts
-sha256: b76e44900bb2631530c3e19a20038e34870cc0d119042792f231aa761bb6df91
-generated_at: 2026-11-08T07:41:15.509000+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b76e44900bb2631530c3e19a20038e34870cc0d119042792f231aa761bb6df91
+context_sha256: 1530614f8df1b64614d634fb5e4566425616b8c3816dd5183322de950eaa00bb
+generated_at: 2026-11-22T07:06:39.800620+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/unit/transfer-reference.test.ts
 
 ## Purpose
-Unit tests for the `buildReference` / `parseReference` pair in the payments domain, verifying the two guarantees that matter for matching a payment reference to the correct order: round-trip fidelity and rejection of mistyped input rather than silent mis-resolution.
+Unit tests for the RF transfer reference in `src/modules/payments/domain/transfer-reference.ts`. They cover the guarantees needed to match incoming money to the right order: a minted reference survives a round trip, and a mistyped character is rejected instead of silently resolving to another order.
 
 ## Key elements
-- **`ORDER_ID`** – a fixed 24-hex ObjectId used as the test fixture for all reference mints and parses.
-- **`describe('buildReference')`** – three tests: output matches the documented shape (`RF` + 2 digits + 19 alphanumeric), output is deterministic for a given order id, and different order ids produce different references.
-- **`describe('parseReference — the RF branch')`** – six tests covering:
-  - Round-trip: `parseReference(buildReference(id))` returns the same string.
-  - Input tolerance: spaces and lowercase are normalised back to the canonical form.
-  - One-character typo in the last position returns `null` (does not silently match a different order).
-  - Structurally similar but wrong-length strings return `null`.
-  - A raw ObjectId (plain or space-grouped) is **not** accepted as a reference.
-  - Non-reference strings and empty string return `null`.
+- `ORDER_ID` — a fixed 24-hex-character ObjectId string used as the input for most tests.
+- `describe('buildReference')`:
+  - Output matches `/^RF\d{2}[\dA-Z]{19}$/`.
+  - It is deterministic: the same order id gives the same reference.
+  - Different order ids give different references (compared against `'000000000000000000000000'`).
+- `describe('parseReference — the RF branch')`:
+  - Round trip: `parseReference(buildReference(id))` returns the same reference.
+  - Tolerates input split into 4-character groups with spaces and lowercased.
+  - Rejects the reference when the last character is changed (a one-character typo); the test expects a `toBeNull()` result.
+  - Rejects `'RF00NOTAREALREFERENCE'`, which looks structured but has the wrong length.
+  - Rejects a raw ObjectId, in plain and spaced/uppercase form.
+  - Rejects non-references (`'not-a-reference'`, `''`).
 
 ## Relationships
-- **Imports `buildReference`, `parseReference`** from `src/modules/payments/domain/transfer-reference.ts` — the sole production dependency under test.
+Imports `buildReference` and `parseReference` from `src/modules/payments/domain/transfer-reference.ts` (the code under test). It has no other dependencies and does no mocking.
 
 ## Notes
-- The `parseReference` describe block is explicitly scoped to "the RF branch," implying the parser handles multiple reference prefixes; only the RF path is exercised here.
-- Typo-rejection is tested by flipping only the last character (`0`↔`1`), which is the cheapest corruption a customer could make while still keeping the string length valid.
-- The valid-shape regex `/^RF\d{2}[\dA-Z]{19}$/` is asserted in the test and is the de facto contract for what `buildReference` must produce.
+- A valid reference is 21 characters: `RF`, two digits, then 19 characters of digits or uppercase letters. This format check is the only structural detail the tests assert.
+- The typo test swaps the last character for `'0'` or `'1'`, so the character always actually changes.
+- Rejection is asserted via `toBeNull()`, so `parseReference` signals failure by returning a null value rather than throwing.

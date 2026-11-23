@@ -1,31 +1,26 @@
 ---
 source: src/modules/orders/domain/deletion.ts
-sha256: d659a128267f827f51c71d2c452dc08ecf23980bba122d927631a9a5882133c1
-generated_at: 2026-11-08T06:48:10.617727+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d659a128267f827f51c71d2c452dc08ecf23980bba122d927631a9a5882133c1
+context_sha256: c8464bab6b9ff68fd54384836ac3115bcb6c96f2abf65a906d4cd59372e8f723
+generated_at: 2026-11-22T06:11:01.399161+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/domain/deletion.ts
 
 ## Purpose
-
-Defines the two pure predicates that determine whether an order may be soft-deleted (hidden) or hard-deleted (destroyed). Centralizing these rules here ensures the UI "delete door" and the service-layer actions agree on the same criteria and cannot diverge.
+Defines the pure rules for when an order may be deleted. Both the delete door and `OrderActions.delete` / `hardDelete` ask the same two questions through this file, so the flag and the refusal cannot disagree. Orders are financial records: soft delete (hiding) is only for finished, canceled orders; hard delete (destroying) is only for orders never paid and never handed money.
 
 ## Key elements
-
-- **`DeletionCandidate`** – Minimal structural interface (`status`, `paidAt`, `moneyReceivedAt`) that any caller can satisfy; keeps the predicates decoupled from the full `Order` type.
-- **`softDeletable(order)`** – Returns `true` only when `order.status === OrderStatus.canceled`.
-- **`hardDeletable(order)`** – Returns `true` only when the order is canceled **and** has neither `paidAt` nor `moneyReceivedAt` set (guards against destroying records that an invoice or a late payment/refund still references).
+- `DeletionCandidate` — interface for the slice of an order the rules read: `status` (`OrderStatus`), optional `paidAt` (set once an invoice exists), optional `moneyReceivedAt` (money recorded after the order could no longer take it).
+- `softDeletable(order)` — true only when `status === OrderStatus.canceled`.
+- `hardDeletable(order)` — true only when the order is canceled, has no `paidAt`, and has no `moneyReceivedAt`. A paid order's invoice must survive, as must an order that a late payment and its refund point at.
 
 ## Relationships
-
-- **`src/types/index.ts`** – Provides the `OrderStatus` enum used by both predicates.
-- **`src/modules/orders/domain/index.ts`** – Barrel file; re-exports this module so consumers import from the domain root.
-- **`src/modules/orders/services/actions.ts`** – `OrderActions.delete` / `hardDelete` call these predicates before performing the actual mutation.
-- **`src/modules/orders/services/remove.ts`** – The "delete door" service; evaluates `softDeletable` / `hardDeletable` to gate user-facing delete requests.
+- Imports `OrderStatus` from `@types` (`src/types/index.ts`).
+- Consumed by the order delete logic in `src/modules/orders/services/actions.ts` and `src/modules/orders/services/remove.ts`, which use these predicates so the visible flag and the enforced refusal agree.
+- Part of the orders domain module, alongside `src/modules/orders/domain/index.ts`.
 
 ## Notes
-
-- Both functions are pure and take only `DeletionCandidate`, not the full order entity. This makes them trivially testable and lets any object with the three fields be checked without a DB round-trip.
-- `paidAt` and `moneyReceivedAt` are typed `Date | null | undefined` (optional + nullable). The `!order.paidAt` check in `hardDeletable` therefore treats all three absent shapes identically.
-- Hard delete is a strict subset of soft delete: every hard-deletable order is also soft-deletable, but not vice-versa.
+- Both functions are pure and take the order "as it is now"; callers must pass current state.
+- Hard deletability is strictly narrower than soft deletability: every hard-deletable order is also soft-deletable.

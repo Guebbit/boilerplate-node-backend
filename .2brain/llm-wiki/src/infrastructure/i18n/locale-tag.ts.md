@@ -1,39 +1,27 @@
 ---
 source: src/infrastructure/i18n/locale-tag.ts
-sha256: 3c903cf18960ccde5132dc1e056c4abe86a3faa03e69cf1f3ded606f949fe576
-generated_at: 2026-11-14T18:08:46.968294+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 20175a1c57b257071a74aeb432dbadb92bfd2b4263bf31dbf13905a0722ab2c5
+context_sha256: 6b13911c824ab46484129d1507d4f2e64eb3f4ed22b2cf4e988e20ec785918b5
+generated_at: 2026-11-22T02:56:11.855205+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/i18n/locale-tag.ts
 
 ## Purpose
-
-Single, import-free definition of BCP 47 language-tag identity for the codebase. It normalises casing and deprecated subtags via `Intl.getCanonicalLocales`, exposes a few small helpers for validation, display, and Mongoose column wiring, and is deliberately kept as a zero-import module so it can sit safely in jest's global-setup import chain (where `infrastructure/config/fields.ts` pulls it in).
+Defines the single notion of "the same language tag" for the API. BCP 47 tags compare case-blind, and the canonical spelling (`pt-BR`, `zh-Hant-TW`) is what the API stores, returns, and uses to name dictionary files. The file is pure `Intl` with no imports, because `src/infrastructure/config/fields.ts` also reads it and that file sits near jest's global-setup import chain.
 
 ## Key elements
-
-- **`parseCanonical`** *(private)* – Wraps `Intl.getCanonicalLocales` in a try/catch; returns the canonical tag string or `undefined` for malformed input. The `RangeError` from `Intl` is the "not a tag" signal.
-- **`isWellFormedLocale(tag)`** – Boolean check: whether the tag is well-formed BCP 47 (any casing). Used as the 422 gate for written tags.
-- **`canonicalLocale(tag)`** – Returns the canonical spelling (e.g. `pt-br` → `pt-BR`, `iw` → `he`). **Never throws**; unparseable input is returned unchanged so the setter can store it and downstream validation rejects it.
-- **`baseLanguage(tag)`** – Primary subtag, lower-cased (`pt-BR` → `pt`). Falls back to splitting on the first hyphen when the tag is unparseable.
-- **`canonicalLocaleSetter(value)`** – Mongoose `SchemaType.set` callback: trims and canonicalises a string; passes non-strings through untouched so Mongoose's own cast error fires.
+- `parseCanonical` (private): wraps `Intl.getCanonicalLocales(tag).at(0)` in a try/catch. It returns the canonical tag, or `undefined` when the tag is malformed (e.g. `en-a`, `en_US`) or empty. The try/catch is the only place the `RangeError` is handled.
+- `isWellFormedLocale(tag)`: true when the tag parses, in any casing. The 422 on a written tag is built from this check.
+- `canonicalLocale(tag)`: returns the canonical spelling (`pt-br` -> `pt-BR`, `iw` -> `he`). Never throws. An unparseable tag is returned unchanged, so validation can refuse it later instead of the setter.
+- `baseLanguage(tag)`: returns the lower-case primary language subtag (`pt-BR` -> `pt`, `fil` -> `fil`). For an unparseable tag it returns the text before the first hyphen, lower-cased.
+- `canonicalLocaleSetter(value)`: the `set:` function for a Mongoose column that stores a tag. Strings are trimmed and canonicalised. Non-strings are returned untouched so Mongoose's own cast reports them. Never throws.
 
 ## Relationships
-
-- **`src/infrastructure/config/fields.ts`** – Imports this module; the zero-import constraint exists specifically to keep this file safe in that file's import chain (near jest global-setup).
-- **`src/infrastructure/http/schemas.ts`** – Uses `isWellFormedLocale` as the well-formedness predicate for request-body / query validation (the "422 on a written tag" mentioned in the JSDoc).
-- **`src/infrastructure/i18n/catalog.ts`** / **`served.ts`** – The canonical spelling returned here is the name the i18n layer uses to address and serve dictionary files.
-- **`src/infrastructure/i18n/index.ts`** – Barrel re-export surface for the i18n infrastructure package.
-- **`src/modules/locales/model.ts`**, **`src/modules/users/model.ts`**, **`src/modules/orders/model.ts`** – Mongoose schemas that attach `canonicalLocaleSetter` to locale-tag columns.
-- **`src/modules/locales/services/capabilities.ts`**, **`translations.ts`** – Domain services that call `isWellFormedLocale` / `canonicalLocale` / `baseLanguage` when reading or resolving a user's or order's locale.
-- **`src/modules/locales/repository.ts`** – Persists and queries by the canonical tag produced by this module.
-- **`tests/unit/infrastructure/i18n/locale-tag.test.ts`** – Unit tests covering all four exports plus the private fallback paths.
+The graph lists many neighbors, but the file itself shows only one dependency. It has no imports and states that `src/infrastructure/config/fields.ts` reads it. The doc comments mention a Mongoose setter and a 422 on written tags, which fits the locale, user, and order models and the HTTP schemas in the graph. The file itself does not name those consumers. `tests/unit/infrastructure/i18n/locale-tag.test.ts` is its unit test.
 
 ## Notes
-
-- **Zero imports by design.** The module must remain dependency-free; adding an import could break the jest global-setup chain that `fields.ts` depends on.
-- **`canonicalLocale` is intentionally non-throwing.** A malformed tag round-trips unchanged; the *setter* stores it and a *validator* (schema layer) is responsible for the 422. Do not add a throw here.
-- **`parseCanonical` is not exported.** All public helpers funnel through it; treat it as an implementation detail that can change without breaking consumers.
-- **`baseLanguage` fallback path.** When `Intl` rejects the tag, it splits on the first `-` and lowercases—this is a best-effort heuristic, not a guarantee of a valid subtag.
-- **ESLint `no-restricted-syntax` is disabled on the try/catch block** because `Intl.getCanonicalLocales` is the only parser available and it signals "malformed" exclusively via a thrown `RangeError`.
+- Invalid input is never thrown from here. Setters and `canonicalLocale` pass bad tags through, and `isWellFormedLocale` is the one place that decides well-formedness.
+- Canonicalisation also rewrites deprecated subtags (`iw` -> `he`), not just casing.
+- Keep the file import-free to avoid pulling dependencies into the config and jest setup chain.

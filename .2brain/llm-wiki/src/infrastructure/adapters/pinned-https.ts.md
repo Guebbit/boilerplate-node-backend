@@ -1,31 +1,41 @@
 ---
 source: src/infrastructure/adapters/pinned-https.ts
-sha256: 9e5e75dd95b75bde0963f3680e5eff95b4ec9df7072a486332838c58df962b52
-generated_at: 2026-11-08T03:22:36.952144+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8693d413b749f27eea9bfd3f765e348436619641f6e96d48e37e9268a0ffaa66
+context_sha256: c77daa0d8d5a861f2f46569eeca97d5968a478525718ad4602c843e8b9c15682
+generated_at: 2026-11-22T02:41:08.111466+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/pinned-https.ts
 
 ## Purpose
-
-The single outbound HTTPS path for any user- or provider-supplied URL. It performs one request that is SSRF-guarded, DNS-pinned (so a second DNS answer cannot reach a private range), and never redirected. Both webhook delivery and avatar download route through it.
+Single outbound HTTPS path for URLs supplied by a user or provider. Each request is SSRF-checked, DNS-pinned to the validated address, and never redirected. Webhook delivery and avatar download both use it. It lives in its own file so `ssrf-guard.ts` can be mocked whole by `remote-image.test.ts` while the request code stays a separate seam.
 
 ## Key elements
-
-- **`PinnedHttpsRequestOptions`** – Interface for one call: `method`, optional `headers`, optional `body` (caller sets `content-length`), and a required `AbortSignal` that aborts DNS resolution, the socket, and the response wait.
-- **`pinnedHttpsRequest(rawUrl, options)`** – Resolves the URL via `resolveSafeOutboundTarget` first, then opens an `https.request` pinned to the validated address. Returns the `IncomingMessage` as soon as response headers arrive. The body is **not** read here; the caller drains or caps it. A 3xx is returned as a normal response for the caller to refuse. Rejects with `SsrfRefusedError` when the guard refuses the URL.
+- `PinnedHttpsRequestOptions` — options interface:
+  - `method`: HTTP method.
+  - `headers?`: optional request headers.
+  - `body?`: optional string body, written as given. The caller sets `content-length`.
+  - `signal`: the caller's total budget. It aborts DNS resolution, the connection and the response wait.
+- `pinnedHttpsRequest(rawUrl, options)` — returns `Promise<IncomingMessage>`, resolved once the response headers arrive.
+  1. Calls `resolveSafeOutboundTarget(rawUrl, signal)` first.
+  2. Then issues a `node:https` `request`, using:
+     - `hostname`: the original host, so TLS SNI and certificate checks verify the name.
+     - `lookup`: the guard's pin, which always answers with the one validated address.
+     - `port`: the URL's port, or 443.
+     - `path`: pathname plus search.
+     - `signal`: the caller's abort signal.
+  3. Ends the request with `body`.
+  - Request errors reject the promise.
+  - If the guard refuses the URL, the promise rejects with `SsrfRefusedError`.
 
 ## Relationships
-
-- **`ssrf-guard.ts`** – Imports `resolveSafeOutboundTarget`; the guard's returned `target` supplies the hostname (for TLS SNI/cert) and a `lookup` function that always resolves to the one validated IP.
-- **`remote-image.ts`** – Avatar-download caller. The doc comment notes that separating the request into this file keeps a clean seam so `remote-image.test.ts` can mock `ssrf-guard` wholesale without touching the socket logic.
-- **`webhook-delivery.ts`** – Webhook-delivery caller; routes its outbound POSTs through `pinnedHttpsRequest`.
-- **`tests/unit/infrastructure/adapters/pinned-https.test.ts`** – Unit tests for this module.
+- `ssrf-guard.ts` — supplies `resolveSafeOutboundTarget`, which validates the host (only `https:` passes) and returns the `hostname` and pinned `lookup` used here.
+- `remote-image.ts` and `webhook-delivery.ts` — callers of this function, per the module doc (avatar download and webhook delivery).
+- `provider-registry.ts` — a graph neighbor. The file content shows no direct interaction with it.
+- `pinned-https.test.ts` — unit tests for this module.
 
 ## Notes
-
-- The `hostname` passed to `https.request` is the **original** host name (so TLS SNI and certificate verification work), while the `lookup` option pins the actual socket to the guard's resolved IP. Do not swap these.
-- `body` is written verbatim; the caller is responsible for setting a correct `content-length` header.
-- `AbortSignal` aborts at any stage (DNS, connect, response wait) and surfaces as an `AbortError` on the promise.
-- Only `https:` URLs pass the guard; `http:` is refused upstream.
+- Redirects are never followed. A 3xx comes back as an ordinary response, and the caller must refuse it.
+- The response body is not read here. The caller must drain or cap it.
+- The pin only fixes the socket address. Because `hostname` stays the original host, certificate verification still checks the name.

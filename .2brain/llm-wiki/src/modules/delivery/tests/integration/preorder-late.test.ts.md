@@ -1,50 +1,47 @@
 ---
 source: src/modules/delivery/tests/integration/preorder-late.test.ts
-sha256: 32039edb372be823ee3810bbb5575a8ab74ed7092051da2e58cf1bcef15b5ac6
-generated_at: 2026-11-14T19:53:45.878853+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5083f8623df2ef0f52b6b9e8f269817646269243f563fb24aae15d6c5894683a
+context_sha256: b8c25c79a71e5aea34f0dc301d6f2f2c1b685c7bd5cfa00b6b2ef3173ba2c9da
+generated_at: 2026-11-22T05:02:11.974124+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/integration/preorder-late.test.ts
 
 ## Purpose
-
-Integration test for the "late preorder" scenario (state P5): an admin moves a product's release date to a later date (or clears it), and the delivery module notifies the buyer via email and a `fulfillment_order.delayed` domain event while keeping the fulfillment order on hold. The test exercises the full path — real Mongo, real outbox processing, real product-service update — with only the mailer mocked at its queue boundary. It verifies that delivery *tells* (sends a notice, records state) but never *asks* or *cancels*.
+Integration test for a paid preorder whose release date slips (PRODUCT_STATES P5). It drives the real entry points: an admin changes a product's release date via `productService`, and `delivery` notifies the buyer through the outbox. The daily sweep is described as notifying once more when a date passes with no stock. The shop only informs: it asks nothing, cancels nothing, and silence leaves the buyer waiting. The notice, the fulfillment-order state change and the event are one transaction, and the email follows. Tests use real Mongo and a real outbox, with the mailer mocked at its queue.
 
 ## Key elements
-
-- **`preorder(days, quantity)`** — creates a paid preorder order via the `paidPreorderOrder` factory and generates its fulfillment orders.
-- **`moveDate(productId, to)`** — simulates the admin action: updates the product's `releaseDate` through the products module, then settles outbox nudges to trigger the delivery module's handler.
-- **`waitingOf(orderId)` / `statusOf` / `promisedAtOf` / `expectedAtOf`** — query helpers that locate the single fulfillment order in `awaiting_stock` hold and read its fields.
-- **`delayedEvents()`** — reads all `fulfillment_order.delayed` payloads from the outbox collection in insertion order.
-- **`viewsOf(orderId, userId)`** — retrieves the three projections of one fulfillment order (buyer API, export, board) for consistency assertions.
-- **`describe('a release date that moves')`** — main suite: later date, earlier date (silent), cleared date, multiple successive moves, idempotency on redelivery, multi-product groups, and non-waiting orders.
-- **`describe('what the buyer, the export and the board see…')`** — verifies that all three views carry the new date, the last-notice timestamp, and expose nothing the buyer must answer.
-- **`inDays(days)`** — local helper returning a `Date` offset from `Date.now()`.
-- **Mock**: `enqueueEmail` from the mailer adapter is the sole external mock; everything else (Mongo, outbox, product service, shop) runs for real.
+- `jest.mock('@infrastructure/adapters/mailer')` / `mockEnqueueEmail`: replaces `enqueueEmail` so cases can assert which mail was enqueued.
+- `setupTestDb()` plus `beforeEach`/`afterEach`: reset domain events, call `deliveryModule.subscribe()`, then `markDomainEventsWired()`; afterwards reset events and clear mocks.
+- `inDays`, `DAY`: date helpers.
+- `preorder(days, quantity)`: creates a paid preorder via `paidPreorderOrder` and materializes its fulfillment orders.
+- `moveDate(productId, to)`: calls `productService.updateById` with a `shopDayOf` date (or `null`), then `settleOutboxNudges()`.
+- `waitingOf`, `statusOf`, `promisedAtOf`, `expectedAtOf`: read the order's `awaiting_stock` fulfillment order and selected fields.
+- `delayedEvents()`: reads `fulfillment_order.delayed` events from `outboxEventModel`, in insertion order.
+- `viewsOf(orderId, userId)`: returns the buyer view (`deliveryService.listFulfillmentOrdersForOrder` as customer), the export view (`presentExportFulfillmentOrder`) and the board view (`presentPreorderFulfillmentOrder`).
+- `describe('a release date that moves')` covers these behaviors:
+  - A later date produces one `reason: 'moved'` notice and an email. The order stays `on_hold`, and `lastNoticeAt` is set.
+  - Slips of 75 days and 365 days produce the same event shape (a fixed key set).
+  - The event carries the previously held date (`promisedAt`) and `shipCountry`. A second move finds the date given by the first.
+  - Clearing the date notifies the buyer, leaves `expectedAt` undefined, and a later date after a clear is followed quietly.
+  - An earlier date produces no event or email.
+  - A redelivered `deliveryService.onDateChanged` is idempotent.
+  - A fulfillment order that is no longer waiting (stock received through `inventoryService.receive`) is left alone.
+- `describe('what the buyer, the export and the board see of a late preorder')`: begins after `viewsOf`. The visible content is cut off here.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/mailer.ts`** — the test mocks this module's `enqueueEmail` export via `jest.mock` and asserts call counts; it is the only boundary faked.
-- **`src/kernel/events.ts`** — provides the in-process event-bus reset and wiring used in `beforeEach`/`afterEach` to isolate handler subscriptions per test.
-- **`src/kernel/outbox.ts`** — supplies the outbox model for reading emitted events and the `settleOutboxNudges` helper that flushes queued outbox entries after a product update.
-- **`src/modules/delivery/module.ts`** — its default export is re-subscribed after each event-bus reset so that domain-event handlers are active for the test.
-- **`src/modules/delivery/presenter.ts`** — provides the export and board view functions used in the "what the buyer sees" suite.
-- **`src/modules/delivery/services/index.ts`** — the delivery service entry point; the test calls its public methods directly for idempotency checks and buyer-API queries.
-- **`src/modules/delivery/tests/factories.ts`** — provides the `paidPreorderOrder` and `fulfillmentOrdersOf` factories that build the initial order and fulfillment rows.
-- **`src/modules/orders/tests/factories.ts`** — provides `timelineOf`, used for timeline-shaped assertions in the truncated portion.
-- **`src/modules/products/index.ts`** — the test imports `productService` from this barrel to perform the admin date-change that drives the whole scenario.
-- **`src/modules/products/services/index.ts`** — the underlying product service implementation reached through the barrel import above.
-- **`src/modules/shop/index.ts`** — provides `shopDayOf`, used to normalise a raw `Date` to the shop's day-granularity value before persistence.
-- **`src/modules/shop/service.ts`** — the shop service implementation reached through the shop barrel import.
-- **`tests/support/callers.ts`** — supplies `asCustomer` and `testCallerContext` for authenticated service calls.
-- **`tests/support/setup-test-db.ts`** — provisions the real MongoDB instance used by the entire test file.
+- Mocks `src/infrastructure/adapters/mailer.ts` (`enqueueEmail`).
+- Uses `src/kernel/events.ts` (`resetDomainEvents`, `markDomainEventsWired`) and `src/kernel/outbox.ts` (`outboxEventModel`, `settleOutboxNudges`) to wire and flush events.
+- Subscribes `src/modules/delivery/module.ts` and calls `deliveryService` (imported from `@modules/delivery/services`) for `onDateChanged` and listing.
+- Uses `src/modules/delivery/presenter.ts` for the export and board views.
+- Imports `fulfillmentOrderRepository` from `src/modules/delivery/repository.ts`. Its use is not visible in the shown portion.
+- Fixtures: `paidPreorderOrder` and `fulfillmentOrdersOf` from `src/modules/delivery/tests/factories.ts`, and `timelineOf` from `src/modules/orders/tests/factories.ts`.
+- Drives `productService` from `src/modules/products/index.ts`.
+- Uses `shopDayOf` from `src/modules/shop/index.ts`.
+- `tests/support/callers.ts` provides `asCustomer` and `testCallerContext`. `tests/support/clock.ts` provides `freezeDate`, whose use is not visible in the shown portion.
 
 ## Notes
-
-- **Real infrastructure, one mock.** Unlike unit tests here, this file runs against actual Mongo and processes real outbox entries. Only the mailer queue is replaced, keeping the assertion surface at "was the queue told, and how many times."
-- **Event-bus re-subscription is manual.** Resetting the event bus wipes handlers; the delivery module must be re-subscribed in `beforeEach`. Forgetting this yields silent no-op tests (events fire into a void).
-- **Idempotency is a first-class concern.** Several tests re-invoke the date-changed handler with the same payload to confirm no duplicate email or event is produced.
-- **Date direction matters.** Moving the date *earlier* (good news) updates `expectedAt` silently — no event, no email. Only later moves and clears produce a notice. Tests assert both directions.
-- **`promisedAt` chaining.** After successive date moves, each new notice records the *previous* `expectedAt` as its `promisedAt`, forming an audit trail. The test asserts the second event's `promisedAt` equals the first event's `expectedAt`.
-- **Time-relative helpers.** `inDays()` computes from `Date.now()`, so assertions use relative comparisons (`toBeGreaterThan`) rather than fixed timestamps to avoid flakiness across runs.
+- `typesOf` is used in the "announced twice" case but is not imported or defined in the visible portion.
+- A date set after "no date yet" is silent, and the buyer holds no promised date. Only clears and later dates tell.
+- Dates are set by moving the product's date and settling the outbox, not by calling delivery directly, except in the redelivery cases.

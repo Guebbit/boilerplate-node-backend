@@ -1,39 +1,42 @@
 ---
 source: src/modules/delivery/routes.ts
-sha256: 359fe84d4fa1773776a0002518e59a08fa3af28d1bf49568003dad9f6f6b32fd
-generated_at: 2026-11-14T19:43:04.882809+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fb9abea577f60b57bea8b765be88430591ed6df190996c4e5ada6863512e45f3
+context_sha256: 710dc2316193c7e320eba3b562e1366bf40920f7e55d9d1f8027a819ba1fa531
+generated_at: 2026-11-22T04:52:11.622327+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/routes.ts
 
 ## Purpose
-
-Defines the Express route table for the delivery module. It maps HTTP paths to controllers, attaching the appropriate authentication, permission, idempotency, and cache middleware per route. The guard strategy is tiered: shipping-methods lookups are public, fulfillment reads require `read:Order`, and every write requires `update:Shipment`.
+Express route table for the delivery module. It maps HTTP paths under `/delivery` to controllers and chooses the guard chain per route. The shipping-methods list is public, reads need a signed-in caller, and every write is a staff action.
 
 ## Key elements
-
-- **`router`** (exported `Router`) — the single exported Express router for all delivery endpoints.
-- **Public read** — `GET /methods` → `getShippingMethods`; no auth.
-- **Fulfillment-order reads** — `GET /fulfillment-orders`, `/summary`, `/:id` → `getPreorderFulfillmentOrders`, `getPreorderSummary`, `getFulfillmentOrder`; guarded by `getAuth`, `isAuth`, `requirePermission('read','Order')`.
-- **Date-impact previews** — `GET /fulfillment-orders/release-date-impact` and `/restock-date-impact` → `getReleaseDateImpact`, `getRestockDateImpact`; require both `update:Product` and `display:Order`, plus `noStore`.
-- **Ship** — `POST /fulfillment-orders/:id/shipments` → `postShipFulfillmentOrder`; `requireIdempotencyKey` (mandatory) placed *after* the permission check so a 401/403 is never cached as the idempotent answer.
-- **Fulfill (digital)** — `POST /fulfillment-orders/:id/fulfill` → `postFulfillFulfillmentOrder`; `idempotencyKey` is optional (re-runs are refused by state, not by key).
-- **Hold / Release** — `POST /fulfillment-orders/:id/hold|release` → `postHoldFulfillmentOrder`, `postReleaseFulfillmentOrder`.
-- **Shipment reads & writes** — `GET /shipments/:id` → `getShipment`; `PATCH /shipments/:id` → `patchShipment` (RFC 7396 merge); `POST /shipments/:id/deliver` → `postDeliverShipment`; `POST /shipments/:id/mark-lost` → `postMarkShipmentLost`.
+- `router`: the exported Express `Router`, with these routes:
+  - `GET /methods`: public, wrapped in `environmentCache`, handled by `getShippingMethods`.
+  - `GET /fulfillment-orders` and `GET /fulfillment-orders/summary`: preorder board reads (`getPreorderFulfillmentOrders`, `getPreorderSummary`). They need `read:Order`.
+  - `GET /fulfillment-orders/release-date-impact` and `/restock-date-impact`: previews for the product form (`getReleaseDateImpact`, `getRestockDateImpact`). They need both `update:Product` and `display:Order`, and use `noStore`.
+  - `GET /fulfillment-orders/:id`: one fulfillment order (`getFulfillmentOrder`), `read:Order`.
+  - `POST /fulfillment-orders/:id/shipments`: cuts a shipment (`postShipFulfillmentOrder`). It needs `update:Shipment` and a required idempotency key.
+  - `POST /fulfillment-orders/:id/fulfill`: the digital fulfillment door (`postFulfillFulfillmentOrder`). It needs `update:Shipment` and an optional idempotency key.
+  - `POST /fulfillment-orders/:id/hold` and `/release`: `postHoldFulfillmentOrder` and `postReleaseFulfillmentOrder`, both `update:Shipment`.
+  - `GET /shipments/:id`: `getShipment`, `read:Order`.
+  - `PATCH /shipments/:id`: corrects a tracking code (RFC 7396) via `patchShipment`, `update:Shipment`.
+  - `POST /shipments/:id/deliver`: `postDeliverShipment`, `update:Shipment`.
+  - `POST /shipments/:id/mark-lost`: `postMarkShipmentLost`, `update:Shipment`.
 
 ## Relationships
-
-- **`src/modules/delivery/module.ts`** — mounts `router` onto the application's Express instance; this file is the route-level contract that module registers.
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuth`, `requirePermission` used on every non-public route.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — provides `requireIdempotencyKey` (ship) and `idempotencyKey` (fulfill); placed after the auth guard so unauthenticated requests never consume an idempotency slot.
-- **`src/infrastructure/http/middlewares/cache.ts`** — provides `noStore`, applied only to the two date-impact GETs so a product-date change is never served stale.
-- **Controllers** (`get-shipping-methods`, `get-fulfillment-order`, `get-preorder-fulfillment-orders`, `get-shipment`, `patch-shipment`, `post-deliver-shipment`, `post-fulfill-fulfillment-order`, `post-hold-fulfillment-order`, `post-mark-shipment-lost`, `post-ship-fulfillment-order`, `get-date-impact`) — each is the terminal handler for exactly one route declared here.
+- `@kernel/middlewares/authorizations` (`src/kernel/middlewares/authorizations.ts`) provides `getAuth`, `isAuth` and `requirePermission`. Every non-public route chains them.
+- `@infrastructure/http/middlewares/idempotency` provides `idempotencyKey` (optional) and `requireIdempotencyKey({ operation, subjectParam })`. Only the ship route uses the required form, with `operation: 'ship'` and `subjectParam: 'id'`. The fulfill route uses the optional one.
+- `@infrastructure/http/middlewares/cache` provides `environmentCache` (on `/methods`) and `noStore` (on the two date-impact previews).
+- `./controllers/*`: each route delegates to one handler. Hold and release share `post-hold-fulfillment-order`. The two date-impact handlers share `get-date-impact`. The preorder list and summary handlers share `get-preorder-fulfillment-orders`.
+- `src/modules/delivery/module.ts` is a graph neighbor, but `routes.ts` does not import it. This file only exports `router`.
 
 ## Notes
-
-- **Route ordering is significant.** The literal paths `/fulfillment-orders/summary`, `/release-date-impact`, and `/restock-date-impact` are registered *before* `/fulfillment-orders/:id`; swapping them would cause those literals to be captured as an `:id` and 404.
-- **Idempotency is intentionally asymmetric.** Ship *requires* a key (a retry without one would cut a second parcel); fulfill *accepts* one optionally (state machine rejects re-runs with 409). Do not "unify" the two.
-- **Permission scope.** Reads use `read:Order` and the controller narrows to the caller's own rows (404 for out-of-scope). `display:Order` widens the view to all orders. Write operations uniformly require `update:Shipment`—there is no step-up or separate `update:Order` gate at the route level.
-- **`noStore` is not a blanket policy.** It appears only on the two impact-preview GETs; all other routes rely on default caching behaviour.
-- See `docs/modules/delivery.md` (referenced in the file header) for the domain rationale behind the guard tiers.
+- **Route order matters.** `/fulfillment-orders/:id` is registered after the literal `summary`, `release-date-impact` and `restock-date-impact` paths, so those literals are not read as an id.
+- **Idempotency placement.** On ship, `requireIdempotencyKey` comes after `requirePermission`, so a 401/403 is never stored as the answer. The key is required because a retry would otherwise cut a second parcel. Fulfill takes the whole remainder, so its key is optional and a re-run is refused with a 409 by the order's state.
+- **Ownership scoping happens in services, not routes.** The `read:Order` routes only check the permission. Per the comments, the service narrows results to the caller's own orders unless they hold `display:Order`. For single-item reads it answers 404 for what the caller may not see.
+- **Start-from-paid.** Ship and fulfill also need `start:Shipment` when the order is `paid`, since the act makes the start move itself. The service asks for this, not the route.
+- **No step-up auth.** The comments state that ship, deliver and mark-lost need none.
+- **Fulfill is digital only.** A physical fulfillment order cannot use `/fulfill`.
+- **State effects (per the comments).** The order moves processing -> shipped only when nothing remains anywhere. The last delivery moves it shipped -> delivered. Marking a shipment lost reopens its units on the same fulfillment order, tops up the stock hold and notifies the buyer.

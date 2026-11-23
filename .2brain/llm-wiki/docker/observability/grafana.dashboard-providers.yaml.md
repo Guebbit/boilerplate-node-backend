@@ -1,29 +1,29 @@
 ---
 source: docker/observability/grafana.dashboard-providers.yaml
-sha256: 49cb76a3048940f7cac076006f5869c05fb9fb42d9c074d3be635ceba42fafc2
-generated_at: 2026-11-08T02:21:52.464985+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 49cb76a3048940f7cac076006f5869c05fb9fb42d9c074d3be635ceba42fafc2
+context_sha256: 6e2c0fdb7f43f8321f0bbca2e3240d04e94c84e62f7205a5430d888898ab993b
+generated_at: 2026-11-22T01:32:02.255795+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/observability/grafana.dashboard-providers.yaml
 
 ## Purpose
-
-Grafana provisioning file that instructs the Grafana instance to auto-load dashboard JSON definitions from a mounted filesystem path. It eliminates the need to manually import dashboards through the UI—any `.json` file placed under the configured directory is picked up automatically at startup.
+Grafana provisioning file that registers a dashboard provider so Grafana automatically loads dashboard JSON files from a mounted directory on startup. This gives the local observability stack repository dashboards with no manual import steps.
 
 ## Key elements
-
-- **`providers[0]` (name: `default`)** — The sole provider definition; binds dashboards to org 1, the root folder, and the `file` source type.
-- **`path: /var/lib/grafana/dashboards`** — The container-internal directory Grafana scans for dashboard JSON files. The Docker setup mounts the host directory `docker/observability/grafana/dashboards` here.
-- **`disableDeletion: false`** — Allows users to delete auto-loaded dashboards from the Grafana UI (they will reappear on next restart).
-- **`editable: true`** — Permits in-UI editing of the loaded dashboards without being overridden by the provisioning file.
+- `apiVersion: 1`: Grafana provisioning schema version.
+- `providers[0]` named `default`:
+  - `orgId: 1`, `folder: ''`: dashboards go into org 1 and the General (root) folder.
+  - `type: file`: dashboards are read from files on disk.
+  - `disableDeletion: false`: dashboards provisioned from files can be deleted in Grafana.
+  - `editable: true`: provisioned dashboards can be edited in the UI.
+  - `options.path: /var/lib/grafana/dashboards`: the container directory scanned for dashboard JSON.
 
 ## Relationships
-
-- **`docker/observability/grafana.datasources.yaml`** — Sibling provisioning file consumed by the same Grafana instance. Together they form the full provisioning bundle (datasources + dashboards) that is mounted into the container; neither file imports the other, but both must be present for a working observability stack.
+- Sibling of `grafana.datasources.yaml`. Both are Grafana provisioning files in the same directory. This file registers where dashboards come from, and the datasources file defines the data sources those dashboards would query. The two files do not reference each other.
+- The `path` is mounted from `docker/observability/grafana/dashboards` (per the in-file comment). The mount itself is defined outside this file.
 
 ## Notes
-
-- Adding a new dashboard only requires dropping a JSON file into `docker/observability/grafana/dashboards/` on the host; no restart or UI import is needed (Grafana watches the directory).
-- Because `disableDeletion` is `false`, a dashboard deleted in the UI will silently re-appear after a Grafana restart—a common source of confusion when debugging "why did my dashboard come back?"
-- The `folder: ''` field means all provisioned dashboards land in the root folder. To group them, set a named folder (which must already exist in Grafana).
+- The `path` value is a container-side path. Changing it requires a matching change to the volume mount.
+- With `editable: true`, UI changes are not written back to the JSON files.

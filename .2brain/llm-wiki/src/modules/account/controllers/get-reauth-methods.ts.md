@@ -1,30 +1,29 @@
 ---
 source: src/modules/account/controllers/get-reauth-methods.ts
-sha256: 3f9afb1a6cf7f8e679ce38c734e7b608dfdb5b94995016c7beb422cab3a76e7b
-generated_at: 2026-11-08T04:02:18.884425+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3f9afb1a6cf7f8e679ce38c734e7b608dfdb5b94995016c7beb422cab3a76e7b
+context_sha256: 2762aeede3e8901f4483dadde9ed0f1d5d261dd9322497b5c7a57d0b67c2b5a7
+generated_at: 2026-11-22T03:21:57.078825+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/get-reauth-methods.ts
 
 ## Purpose
-
-Thin HTTP adapter for `GET /account/reauth`. It exposes which re-authentication methods (e.g. passkey, OTP) are available to answer a `401 REAUTH_REQUIRED` challenge. It exists to keep Express plumbing separate from the `accountService.reauthMethods` business logic.
+Controller for `GET /account/reauth`. It is a thin HTTP adapter over `accountService.reauthMethods`. It reports which ways the caller's account can answer a `401 REAUTH_REQUIRED` challenge.
 
 ## Key elements
-
-- **`getReauthMethods`** (exported) — Express handler that reads `request.authContext!.id`, calls `accountService.reauthMethods(id)`, then either short-circuits via `refused` or sends `successResponse<ReauthMethods>`. All errors are funneled through `catchAs`.
+- `getReauthMethods(request, response)` is the only export. It reads `id` from `request.authContext!` and calls `accountService.reauthMethods(id)`.
+  - If `refused(response, result)` returns true, the handler returns without sending anything further.
+  - Otherwise it sends `result.data` through `successResponse<ReauthMethods>`.
+  - Any rejection goes to `catchAs(response, 'getReauthMethods')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — provides `refused` (early-return guard for denied/empty results) and `catchAs` (uniform error-to-HTTP mapping) used in the handler's `.then`/`.catch` chain.
-- **`src/infrastructure/http/response.ts`** — provides `successResponse`, which serialises the payload and sets status headers.
-- **`src/modules/account/services/index.ts`** — source of `accountService`; the `reauthMethods` method holds the actual logic.
-- **`src/types/index.ts`** — exports the `ReauthMethods` shape used as the generic on `successResponse`.
-- **`src/modules/account/routes.ts`** — registers `getReauthMethods` as the handler for the `/account/reauth` route (with `isAuth` middleware).
+- `src/infrastructure/http/controller.ts` supplies `refused` (handles refused service results) and `catchAs` (error handler tagged with the controller name).
+- `src/infrastructure/http/response.ts` supplies `successResponse`, which sends the success payload.
+- `src/modules/account/services/index.ts` exports `accountService`, whose `reauthMethods` does the actual work.
+- `src/types/index.ts` provides the `ReauthMethods` type (imported from `@types`) for the response payload.
+- `src/modules/account/routes.ts` is the neighbor that wires this handler to the route. The controller file itself does not show the wiring.
 
 ## Notes
-
-- Auth requirement is deliberately plain `isAuth`, **not** a fresh session. The JSDoc explains: a stale token must still be able to discover its own re-auth options, otherwise it could never recover.
-- `request.authContext!` uses a non-null assertion — safe only because the route is guaranteed to sit behind auth middleware; there is no runtime guard in this file.
-- The `refused` check runs before `successResponse`; if the service returns a refusal (e.g. no methods configured), the handler returns early without a 200 body.
+- The route uses plain `isAuth`, not a fresh-session check. A stale session has to be able to learn its reauth options, otherwise it could never find out how to become fresh.
+- The non-null assertion on `request.authContext!` assumes the auth middleware has already run.

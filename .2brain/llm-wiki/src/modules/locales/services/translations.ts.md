@@ -1,45 +1,58 @@
 ---
 source: src/modules/locales/services/translations.ts
-sha256: e48864b11e4fc7991dac246cdbb3ca74756d7a65cf8bf8fce2227376222e28ef
-generated_at: 2026-11-14T20:22:35.613992+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f4c414c89002dad73afd36115d55bff92a405513d4f85d64a167330effad1778
+context_sha256: c93a0753ebcbfa4edc3d08e612705e79e69c9257a2b796446348903cde68ecd3
+generated_at: 2026-11-22T05:48:56.514838+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/services/translations.ts
 
 ## Purpose
-
-The admin-facing service door for reading and writing per-locale translations on any translatable entity. It is fully generic: it resolves a target's declared fields and validation rules from the registry, validates a whole PUT/PATCH batch before any write, then applies the validated plan to the translations collection. It also writes the derived index column (fallback-locale content mirrored onto the entity document) in exactly one place so no caller can drift.
+The "translator's door" of the locales module. It reads every locale's translations for an entity and writes PUT/PATCH payloads into them. It is generic over whatever the `translatables` registry declares. It never touches an entity's own collection, except for the derived index-column write that the registry names.
 
 ## Key elements
-
-- **`EntityTranslationsResult`** — exported interface: the wire shape a controller returns for GET (entityType, entityId, `translations: Translation[]`, and the list of declared `fields`).
-- **`entityNotFoundError(entityType, entityId)`** — exported 404 error-item factory shared with controllers so malformed IDs and genuinely missing IDs are indistinguishable to the caller.
-- **`declaredFields(target)`** — extracts the ordered list of translatable field names from a target's `fieldRules.shape`.
-- **`planSlot(entityType, target, fallbackLocale, locale, value)`** — validates one locale slot: rejects null-for-fallback, empty fields, unknown fields, and schema violations; returns a `PlannedWrite` (`upsert` or `delete`) or a 422 rejection. Looks up the `locales` collection for non-fallback tags to reject unknown locales.
-- **`planTranslationWrites(entityType, payload)`** — batch-level pre-flight: canonicalises all locale keys (RFC 4647), iterates slots via `planSlot`, short-circuits on the first rejection. Returns the resolved `target`, `fallbackLocale`, and the full `PlannedWrite[]` alongside, or the rejection.
-- **`writePlannedTranslations(entityType, entityId, fallbackLocale, planned, translatedBy, session?)`** — applies an already-validated plan: upserts or deletes rows via `translationRepository`, then writes the derived index column for the fallback locale. Does **not** invalidate cache or record audit; callers own those. Accepts a Mongoose session for transactional use.
-- **`withCanonicalKeys(payload)`** — re-keys a locale map to canonical spelling via `canonicalLocale`.
-- **`isRejection(value)`** — type-guard narrowing a `ResponseReject` out of a union.
+- **`EntityTranslationsResult`**: the wire-shaped admin result for GET/PUT/PATCH. It holds `entityType`, `entityId`, `translations`, and `fields`, which lists every field the registry declares for that type. `translations` is already normalized, so controllers don't call `.toJSON()` on it.
+- **`entityNotFoundError(entityType, entityId)`** (exported): builds the 404 `LOCALE_ENTITY_NOT_FOUND` error item. Controllers answer a malformed id with the same item.
+- **`declaredFields`**: the keys of a target's `fieldRules.shape`.
+- **`entityTypeUnknown` / `entityNotFound`**: 404 rejections.
+- **`slotRejection`**: builds the 422 field-error rejection shared by every `planSlot` refusal.
+- **`PlannedWrite`**: a validated slot, either an `upsert` (fields plus origin) or a `delete`.
+- **`planSlot`**: validates one locale slot.
+  - A `null` value means delete. Deleting the fallback locale is rejected.
+  - The fields must be non-empty and declared.
+  - Values are parsed with the entity's `fieldRules`, so values are trimmed and the entity's own rules apply.
+  - `origin` defaults to `'human'`.
+  - Non-fallback locales must exist in the `locales` collection via `localeRepository.findByTag`. Inactive languages are allowed, because that is where drafts live.
+- **`isRejection`**: a type guard for `ResponseReject`.
+- **`withCanonicalKeys`**: canonicalizes locale keys (`EN` becomes `en`, `pt-br` becomes `pt-BR`).
+- **`planTranslationWrites`**: the pre-flight validation of a whole batch, with no entity id.
+  - It resolves the target through `translatableTarget` and returns `{ target, fallbackLocale, planned }`, or the first rejection.
+  - It works for entities that don't exist yet, such as one being created in the same request.
+- **`writePlannedTranslations`**: applies an already-validated plan.
+  - It reads the fallback row and derives a source digest with `deriveSourceDigest`.
+  - It then runs `removeEntityLocale` or `upsertEntityLocale` per slot. The digest is passed only for non-fallback upserts, and `translatedBy` is passed through.
+  - It accepts an optional `ClientSession`.
+  - It also handles the derived index-column write for the fallback locale, in the part of the file past the shown content.
+- The remainder of the file, including `updateEntityTranslations`, is not visible here. The file's own comments describe `updateEntityTranslations` as the generic door's caller.
 
 ## Relationships
-
-- **`src/kernel/registry.ts` (`TranslatableTarget`)** — every validation and field check delegates to the target resolved here; the file never hard-codes entity types.
-- **`src/kernel/translation.ts` (`TranslationBatch`, `TranslationWritePlan`, `TranslationWriteSlot`)** — the shared type contracts for batch shape and slot semantics that this file both consumes and produces.
-- **`src/infrastructure/i18n/index.ts` → `locale-tag.ts`, `catalog.ts`, `context.ts`** — provides `canonicalLocale` (key normalisation), `getFallbackLocale`, and `t` (i18n message lookup for error strings).
-- **`src/infrastructure/object-guards.ts`** — `stripUndefined` narrows zod-parsed output; `fillOmittedWithNull` normalises omitted fields.
-- **`src/infrastructure/http/response.ts`** — all error/success response shapes (`generateReject`, `fieldError`, `generateSuccess`, `ResponseReject`, `ResponseSuccess`) come from here.
-- **`src/infrastructure/adapters/cache.ts`** — `invalidateCacheTagsLogged` is imported for cache invalidation in the full write path.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` is imported; paired with `localeAuditActions` from the sibling `audit.ts` for the audit trail the caller is expected to write.
-- **`src/infrastructure/persistence/versioning.ts`** — `carryVersion` and `rearmPrecondition` are imported for optimistic-concurrency handling in the write/audit section.
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps multi-write sequences (e.g. entity doc + translations) in a single MongoDB transaction.
-- **`src/modules/locales/audit.ts`** — supplies the `localeAuditActions` map that `recordAudit` calls reference.
-- **`src/modules/cart/tests/unit/merge-rule.test.ts`** — exercises merge rules that depend on the translation write path; not a direct import but an integration consumer.
+- **`../repository`**: `localeRepository`, `translationRepository` and `deriveSourceDigest` do the actual persistence and digest work.
+- **`./translatables`**: `translatableTarget` resolves a registry entry. The `TranslatableTarget` type comes from `@kernel/registry`.
+- **`@kernel/translation`**: supplies the `TranslationBatch`, `TranslationWritePlan` and `TranslationWriteSlot` types. The file's comments say fallback-language content still works when `locales` is uninstalled.
+- **`@infrastructure/i18n`**: `canonicalLocale`, `getFallbackLocale` and `t` for message translation.
+- **`@infrastructure/http/response`**: `generateReject`, `generateSuccess` and `fieldError` build responses.
+- **`@infrastructure/object-guards`**: `stripUndefined` and `fillOmittedWithNull`.
+- **`@infrastructure/adapters/cache`**: `invalidateCacheTagsLogged`.
+- **`@infrastructure/persistence/versioning`**: `carryVersion` and `rearmPrecondition`.
+- **`@infrastructure/runtime/database`**: `withTransaction`.
+- **`@infrastructure/observability/audit`** and **`../audit`**: `recordAudit` and `localeAuditActions`.
+- The cache, versioning, transaction and audit imports are not exercised in the visible portion.
 
 ## Notes
-
-- **Two-phase contract (plan → write):** `planTranslationWrites` and `writePlannedTranslations` are intentionally separate so internal callers can validate inside their own transaction and skip this module's cache/audit duties. Calling `writePlannedTranslations` without a prior `planTranslationWrites` will silently corrupt data — there is no internal re-validation.
-- **Fallback locale is special-cased twice:** it is never deletable, never deactivated, and its write never hits the `locales` collection (so the system still works if that collection is dropped).
-- **Inactive locales are writable:** `planSlot` allows upserts for inactive languages by design (drafting), but read paths filter them out via `inactiveTags`.
-- **The file never touches the entity's own collection** except through the single derived-index-column write performed in `writePlannedTranslations`; all other persistence goes through `translationRepository`.
-- **`origin` defaults to `'human'`** only for internal callers that omit it; the PATCH wire contract always supplies it explicitly.
+- `planTranslationWrites` and `writePlannedTranslations` are deliberately split. `writePlannedTranslations` never validates, so skipping the plan step first can corrupt data.
+- The whole batch is validated before anything is written, so a rejected slot leaves no partial edit.
+- The fallback locale skips the `locales` collection lookup. It can't be deleted or deactivated.
+- The derived index column write is centralized in `writePlannedTranslations` so every caller behaves the same way. `title` and `description` on the entity's own document must reflect the fallback-locale row.
+- `writePlannedTranslations` does not touch the cache tag or audit trail. Callers with their own document (for example a product create or update, per the file's comments) own both.
+- Validation failures use HTTP 422. Unknown entity types and missing entities use 404.

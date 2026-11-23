@@ -1,33 +1,38 @@
 ---
 source: shared/rules/schemas/defaults.generated.schema.json
-sha256: 6269ee07d5a6af20200f70afa52b2fab6a558894a7e4e1b9f2275cbfc4319ec0
-generated_at: 2026-11-08T03:10:28.968826+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6269ee07d5a6af20200f70afa52b2fab6a558894a7e4e1b9f2275cbfc4319ec0
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:27:25.251415+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/schemas/defaults.generated.schema.json
 
 ## Purpose
-
-A JSON Schema (draft 2020-12) that validates a system-wide `defaults` configuration object. It enforces the exact shape and value bounds of five operational settings (response cache, idempotency, pagination, images, uploads) so that any consumer reading this config gets a predictable, fully-specified set of values.
+A generated JSON Schema (draft 2020-12) describing the shape of a `defaults` configuration object. It defines the required keys and value constraints for shared default limits and settings (response cache, idempotency, pagination, images, uploads). The `.generated` name suggests it is produced by tooling rather than edited by hand.
 
 ## Key elements
+All leaf values are integers with a maximum of `9007199254740991`. The root object requires `defaults` and disallows extra keys, as does every nested object.
 
-- **Top-level object** – requires a single `defaults` key; nothing else is allowed at the root.
-- **`defaults.responseCache`** – `devTtlMaxSeconds` (integer ≥ 0) and `maxBytes` (integer ≥ 1).
-- **`defaults.idempotency`** – `retentionHours` (integer ≥ 1).
-- **`defaults.pagination`** – `pageSize` (integer ≥ 1).
-- **`defaults.images`** – `maxInputPixels`, `maxDimension`, `thumbnailDimension`, `quarantineRetentionHours` (all integers ≥ 1).
-- **`defaults.uploads`** – `maxBytes` (integer ≥ 1).
-- **`additionalProperties: false`** on every object node – closed schemas; any undeclared key causes a validation failure.
-- **`maximum: 9007199254740991`** (Number.MAX_SAFE_INTEGER) as the universal upper bound for every integer field.
+- `defaults.responseCache`
+  - `devTtlMaxSeconds`: integer, `>= 0`.
+  - `maxBytes`: integer, `> 0`.
+- `defaults.idempotency`
+  - `retentionHours`: integer, `> 0`.
+- `defaults.pagination`
+  - `pageSize`: integer, `> 0`.
+- `defaults.images`
+  - `maxInputPixels`: integer, `> 0`.
+  - `maxDimension`: integer, `> 0`.
+  - `thumbnailDimension`: integer, `> 0`.
+  - `quarantineRetentionHours`: integer, `> 0`.
+- `defaults.uploads`
+  - `maxBytes`: integer, `> 0`.
 
 ## Relationships
-
-No graph neighbors are recorded for this file.
+No graph neighbors are listed, so no dependencies or consumers are visible from this file alone.
 
 ## Notes
-
-- `responseCache.devTtlMaxSeconds` uses `minimum: 0` (inclusive), while every other integer field uses `exclusiveMinimum: 0` (i.e. ≥ 1). The zero-value is intentional only for the dev TTL.
-- Because every node is closed (`additionalProperties: false`), adding a new sub-setting requires editing this schema *and* any code that produces/consumes the config.
-- The `maximum` is set to `Number.MAX_SAFE_INTEGER` to guard against accidental overflow in JS/TS runtimes; it is not a practical business cap.
+- Every property in every object is `required` and `additionalProperties` is `false`, so the schema is strict: missing or unknown keys fail validation.
+- `devTtlMaxSeconds` is the only field that permits `0`. All other fields must be strictly positive.
+- The `minimum`/`exclusiveMinimum` and `maximum: 9007199254740991` pattern looks like the output of a schema converter, likely from Zod. This is an inference from the style, not something the file states. Changes should likely be made in the source definition and then regenerated, not in this file.

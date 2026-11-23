@@ -1,32 +1,26 @@
 ---
 source: src/modules/cart/factories.ts
-sha256: 5da753ea502ad47ec46aa1cc478fc5e895421f0a5addba70a6b51a04f985852f
-generated_at: 2026-11-08T05:13:57.761639+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5da753ea502ad47ec46aa1cc478fc5e895421f0a5addba70a6b51a04f985852f
+context_sha256: b74253fb880f59f0aa877ac4fd1dccee06eefdd5f0c9547c4e51bd869188941f
+generated_at: 2026-11-22T04:32:57.357361+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/factories.ts
 
 ## Purpose
-
-Builds cart fixtures (documents ready for `cartRepository.create`) from bare string product/user ids and quantities. It exists so that test and seed code can construct a valid `CartDocument` without manually wrapping every id in `Types.ObjectId` or re-declaring the line-item shape.
+Test/seed fixture builder for cart rows. It turns bare string ids and quantities into a cart object with Mongo `ObjectId`s, ready to pass to `cartRepository.create`. Carts are addressed by their owner (`userId` is unique), so there is deliberately no `_id` override.
 
 ## Key elements
-
-- **`CartOverrides`** (interface) — input shape: required `userId: Id` plus optional `items?: CartItem[]`.
-- **`CartFixture`** (type) — `Partial<CartDocument> & Pick<CartDocument, 'userId'>`; a cart with `userId` guaranteed present, everything else optional for partial overrides.
-- **`makeCart`** (function) — converts the string `userId` to a `Types.ObjectId`; if `items` is supplied, maps each `productId` to a `Types.ObjectId` while preserving `quantity`. If `items` is omitted the key is left out entirely so the Mongoose schema default `[]` applies.
+- `CartOverrides` — input shape: required `userId: Id` (24-char hex string) and optional `items?: CartItem[]`.
+- `CartFixture` — `Partial<CartDocument> & Pick<CartDocument, 'userId'>`. `userId` is required so seed callers don't need `fixture.userId!`.
+- `makeCart({ userId, items })` — returns a `CartFixture`. It converts `userId` and each item's `productId` with `new Types.ObjectId(...)`, and it keeps `quantity` as-is.
 
 ## Relationships
-
-- **`src/modules/cart/model.ts`** — `CartDocument` type is imported and used to define `CartFixture`; the returned object is the payload passed to `cartRepository.create`, which persists via this model.
-- **`src/types/index.ts`** — source of the `CartItem` and `Id` types used in the public interface; the line-item shape is intentionally *not* re-declared here.
-- **`src/modules/cart/tests/unit/factories.test.ts`** — unit-tests the conversions and optional-items behavior of `makeCart`.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — consumes `makeCart` to seed a cart fixture without importing the cart model directly.
+- `./model` — supplies the `CartDocument` type that `CartFixture` is derived from (type-only import).
+- `@types` (`src/types/index.ts`) — supplies `CartItem` and `Id`. The `CartItem` shape (`{ productId, quantity }`) comes from the API contract rather than being redefined here.
+- `src/modules/cart/tests/unit/factories.test.ts` and `src/modules/delivery/tests/unit/fulfillment.test.ts` — test files related to this module in the dependency graph. The factory itself does not import them.
 
 ## Notes
-
-- `userId` is **required** (not `Partial`) in `CartFixture`. The JSDoc explains this is deliberate: making it optional would force every seed caller to non-null-assert a value that can never be absent, creating a false sense of uncertainty.
-- String-to-`ObjectId` conversion is the core reason this file exists. A bare hex string passed to Mongoose would silently match no document.
-- When `items` is `undefined` the spread produces `{}` (key omitted), relying on the schema's `default: []`. Passing `items: []` explicitly would set an empty array directly.
-- No `_id` field is generated or overridable; carts are addressed by `userId` and the repository assigns the id server-side.
+- When `items` is `undefined`, the `items` key is omitted entirely, so the schema's `default: []` applies. An explicit empty array is passed through and produces `items: []`.
+- Ids must be valid 24-char hex strings. Passing a bare string to Mongo instead of an `ObjectId` would silently match nothing, which is why the conversion happens here.

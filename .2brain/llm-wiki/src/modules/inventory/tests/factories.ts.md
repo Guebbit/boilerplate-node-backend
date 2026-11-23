@@ -1,33 +1,25 @@
 ---
 source: src/modules/inventory/tests/factories.ts
-sha256: c4cc6ca041fa9d6384c8a12b0e303d0b1d619ebd4c9ccf61a8c2417e889d2b10
-generated_at: 2026-11-08T06:04:46.246003+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d2f65825268b9c10ece2e4e047d691dc8cd53de138e374f26f820eb254f3d5fc
+context_sha256: cb2820a7f482b4d22e0ccc8db7b6e5af31e172348fa1093c8e379a759fd36eaa
+generated_at: 2026-11-22T05:25:08.905266+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/tests/factories.ts
 
 ## Purpose
-
-A test-only re-export layer that gives sibling modules' integration tests controlled access to inventory's internal storage primitives (stock rows, reservation rows, level service). It exists because the import boundary blocks those tests from reaching `../repository` or `../model` directly; this file is the sanctioned door.
+The test-side entry point into `inventory`'s storage, for other modules' tests. Sibling modules have an import boundary that forbids reaching `../repository` or `../model` directly, so this file re-exports or wraps the pieces they need to read, assert on, and force stock rows.
 
 ## Key elements
-
-- **`forceStockLevel(productId, onHand, reserved)`** — Local export. Overwrites a level row's counters via `stockLevelModel.updateOne`, computing `available` as `onHand − reserved`. Bypasses all stock-movement rules and leaves the catalogue's cached copy untouched. Test-only: no production code calls this.
-- **`removeLevel`** — Re-exported from `../services/levels`. Deletes a product's level row. In production only inventory's own `product.deleted` listener triggers this.
-- **`stockLevelRepository`** — Re-exported from `../repository`. Gives a sibling test direct read access to stock-level documents for assertions.
-- **`reservationRepository`** — Re-exported from `../repository`. Gives a sibling test direct read access to reservation/hold documents.
+- `removeLevel` (re-export from `../services/levels`): erases a product's level row, for testing a product that has none. It is deliberately not on `inventoryService`. In production only this module's own `product.deleted` listener runs it.
+- `stockLevelRepository`, `reservationRepository` (re-exports from `../repository`): the stock rows and holds, used for a sibling's own assertions on what the ledger holds.
+- `forceStockLevel(productId, onHand, reserved)`: runs `stockLevelModel.updateOne` with `$set` on `onHand` and `reserved`, and sets `available` to `onHand - reserved`. It bypasses every stock rule, so a test can move stock behind a cart's back.
 
 ## Relationships
-
-- **Imports** `stockLevelModel` from `src/modules/inventory/model.ts` (used internally by `forceStockLevel`).
-- **Re-exports** `stockLevelRepository` and `reservationRepository` from `src/modules/inventory/repository.ts`, and `removeLevel` from `src/modules/inventory/services/levels.ts`.
-- **Consumed by** sibling integration tests across cart (`stock`, `checkout-stock-divergence`, `product-removal-protects-orders`, `checkout-interleavings`), delivery (`lost-parcel`), orders (`hold-doors`), payments (`reconcile`), returns (`lost-parcel`, `restock`), and shop-tasks (`work-summary`). These tests call `forceStockLevel` to set up divergent ledger state and use the repositories to assert on resulting rows.
-- **Consumed by** inventory's own `tests/integration/top-up.test.ts`.
+- Imports `stockLevelModel` from `../model`, and re-exports from `../repository` and `../services/levels`.
+- Used by integration tests in other modules (cart, delivery, orders, payments, returns, shop-tasks) and by inventory's own integration tests (`availability-cache.test.ts`, `top-up.test.ts`).
 
 ## Notes
-
-- This file is a **test-side** module; the header JSDoc explicitly states it is not a production API. The `forceStockLevel` doc comment reinforces: "Never a production door."
-- `forceStockLevel` writes `available` as a derived value (`onHand − reserved`) rather than setting it independently — a test author must keep that invariant in mind when choosing arguments.
-- The import of `Types` from `mongoose` is type-only (`import type`); no runtime Mongoose dependency is added beyond what `model.ts` already pulls in.
-- Because `removeLevel` is re-exported (not re-implemented), any future change to its signature in `services/levels.ts` flows through automatically.
+- `forceStockLevel` is never a production door. Every real stock write goes through a conditional movement.
+- `forceStockLevel` is an `updateOne` on `{ productId }`, so it only changes an existing level row. It does not create one.

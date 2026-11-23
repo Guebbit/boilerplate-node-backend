@@ -1,30 +1,28 @@
 ---
 source: jest.config.broker.js
-sha256: 1c001b651e19b904da5709fc9968f00f8739db22e41bdf4fe6678d892be184e7
-generated_at: 2026-11-08T02:25:11.684535+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cd2ce12546abd0c127460bff76ef7f366a8707089917164798d231f3d708e371
+context_sha256: 8ea95f727d77948c02c8d90cb96666bb2427991c9f00ea2f2fd7d93634df776d
+generated_at: 2026-11-22T01:35:34.128236+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # jest.config.broker.js
 
 ## Purpose
-
-Jest configuration for the broker (RabbitMQ) test suite, invoked via `npm run test:broker`. It strips away base-config setup that the queue adapter doesn't need (i18n boot, rate-limit budgets, in-memory MongoDB) and relaxes timeouts to accommodate container pulls and real retry TTLs.
+Jest configuration for the broker test suite, run with `npm run test:broker`. It derives from `jest.config.js` but overrides the settings that don't suit tests which need a real message broker (RabbitMQ) and a shared in-memory MongoDB. It follows the same approach as `jest.config.replicas.js`.
 
 ## Key elements
-
-- **Extends `./jest.config.js`** — requires the base config and inherits `preset`, `moduleNameMapper`, `transform`, `cacheDirectory`, and `testEnvironment`.
-- **`roots` / `testMatch`** — scoped to `<rootDir>/tests/broker` and `**/tests/broker/**/*.test.ts` so only broker tests are collected.
-- **`maxWorkers: 1`** — forces serial execution because test files share a single broker and wait on real TTLs; parallel workers would make timings flaky.
-- **`testTimeout: 120_000`** — 120 s default; individual test files may override this further.
-- **Deliberately omitted** (not inherited from base): `setupFiles` and `globalSetup`, because broker tests build their adapter environment per-case and read no database.
+- **Inherited from base:** `preset`, `moduleNameMapper`, `transform`, `transformIgnorePatterns` (so ESM-only packages such as `jose`, loaded by the app boot, are transformed), `cacheDirectory`, `testEnvironment`, `globalSetup` and `globalTeardown`.
+- **`setupFiles`:** only `tests/support/setup-environment.ts`. It sets plain `??=` env defaults with no imports, including `NODE_PSEUDONYM_KEY`, which has no built-in value. It deliberately avoids `tests/support/setup.ts`, which boots i18n and raises budgets the queue adapter doesn't need.
+- **`globalSetup` / `globalTeardown`:** start and stop a shared in-memory mongod. The app/worker boot case and the spawned workers in `tests/broker/worker-shutdown.test.ts` connect to it through `NODE_TEST_MONGO_URI`.
+- **`roots` / `testMatch`:** limited to `tests/broker` and `**/tests/broker/**/*.test.ts`.
+- **`maxWorkers: 1`:** files run one at a time because they share one broker and wait on real TTLs.
+- **`testTimeout: 120_000`:** 120 seconds.
 
 ## Relationships
-
-- **`jest.config.js`** — the base config this file requires. It supplies the TypeScript preset, module mapping, transform, cache path, and environment. In the reverse direction, `jest.config.js` scopes its own `roots` to exclude `tests/broker`, so the default `npm test` never picks up broker tests or starts a container.
+- Imports `jest.config.js` through `require` and reuses most of its fields instead of redefining them.
+- `jest.config.js` ignores `tests/broker`, so `npm test` needs no container. This config is the only runner for that directory.
 
 ## Notes
-
-- The two configs share the same on-disk Jest cache directory (inherited from base), avoiding redundant `node_modules` recompilation.
-- `maxWorkers: 1` is intentional, not a performance oversight: the broker is a single shared resource and tests depend on wall-clock TTLs.
-- If you add a new broker test file, it only needs to match the `tests/broker/**/*.test.ts` pattern — no extra registration required.
+- The header comment says `testTimeout` is 30s, but the code sets `120_000` (120s). The code is authoritative, and the comment appears stale.
+- The header says individual test files set their own timeouts where they need longer ones.

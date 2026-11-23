@@ -1,42 +1,38 @@
 ---
 source: scripts/scaffold/templates-code.ts
-sha256: 9638cec227291ca6cb57db1b7de598e22155d5bda66635ccdc622d13fb80d1d2
-generated_at: 2026-11-14T17:42:45.753270+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f7ec4647d3d489753d1a23026f36ced732d8d7e18af9c36b240c1cd280bb002f
+context_sha256: 42607f272025214aabc42027eacd18d4fe0f1f8da790a8ec69f1615ce525f874
+generated_at: 2026-11-22T02:17:04.763423+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/scaffold/templates-code.ts
 
 ## Purpose
-
-Provides the template-literal functions that produce the runtime source files of a scaffolded module (manifest, barrel, model, repository, services, audit, rules, authorization, and `module.yaml`). The shape mirrors the `example` module's core cut to an admin CRUD collection. It exists so the scaffold script can emit a coherent, documented set of files without duplicating string-building logic across the plan or CLI.
+Holds the runtime source files of a scaffolded module as plain template literals. The shape is a cut-down copy of the `example` module's core: an admin collection with a required `name` and optional `notes`, with keyed list / create / replace / patch / delete behind one permission gate. Each generated file opens with a header giving its role in any module, then what it does in this module. Prettier reformats the output, so the templates favour readability over final layout.
 
 ## Key elements
-
-- **`moduleYaml(options)`** – Returns the `module.yaml` body (summary, subdomain, group, dependsOn).
-- **`moduleManifest(names)`** – Returns the module's `index.ts` (the `AppModule` manifest entry).
-- **`barrel(names)`** – Returns the public barrel (`export * from './services' | './domain' | './model'`).
-- **`auditEntries(names)`** – Returns the four `{ value, description }` audit action entries (viewed, created, updated, deleted).
-- **`rulesYaml(names)`** – Returns the `rules.yaml` content listing those audit entries.
-- **`rulesSchemaFile(names)`** – Returns the Zod schema + `GenerateSpec` for `rules.yaml` (uses `String.raw` to preserve backticks in generated code).
-- **`auditFile(names)`** – Returns the audit-action re-export + `declare module` augmentation into `AuditActionMap`.
-- **`authorizationYaml(names)`** – Returns the authorization-rules YAML content with per-action rules and a single permission set.
-- **`modelFile(names)`** – Returns the Mongoose schema, document/model types, index, and serialization transform.
-- **`repositoryFile(names)`** – Returns the `createRepository` call with text search and sort config.
-- **`servicesIndexFile(names)`** – Returns the service-layer barrel that controllers import (CRUD re-exports, action list).
-- **`auditCall(names, options, action, extra)`** *(private)* – Emits a `recordAudit(…)` statement, or an empty string when `options.audit` is falsy.
-- **`describeAction(action)`** *(private)* – Maps a rule action to its human-readable verb phrase for YAML descriptions.
+- `moduleYaml(options)`: the `module.yaml` body (escaped `summary`, `subdomain: generic`, `group`, empty `dependsOn`).
+- `moduleManifest(names)`: the manifest file. It is a default-exported `AppModule` with `name`, one `mounts` entry (`basePath`, `router` from `./routes`) and `personalData: 'none'`.
+- `barrel(names)`: the public barrel. It re-exports `./services` and `./domain`, and exports the types from `./model`.
+- `auditEntries(names)`: builds the four audit actions (`admin.<entitySnake>.viewed|created|updated|deleted`) with descriptions.
+- `rulesYaml(names)`: `rules.yaml` listing those audit entries.
+- `rulesSchemaFile(names)`: a Zod `rulesSchema` plus a `rulesGenerate` spec. The spec describes the generated output file and exports `<pluralCamel>AuditActions`.
+- `auditFile(names)`: the audit vocabulary. It re-exports the generated actions and augments `AuditActionMap` in `@infrastructure/observability/audit`.
+- `authorizationYaml(names)`: permission rules, one per entry in `RULE_ACTIONS`, plus one permission set named by `permissionSetName(names)`. All rules have `scope: tenant`. The private `describeAction` supplies the verb phrase for each rule description.
+- `modelFile(names)`: the Mongoose schema and model (`name`, `notes`, timestamps, a `createdAt: -1` index). It also emits the `<Entity>Row`, `<Entity>Document` and `<Entity>Model` types and `apply<Entity>Transform` via `applySerialization`.
+- `repositoryFile(names)`: a repository built with `createRepository`, searchable over `name` and `notes`, and sortable by `createdAt` or `name`.
+- `auditCall(names, options, action, extra)`: private. It emits a `recordAudit(...)` statement, or an empty string when `options.audit` is false.
+- `servicesIndexFile(names)`: the start of the services folder's index file. The service object is what controllers call and the barrel publishes.
 
 ## Relationships
-
-- **`scripts/scaffold/names.ts`** – Imports `RULE_ACTIONS`, `permissionSetName`, and the `ModuleNames` type used to interpolate every template.
-- **`scripts/scaffold/options.ts`** – Imports the `ScaffoldOptions` type (fields such as `summary`, `group`, `audit`) that gates conditional output such as audit calls.
-- **`scripts/scaffold/plan.ts`** – Consumes the exported template functions to build the list of files (path + content) that the scaffold writes to disk.
-- **`tests/cross-cutting/guarded-steps-stay-unpublished.test.ts`** – Asserts that scaffolded output (generated by these templates) does not accidentally expose guarded/internal steps through the barrel or manifest.
+- `./names`: provides the `ModuleNames` spellings that every template interpolates (`kebab`, `entity`, `entityCamel`, `entitySnake`, `pluralCamel`, `words`, `basePath`). It also provides `RULE_ACTIONS` and `permissionSetName` for `authorizationYaml`.
+- `./options`: supplies the `ScaffoldOptions` type. `summary` and `group` feed `moduleYaml`, and `audit` toggles `auditCall`.
+- `tests/cross-cutting/guarded-steps-stay-unpublished.test.ts`: listed as a graph neighbour. No direct interaction is visible in the shown content.
 
 ## Notes
-
-- Generated comments must avoid backticks; they would need escaping inside the outer template literals. The `rulesSchemaFile` export uses `String.raw` for the same reason.
-- Templates are written for human readability; **Prettier** reformats the output after the scaffold writes files, so indentation in the source does not reflect final layout.
-- `auditCall` silently returns `''` when `options.audit` is disabled—callers must tolerate empty-string insertion (no dangling comma guard is added here).
-- The file is marked `@module` and has **no default export**; all values are named exports intended for programmatic consumption by the plan builder, not for direct user invocation.
+- Generated comments avoid backticks, because they would need escaping inside the template literals.
+- `rulesSchemaFile` uses `String.raw` so the regex backslashes survive unescaped.
+- Audit output is conditional. `rulesYaml` and `auditFile` are described as present unless the module opted out, and `auditCall` yields `''` when `options.audit` is false.
+- The manifest sets `personalData: 'none'` with a comment to change it once a record names a person.
+- The generated headers contain `@see` links into `docs/` that use the module's kebab name.

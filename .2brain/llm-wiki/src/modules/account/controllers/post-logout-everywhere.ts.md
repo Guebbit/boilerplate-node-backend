@@ -1,32 +1,33 @@
 ---
 source: src/modules/account/controllers/post-logout-everywhere.ts
-sha256: 7a863d9dbbbe3d7e10ef6d580284a4fb8f5dbe013d3cc337f7bd69b55b91ee4f
-generated_at: 2026-11-08T04:05:58.987026+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0f627def526d341fbbf572f0b9a71fd4fc8f5bf54edf68793b749b1d8c53cf05
+context_sha256: a130cebad299188282df9d3eb00a81c1796b9be2b5818aefe4ae6bcb48c4abbf
+generated_at: 2026-11-22T03:25:45.203043+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-logout-everywhere.ts
 
 ## Purpose
-
-Thin HTTP adapter for the `DELETE /account/sessions` endpoint. It delegates all business logic to `accountService.logoutEverywhere` and is responsible only for translating the service result into an HTTP response: destroying the session cookie, returning `204` on success, or a rejection with error details on failure.
+HTTP controller for `DELETE /account/sessions`. It is a thin adapter that signs the caller out of every device by delegating to `accountService.logoutEverywhere`, then clears the caller's own refresh cookie and replies with no content.
 
 ## Key elements
-
-- **`postLogoutEverywhere`** (exported const) — The controller handler. Reads the user ID from `request.authContext` and caller info from `callerContextOf(request)`, calls `accountService.logoutEverywhere`, then either destroys the session cookie and sends `204 No Content`, or sends a rejection response if the service reports a failed revocation. Errors from the promise are funneled through `catchAs`.
+- `postLogoutEverywhere(request, response)`: the Express handler (the only export).
+  - Calls `accountService.logoutEverywhere(request.authContext!.id, callerContextOf(request))`.
+  - If `result.success` is false, it sends `rejectResponse(response, result.status, result.errors)` and returns early.
+  - On success it calls `destroySessionCookie(response)` and then `noContentResponse(response)`.
+  - Any rejection goes to `.catch(catchAs(response, 'postLogoutEverywhere'))`.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — Imports `noContentResponse` (success path) and `rejectResponse` (failed-revocation path).
-- **`src/infrastructure/http/controller.ts`** — Imports `catchAs` for promise-rejection handling attached to the returned promise.
-- **`src/infrastructure/http/request.ts`** — Imports `callerContextOf` to extract caller metadata (e.g. IP/UA) passed into the service call.
-- **`src/modules/account/services/index.ts`** — Imports `accountService` and calls its `logoutEverywhere` method (the actual revocation + epoch-bump logic).
-- **`src/modules/account/session/cookies.ts`** — Imports `destroySessionCookie` to clear the refresh-token cookie after a successful call.
-- **`src/modules/account/routes.ts`** — Registers this handler on the `DELETE /account/sessions` route (implied by the doc comment and module structure).
+- `src/infrastructure/http/controller.ts`: provides `catchAs`, which builds the error handler for the promise chain.
+- `src/infrastructure/http/request.ts`: provides `callerContextOf`, which extracts the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: provides `rejectResponse` (error reply) and `noContentResponse` (success reply).
+- `src/modules/account/services/index.ts`: provides `accountService`. Its `logoutEverywhere` does the actual revocation.
+- `src/modules/account/session/cookies.ts`: provides `destroySessionCookie`, which removes the refresh cookie from the response.
+- `src/modules/account/routes.ts`: the route file for the account module. It is the expected place where this handler is mounted for `DELETE /account/sessions`.
 
 ## Notes
-
-- **Naming vs. verb:** The function is named `postLogoutEverywhere` and the file is `post-logout-everywhere.ts`, but the HTTP method it serves is **DELETE**, not POST. The "post" prefix appears to mean "perform" rather than the HTTP verb.
-- **Non-null assertion:** `request.authContext!` assumes an auth guard has already populated the context; calling this handler without that guard will throw at runtime.
-- **Security intent (in-code comment):** A failed revocation is deliberately surfaced as an error rather than `204`, so the caller cannot assume all devices are signed out when a stale token may still be valid.
-- **No re-mint:** The caller's own session is also destroyed; the controller does not issue a new token or cookie.
+- The handler assumes authentication middleware has already set `request.authContext`. It reads `authContext!.id` with a non-null assertion, so there is no check in this file.
+- Per the in-code docs, `logoutEverywhere` removes all refresh tokens in the DB and moves the session epoch, so access tokens already issued stop working too.
+- The caller is signed out as well. No new session or token is issued.
+- A failed revocation is deliberately returned as an error and the cookie is not cleared. Otherwise the caller would think every device is logged out while a stolen one might still work.

@@ -1,27 +1,28 @@
 ---
 source: src/modules/account/tests/unit/session-proof.test.ts
-sha256: 498149e1bccef59df20e17dc0a6046ab22c01452702019d5ac1f40459ff3c6b6
-generated_at: 2026-11-08T04:50:15.757155+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 498149e1bccef59df20e17dc0a6046ab22c01452702019d5ac1f40459ff3c6b6
+context_sha256: a91c35580d13c67e7beb13556c9d994e5ef4164e2f5e6576b330d04d6b83d2ae
+generated_at: 2026-11-22T04:08:58.596116+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/session-proof.test.ts
 
 ## Purpose
-
-Unit tests for the session-proof domain logic in `../../domain/session-proof`. They verify two rules: proofs are combined without duplicates while preserving the input array, and first-session refusal only applies to armed accounts lacking an `otp` proof.
+Unit tests for the session proof rules defined in `domain/session-proof`. They check that proofs combine without duplicates, and that only an armed account lacking the `otp` proof is refused a first session.
 
 ## Key elements
-
-- **`withProofs`** — tested for two behaviors: (1) appending new proofs after existing ones, deduplicating (e.g., passing `otp` when it's already present is a no-op); (2) non-mutation — the carried-in array is left unchanged.
-- **`firstSessionRefused`** — tested via a table (`it.each`) of six `(armed, amr, refused)` cases. The refusal rule: `armed === true` AND `otp` is absent from `amr` → `true`; all other combinations → `false`.
+- **`describe('withProofs')`**
+  - Adding a proof appends it after the carried ones, once only. `withProofs([AMR.password], AMR.otp)` and `withProofs([AMR.password, AMR.otp], AMR.otp)` both give `['pwd', 'otp']`.
+  - The input array is not mutated.
+- **`describe('firstSessionRefused')`**
+  - A table-driven `it.each` over `(armed, amr)` pairs, each with an expected `refused` value.
+  - Refused: armed with `['pwd']`, `[]` or `['email']`.
+  - Not refused: armed with `['pwd', 'otp']`, and unarmed with `['pwd']` or `[]`.
 
 ## Relationships
-
-- Imports `AMR`, `firstSessionRefused`, and `withProofs` from `src/modules/account/domain/session-proof.ts`. All assertions are against those three exports and no other module.
+Imports `AMR`, `firstSessionRefused` and `withProofs` from `src/modules/account/domain/session-proof.ts` and tests them directly. It has no other dependencies.
 
 ## Notes
-
-- `AMR` is used as an enum-like map of AMR values (`AMR.password` → `'pwd'`, `AMR.otp` → `'otp'`, `AMR.email` → `'email'`), so tests read as symbols but compare against the string values.
-- The non-mutation test for `withProofs` is deliberate: it guards against the implementation mutating the caller's array in place.
-- The `firstSessionRefused` table includes the `armed: false` cases explicitly to pin down that disarmed accounts are *never* refused, regardless of proofs.
+- The tests show that `AMR.password` is `'pwd'` and that `AMR.otp` is `'otp'`.
+- The table also uses the raw string `'email'` as an AMR value. It does not use an `AMR` constant for it.

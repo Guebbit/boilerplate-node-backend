@@ -1,45 +1,52 @@
 ---
 source: src/infrastructure/observability/analytics/index.ts
-sha256: 0c568d56a73e400dda1fb98757c13d503d599e81dada7586567ba56f26744357
-generated_at: 2026-11-14T18:10:31.900370+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a80831d9c718575cd5b08b3928f8c5fa1970b3f1ce4440707868fd6a7cf5350e
+context_sha256: ddc32a469c3cbbabdae02dc6f9690212f12f67492621c4dea91588bd8a01350f
+generated_at: 2026-11-22T02:57:12.263062+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/observability/analytics/index.ts
 
 ## Purpose
-
-Defines the product-analytics port (`AnalyticsProvider`) and the registry of the three shipped implementations (Umami, PostHog, none). It answers *product* questions (funnels, event counts), not operational ones, and centralises the consent gate, event shape, and provider lifecycle so that modules emit events through a single choke point without knowing which backend is active.
+Defines the product-analytics port (`AnalyticsProvider`), the event/payload types, and a registry of the three shipped implementations (`umami`, `posthog`, `none`). It answers product questions, not operational ones (metrics/tracing). The active provider is chosen by `NODE_ANALYTICS_PROVIDER` (default `umami`). It also hosts the consent gate every event passes through.
 
 ## Key elements
-
-- **`AnalyticsEventMap`** – Empty interface, deliberately a declaration-merging seam. Each module (e.g. `modules/cart/analytics.ts`) augments it with its own event names so `infrastructure` never imports from a module.
-- **`AnalyticsEvent` / `AnalyticsEventInput`** – Core event shape (distinctId, event, traceId, properties, clientIp, userAgent, hostname, optional timestamp). `AnalyticsEventInput` adds the required `analyticsConsent` boolean.
-- **`AnalyticsProvider`** – The port: `capture(event)` (fire-and-forget), `configured()`, `forget(distinctId)` (awaited, rejects on failure for GDPR Art. 17), `shutdown()`.
-- **`registry`** – `createProviderRegistry` mapping the three names to their adapter singletons.
-- **`resolveAnalyticsProvider()`** – Memoised lazy resolution from `NODE_ANALYTICS_PROVIDER` (default `umami`); throws on an unrecognised value.
-- **`buildAnalyticsBase(context)`** – Fills `distinctId`, `traceId` (via ambient OTel span context), `clientIp`, `userAgent`, `hostname`, and `analyticsConsent` from a `CallerContext`.
-- **`emitAnalyticsEvent(event)`** – The single emit point. Gates on `NODE_ANALYTICS_REQUIRE_CONSENT` (defaults `true` → opt-in), then calls `capture`. Returns `void`.
-- **`shutdownAnalytics()`** – Flushes buffered events and releases the client; clears the memoised handle.
-- **`analyticsProviderProbe`** – `defineProbe` wired at boot in `src/app/config.ts` so a typo in the env var is rejected before the first request.
-- **`resetAnalyticsProvider()`** – Test seam to clear the memoised provider between cases.
+- **`AnalyticsEventMap`**: an intentionally empty interface that modules augment via declaration merging with their own event names, so `infrastructure` never imports from a module.
+- **`AnalyticsEventName`**: union of all event names declared across `AnalyticsEventMap`.
+- **`AnalyticsEvent`**: the core payload: `distinctId`, `event`, optional `timestamp`, `traceId`, `properties`, plus attribution fields `clientIp`, `userAgent` and `hostname`.
+- **`AnalyticsEventInput`**: `AnalyticsEvent` plus a required `analyticsConsent: boolean`. Consent is a gate input, not event data, so providers never receive it.
+- **`AnalyticsProviderName`**: `'umami' | 'posthog' | 'none'`.
+- **`AnalyticsProvider`**: the port, with these members:
+  - `name`: reported by `GET /observability/health` as `integrations.analytics`.
+  - `capture(event)`: fire-and-forget.
+  - `configured()`: reports whether the provider has what it needs to deliver an event.
+  - `forget(distinctId)`: awaited GDPR Art. 17 erasure that rejects on failure.
+  - `shutdown()`: flushes buffers and releases the client.
+- **`resolveAnalyticsProvider()`**: lazily resolves and memoises the provider through `requireProvider`. It throws on an unknown provider name.
+- **`resetAnalyticsProvider()`**: test seam that clears the memoised provider.
+- **`buildAnalyticsBase(context)`**: builds the repeated fields from a `CallerContext`: `distinctId` (`caller.id ?? 'anonymous'`), `traceId` from the active OTel span, IP, user agent, host and `analyticsConsent`.
+- **`emitAnalyticsEvent(event)`**: strips `analyticsConsent`, drops the event when `NODE_ANALYTICS_REQUIRE_CONSENT` is on and consent is not given, and otherwise calls `capture` on the resolved provider.
+- **`shutdownAnalytics()`**: shuts down the provider if one was resolved, then clears the handle. It is a no-op otherwise.
+- **`analyticsProviderProbe`**: a `defineProbe('analytics-provider', resolveAnalyticsProvider)` boot probe.
 
 ## Relationships
-
-- **`src/infrastructure/observability/span-context.ts`** – `buildAnalyticsBase` reads the active trace ID via `getActiveSpanContext()`.
-- **`src/infrastructure/runtime/provider-registry.ts`** – Provides `createProviderRegistry` / `requireProvider` used to build the registry and resolve the active provider.
-- **`src/infrastructure/config/define.ts`** – Supplies `defineProbe` for the boot-time health probe.
-- **`src/infrastructure/observability/config.ts`** – Source of `analyticsConfig()` (env values like `NODE_ANALYTICS_PROVIDER`, `NODE_ANALYTICS_REQUIRE_CONSENT`).
-- **`./umami`, `./posthog`, `./none`** – The three concrete `AnalyticsProvider` adapters registered at module load.
-- **`src/app/config.ts`** – Calls `analyticsProviderProbe` during boot to fail fast on a bad provider name.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** – Calls `shutdownAnalytics()` as the last step in the shutdown chain.
-- **`src/modules/account/module.ts`, `src/modules/account/services/account-deletion.ts`, `src/modules/account/services/logout.ts`, `src/modules/account/services/oauth.ts`, `src/kernel/registry.ts`, `src/infrastructure/http/middlewares/idempotency.ts`** – Downstream consumers that import the port, event types, and emit helpers defined here.
+- **`src/infrastructure/observability/analytics/umami.ts`, `src/infrastructure/observability/analytics/posthog.ts`, `src/infrastructure/observability/analytics/none.ts`**: the adapters registered in the local `createProviderRegistry` call. Adding a provider means a new adapter file plus a registry entry.
+- **`src/infrastructure/runtime/provider-registry.ts`**: supplies `createProviderRegistry` and `requireProvider`.
+- **`src/infrastructure/observability/config.ts`**: `analyticsConfig()` supplies `NODE_ANALYTICS_PROVIDER` and `NODE_ANALYTICS_REQUIRE_CONSENT`.
+- **`src/infrastructure/observability/span-context.ts`**: `getActiveSpanContext()` supplies the `traceId`.
+- **`src/infrastructure/config/define.ts`**: `defineProbe` builds the boot probe.
+- **`src/app/config.ts`**: wires `analyticsProviderProbe` so a bad provider name is refused at boot.
+- **`src/infrastructure/runtime/server-lifecycle.ts`**: calls shutdown last in the stop chain.
+- **Account module files** (`src/modules/account/module.ts`, `src/modules/account/services/account-deletion.ts`, `src/modules/account/services/logout.ts`, `src/modules/account/services/oauth.ts`): neighbors in the dependency graph that use this module's emit and erasure API. The page's source doesn't show the exact call sites.
+- **`src/infrastructure/http/middlewares/idempotency.ts`** and **`src/kernel/registry.ts`**: listed as graph neighbors, but no direct interaction is visible in this file.
 
 ## Notes
-
-- `AnalyticsEventMap` is **intentionally empty** in this file; it is never "complete" until every module's `analytics.ts` declaration-merging file is included in the build. Adding an event name to a module without its augmentation file is a silent no-op.
-- `timestamp` is **PostHog-only**. Umami (v2.14.0 pinned) has no timestamp field in `/api/send` and stamps ingest time, so replayed/backfilled events land on the wrong date there.
-- **Umami discards** an event that arrives without `userAgent`. PostHog does not require it.
-- Unauthenticated traffic all shares `distinctId: 'anonymous'`. Under Umami the IP + user-agent hash still separates visitors; under PostHog it does not.
-- `capture` is fire-and-forget by contract (analytics must never delay a request); `forget` is the opposite — it is awaited and **rejects** on failure so the outbox relay can retry and eventually park it as `dead`. A swallowed erasure is treated as a silent GDPR breach.
-- The provider handle is memoised on first use. A restarted process (or test) must call `resetAnalyticsProvider()` before resolving again, otherwise it reuses a shut-down client whose `capture` calls silently do nothing.
+- Consent is opt-in. `NODE_ANALYTICS_REQUIRE_CONSENT` defaults to `true` (GDPR Art. 25(2)). Aggregate counts without consent belong in a metric, not here.
+- `analyticsConsent` is required on `AnalyticsEventInput`, so a call site that forgets it fails to compile.
+- Unauthenticated events all share `distinctId: 'anonymous'`. Umami still separates visitors by IP and user-agent hash; PostHog does not.
+- `timestamp` is honoured only by PostHog. Umami (pinned v2.14.0) stamps ingest time, and it discards events that have no `userAgent`.
+- `capture` swallows failures, but `forget` rejects so the outbox relay can retry and park the erasure as `dead`.
+- `shutdownAnalytics` deliberately does not resolve a provider. Doing so would turn a typo'd env var into a crash on exit.
+- The config cannot import the resolver, because the resolver imports the config. That is why the probe is shape-less.
+- The event-name taxonomy is shared 1:1 with the frontend, with one emitter per event, enforced by `tests/cross-cutting/analytics-events.test.ts`.

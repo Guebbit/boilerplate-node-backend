@@ -1,34 +1,29 @@
 ---
 source: src/modules/orders/rate-limits.ts
-sha256: 9430f0bfcac73a95c50fd52801cd2c0eb064d9aeb65db7d40238f9b2cca3d376
-generated_at: 2026-11-08T06:54:30.797773+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d964440fd7d35ee9b524c3de9a68af5539626c3d271392ee0eb1227263057f1e
+context_sha256: 7ff07b1588d4f5063b247c914c4ceb3359c97f25553eb3055dcd2e7a55040721
+generated_at: 2026-11-22T06:17:22.141144+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/rate-limits.ts
 
 ## Purpose
-
-Declares the two rate-limit budgets specific to the orders module (export and timeline-note endpoints) and exposes them as ready-to-use Express `RequestHandler` middlewares. It converts the raw budget data into middleware via the shared `buildRateLimiter` factory so the orders routes can enforce per-account request windows without re-implementing limiter logic.
+Defines the orders module's own rate-limit budgets and the middleware built from them: one for the order export route (`GET /orders/export`) and one for adding timeline notes (`POST /orders/:id/timeline/notes`). Budgets are plain data (`RateLimitBudget`) turned into Express middleware by the shared `buildRateLimiter` factory, the same one other modules use.
 
 ## Key elements
-
-- **`ORDERS_EXPORT_BUDGET`** (internal) — `RateLimitBudget` object for `GET /orders/export`; pulls numeric limits from `ordersRateLimitData.ordersExport` and keys by authenticated account.
-- **`ordersExportLimiter`** (exported) — `RequestHandler` middleware produced by `buildRateLimiter(ORDERS_EXPORT_BUDGET)`.
-- **`ORDERS_NOTE_BUDGET`** (internal) — `RateLimitBudget` object for `POST /orders/:id/timeline/notes`; keyed by authenticated account.
-- **`ordersNoteLimiter`** (exported) — `RequestHandler` middleware produced by `buildRateLimiter(ORDERS_NOTE_BUDGET)`.
-- **`ordersRateLimits`** (exported) — `readonly RateLimitBudget[]` array containing both budgets; referenced by `module.ts`'s `rateLimits` declaration.
+- `ordersExportLimiter` — `RequestHandler` built from the export budget. Intended to throttle long cursor scans (up to `NODE_ORDER_EXPORT_MAX_ROWS` orders per export).
+- `ordersNoteLimiter` — `RequestHandler` built from the note budget. Intended to stop scripts from filling the timeline with staff notes.
+- `ordersRateLimits` — `readonly RateLimitBudget[]` of both budgets (export, then note), for declaration on `./module.ts`'s `rateLimits`.
+- `ORDERS_EXPORT_BUDGET` / `ORDERS_NOTE_BUDGET` (not exported) — spread the numeric data from `ordersRateLimitData.ordersExport` / `.ordersNote` (imported from `./rate-limits.generated`) and add `keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT` and `keyGenerator: accountIdOf`.
 
 ## Relationships
-
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — provides `buildRateLimiter` (the factory that turns a budget into a `RequestHandler`), `accountIdOf` (key generator), and `KEYED_BY_AUTHENTICATED_ACCOUNT` (keying strategy constant). This file is a *consumer* of that infrastructure module.
-- **`src/types/rate-limit-budget.ts`** (re-exported via `src/types/index.ts` as `@types`) — defines the `RateLimitBudget` type that both budget objects conform to.
-- **`src/modules/orders/module.ts`** — its `rateLimits` export references the `ordersRateLimits` array declared here, making this file the source of truth for the orders module's budget list.
-- **`src/modules/orders/routes.ts`** — applies `ordersExportLimiter` and `ordersNoteLimiter` as middleware on the corresponding route handlers.
-- **`src/modules/orders/tests/integration/note-rate-limit.test.ts`** — integration test that exercises `ordersNoteLimiter` against the live route.
+- `src/infrastructure/http/middlewares/rate-limit.ts` — provides `buildRateLimiter`, `accountIdOf` and `KEYED_BY_AUTHENTICATED_ACCOUNT`, all used here.
+- `src/types/rate-limit-budget.ts` (re-exported via `src/types/index.ts` as `@types`) — defines the `RateLimitBudget` type.
+- `src/modules/orders/module.ts` — lists `ordersRateLimits` as the module's `rateLimits`.
+- `src/modules/orders/routes.ts` — the export and note routes use the limiters (inferred from the route names in the doc comments).
+- `src/modules/orders/tests/integration/note-rate-limit.test.ts` — integration test for the note limit.
 
 ## Notes
-
-- Numeric limits (window, max requests) live in `./rate-limits.generated`, a generated file not checked in by hand. Editing the limits means regenerating that file, not editing this one.
-- Both budgets use the same keying strategy (`KEYED_BY_AUTHENTICATED_ACCOUNT` + `accountIdOf`); there is no per-IP fallback in this module.
-- The internal budget consts (`ORDERS_EXPORT_BUDGET`, `ORDERS_NOTE_BUDGET`) are **not** exported — only the built `RequestHandler`s and the combined `ordersRateLimits` array are public. Consumers should import the limiters, not the raw budget objects.
+- Both budgets are keyed per authenticated account, not per IP.
+- The numeric limits are not in this file; they come from the generated data module `./rate-limits.generated`.

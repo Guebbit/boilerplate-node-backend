@@ -1,42 +1,43 @@
 ---
 source: src/infrastructure/http/middlewares/rate-limit-store.ts
-sha256: 01c7920e8b95c4255408f1b79dc3204dc6e44b026a4062fe9f7af413d92a97bc
-generated_at: 2026-11-14T18:03:13.418289+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1f24b78a00846f89b9bf6cf747a5005459a66d2459202bccd60ca4273e40ddc1
+context_sha256: d15925f5dde1e9c4b032941d2c1e18fc7843cf3966defa7fc7d96fe238bcb267
+generated_at: 2026-11-22T02:51:32.992884+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/http/middlewares/rate-limit-store.ts
 
 ## Purpose
-
-Provides the counter stores that `express-rate-limit` uses to track per-client hits. When a `limits` Redis URL is configured, counters live in a shared Redis instance so the budget is consistent across cluster workers and replicas; otherwise it falls back to a per-process `MemoryStore`. The module also implements a circuit breaker for Redis outages and an escalating-lockout wrapper that doubles the lockout window on repeated violations.
+Decides where the rate limiters keep their counters. `express-rate-limit`'s default in-process `Map` gives each process its own budget (so the effective budget becomes `budget × processes`). This file builds stores backed by a dedicated `limits` Redis instance, making it a single budget across processes, with memory fallbacks when Redis is unavailable. The limits Redis is a separate instance from the response cache, so cache-key floods cannot evict counters.
 
 ## Key elements
-
-- **`SyncInitStore`** (type export) — A `Store` variant whose `init` is synchronously typed, avoiding floating-promise lint noise at call sites.
-- **`lazyRedisStore`** — Wraps `rate-limit-redis`'s `RedisStore` so the Lua-script connection is opened on the first `increment`, not at module import. Includes a load-bearing `.catch` that discards the failed store and logs the error.
-- **`failoverStore`** — Routes every store operation through a process-wide circuit breaker (`store-breaker.ts`). On Redis failure it delegates to either a `MemoryStore` (`onStoreError: 'memory'`) or rejects so the middleware can pass the request (`onStoreError: 'pass'`). Increments the `rateLimitStoreFallbackTotal` metric on each fallback.
-- **`plainStore`** — Factory that returns a `MemoryStore` (tracked in `memoryStores` for reset) when no Redis URL is set, or a `failoverStore` wrapping a `lazyRedisStore` when it is.
-- **`escalatingStore`** (implied by `Escalation` interface and surrounding code) — Builds one `plainStore` per escalation level, each with its own `windowMs × 2^level`, plus a strike-count store. A key that repeatedly hits the cap is locked at progressively longer windows.
-- **`resetMemoryRateLimitCounters`** (export) — Resets every in-process `MemoryStore` created by this module; used by the demo `POST /__test/restore` route to clear spent budgets after a reseed.
-- **`warnPerProcessCounting`** — Logs an `error`-level message (once per budget) when running in cluster mode with >1 worker and no `limits` Redis, because the effective budget is silently multiplied by the worker count.
-- **`liveHits`** — Returns `totalHits` from a `ClientRateLimitInfo` record only if the window hasn't expired, preventing `MemoryStore` from reporting stale entries past their reset time.
+- `SyncInitStore` (type): a `Store` whose `init` is typed as synchronous, avoiding floating-promise warnings.
+- `BREAKER_WINDOW_MS` / `breaker`: a single process-wide breaker (30 s window, from `createBreaker`). After a store error, all budgets skip Redis until one request probes it again.
+- `lazyRedisStore(namespace, url)`: wraps `RedisStore` (`rate-limit-redis`) and constructs it only on the first `increment`, so importing the module makes no connection. It replays the `Options` given to `init` and keys are prefixed `${limitsKeyPrefix()}:${namespace}:`. The `.catch()` on its `init` logs the error and drops the failed store so the next request builds a fresh one.
+- `failoverStore(namespace, primary, onStoreError)`: routes each operation to Redis through the breaker. On failure or an open breaker it increments `rateLimitStoreFallbackTotal` and applies the budget's `onStoreError` policy:
+  - `memory`: count in a local `MemoryStore`. This is the default, since a security control fails secure.
+  - `pass`: reject, so `passOnStoreError` lets the request through. Reserved for the browsing brake.
+- `memoryStores` / `resetMemoryRateLimitCounters()` (exported): tracks every in-process `MemoryStore` built by `plainStore` and empties them all. Used by the demo's `POST /__test/restore` (demo profile only).
+- `plainStore(namespace, onStoreError)`: returns a `MemoryStore` when no limits URL is configured, otherwise a `failoverStore` over a `lazyRedisStore`.
+- `liveHits(record)`: returns a record's hit count, or 0 once its window has ended. This matters because `MemoryStore#get` can return expired entries before its sweep runs.
+- `Escalation` (interface, exported): `{ limit, doublings }`.
+- `escalatingStore(namespace, onStoreError, escalation)`: a store whose lockout doubles each time a key hits the cap again. It uses one `plainStore` per level (window `windowMs × 2^level`, namespace `:x<level>`) plus a `:strikes` store whose window outlasts the longest lockout. `lockedLevel` finds the highest level at which the key's live hits exceed the limit, and a `levelOf` helper (cut off in the source shown) chooses the counting level. Level is recomputed from counters on each call, so there is no per-key memory to grow.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/limits-redis.ts`** — Supplies `limitsRedisUrl()`, `limitsKeyPrefix()`, and `sendToLimits()` (the `sendCommand` binding for `RedisStore`).
-- **`src/infrastructure/http/middlewares/store-breaker.ts`** — Provides `createBreaker`; the breaker instance is module-level (one per process) and gates every Redis-backed store operation.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — The middleware that calls `init`/`increment`/`decrement`/`get` on the stores built here.
-- **`src/infrastructure/observability/metrics-rate-limit.ts`** — `rateLimitStoreFallbackTotal` is incremented on every fallback hit.
-- **`src/infrastructure/runtime/config.ts`** / **`src/infrastructure/runtime/cluster-policy.ts`** — `clusterConfig()` and `workerTarget()` are read by `warnPerProcessCounting` to detect the multi-worker-without-Redis condition.
-- **`src/types/rate-limit-budget.ts`** — `RateLimitBudget` type defines `onStoreError` and other budget fields consumed by `plainStore`/`failoverStore`.
-- **`scenarios/support/demo.ts`** — Calls `resetMemoryRateLimitCounters` during the demo restore flow.
-- **`tests/unit/infrastructure/http/middlewares/rate-limit-escalation.test.ts`** — Unit-tests the escalating-lockout store logic.
+- `src/infrastructure/adapters/limits-redis.ts`: supplies `limitsRedisUrl`, `limitsKeyPrefix`, `buildLimitsClient` and `sendToLimits`, which is the command channel `RedisStore` uses.
+- `src/infrastructure/adapters/redis.ts`: `closeRedisClient` is imported here.
+- `src/infrastructure/adapters/cache.ts`: `drainMatchingKeys` is imported here. (The comment mentions `clearRateLimitCounters` for Redis counters.)
+- `src/infrastructure/adapters/logger.ts`: logs store initialisation failures.
+- `src/infrastructure/http/middlewares/store-breaker.ts`: `createBreaker` provides the shared circuit breaker (`admit`, `succeeded`, `failed`).
+- `src/infrastructure/observability/metrics-rate-limit.ts`: `rateLimitStoreFallbackTotal` counter, labelled by namespace and pre-initialised to 0.
+- `src/types/rate-limit-budget.ts` (via `@types`): `RateLimitBudget['onStoreError']` sets the failure policy.
+- `src/infrastructure/http/middlewares/rate-limit.ts`: the limiter definitions that consume these stores.
+- `scenarios/apply.ts`, `scenarios/support/demo.ts` and `tests/integration/scenarios/demo-routes.test.ts` relate to the demo restore flow and `resetMemoryRateLimitCounters`.
+- Unit tests `tests/unit/infrastructure/http/middlewares/rate-limit-escalation.test.ts`, `rate-limit-store-clear.test.ts` and `rate-limit-store-selection.test.ts` cover escalation, clearing and store selection.
 
 ## Notes
-
-- The breaker window is fixed at **30 s**; it is long enough to absorb a Redis outage without adding the 1 s connect timeout to every request, and short enough to probe recovery within a minute.
-- `pass` failure policy is deliberately reserved for low-severity "browsing brake" budgets; the default (`memory`) keeps a security control active per-process. The code cites OWASP A10:2025 for this choice.
-- `MemoryStore` instances are tracked in a module-level `Set` (`memoryStores`) exclusively so `resetMemoryRateLimitCounters` can clear them; Redis stores are not in this set.
-- The `.catch` on the lazy `RedisStore.init` is **load-bearing**: without it, the rejected script-load promise would be re-awaited on every subsequent `increment`, leaving the limiter broken until a process restart. The handler nulls `inner` so the next request rebuilds a fresh store.
-- `drainMatchingKeys` from `src/infrastructure/adapters/cache.ts` and `closeRedisClient` from `src/infrastructure/adapters/redis.ts` are imported but their call sites fall in the truncated portion of the file (likely used in a cleanup/export path).
+- Nothing refuses to boot without the limits Redis. Copies cannot be detected from inside a process, so configuring it is the operator's job.
+- `lazyRedisStore` relies on `increment` always being the first call, since nothing decrements or resets a key it has not counted.
+- Dropping a failed `RedisStore` is deliberate: it caches the rejected script-load promise, which would otherwise leave the limiter open until restart.
+- Escalating budgets' level and strike stores are plain stores, so they get the same Redis and memory-fallback behaviour as flat budgets.

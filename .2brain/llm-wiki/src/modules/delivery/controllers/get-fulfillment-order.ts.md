@@ -1,32 +1,32 @@
 ---
 source: src/modules/delivery/controllers/get-fulfillment-order.ts
-sha256: f4682d2b3d4ebd3a607f2d5190b262e262c0c4eddddf2c213e183500707b4e7b
-generated_at: 2026-11-08T05:26:27.606414+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f4682d2b3d4ebd3a607f2d5190b262e262c0c4eddddf2c213e183500707b4e7b
+context_sha256: e3b5aee4df95678a1b188e65cab5b1d03dc13ff142e9e0e884f263071f565bce
+generated_at: 2026-11-22T04:45:27.851138+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/controllers/get-fulfillment-order.ts
 
 ## Purpose
-
-Thin Express handler for `GET /delivery/fulfillment-orders/:id`. It validates the route parameter, delegates to the delivery service, and maps the service result to an HTTP response. Exists as the single HTTP-facing entry point for fetching one fulfillment order (buyer-scoped or staff-visible, per the service layer).
+Express controller for `GET /delivery/fulfillment-orders/:id`. It returns a single fulfillment order, for the buyer who owns it and for staff who can see every order. The controller only handles HTTP concerns: ID validation, delegation to the delivery service, and response formatting.
 
 ## Key elements
-
-- **`getFulfillmentOrder`** (exported const) – Express route handler. Reads the `id` param via `requireId`, calls `deliveryService.getFulfillmentOrder(id, request.authContext)`, then either short-circuits on a refusal, sends a `successResponse`, or routes the error through `catchAs`.
+- `getFulfillmentOrder(request, response)`: the exported handler.
+  - Validates the `:id` param with `requireId`, using the not-found message key `delivery.fulfillment-order-not-found`. If validation fails it returns `Promise.resolve()` and does nothing more.
+  - Calls `deliveryService.getFulfillmentOrder(id, request.authContext)`.
+  - If `refused(response, result)` is true, it returns without sending anything further.
+  - Otherwise it sends `successResponse<FulfillmentOrder>(response, result.data)`.
+  - Rejections are handled by `.catch(catchAs(response, 'getFulfillmentOrder'))`.
 
 ## Relationships
-
-- **`@infrastructure/http/controller`** – Provides `catchAs` (error-to-response mapping) and `refused` (checks a result for an authorization/denial signal).
-- **`@infrastructure/http/ids`** – Provides `requireId`, which extracts the `:id` route param and responds 404 with a localized key if missing.
-- **`@infrastructure/http/response`** – Provides `successResponse`, the standard 200 JSON envelope.
-- **`../services`** (delivery services barrel) – Source of `deliveryService.getFulfillmentOrder`, the actual business logic and data access.
-- **`@types`** – Imports the `FulfillmentOrder` type used to type the response payload.
-- **`src/modules/delivery/routes.ts`** – Registers this handler on the `GET /delivery/fulfillment-orders/:id` path (implied by the module doc comment and standard Express routing).
+- `src/infrastructure/http/ids.ts`: provides `requireId`, which parses and validates the route ID.
+- `src/infrastructure/http/response.ts`: provides `successResponse` for the success payload.
+- `src/infrastructure/http/controller.ts`: provides `refused`, which handles a service result that was refused, and `catchAs`, which handles errors.
+- `src/modules/delivery/services/index.ts`: provides `deliveryService`, which does the lookup and the access decision.
+- `src/types/index.ts`: provides the `FulfillmentOrder` type, imported through the `@types` alias.
+- `src/modules/delivery/routes.ts`: the route file that wires this handler to the endpoint. It is a neighbor in the dependency graph, but nothing in this file shows how it is wired.
 
 ## Notes
-
-- The handler's parameter type is `{ id?: string }` (optional), but `requireId` makes it effectively required at runtime; the optionality is only to satisfy the type signature before extraction.
-- Auth context is read from `request.authContext` (set by upstream middleware) and forwarded to the service—this file performs **no** authentication of its own.
-- On early return (missing id) the function yields `Promise.resolve()` rather than `undefined`/`void`, keeping the return type uniformly `Promise<void> | void`.
-- The `catchAs` key is the literal string `'getFulfillmentOrder'`, which the controller helper presumably uses to select an error-response template.
+- The handler does not check ownership or staff access itself. It passes `request.authContext` to the service, which decides access. A refusal is passed through `refused`.
+- Every code path returns a Promise, including the early return on an invalid ID. The handler is not `async`.

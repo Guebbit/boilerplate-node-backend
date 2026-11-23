@@ -1,32 +1,33 @@
 ---
 source: src/modules/orders/tests/integration/order-number.test.ts
-sha256: 33d0c0ea8d7e05a167284bf12d98b56a0ab13601c8c1db92574ce578616ca150
-generated_at: 2026-11-08T07:06:48.181380+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 33d0c0ea8d7e05a167284bf12d98b56a0ab13601c8c1db92574ce578616ca150
+context_sha256: 4c8a48aaaa6efa2f94f531222b49b9e03f6e51eaa90b30bb952fad0200425f6b
+generated_at: 2026-11-22T06:30:20.663146+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/order-number.test.ts
 
 ## Purpose
-
-Integration test verifying that `GET /orders/{id}` returns the order number exactly as it was set at creation time. It runs against a real HTTP server with a fresh test database, confirming the field is persisted and surfaced unchanged.
+Integration test that checks the order number is exposed over real HTTP. It verifies that `GET /orders/{id}` returns the `orderNumber` that was stored when the order was created. The invoice's own number-and-date block is out of scope here. The module doc says it is covered in `src/modules/invoicing/tests/unit/emails.test.ts`.
 
 ## Key elements
-
-- **`setupTestDb()`** — called at module load to create/seed a clean test database before the suite runs.
-- **`describe('GET /orders/{id} — the order number on the response')`** — the single test block; one test case inside.
-- **`it('publishes the order number frozen at creation')`** — authenticates as `admin`, creates a product and an order (with `orderNumber: '2026-000041'`), issues a real HTTP `GET`, and asserts `response.body.orderNumber` equals the value supplied at creation.
+- `setupTestDb()`: called at module level to set up the test database for the suite.
+- `describe('GET /orders/{id} — the order number on the response')`: the single suite.
+- Test `publishes the order number frozen at creation`:
+  - Authenticates as `admin` with `authenticateAs('admin')`, which gives a `bearer` token and a `user`.
+  - Creates a product with `createProduct()`.
+  - Creates an order for that user with one item, built by `toOrderItem(product, 1)`, and a preset `orderNumber` of `'2026-000041'`.
+  - Calls `GET /orders/<id>` with the `Authorization` header set to the bearer token.
+  - Expects status `200` and `response.body.orderNumber` equal to `'2026-000041'`.
 
 ## Relationships
-
-- **`@tests/contract`** — imported for side effects (test contract / assertion setup).
-- **`@tests/setup-test-db`** — provides `setupTestDb`, which provisions the test database.
-- **`@tests/http`** — provides the `api()` HTTP client and `authenticateAs` helper used to make the authenticated request.
-- **`@modules/products/tests/factories`** — provides `createProduct`, used to build a valid product reference for the order item.
-- **`@modules/orders/tests/factories`** — provides `createOrder` and `toOrderItem`, used to construct the order fixture with a specific `orderNumber`.
+- `@tests/contract` is imported only for its side effects. Its contents are not visible here.
+- `@tests/setup-test-db` (`tests/support/setup-test-db.ts`) provides `setupTestDb`.
+- `@tests/http` (`tests/support/http.ts`) provides `api` (the HTTP client) and `authenticateAs` (auth helper).
+- `@modules/products/tests/factories` (`src/modules/products/tests/factories.ts`) provides `createProduct`.
+- `@modules/orders/tests/factories` (`src/modules/orders/tests/factories.ts`) provides `createOrder` and `toOrderItem`.
 
 ## Notes
-
-- The module JSDoc explicitly scopes this test to the **order's** number field. The invoice's number-and-date block is covered separately in `src/modules/invoicing/tests/unit/emails.test.ts` — don't extend this file for invoice concerns.
-- The order number is *supplied* by the test (`'2026-000041'`) rather than auto-generated, so the test verifies round-trip persistence, not generation logic.
-- Despite the "integration" label in the path, the assertion is a simple equality check on one field; there is no sequencing or numbering-algorithm logic under test here.
+- The test seeds `orderNumber` directly through the factory rather than generating it. It therefore checks that the value is returned unchanged, not how numbers are generated.
+- The `@tests/*` and `@modules/*` path aliases are used for imports.

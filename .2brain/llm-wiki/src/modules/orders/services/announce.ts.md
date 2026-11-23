@@ -1,35 +1,29 @@
 ---
 source: src/modules/orders/services/announce.ts
-sha256: 9e741429e12e2c12fe536e5670fa01b173f284a6dbf0675b1ccd27788ec5a969
-generated_at: 2026-11-08T06:55:54.701753+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 34380f86c12626ad367871f82328bab69cebe8ddf0c4b639349600c8e7b9965a
+context_sha256: de4002d70cecc75acabba8cc3eee2838a23cb9e2316fac9f9a69c874b8f0a1ba
+generated_at: 2026-11-22T06:18:37.027346+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/announce.ts
 
 ## Purpose
-
-Factory functions that build typed `OutboxAnnouncement` payloads for order lifecycle events. Each returned object is passed to `announceInTransaction` so the event row commits atomically with the corresponding status write (or not at all), guaranteeing per-order event ordering via a shared `aggregateId`.
+Builds the order events that ride the transactional outbox. Each status write passes one of these announcements to `announceInTransaction`, so the event row commits together with the write or not at all. The file only constructs `OutboxAnnouncement` objects. It does no I/O itself.
 
 ## Key elements
-
-- **`statusChangedEvent(orderId, from, to)`** — Builds an `ORDER_STATUS_CHANGED` announcement for a landed status transition.
-- **`createdEvent(orderId)`** — Builds an `ORDER_CREATED` announcement for a newly written order.
-- **`statusOverriddenEvent(orderId, from, to, at)`** — Builds an `ORDER_STATUS_OVERRIDDEN` announcement; serialises `at` to ISO-8601 in the payload and tags `mode: 'status'`. Written alongside the paired `statusChangedEvent` so downstream `delivery` can reconcile at the override's own instant.
-
-All three use `orderId` as the `aggregateId`, which is what gives per-order ordering across `created`, `status_changed`, and `canceled`.
+- `statusChangedEvent(orderId, from, to)` builds the `ORDER_STATUS_CHANGED` announcement with payload `{ orderId, from, to }`.
+- `createdEvent(orderId)` builds the `ORDER_CREATED` announcement with payload `{ orderId }`.
+- `statusOverriddenEvent(orderId, from, to, at)` builds the `ORDER_STATUS_OVERRIDDEN` announcement. Its payload is `{ orderId, from, to, at, mode: 'status' }`, with `at` serialised via `toISOString()`. It is written beside the matching `order.status_changed` so `delivery` can bring its shipments in step at the override's own instant.
+- `billingCorrectedEvent(orderId)` builds the `ORDER_BILLING_CORRECTED` announcement with payload `{ orderId }`.
 
 ## Relationships
-
-- **`src/modules/orders/events.ts`** — Supplies the event-name constants (`ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_STATUS_OVERRIDDEN`) used as the `name` field of each announcement.
-- **`src/kernel/outbox.ts`** — Provides the `OutboxAnnouncement<T>` return type; the produced objects are consumed by `announceInTransaction` (exported from that module) to persist the event row.
-- **`src/types/index.ts`** — Provides the `OrderStatus` type used in function signatures.
-- **`src/modules/orders/services/status.ts`** — Calls `statusChangedEvent` when a status write lands.
-- **`src/modules/orders/services/place.ts`** — Calls `createdEvent` when a new order is written.
-- **`src/modules/orders/services/override.ts`** — Calls `statusOverriddenEvent` (paired with `statusChangedEvent`) when an override lands.
+- **`src/kernel/outbox.ts`**: provides the `OutboxAnnouncement` type that every builder returns.
+- **`src/modules/orders/events.ts`**: provides the event name constants (`ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_STATUS_OVERRIDDEN`, `ORDER_BILLING_CORRECTED`). Each builder uses one as the announcement `name` and as its type parameter.
+- **`src/types/index.ts`**: provides the `OrderStatus` type for the `from` and `to` parameters.
+- **`billing.ts`, `override.ts`, `place.ts`, `status.ts`** (sibling services): these are graph neighbors, so they presumably call these builders. The file itself shows no import or call from them, so check those files to confirm which builder each one uses.
 
 ## Notes
-
-- `statusOverriddenEvent` serialises `at` via `.toISOString()` at call time; the payload stores a string, not a `Date`. Consumers should expect an ISO string.
-- The `mode: 'status'` field in the override payload distinguishes status-mode overrides from other override kinds; it is a literal, not derived from a constant.
-- The module is pure: no side effects, no I/O. All persistence is the caller's responsibility via the outbox.
+- Every event sets `aggregateId` to the order id. Per-order ordering therefore holds across `created`, `status_changed` and `canceled`.
+- The doc comment on `statusChangedEvent` mentions a `canceled` event, but this file defines no builder for it.
+- `statusOverriddenEvent` hardcodes `mode: 'status'` in its payload.

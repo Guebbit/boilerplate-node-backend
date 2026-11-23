@@ -1,36 +1,37 @@
 ---
 source: src/modules/stats/domain/range.ts
-sha256: fb8dcef344740868f397e8f2f8646d31b324249918c772f03c5ccf28e674e0f4
-generated_at: 2026-11-08T08:24:28.798297+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fb8dcef344740868f397e8f2f8646d31b324249918c772f03c5ccf28e674e0f4
+context_sha256: 156fd22ce7d9796743b5ad3a474db782b8a3009e9cbfb528b27876bb529f1c6a
+generated_at: 2026-11-22T07:51:03.087358+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stats/domain/range.ts
 
 ## Purpose
-
-Pure domain logic that validates a user-requested date range (two `YYYY-MM-DD` strings plus a bucket interval) against fixed rules and, on success, computes the calendar-day bucket boundaries the report will use. It also derives the immediately preceding period of equal length for comparison queries. All arithmetic is in calendar days, so it is timezone-independent.
+Defines which reporting periods a stats request may ask for. It is pure: bounds are counted in calendar days, so the rules behave the same in every time zone. It validates a `from`/`to` pair plus a bucket interval and expands it into the list of buckets the period touches.
 
 ## Key elements
-
-- **`MAX_RANGE_DAYS`** (731) — upper bound on the span of a single request (≈ 2 years).
-- **`MAX_BUCKETS`** (400) — upper bound on the number of bucket start days a request may produce.
-- **`RangeRefusal`** — union type (`'invalid-day' | 'out-of-order' | 'too-long' | 'too-many-buckets'`) identifying why a request was rejected.
-- **`CalendarRange`** — the validated result: `from`, `to`, `interval`, and the pre-computed `bucketStarts` array.
-- **`bucketStartsBetween(from, to, interval)`** — walks from the bucket containing `from` forward until past `to`, collecting every bucket start day. The first entry may fall before `from`.
-- **`checkRange({from, to, interval})`** — entry point. Parses the two date strings, then checks in order: valid dates → `from ≤ to` → span ≤ `MAX_RANGE_DAYS` → bucket count ≤ `MAX_BUCKETS`. Returns `{ range }` or `{ refusal }`.
-- **`previousOf(range)`** — returns the `{from, to}` pair of the same length ending the day before `range.from`. Does **not** include `interval` or `bucketStarts`.
+- `MAX_RANGE_DAYS` (731): longest period one request may cover (about two years).
+- `MAX_BUCKETS` (400): most buckets one request may return. It refuses, for example, a day-by-day chart over two years.
+- `RangeRefusal`: union `'invalid-day' | 'out-of-order' | 'too-long' | 'too-many-buckets'`.
+- `CalendarRange`: an accepted period with `from`, `to`, `interval` and `bucketStarts`. The first bucket start may fall before `from`.
+- `bucketStartsBetween(from, to, interval)`: starts at the bucket containing `from` and steps with `nextBucket` while the cursor is still within `to`. It returns each bucket's first day.
+- `checkRange({ from, to, interval })`: parses the `YYYY-MM-DD` strings and returns `{ range }` or `{ refusal }`. Checks run in this order:
+  1. Either day fails to parse: `invalid-day`.
+  2. Fewer than 1 inclusive day: `out-of-order`.
+  3. More than `MAX_RANGE_DAYS`: `too-long`.
+  4. More than `MAX_BUCKETS` buckets: `too-many-buckets`.
+- `previousOf(range)`: returns the period of equal length that ends the day before `range.from`. Used for comparison periods.
 
 ## Relationships
-
-- **`src/modules/stats/domain/calendar.ts`** — provides all the calendar primitives this module composes: `parseDay`, `addDays`, `inclusiveDays`, `bucketStart`, `nextBucket`, and the `CalendarDay` type.
-- **`src/types/index.ts`** — source of the `StatsInterval` type used in signatures throughout this file.
-- **`src/modules/stats/domain/index.ts`** — barrel re-export; makes this module's API available to the rest of the stats domain.
-- **`src/modules/stats/services/range.ts`** — service layer that calls `checkRange` / `previousOf` and orchestrates the report-fetching flow around the validated range.
-- **`src/modules/stats/tests/unit/range.test.ts`** — unit tests covering the validation rules and bucket-start computation.
+- Imports the day arithmetic and parsing helpers from `./calendar` (`addDays`, `bucketStart`, `inclusiveDays`, `nextBucket`, `parseDay`, and the `CalendarDay` type). It does no date math of its own.
+- Imports the `StatsInterval` type from `@types` (`src/types/index.ts`).
+- Part of the stats domain layer. `src/modules/stats/domain/index.ts` is its neighbor in the same layer.
+- `src/modules/stats/services/range.ts` is a neighbor in the service layer. The domain file is pure, so the service layer presumably adds the non-pure parts.
+- `src/modules/stats/tests/unit/range.test.ts` holds the unit tests for this file.
 
 ## Notes
-
-- `bucketStarts` in `CalendarRange` may contain a day **before** `range.from` (the bucket boundary that contains `from`). Consumers must not assume `bucketStarts[0] === from`.
-- `previousOf` intentionally returns a bare `{from, to}` pair rather than a full `CalendarRange`; callers that need buckets must re-run `bucketStartsBetween` or pass the pair back through `checkRange`.
-- Validation is short-circuit and ordered: the refusal reason reflects the *first* rule that fails, not all violations.
+- `checkRange` returns a discriminated result rather than throwing. Callers must test for `range` or `refusal`.
+- The bucket-count check runs only after the day-length check passes. `bucketStartsBetween` is therefore only ever called on a period of at most 731 days.
+- Because bucket starts are aligned to the interval, a period can produce one more bucket than its length alone suggests.

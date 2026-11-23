@@ -1,28 +1,30 @@
 ---
 source: src/modules/orders/tests/unit/timeline.test.ts
-sha256: 51446c6568924137950872467b38186bfe84a994f7f891dd274b7a62c0b80ca9
-generated_at: 2026-11-08T07:14:59.245198+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8093cf652d3eb48d691373c7069b77e7129038166cfe2d9b970784a47cb0515c
+context_sha256: 1fe7f992c2dfa96ec21462772b5d3585d2465af7055dfbc4aa4c638c498a002a
+generated_at: 2026-11-22T06:38:55.937860+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/timeline.test.ts
 
 ## Purpose
-
-Unit test that pins the exact set of timeline event types marked as staff-only (invisible to buyers). The list is hardcoded rather than derived dynamically so that promoting or demoting a type produces a visible, reviewable diff instead of a silent side effect.
+Unit test that pins down the timeline type → audience table. It asserts exactly which timeline row types are hidden from the buyer (staff-only). The staff-only set is spelled out in the test, so moving a type across the buyer/staff line shows up as an explicit diff rather than a silent side effect.
 
 ## Key elements
-
-- **`TIMELINE_AUDIENCE`** (imported) — the type→audience mapping under test; the single source of truth for which rows a buyer may see.
-- **`describe("the timeline audience table")` / `it("keeps exactly these types from the buyer")`** — filters `TIMELINE_AUDIENCE` for entries whose audience is `'staff'`, extracts the type names, sorts them (`.toSorted()`), and asserts equality against a hardcoded 10-item list: `address_corrected`, `dispute_closed`, `dispute_opened`, `fulfillment_held`, `fulfillment_released`, `note_added`, `refund_canceled`, `refund_failed`, `refund_reversed`, `status_overridden`.
+- `describe('the timeline audience table')` with one test, `keeps exactly these types from the buyer`.
+- The test filters `Object.entries(TIMELINE_AUDIENCE)` to entries whose audience is `'staff'`, sorts the type names with `toSorted()`, and compares them with `toEqual` to a hard-coded list of 11 types:
+  - `address_corrected`, `billing_corrected`
+  - `dispute_closed`, `dispute_opened`
+  - `fulfillment_held`, `fulfillment_released`
+  - `note_added`
+  - `refund_canceled`, `refund_failed`, `refund_reversed`
+  - `status_overridden`
 
 ## Relationships
-
-- **`src/modules/orders/domain/index.ts`** — barrel re-export; the test imports `TIMELINE_AUDIENCE` through this module (`'../../domain'`).
-- **`src/modules/orders/domain/timeline.ts`** — where `TIMELINE_AUDIENCE` is defined; this test reads the value but does not mutate or extend it.
+- Imports `TIMELINE_AUDIENCE` from `../../domain` (`src/modules/orders/domain/index.ts`). That barrel presumably re-exports it from `src/modules/orders/domain/timeline.ts`, where the table lives.
 
 ## Notes
-
-- **Completeness is not this test's job.** The module doc explicitly defers "every type in the contract appears in the table" to `contract/timeline-variants.contract.test.ts`. This test only asserts *which* entries are staff-only, not that the set is exhaustive.
-- Uses `.toSorted()` (ES2023 immutable sort) rather than mutating `.sort()`; requires a runtime or polyfill that supports it.
-- Adding or removing a staff-only type requires updating **both** the domain table and this hardcoded list — the test will fail until the list is amended, making the policy change explicit in the diff.
+- The test only checks the staff-only subset. It does not check that every type is present, or that the remaining types are buyer-visible. Per the module comment, checking that the table names every type the contract defines is left to a separate contract test.
+- Adding a new staff-only type, or changing an existing type's audience, requires updating the expected list here, and the test fails until it is updated.
+- The result is sorted before comparison, so the order in `TIMELINE_AUDIENCE` does not matter.

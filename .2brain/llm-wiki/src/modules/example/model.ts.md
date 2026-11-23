@@ -1,48 +1,36 @@
 ---
 source: src/modules/example/model.ts
-sha256: 530b6fc76c169fd335cbd15935ac9dae6f0de7d67e499d69ad5ee7c3e1572cfc
-generated_at: 2026-11-14T19:58:57.601543+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 27d4fadfa606a1f4023b1bb4984f13cb03b705e02e2bab03ab934f15c4a2bb3d
+context_sha256: 4531aecd6b5a12b78ba386c14c048a1366d3a01dbcbf27b59a03daf54e1f1971
+generated_at: 2026-11-22T05:09:25.994226+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/model.ts
 
 ## Purpose
-
-Defines the Mongoose schema, document type, and shared wire-shape transform for the **example** resource (a note with an owner, a status, and an optional cover). It is the single source of truth for what a row looks like in the database, on the wire, and as a contract type—used by both the repository and the presenter.
+Defines the Mongoose schema, the single `Example` collection and the wire-shape transform shared by the example module's repository and presenter. An example is a note with an owner, a status and an optional cover image.
 
 ## Key elements
-
-- **`ExampleRow`** — `Omit<Example, 'ownerName'>`; the shape every repository read returns (everything except the presenter-only `ownerName`).
-- **`ExampleDocument`** — Mongoose document interface. Stores `userId` as `Types.ObjectId`, dates as native `Date`, and carries a document-only `pendingImageKey` (quarantine key for the image digest pipeline) that never appears on the wire.
-- **`exampleSchema`** — Mongoose `Schema` with fields: `userId` (ObjectId, required), `title` (fallback-language string), `body`, `status` (enum from `ExampleStatus`, defaults to `draft`), `publishedAt`, `imageUrl`, `thumbnailUrl`, `pendingImageKey`. Timestamps enabled.
-- **`exampleSchema.plugin(revisionPlugin)`** — attaches the edit-counter plugin that backs `ETag` / `If-Match`.
-- **Index** `{ userId: 1, createdAt: -1 }` — supports the "one owner's examples, newest first" list query.
-- **`applyExampleTransform`** — wraps `applySerialization`; maps `_id`→`id`, drops `__v` and `pendingImageKey`, and stringifies `userId`. Exported so lean query results (which bypass `toJSON`) use the same logic.
-- **`exampleModel`** — the Mongoose `Model<ExampleDocument, ExampleModel>` entrypoint (`model('Example', exampleSchema)`).
-- **`exampleTranslationFieldRules`** — Zod `strictObject` declaring `title` as the sole translatable field (optional, validated by `trimmedExampleTitle`); used by the `translatables` registry.
+- `ExampleRow`: the contract's `Example` minus `ownerName`, which only the presenter fills from `users`. Every repository read returns this shape.
+- `ExampleDocument`: the Mongoose document interface. It overrides `id`, `userId` (stored as an `ObjectId`) and the date fields (native `Date`). It also adds the document-only `pendingImageKey`, the quarantine key of an upload still waiting for its image digest job.
+- `ExampleModel`: `Model<ExampleDocument>`.
+- `exampleSchema`: the schema, with `timestamps: true`.
+  - Fields: `userId` (required), `title` (required), `body` (required), `status` (enum from `ExampleStatus`, default `draft`), `publishedAt`, `imageUrl`, `thumbnailUrl` and `pendingImageKey`.
+  - Plugin: `revisionPlugin`, which provides the edit counter behind `ETag` / `If-Match`.
+  - Index: `{ userId: 1, createdAt: -1 }`, for the list screen (one owner's examples, newest first).
+- `applyExampleTransform`: built with `applySerialization`. It maps `_id` to `id`, drops `__v`, omits `pendingImageKey` and turns `userId` into a string. It is exported so lean results, which bypass `toJSON`, go through the same logic.
+- `exampleModel`: the registered `'Example'` model.
+- `exampleTranslationFieldRules`: a strict zod object with an optional `title` using `trimmedExampleTitle`. It is the `fieldRules` for the `translatables` registry. Because `title` is not nullable, the fallback title can't be cleared through the translator.
 
 ## Relationships
-
-- **`src/types/index.ts`** — imports `ExampleStatus` and `Example`; `ExampleRow` is a structural subset of `Example`.
-- **`src/modules/example/title-rule.ts`** — imports `trimmedExampleTitle` for the translation field rule.
-- **`src/infrastructure/persistence/revision-plugin.ts`** — plugin registered on the schema; provides the revision counter for optimistic concurrency.
-- **`src/infrastructure/persistence/serialize.ts`** — `applySerialization` is the factory behind `applyExampleTransform`.
-- **`src/modules/example/repository.ts`** — consumes `exampleModel` and `applyExampleTransform` for all reads/writes.
-- **`src/modules/example/presenter.ts`** — consumes `ExampleRow` and fills in `ownerName` (looked up from `users`).
-- **`src/modules/example/factories.ts`** — uses the model/schema to construct example instances in app code.
-- **`src/modules/example/module.ts`** — wires the model into the module's service graph.
-- **`src/modules/example/index.ts`** — re-exports the public API of this module.
-- **`src/modules/example/services/cover.ts`** — reads/writes `imageUrl`, `thumbnailUrl`, and `pendingImageKey`.
-- **`src/modules/example/services/transition.ts`** — mutates `status` and `publishedAt`.
-- **`src/modules/example/services/owner.ts`** — reads `userId` for ownership checks.
-- **`src/modules/example/services/crud.ts`** — consumes `exampleModel` and `ExampleRow` for create/read/update/delete operations.
-- **`src/modules/example/tests/unit/schema-contract.test.ts`** — asserts the schema contract (fields, types, defaults).
-- **`src/modules/example/tests/factories.ts`** — builds fixture `ExampleDocument` instances.
+- Imports `revisionPlugin` from `src/infrastructure/persistence/revision-plugin.ts` and `applySerialization` from `src/infrastructure/persistence/serialize.ts`.
+- Imports `trimmedExampleTitle` from `./title-rule` and `ExampleStatus` / `Example` from `@types` (`src/types/index.ts`).
+- `./repository` uses `applyExampleTransform` for lean results.
+- The presenter shares the wire-shape transform and supplies `ownerName`.
+- The remaining neighbors (`factories.ts`, `index.ts`, `module.ts`, the `services/*` files and the tests) are related through the dependency graph. This file's content doesn't show how they use it.
 
 ## Notes
-
-- `title` in the schema is the **fallback-language** value only. Other languages live in `locales` translation rows; a fallback-language write is copied back here by `repository.writeTranslatedFields`.
-- `pendingImageKey` is document-only bookkeeping (image digest pipeline). It is explicitly `omit`-ed in `applyExampleTransform` and must never leak into API responses.
-- `ExampleDocument` overrides the contract's string dates with native `Date` types; the serialization layer converts them back to ISO strings on the way out.
-- `applyExampleTransform` is exported specifically because Mongoose **lean** results skip `toJSON`; the repository must call it manually on lean queries.
+- `title` holds only the fallback-language title. Other languages live in translation rows in `locales`. A fallback-language write is copied back to `title`.
+- Dates are native `Date` objects in Mongoose and become ISO strings in the JSON response.
+- `pendingImageKey` is persisted but never appears on the wire.

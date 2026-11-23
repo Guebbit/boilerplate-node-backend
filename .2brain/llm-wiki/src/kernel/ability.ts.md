@@ -1,41 +1,44 @@
 ---
 source: src/kernel/ability.ts
-sha256: 8b027cff25844960a1752219fb1f41f0a26ee082b6b5341ff8d8b71b23202916
-generated_at: 2026-11-14T18:20:27.016851+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 72b63ca79447b059a419e4c28ca86272bc071efde55bb2f488329278c436f793
+context_sha256: 7516f0b52d615454beab0afddfee77b44eaa16ec2e63f65111af7085b7b01f7e
+generated_at: 2026-11-22T03:11:28.775096+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/kernel/ability.ts
 
 ## Purpose
-
-Builds a per-request CASL `Ability` (a `MongoAbility`) from a caller's declared permission rules and their contextual conditions. Every authorization question in the system—route guards, per-row checks, permission-set membership—is answered against this single object, so that the server's read filter and the browser's UI greying derive from the same ruleset rather than parallel copies.
+Turns a resolved `Caller` into a CASL `Ability`, built per request from the declared permission rules the caller's role holds and the conditions those rules carry. It also provides the route-guard and per-row questions asked of that ability. CASL is used so rules can compile into database queries and be packed for the browser. The rule keys come from `shared/authorization-keys.generated.yaml`, which the PHP twin also reads.
 
 ## Key elements
-
-- **`Ability`** (type) — alias for `MongoAbility`; the canonical shape returned by the builder.
-- **`buildAbility(caller)`** — the main entry point. Filters the caller's rules to their scope, resolves `$caller.<field>` placeholders, injects `tenantId` for tenant-scope callers, and registers each rule (plus its implied plain actions) via CASL's `can()`. System-actor rules are registered unconditionally.
-- **`holds(caller, action, subject)`** — boolean check used by route guards. Answers "does this caller hold a rule for this action on this subject?", also matching a staff action (`display`) as answering its implied plain action (`read`).
-- **`holdsSet(caller, setName)`** — true when the caller holds every rule in a named permission set (or is unrestricted).
-- **`heldRules(caller)`** — returns a `ReadonlySet<PermissionRuleId>` of the caller's effective rule IDs; consumed by the role-matrix docs generator.
-- **`permitsOnRows(caller, subjectName, actions)`** — returns a row-level predicate function that asks the built ability about each individual row, so modules never restate ownership conditions in code.
-- **`resolveConditions`** (internal) — substitutes `$caller.*` placeholders; returns `undefined` (→ rule dropped) when any placeholder has no value, enforcing fail-closed.
-- **`effectiveRules`** (internal) — keeps only rules whose `scope` matches the caller's scope, making cross-scope rules inert by construction.
-- **`IMPLIED_BY`** (internal) — inverse of `IMPLIED_ACTIONS`; maps a plain action to the staff action(s) that also answer it.
+- `Ability` — type alias for `MongoAbility`.
+- `buildAbility(caller)` — builds the ability from the caller's effective rules.
+  - It emits `can(action, subject, conditions)` for each rule, and also for each action the rule implies (`IMPLIED_ACTIONS`, e.g. `display` also answers `read`).
+  - Tenant-scope rules get `tenantId` from the caller, never from the keys file or a request parameter.
+  - The SYSTEM actor (`caller.system`) gets rules with no conditions.
+  - It never emits `can('manage', …)`.
+- `holds(caller, action, subject)` — the route-guard question: does the caller hold a rule for that action on that subject? It checks the literal held rule ids, not CASL's collapsed answer. A plain action is also satisfied by a staff action that implies it, via the inverse map `IMPLIED_BY`.
+- `holdsSet(caller, setName)` — true if the caller holds every rule in a named `PERMISSION_SETS` entry. `unrestricted` callers hold every set; an unknown set name is held by nobody.
+- `heldRules(caller)` — returns the `ReadonlySet` of rule ids the caller effectively holds.
+- `permitsOnRows(caller, subjectName, actions)` — builds the ability once and returns a function mapping a row to a `{action: boolean}` record. It tags the row with `subject()` and the caller's `tenantId`.
+- Internal helpers:
+  - `resolveConditions` substitutes `$caller.<field>` placeholders.
+  - `effectiveRules` filters the caller's permissions to declared rules in the caller's scope.
 
 ## Relationships
-
-- **`src/kernel/permissions.ts`** — sole source of rule metadata: `findRule`, `isRuleId`, `ruleId`, `IMPLIED_ACTIONS`, `PERMISSION_SETS`, and all rule/subject types are imported from here. This file never defines a rule; it only interprets them.
-- **`src/kernel/access/query.ts`** — the compiled ability filter is consumed there to produce Mongo query conditions. Both files share the fail-closed convention: an unresolved condition becomes "denied," never a widened match.
-- **`src/kernel/middlewares/authorizations.ts`** — calls `holds` (or `buildAbility`) as the route-level gate before a handler runs.
-- **`src/kernel/staff-read.ts`** — builds on the `display`/`read` implied-action distinction that this file encodes; staff reads compose an own-rows rule with a staff rule into one filter.
-- **`scripts/docs/generate-role-matrix.ts`** — reads `heldRules` to render the role → rule matrix documentation.
-- **`scripts/contracts/permission-security.ts`** — contract-level validation of the declared rules that this file interprets at runtime.
-- **Module service files** (`src/modules/access/services/grants.ts`, `src/modules/access/services/protection.ts`, `src/modules/api-keys/services/*`, `src/modules/delivery/services/*`, `src/modules/account/session/account-view.ts`) — consume `holds`, `holdsSet`, and `permitsOnRows` to gate their respective actions without re-encoding ownership logic.
+- Imports `findRule`, `isRuleId`, `ruleId`, `IMPLIED_ACTIONS`, `PERMISSION_SETS` and related types from `@kernel/permissions` (`src/kernel/permissions.ts`), which holds the declared rules.
+- It is paired with `src/kernel/access/query.ts`:
+  - `src/kernel/access/query.ts` compiles the ability's rules into read filters; `holds` and `permitsOnRows` are the guard and per-row counterparts.
+  - Both fail closed on an unresolved value.
+  - `src/kernel/access/query.ts` also owns the `userId` coercion that the system actor's unconditional rules avoid.
+- `heldRules` is documented as what the role-matrix docs generator reads (`scripts/docs/generate-role-matrix.ts`).
+- The remaining neighbors are in the graph but this file shows no direct interaction with them. They are the authorization middleware, the contract script, the staff-read helper, and the access, api-keys, delivery and account modules.
 
 ## Notes
-
-- `manage` is deliberately **never** emitted as a `can()` rule. In CASL, `can('manage', …)` means "any action at all," which would be an unbounded grant. No declared rule uses it, so asking the ability for it always answers `false`.
-- The SYSTEM actor's rules are registered with **zero conditions**. This is load-bearing: the system id is the literal string `'system'`, and resolving an own-rows condition against it would bake that string into a Mongo filter as if it were an ObjectId.
-- An administrator is **not** exempt from conditions. Every signed-in account holds the own-rows rules of its audience; the only difference is which rule IDs appear in `caller.permissions`.
-- The `$caller.` placeholder prefix is the sole coupling point between the shared keys file (`shared/authorization-keys.generated.yaml`, read byte-for-byte by the PHP twin) and the runtime ability. If a placeholder has no value in the caller, the rule is dropped entirely rather than substituted with `null`/empty—this prevents `{ userId: null }` from matching unowned rows.
+- **Fail closed:** if a `$caller.<field>` placeholder is undefined, null or empty, the whole rule is dropped. Otherwise `{ userId: null }` would match every unowned row.
+- **Staff vs. plain actions:** `read` means own rows and `display` means all rows. Guards should ask for the staff action, because every signed-in account holds the plain one.
+- **No `manage`:** every rule names a declared rule's own action and subject. `AuditLog` declares only a read key, so even `admin` cannot write it. `admin` has no shortcut and lists every declared tenant set by name.
+- **Scope filtering:** a rule from the other scope is dropped, so a role seeded with one is inert.
+- **Admin is not exempt:** only the SYSTEM actor skips conditions. An administrator still gets the own-rows conditions.
+- `permitsOnRows` always sets `tenantId` from `caller.tenantId`, so its answers assume the subject is tenant-scoped.

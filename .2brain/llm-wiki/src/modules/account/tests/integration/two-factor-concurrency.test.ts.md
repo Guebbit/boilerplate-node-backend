@@ -1,51 +1,41 @@
 ---
 source: src/modules/account/tests/integration/two-factor-concurrency.test.ts
-sha256: f7016cd203d99b065c364032d16aa75588d5bf6f9f0f0127c8bba836b80a35ae
-generated_at: 2026-11-14T19:12:59.565091+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 03972dbe1e9b377065aaca023775ef366e25d05db830d1b5f1d317d0c576bae8
+context_sha256: 261acbe6a7e4f559791332ff398321b98cba77a34c295f1798ec20b80014b1d9
+generated_at: 2026-11-22T04:02:55.430603+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/two-factor-concurrency.test.ts
 
 ## Purpose
-
-Integration tests that verify one-time-use two-factor secrets (backup codes, emailed login codes, step-up codes) are spent exactly once and that wrong-guess counters hold regardless of request interleaving. Every test fires parallel HTTP requests through the real app (supertest) and asserts invariants that must hold under **any** scheduling order, not just the one where a single request happens to win.
+Integration tests, run against the real app and test database, that fire parallel requests at the two-factor flows. They check that every single-use secret (backup code, mailed 2FA code, step-up code) is spent only once, and that every wrong guess is counted. Each assertion is meant to hold under any request interleaving, not only when one request happens to win.
 
 ## Key elements
-
-- **`mockOutbox`** – Module-level array that captures every email the app queues. The mailer adapter is replaced via `jest.mock` so `enqueueEmail` pushes into this array instead of sending.
-- **`mailedCode(template)`** – Reads the newest entry in `mockOutbox` for a given template and returns its `data.code` string.
-- **`confirmEmail(bearer, code)`** – Helper for `POST /account/2fa/methods/email/confirm`.
-- **`signedIn()`** – Creates a user with a verified email, logs in via the API, returns `{ user, bearer }`.
-- **`armedAccount()`** – Builds on `signedIn()`; sets up and confirms a TOTP factor, returning the backup-code set from the confirm response.
-- **`challengeFor(userId)`** – Mints a fresh login challenge at the service level (one per racing request) using `buildLoginChallenge`.
-- **`loginWith(userId, code)`** – `POST /account/login/2fa` with a freshly-minted challenge and a backup code.
-- **`storedCodes(userId)`** – Reads the current `twoFactorBackupCodes` array from the repository.
-- **`oauthOnlySession()`** – Creates a password-less user and starts a session tagged `['google']`, returning a bearer token.
-- **`reauthWith(bearer, code)`** – `POST /account/reauth` with an emailed step-up code.
-- **`describe` blocks** – Four groups: backup-code spend, mailed 2FA code, step-up code, and first backup-code-set generation under parallel factor confirmation.
+- `mockOutbox` / `jest.mock('@infrastructure/adapters/mailer')`: replaces `enqueueEmail` so queued mails are captured. This is the only place a delivered code exists in the clear. The `mock*` prefix is required because `jest.mock` is hoisted.
+- `beforeEach`: sets `NODE_MAIL_TRANSPORT` to `'outbox'` (a mailed code is offered only where mail reaches a person) and clears the outbox.
+- `mailedCode(template)`: returns the digits of the newest queued mail of that template. It throws if none was queued.
+- `signedIn()`: creates a verified user, logs in through the API, and returns the user and a `Bearer` header.
+- `armedAccount()`: `signedIn()` plus TOTP setup and confirm. It returns the backup codes that confirm handed out, and calls `forgetSessionEpoch`.
+- `challengeFor(userId)`: mints a fresh login challenge at the service level through `buildLoginChallenge`, one per racing request.
+- `loginWith(userId, code)`: `POST /account/login/2fa` on its own fresh challenge.
+- `storedCodes(userId)`: reads the stored backup-code digests fresh.
+- `confirmEmail`, `oauthOnlySession`, `reauthWith`: helpers for the email-confirm route, a passwordless OAuth-style session (`startSession(..., ['google'])` plus `createAccessToken`), and `POST /account/reauth`.
+- Test groups:
+  - **Backup code in parallel.** The same code twice succeeds once and leaves 9 stored. Two different codes both succeed and leave 8. A login racing a regeneration leaves exactly the regenerated set.
+  - **Mailed 2FA code.** The same code twice succeeds once. `DELIVERED_CODE_MAX_ATTEMPTS + 3` parallel wrong guesses burn the code, so the right code then gets 422.
+  - **Step-up (reauth) code.** The same code twice succeeds once. Wrong guesses are counted, with the same ceiling check. Sending or spending a code does not change the account's `versionOf`.
+  - **First backup-code set.** Confirming TOTP and email in parallel stores one set, and every code handed out hashes to a stored digest.
 
 ## Relationships
-
-- **`src/modules/account/two-factor/index.ts`** – Re-exports `hashBackupCode` and `DELIVERED_CODE_MAX_ATTEMPTS`, both used to verify stored digests and to size the wrong-guess ceiling tests.
-- **`src/modules/account/services/two-factor-challenge.ts`** – `buildLoginChallenge` is called directly (service-level) to mint a unique challenge per parallel `loginWith` call.
-- **`src/modules/account/services/index.ts`** – Source of the `twoFactorService` import; used to enqueue a login code for the mailed-code tests.
-- **`src/modules/account/session/jwt.ts`** – `startSession` + `createAccessToken` build the OAuth-only bearer token used in the step-up and reauth tests.
-- **`src/modules/users/repository.ts`** – `userRepository` is read (not written) after each parallel burst to inspect stored backup-code digests, count, and account version.
-- **`src/modules/users/tests/factories.ts`** – `createUser` and `PLAIN_PASSWORD` bootstrap accounts; `userRepository` is the same repository instance.
-- **`src/infrastructure/persistence/versioning.ts`** – `versionOf` extracts the optimistic-concurrency version to assert it is unchanged after code send/spend.
-- **`tests/support/http.ts`** – `api()` provides the supertest agent for all HTTP calls.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the test database at module load.
-- **`tests/support/environment.ts`** – `setEnvironment` sets `NODE_MAIL_TRANSPORT` to `'outbox'` so the app routes mail through the mocked adapter.
-- **`tests/support/session-epoch.ts`** – `forgetSessionEpoch` invalidates the session-epoch binding after factor confirmation so subsequent logins aren't blocked.
-- **`tests/support/totp.ts`** – `codeFor(secret, counter)` generates a valid TOTP code for confirming the TOTP factor.
-- **`tests/support/callers.ts`** – `testCallerContext` supplies the caller identity required when enqueuing a login code.
+- Uses `tests/support/*` helpers: `api` (`http`), `setupTestDb`, `setEnvironment`, `codeFor` (`totp`), `forgetSessionEpoch` (`session-epoch`), and `testCallerContext` (`callers`).
+- Uses `createUser`, `PLAIN_PASSWORD` and `userRepository` from the users test factories. `userRepository` is also used directly to read stored state and to create the OAuth-only user.
+- Calls `twoFactorService` from `account/services` directly, and `buildLoginChallenge` from `services/two-factor-challenge`.
+- Imports `DELIVERED_CODE_MAX_ATTEMPTS` and `hashBackupCode` from `account/two-factor`, to size the guess flood and compare stored digests.
+- Uses `startSession` and `createAccessToken` from `session/jwt` to build the OAuth-only session.
+- Uses `versionOf` from `infrastructure/persistence/versioning` for the version-stability assertion.
 
 ## Notes
-
-- `mockOutbox` **must** carry the `mock` prefix: `jest.mock` hoisting only allows closing over variables with that prefix.
-- The mailer mock is applied at module scope (`jest.mock` at top level), not inside a `describe` block, so every test in this file uses it.
-- `challengeFor` is deliberately called **inside** each parallel `loginWith` so every racing request gets its own challenge; reusing one challenge across requests would change what is being tested.
-- The ceiling tests fire `DELIVERED_CODE_MAX_ATTEMPTS + 3` wrong guesses concurrently, then assert the *correct* code is still rejected (422) — proving the counter is not reset by interleaving.
-- `findLast` (ES 2023) is used to grab the most recent queued mail; ensure the runtime/target supports it.
-- The "two factors confirmed in parallel" test asserts that exactly one of the two confirm responses carries a backup-code set (the one that stored it), and that the handed-out codes hash to the stored digests — the other response returns an empty set.
+- The mocked mailer spreads `jest.requireActual`, so only `enqueueEmail` is replaced.
+- Several tests call `forgetSessionEpoch(bearer)` after arming a factor. The file does not say why.
+- The wrong-guess tests only assert that the correct code is rejected with 422 after the ceiling is exceeded.

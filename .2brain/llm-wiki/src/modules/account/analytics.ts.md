@@ -1,32 +1,30 @@
 ---
 source: src/modules/account/analytics.ts
-sha256: c5348910c52c3f8d4dafd0b3198b0da9ecf0b3517ef1eb68bdde2e5a95c3a4b0
-generated_at: 2026-11-08T03:59:31.337656+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:19:16.192354+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/analytics.ts
 
 ## Purpose
-
-Declares the canonical set of analytics event names owned by the account module and registers them into the shared `AnalyticsEventMap` type. Every account-related event fired anywhere in the backend must use a name from this catalogue, giving the analytics port a single, type-checked vocabulary for the account domain.
+Declares the analytics event names the account module emits. Signup and login anchor the funnel that other rates are measured against. The names live in this file only: the paired frontend emits no custom events, so each name has exactly one emitter. The file extends the analytics port's name map (the same pattern `./audit.ts` uses for audit actions), so the event catalogue grows with the modules that own the names.
 
 ## Key elements
-
-- **`accountAnalyticsEvents`** (`as const` object) — the six event-name strings this module is responsible for: `user_signed_up`, `user_logged_in`, `user_logged_out`, `user_profile_viewed`, `account_deletion_scheduled`, `account_restored`.
-- **`declare module '@infrastructure/observability/analytics'`** — augments `AnalyticsEventMap` with an `account` key typed to the values of `accountAnalyticsEvents`, so any consumer that emits an `account` event is checked against this catalogue at compile time.
+- `accountAnalyticsEvents`: a `as const` object mapping keys to event-name strings.
+  - `USER_SIGNED_UP`: `'user_signed_up'`
+  - `USER_LOGGED_IN`: `'user_logged_in'`
+  - `USER_LOGGED_OUT`: `'user_logged_out'`. It is emitted server-side, because both logout routes are real requests this API answers. That lets it report the logout that succeeded instead of the one that was attempted.
+  - `USER_PROFILE_VIEWED`: `'user_profile_viewed'`
+  - `ACCOUNT_DELETION_SCHEDULED`: `'account_deletion_scheduled'`
+  - `ACCOUNT_RESTORED`: `'account_restored'`
+- `declare module '@infrastructure/observability/analytics'`: augments `AnalyticsEventMap` with an `account` entry. Its type is the union of the values of `accountAnalyticsEvents`.
 
 ## Relationships
-
-- **`services/signup.ts`, `services/logout.ts`, `services/profile.ts`, `services/account-deletion.ts`, `services/oauth.ts`** — each of these services imports `accountAnalyticsEvents` and passes the relevant name to the analytics port when the corresponding action succeeds. This file is their sole source of truth for the strings they emit.
-- **`session/login-observability.ts`** — emits `USER_LOGGED_IN` (and related auth events) defined here as part of the login flow's server-side observability.
-- **`tests/integration/oauth-link.test.ts`, `tests/integration/self-service.test.ts`, `tests/integration/service.test.ts`** — assert that the correct event names (referenced from this module) were recorded after each service call.
-- **`tests/unit/infrastructure/observability/analytics.test.ts`** — validates the analytics port's dispatch mechanism; the account event names appear as fixtures.
+- The neighbors in `services/` (`signup.ts`, `logout.ts`, `oauth.ts`, `profile.ts`, `account-deletion.ts`) and `src/modules/account/session/login-observability.ts` are the likely emitters, since they sit in the graph next to the signup, login, logout, profile and deletion events this file names. The file itself does not show which one fires which event.
+- The integration tests (`oauth-link.test.ts`, `self-service.test.ts`, `service.test.ts`) and `tests/unit/infrastructure/observability/analytics.test.ts` are related in the graph and likely reference these names or the analytics port.
+- The `@infrastructure/observability/analytics` port provides `AnalyticsEventMap`, which this file augments.
 
 ## Notes
-
-- **Single-emitter rule** — each event name has exactly one emitting site in the codebase. The paired frontend does not emit custom account events, so no name is shared across clients.
-- **`USER_LOGGED_OUT` is server-side only** — both logout routes are real API requests, so the server reports which one actually succeeded rather than what the client attempted.
-- **`ACCOUNT_DELETION_SCHEDULED` is emitted; the purge is not** — the eventual hard-delete fires no event because there is no request or user consent at that point.
-- **Module-augmentation pattern** — mirrors `./audit.ts`: each domain module grows the shared `AnalyticsEventMap` with its own slice, keeping the port generic while the catalogue stays co-located with the owners of the names.
-- **Naming convention** — see `docs/tools/analytics.md#naming` for the snake_case, past-tense / noun rule applied to these strings.
+- The account-purge flow deliberately fires no event, because there is no request and no consent behind it.
+- Keep new account event names in this file only, so that every name keeps a single emitter.
+- The file's header points to `docs/understand/analytics.md#naming` for further naming rules.

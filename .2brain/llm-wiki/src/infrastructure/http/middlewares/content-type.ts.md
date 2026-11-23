@@ -1,35 +1,32 @@
 ---
 source: src/infrastructure/http/middlewares/content-type.ts
-sha256: ada06dea006f67b48a6218a78fd5be5ce674dc05d1f6ae06bba10af46631e604
-generated_at: 2026-11-14T18:01:24.135918+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 20fedb2aa7beb6d01cb31c5de5664f4f843f82590be6442c8b45b78eaa23adf7
+context_sha256: ed6135e3c62fe7466bf106ac9a42d4b08d256dcde9b57c16db46c60aea796a99
+generated_at: 2026-11-22T02:49:17.070752+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/http/middlewares/content-type.ts
 
 ## Purpose
-
-Express middleware that returns **415 Unsupported Media Type** when a request carries a body whose media type is not declared by the matched operation. Without it, `express.json` silently drops unlisted body types, an all-optional PATCH schema accepts the resulting `{}`, and the client receives a misleading 200.
+Implements the 415 guard: a write request whose body is in a media type the operation does not declare is refused. It exists because the JSON body parser only handles the types it is told to. Any other body arrives as `{}`, and an all-optional PATCH schema would accept that as a 200 that changed nothing. Per the file's own comments, RFC 9110 §15.5.16 names the honest answer.
 
 ## Key elements
-
-- **`carriesBody(request)`** *(private)* – Returns `true` if the request has a chunked body or a non-zero `Content-Length`. Guards against 415-ing empty action POSTs.
-- **`acceptsBody(request, types)`** *(private)* – Wraps `request.is()` with a special case: an empty `types` array (body-less operation) always rejects, because `request.is([])` would return the request's own type rather than `false`.
-- **`declaredOperation(operations, method, path)`** *(exported)* – Looks up the matching row in the generated `RequestContentType[]` table (first row whose method matches and whose regex pattern matches the path). Used by both the 415 guard and the `OPTIONS`/`Accept-Patch` responder so both name the same declared types.
-- **`requireDeclaredContentType(operations)`** *(exported)* – Factory returning an Express `RequestHandler`. Strips a trailing slash from the path, resolves the operation, and if the request carries a body of an undeclared type, sends a 415 with an `Accept` header (and `Accept-Patch` for PATCH) listing the allowed types. Otherwise calls `next()`.
+- `requireDeclaredContentType(operations)`: factory that returns an Express `RequestHandler`. It normalizes the path (strips a trailing slash unless the path is `/`) and looks up the operation. If an operation is found, the request carries a body, and the type is not accepted, it answers 415. Otherwise it calls `next()`.
+- `declaredOperation(operations, method, path)`: exported lookup that returns the first row whose `method` equals the request method and whose `pattern` matches the path, or `undefined`. The table is ordered with the fewest `{param}` segments first, so a literal path wins over a templated one.
+- `carriesBody` (internal): true when `Transfer-Encoding` is present or `Content-Length` is greater than 0. It avoids type-is's behavior of counting `Content-Length: 0` as a body, which would 415 body-less action POSTs that send a content type.
+- `acceptsBody` (internal): returns `false` for any body on an operation with no declared types. Otherwise it uses `request.is([...types]) !== false`. The empty case is decided explicitly because `request.is([])` would return the request's own type.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** – Calls `rejectResponse` to build the 415 response body with the standard error envelope.
-- **`src/infrastructure/i18n/index.ts`** – Calls `t()` to internationalize the `UNSUPPORTED_MEDIA_TYPE` error message.
-- **`src/app/security.ts`** – Consumes `requireDeclaredContentType` as part of the security/composition layer that wires middlewares onto the Express app.
-- **`src/infrastructure/http/middlewares/method-not-allowed.ts`** – Sibling middleware; shares the `declaredOperation` lookup so the 405 and 415 guards agree on which operation a route represents.
-- **`tests/unit/infrastructure/http/middlewares/content-type.test.ts`** – Unit tests covering the guard's accept/reject paths and header behaviour.
+- `src/infrastructure/http/response.ts`: `rejectResponse(response, 415, [...])` builds the error response.
+- `src/infrastructure/i18n/index.ts`: exports `t`, used to supply the localized message for the 415.
+- `declaredOperation` is shared with the `OPTIONS` answer's `Accept-Patch`, so both name the same list. The `OPTIONS` handler's file is not shown here.
+- `tests/unit/infrastructure/http/middlewares/content-type.test.ts` is the unit test for this module.
+- `src/app/security.ts`, `src/infrastructure/http/middlewares/method-not-allowed.ts` and `src/infrastructure/i18n/context.ts` are graph neighbors, but this file does not import them directly.
 
 ## Notes
-
-- **Empty-body edge case:** `type-is` (via `request.is`) counts `Content-Length: 0` as a body. `carriesBody` explicitly excludes it so that a client POSTing an action with a content-type header but no bytes is not 415'd.
-- **`request.is([])` quirk:** Passing an empty array to `request.is` returns the request's own detected type rather than `false`. The `types.length > 0` check in `acceptsBody` handles this; the empty-list case means "no body allowed" and is always a reject.
-- **Table ordering matters:** The generated `operations` array is ordered most-specific-first (static segments before `{param}`), so `/products/search` will not be shadowed by `/products/{id}`.
-- **Trailing-slash normalization:** The middleware strips a single trailing slash from `request.path` before pattern matching; the path `/` is left as-is.
-- **RFC references in code:** 415 semantics (RFC 9110 §15.5.16), `Accept` header on 415 (§12.5.1), and `Accept-Patch` (RFC 5789 §2.2) are called out in inline comments for traceability.
+- Only requests that carry a body are judged. A body-less action POST passes, and a missing required body is left to the schema's own 422.
+- Routes absent from the table are not touched.
+- On rejection, the 415 sets an `Accept` header listing the declared types. For PATCH it also sets `Accept-Patch`. Neither header is set for a body-less operation, which has no types to list.
+- The error `details` carry the accepted types, which is empty for a body-less operation.
+- Ordering of the operations table matters: the generator must put static segments before parameters, for example so `/products/search` is never read as `/products/{id}`.

@@ -1,35 +1,32 @@
 ---
 source: src/infrastructure/adapters/antibot-providers/altcha-store.ts
-sha256: 3281d646a7166dd3b88361e47bfc167de27ec149ccfa241594bb59f940e44834
-generated_at: 2026-11-08T03:16:30.098749+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a2ea6b15c5b04b547cf1ba195e3c0c82cfa9275d681ab55ef9c7e0778478ecc0
+context_sha256: a34cab2e54a3d842493566674f4d70646cdead4b22913ae30878c09604896a3a
+generated_at: 2026-11-22T02:33:40.026693+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/antibot-providers/altcha-store.ts
 
 ## Purpose
-
-Enforces single-use of ALTCHA challenge IDs so a solved challenge cannot be replayed. It wraps the verify step with a two-phase check—`isSpent` (peek, no write) before verification, `claim` (record) only after a successful `verify`—using an in-process Map as a synchronous floor and Redis as a cross-worker authority.
+Single-use record for ALTCHA challenges, so a solved challenge cannot be spent twice. It works in two steps around altcha-lib's `verify`: a read-only peek (`isSpent`) before verification, and a claim (`claim`) only after `verify` returned `verified: true`. Nothing unsigned ever writes, because the id is read from the payload before it is trusted. Otherwise an attacker could fill memory and Redis with random ids.
 
 ## Key elements
-
-- **`isSpent(id: string): Promise<boolean>`** — Read-only lookup. Rejects over-long IDs outright. Checks the local Map first, then Redis. Leaves no trace.
-- **`claim(id: string): Promise<boolean>`** — Records an ID as used. Tries the local Map synchronously (prevents two in-process requests from both winning), then `SET NX` in Redis. Returns `true` only for the first caller.
-- **`spentLocally: Map<string, number>`** — In-process store keyed by namespaced ID with an expiry timestamp. Serves as the no-Redis fallback so single-use still holds within one worker.
-- **`sweepExpired()`** — Iterates the Map in insertion order and deletes entries past their TTL; stops at the first live entry (all share one TTL). Amortised O(1) per call.
-- **`RECORD_TTL_SECONDS = 600`** — Lifetime of a spent record; intentionally shorter than the challenge's own expiry.
-- **`MAX_KEY_LENGTH = 256`** — Cap on the raw challenge ID; prevents an attacker from stuffing memory/Redis with arbitrarily long unsigned strings.
-- **`keyOf(key)`** — Prepends `antibot:spent:` to namespace keys in the shared Redis.
+- `isSpent(id)` — read-only check. Returns `true` if the id is spent in the local map or in Redis. An id longer than 256 characters counts as spent.
+- `claim(id)` — records the id atomically. It claims in the local map first (synchronous), then calls Redis `SET NX` with a 600 s TTL. It resolves `true` only for the first caller. An over-long id resolves `false`.
+- `spentLocally` — in-process `Map<key, expiresAt>`. It is the floor that still enforces single-use when Redis is absent or failing.
+- `sweepExpired()` — drops expired entries and stops at the first live one. This is valid because the Map iterates in insertion order and all records share one TTL.
+- `claimLocally` / `spentHere` — local-map helpers. `spentHere` sweeps before checking.
+- `keyOf(id)` — namespaces keys as `antibot:spent:<id>`.
+- `RECORD_TTL_SECONDS` (600) and `MAX_KEY_LENGTH` (256) — constants.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/antibot-providers/altcha.ts`** — The ALTCHA provider that calls `isSpent` before running `altcha-lib`'s `verify` and `claim` after a `verified: true` result. This file is the anti-replay guard it delegates to.
-- **`src/infrastructure/adapters/limits-redis.ts`** — Supplies `isLimitsKeyClaimed` (Redis GET) and `claimLimitsKey` (Redis `SET NX` with TTL). This file relies on that module's shared `limits` Redis connection rather than the general cache, because cache eviction would make a spent record replayable.
-- **`tests/unit/infrastructure/adapters/antibot-providers/altcha.test.ts`** — Exercises the provider end-to-end, which exercises `isSpent`/`claim` for happy-path and replay scenarios.
+- `../limits-redis` — supplies `isLimitsKeyClaimed` (used by `isSpent`) and `claimLimitsKey` (used by `claim`). `claim` treats any result other than `'taken'` as success. The `'unavailable'` result (no Redis) therefore leaves the local claim as the answer.
+- `altcha.ts` — the ALTCHA provider. By the module's own doc, it calls `isSpent` before `verify` and `claim` after a successful one.
+- `tests/unit/infrastructure/adapters/antibot-providers/altcha.test.ts` — unit tests that exercise the ALTCHA provider.
 
 ## Notes
-
-- `claim` is **synchronous** in its local step: `claimLocally` runs before any `await`, so two concurrent requests in the same process are serialised by the Map's `set`—the first wins, the second gets `false` immediately.
-- When Redis is unavailable, `claimLimitsKey` resolves with `'unavailable'`; `claim` treats that as a successful local-only claim (`result !== 'taken'` is `true`), so single-use degrades gracefully to per-process.
-- Insertion order in `spentLocally` is load-bearing: because every record shares one TTL, the first entry that is *not* expired means every subsequent entry is also not expired, so `sweepExpired` can bail early.
-- The ID is read from the **unsigned** payload before verification; `MAX_KEY_LENGTH` is the only guard against an attacker choosing pathological IDs. Do not remove it without an equivalent bound.
+- Claims are deliberately kept on the `limits` Redis instance, not the cache's. The cache evicts under pressure, and an evicted claim would make a solution replayable.
+- The local claim happens synchronously before the async Redis call, so two concurrent requests in one process cannot both win.
+- The local map is per process. Redis `SET NX` is what settles the claim across replicas when it is reachable.
+- The TTL covers the challenge's own lifetime, after which the challenge has expired anyway.

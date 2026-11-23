@@ -1,34 +1,27 @@
 ---
 source: src/modules/account/consent-record.ts
-sha256: 19cc7de2bfca532190469f913fbec645b334b7f66af6019793190b1be36d8bec
-generated_at: 2026-11-14T18:30:16.166114+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4c5c796e7a8282f7b0712dffceed0bd3a663e5cf21979016f701114bd848e89a
+context_sha256: 8e797b93304730e159d78047c86f0b1271fbc7d36c208a8e272b04939fd14d0e
+generated_at: 2026-11-22T03:20:12.236345+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/consent-record.ts
 
 ## Purpose
-
-Defines the consent "stamp" shapes an account carries for terms acceptance and analytics choice. Each exported function produces the exact object (timestamp + version/value) that a signup, provider sign-in, or first-password flow writes onto the account record, so the controller can later answer "who agreed to what, and when."
+Builds the consent-related fields stored on an account record: which Terms version is in force, when the terms were accepted, and the optional analytics-consent choice with its timestamp. These fields let the controller later show who agreed to what, and when.
 
 ## Key elements
-
-- **`termsVersion()`** — Reads `NODE_TERMS_VERSION` from `accountConfig()` and returns it as a string (defaults to `"1"`).
-- **`termsAcceptance()`** — Returns `{ termsAcceptedAt: Date; termsVersion: string }`, capturing the current moment paired with the version in force at that moment.
-- **`analyticsAnswer(analyticsConsent: boolean | undefined)`** — Returns `{ analyticsConsent, analyticsConsentAt: Date }` when a boolean is supplied; returns `{}` when the argument is `undefined` (i.e. the user was never asked).
+- `termsVersion()` — returns `accountConfig().NODE_TERMS_VERSION` (default `1`). Published so `GET /config` can print it.
+- `termsAcceptance()` — returns `{ termsAcceptedAt: new Date(), termsVersion }`, a record of accepting the terms now. Stamped by signup, provider sign-in, and the first password set on a staff-created account.
+- `analyticsAnswer(analyticsConsent)` — takes the signup's optional checkbox. Returns `{}` if the value is `undefined`. Otherwise it returns `{ analyticsConsent, analyticsConsentAt: new Date() }`.
 
 ## Relationships
-
-- **`src/modules/account/config.ts`** — Source of `accountConfig`; this module reads `NODE_TERMS_VERSION` through it.
-- **`src/app/config-routes.ts`** — Consumes `termsVersion()` so `GET /config` can expose the current terms label.
-- **`src/modules/account/services/signup.ts`** — Calls `termsAcceptance()` and `analyticsAnswer()` during account creation to stamp the record.
-- **`src/modules/account/services/oauth.ts`** — Stamps `termsAcceptance()` on provider-based sign-in.
-- **`src/modules/account/services/password-reset.ts`** — Stamps `termsAcceptance()` when a staff-created account sets its first password.
-- **`src/modules/account/services/index.ts`** — Barrel for the account services that import this module.
-- **`scenarios/users.ts`** — Test scenarios that exercise the signup/sign-in paths which invoke these stamping helpers.
+- Reads `NODE_TERMS_VERSION` through `accountConfig()` from `src/modules/account/config.ts`.
+- `src/app/config-routes.ts` uses `termsVersion()` for `GET /config`.
+- The services (`src/modules/account/services/signup.ts`, `src/modules/account/services/oauth.ts`, `src/modules/account/services/password-reset.ts`) are the places the doc comments describe as stamping these fields: signup, provider sign-in, and the first password set on a staff-created account.
+- `src/modules/account/services/index.ts`, `scenarios/users.ts` and `src/modules/orders/services/place.ts` are graph neighbors. Nothing in this file shows how they interact with it.
 
 ## Notes
-
-- `analyticsAnswer` intentionally returns an **empty object** (not a null/undefined) when the user was not asked. Downstream code must treat the *absence of keys* as "no record yet," not as `false`.
-- All three functions are pure "create the stamp" helpers; they do **not** read or mutate an existing account record. The caller is responsible for persisting the returned object.
-- The terms version is a single config value, not a per-account field — every account stamped under the same `NODE_TERMS_VERSION` shares the same label.
+- Both functions that return timestamps call `new Date()` on each call, so the stamp is the moment of the call and the result is not cached.
+- An absent analytics answer (`undefined`) is deliberately not recorded. The doc says nobody was asked, so a banner choice may still apply.

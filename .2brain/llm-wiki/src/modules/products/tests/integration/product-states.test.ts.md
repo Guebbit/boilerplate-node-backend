@@ -1,28 +1,40 @@
 ---
 source: src/modules/products/tests/integration/product-states.test.ts
-sha256: b1678954635fc11727691467e6375865e3ad9e9407bbaf52ceaeec2dcf02d23b
-generated_at: 2026-11-08T07:52:16.633273+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 92883cd0341a9285709ed3d29ed72804b8179b362d629ead20871931c2dcf3ad
+context_sha256: 999af81da5cfe716c7a39a06f48725aa53b9ed7b871b8f77209f1f7d32926448
+generated_at: 2026-11-22T07:17:28.132048+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/integration/product-states.test.ts
 
 ## Purpose
-Integration tests verifying the two product visibility flags (`active` and `purchasable`) over HTTP. They assert how an anonymous shopper and an authenticated staff member see products in listing and by-id endpoints across all four flag combinations.
+HTTP-level integration tests for the two product visibility flags. `active: false` hides a product from shoppers entirely, while `purchasable: false` only takes it off sale. An anonymous user sees off-sale products in listings and by id, and never sees inactive ones; staff with the right permission see both.
 
 ## Key elements
-- **`titlesOf(body)`** – Extracts `title` strings from the `{ items: [{ title }] }` response shape for easy assertions.
-- **`seedStates()`** – Creates four products covering every flag combination: on-sale, off-sale (`purchasable: false`), hidden (`active: false`), and both flags off. Returns them as a tuple.
-- **`describe('GET /products, anonymously')`** – Four cases: default listing hides inactive products; `?purchasable=false` / `=true` filters; combined `?purchasable=false&active=false` yields an empty list.
-- **`describe('GET /products/:id')`** – Three cases: off-sale product is publicly visible (200, `purchasable: false`); inactive product returns 404 regardless of `purchasable`; inactive product is visible to an editor holding `display:Product` (200).
+- `titlesOf(body)`: helper that extracts `items[].title` from a search response body.
+- `seedStates()`: creates four products in parallel via `createProduct`, one per state combination:
+  - "On sale product"
+  - "Off sale product" (`purchasable: false`)
+  - "Hidden product" (`active: false`)
+  - "Hidden and off sale" (both flags false)
+- `describe('GET /products, anonymously')`:
+  - The default listing returns only the on-sale and off-sale products.
+  - `?purchasable=false` returns only the off-sale product.
+  - `?purchasable=true` returns only the on-sale product.
+  - `?purchasable=false&active=false` still returns nothing, because an anonymous request cannot opt into inactive products.
+- `describe('GET /products/:id')`:
+  - An off-sale product returns 200 with `purchasable: false, active: true`.
+  - Both inactive products return 404 to an anonymous user, whatever their `purchasable` value.
+  - An inactive product returns 200 with `active: false` for an `editor` role, per the test title "staff holding `display:Product`".
 
 ## Relationships
-- **`tests/support/http.ts`** – Supplies the `api()` HTTP client and `authenticateAsRole()` used to obtain a bearer token for the staff-visibility test.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called once at module scope to provision/reset the test database before any test runs.
-- **`src/modules/products/tests/factories.ts`** – `createProduct()` is the factory that inserts seed products with the desired flag values.
+- `src/modules/products/tests/factories.ts`: provides `createProduct`, used to seed the products.
+- `tests/support/http.ts`: provides `api()` (the request client) and `authenticateAsRole('editor')`, which returns a `bearer` value used as the `Authorization` header.
+- `tests/support/setup-test-db.ts`: `setupTestDb()` is called at module top level to prepare the test database.
 
 ## Notes
-- `setupTestDb()` runs at import time (top-level), not inside a `beforeEach`, so it executes once per file.
-- `titlesOf` casts the body to `{ items: … }`; if the API ever changes its envelope shape, this helper will silently return `undefined` rather than failing loudly.
-- The `?purchasable=false&active=false` test asserts that the `active` filter is *not* overridable by the `purchasable` param—an inactive product stays hidden even when explicitly requested.
-- Uses `Array.prototype.toSorted()` (ES 2023); the project's target/lib must include it.
+- Tests that compare listings against a list use `.toSorted()` only for the unfiltered case. The filtered cases assert a single title, so they do not depend on order.
+- `seedStates()` returns products in a fixed order. The tests destructure by position (`[, offSale]`, `states.slice(2)`, `states[2]`), so reordering the seed would break them.
+- The authenticated test creates the role user before seeding.
+- Only the `editor` role is exercised for staff access. There is no test of a role lacking `display:Product`.

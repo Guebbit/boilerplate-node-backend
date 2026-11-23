@@ -1,29 +1,29 @@
 ---
 source: src/modules/products/controllers/delete-products.ts
-sha256: c3466b8313964f361aa495693d965bb91b14b0be2c818e3ac64524d84e4ef1ff
-generated_at: 2026-11-08T07:42:09.891729+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 81122aef3a534d0a9c965abd8376cc4c1eb12c29868a3bae752f80274ce4df8e
+context_sha256: 517a0b2b936b415faad85ea4bd4c59f0ece63db383834c01c80b8038d03e4913
+generated_at: 2026-11-22T07:07:39.162186+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/controllers/delete-products.ts
 
 ## Purpose
-
-Thin admin controller for deleting a product by ID. It delegates all delete logic to the shared `createDeleteController` factory, wiring in the product-specific service call and error-key, so the module stays consistent with other delete endpoints in the codebase.
+Admin controller for deleting products in the catalogue. It is thin wiring that configures the shared `createDeleteController` factory for the `product` entity. It handles `DELETE /products/:id`, where `?hardDelete=true` deletes permanently and the default is a soft delete.
 
 ## Key elements
-
-- **`deleteProducts`** (exported const) — The DELETE `/products/:id` handler. Configured via `createDeleteController` with `entity: 'product'`. Accepts an optional `?hardDelete=true` query param; without it the delete is soft. On hard delete the service also emits `PRODUCT_DELETED` and removes the associated image. The `remove` callback calls `productService.removeById(id, hardDelete, callerContextOf(request))`. Not-found responses use the i18n key `products.not-found`.
+- `deleteProducts` (export): the controller built by `createDeleteController` with these options:
+  - `entity: 'product'`
+  - `remove: (id, hardDelete, request)`, which calls `productService.removeById(id, hardDelete, callerContextOf(request))`
+  - `notFoundKey: 'products.not-found'`, the i18n key used when the product doesn't exist
 
 ## Relationships
-
-- **`src/infrastructure/surfaces/create-delete-controller.ts`** — Provides the `createDeleteController` factory that builds the request-parsing, validation, and response-formatting scaffold around this module's `remove` callback.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)`, extracting the authenticated caller's identity to pass into the service for audit purposes.
-- **`src/modules/products/services/index.ts`** — Source of `productService`; its `removeById` method performs the actual soft/hard delete, emits the `ADMIN_PRODUCT_DELETED` audit event, and (on hard) the `PRODUCT_DELETED` domain event and image cleanup.
-- **`src/modules/products/routes.ts`** — Registers the `DELETE /products/:id` route and dispatches to `deleteProducts`.
+- **`src/infrastructure/surfaces/create-delete-controller.ts`**: provides the factory that does the actual request handling. This file supplies only the entity name, the remove callback and the not-found key.
+- **`src/modules/products/services/index.ts`**: supplies `productService`, whose `removeById` performs the deletion.
+- **`src/infrastructure/http/request.ts`**: supplies `callerContextOf`, which turns the request into the caller context passed to the service.
+- **`src/modules/products/routes.ts`**: the neighbor that wires this controller into the products routes.
 
 ## Notes
-
-- This file contains no business logic; all behavior (soft vs. hard semantics, audit emission, side-effects like image removal) lives in `productService.removeById`. Changes to delete behavior should be made there, not here.
-- The `callerContextOf` value is passed as the third argument to `removeById`; if the service signature changes, the wiring in this file must follow.
-- The `notFoundKey` is a flat i18n string, not an object key — keep it in sync with whatever key the products error catalog actually defines.
+- Per the JSDoc, both delete paths announce `PRODUCT_DELETED`, and its `hardDelete` field says which kind occurred.
+- Only the hard-delete path removes the product image. The JSDoc says this keeps a deleted product from outliving itself in a wishlist or on disk.
+- `productService.removeById` owns the `ADMIN_PRODUCT_DELETED` audit emit, so this controller emits nothing itself.

@@ -1,33 +1,34 @@
 ---
 source: src/modules/orders/controllers/respond.ts
-sha256: aa61b6cb91b480dbe2474c240db81d4001e051bb983a3cf6882eccc391abb6a3
-generated_at: 2026-11-14T20:33:47.989658+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 50760ccc57da3d7640a5cf9e88327c4af533cc98c6638a3a7a3607e887473bf8
+context_sha256: f127700c5897d1024fbae13a3417a0e6090d3d85378cf7140869f841c495c1b3
+generated_at: 2026-11-22T06:10:19.737276+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/controllers/respond.ts
 
 ## Purpose
-
-Shared success-path helper for every order controller (reads and writes). It hydrates the order document returned by the service with the caller's `actions` (via `orderService.withActions`) and sends it as the HTTP response. Extracted from the individual controllers so the hydrate-then-send shape is written once, while each call site still declares its own status code and error context.
+Shared success tail for the order controllers. After the service returns an order document, this file hydrates it with the caller's `actions` and sends it as the response body. It is kept out of `src/modules/orders/services/scope.ts` so that `withActions` stays framework-free. Only the hydrate-then-send shape is shared. Each call site still chooses its own status (for example, create uses 201).
 
 ## Key elements
-
-- **`OrderForResponse`** (type) — Derived from `Parameters<typeof orderService.withActions>[0]` rather than imported from the model layer, satisfying the `no-persistence-imports` controller rule.
-- **`respondWithOrder(response, order, authContext, context, status?)`** (exported const) — Calls `orderService.withActions`, then on success: sets `ETag` + `Content-Location` via `answerAsResource`, sends the body with `createdOrOk` (passing through `status` for 201 vs. default 200), and attaches `Location` on a write. On failure, routes to `catchAs(response, context)`.
+- **`respondWithOrder(response, order, authContext, context, status?)`** is the only export. It returns `Promise<void>`.
+  - Calls `orderService.withActions(order, authContext)`.
+  - Calls `answerAsResource(response, order, "/orders/<id>")` to set the order's real `ETag` and its resource location.
+  - Calls `createdOrOk<Order>(response, resolved, status, "/orders/<id>")` to send the body. `status` defaults to 200, and a 201 always names the new order.
+  - Ends with `.catch(catchAs(response, context))`.
+- **`OrderForResponse`** is a private type alias. It is `Parameters<typeof orderService.withActions>[0]`, derived from the service rather than imported from `../model`.
 
 ## Relationships
-
-- **`src/modules/orders/services/index.ts`** — Imports the order service to hydrate the order document with caller-specific actions; also the source from which `OrderForResponse` is derived.
-- **`src/infrastructure/http/response.ts`** — Imports `createdOrOk` to serialize the resolved order and apply status + `Location`.
-- **`src/infrastructure/http/preconditions.ts`** — Imports `answerAsResource` to stamp `ETag` and `Content-Location` on the response.
-- **`src/infrastructure/http/controller.ts`** — Imports `catchAs` for the error path, reusing the caller-supplied `context` string.
-- **`src/types/auth-context.ts`** — Imports the `AuthContext` type for the `authContext` parameter.
-- **`src/types/index.ts`** — Imports the `Order` type (used in the `createdOrOk` generic and JSDoc).
-- **Consumer controllers** (`get-order.ts`, `post-order.ts`, `post-cancel-order.ts`, `post-order-override-status.ts`, `put-shipping-address.ts`) — Each calls `respondWithOrder` as its final success step, passing its own status code (200 or 201) and an operation-name string.
+- **`../services` (`orderService`)**: `withActions` does the hydration.
+- **`@infrastructure/http/response`**: `createdOrOk` writes the status and body.
+- **`@infrastructure/http/preconditions`**: `answerAsResource` sets the `ETag` and resource location.
+- **`@infrastructure/http/controller`**: `catchAs` turns failures into error responses under the given operation name.
+- **`@types`**: supplies the `AuthContext` and `Order` types.
+- **Order controllers** (`get-order`, `post-order`, `post-cancel-order`, `post-order-override-status`, `put-billing-address`, `put-shipping-address`): these are the neighbors in the graph that share this success tail. Nothing in this file shows how each one calls it.
 
 ## Notes
-
-- The internal `.catch` intentionally reuses the caller's `context` (operation name) rather than introducing a second name, so a `withActions` failure logs under the same operation as the preceding service call.
-- `withActions` is kept framework-free (no Express types); this file is where Express `Response` handling is introduced.
-- `status` is optional and defaults to 200; only `post-order` passes `201`. The `Location` header is set on every write via `createdOrOk`.
+- The `context` argument must match the operation name that the calling controller passes to its own final `.catch`. A `withActions` failure then logs under the same name as a service failure.
+- The `ETag` and resource location come from the raw `order` document. The body is `resolved`, which is the wire shape.
+- The type is derived instead of imported because controllers may not hold a persistence handle (`no-persistence-imports`).
+- `authContext` may be `undefined`.

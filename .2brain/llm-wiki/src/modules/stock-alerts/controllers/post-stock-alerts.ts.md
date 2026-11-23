@@ -1,35 +1,32 @@
 ---
 source: src/modules/stock-alerts/controllers/post-stock-alerts.ts
-sha256: 3f37a6b21d835124656bb8dc46acdaf4f5d885bd99da2fd66e484c7383994c8d
-generated_at: 2026-11-08T08:27:44.819079+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3f37a6b21d835124656bb8dc46acdaf4f5d885bd99da2fd66e484c7383994c8d
+context_sha256: 84d17b8619d62c8aa465fb04b3f78f76d914153ab3a18ee33ec869df1714b632
+generated_at: 2026-11-22T07:53:59.868270+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stock-alerts/controllers/post-stock-alerts.ts
 
 ## Purpose
-
-Thin HTTP adapter that handles `POST /stock-alerts`. It validates the request body, delegates to `stockAlertService.ask`, and returns **200** with the full stock-alerts list. Because the endpoint is idempotent (repeating the request is the same request), it intentionally uses 200 rather than 201.
+Express controller for `POST /stock-alerts`. It is a thin HTTP adapter: it validates the request body, delegates to the stock alert service's `ask` method, and returns the resulting stock-alert list. It lets an authenticated user ask to be notified when a product can be ordered again.
 
 ## Key elements
-
-- **`postStockAlerts`** (exported const) — the sole controller handler. Accepts `Request<unknown, unknown, CreateStockAlertRequest>` and `Response`.
-  1. Validates `request.body` against `CreateStockAlertBody` (Zod schema from `@api/schemas.zod`) via `parseBody`; returns early on 422.
-  2. Calls `stockAlertService.ask(request.authContext!.id, body.productId)`.
-  3. On success: `successResponse<StockAlertsResponse>(response, result.data, 200)`.
-  4. On refusal: short-circuits via `refused(response, result)`.
-  5. On unhandled error: `catchAs(response, 'createStockAlert')`.
+- `postStockAlerts(request, response)` is the only export, an Express handler typed with `CreateStockAlertRequest` as the body.
+  - Parses the body with `parseBody(CreateStockAlertBody, ...)` and returns early if parsing fails. `parseBody` has already written the error response by then. Per the inline comment, a `productId` that is not this backend's id gets a 422.
+  - Calls `stockAlertService.ask(request.authContext!.id, body.productId)`.
+  - If `refused(response, result)` handles the result, the handler returns without writing anything further.
+  - Otherwise it sends `successResponse<StockAlertsResponse>(response, result.data, 200)`.
+  - Rejected promises go to `catchAs(response, 'createStockAlert')`.
 
 ## Relationships
-
-- **`src/modules/stock-alerts/service.ts`** — imports `stockAlertService` and calls its `.ask(userId, productId)` method; this file owns the HTTP boundary while the service owns the business logic.
-- **`src/infrastructure/http/controller.ts`** — provides `parseBody`, `refused`, and `catchAs`, the shared validation / error-handling helpers used here.
-- **`src/infrastructure/http/response.ts`** — provides `successResponse`, the standard JSON success envelope.
-- **`src/types/index.ts`** — supplies the `CreateStockAlertRequest` and `StockAlertsResponse` types that shape the function's generics.
-- **`src/modules/stock-alerts/routes.ts`** — registers `postStockAlerts` as the handler for the `POST /stock-alerts` route.
+- `src/infrastructure/http/controller.ts` provides `parseBody`, `refused` and `catchAs`, which handle validation, refusal results and error mapping.
+- `src/infrastructure/http/response.ts` provides `successResponse`, which sends the 200 response.
+- `src/modules/stock-alerts/service.ts` provides `stockAlertService`, whose `ask` method holds the business logic.
+- `src/modules/stock-alerts/routes.ts` presumably mounts this handler on `POST /stock-alerts`.
+- `src/types/index.ts` (imported as `@types`) supplies `CreateStockAlertRequest` and `StockAlertsResponse`.
 
 ## Notes
-
-- **200, not 201.** The file's doc comment makes this explicit: the response is the *whole list*, so the operation is a repeatable "ask" rather than a one-shot create. Do not "fix" the status code to 201.
-- **`request.authContext!`** uses a non-null assertion; the auth middleware is expected to have populated it before the handler runs.
-- **`parseBody` rejects unknown `productId`s** (422) before any service call is made, acting as a guard against cross-backend product IDs.
+- The endpoint returns 200 with the whole alert list, not 201 with the created item. The doc comment gives the reason: the parent resource is the list, and repeating the request is the same request, so it is idempotent.
+- `request.authContext!` is non-null asserted, so the route must run behind authentication middleware that sets `authContext`.
+- The body schema `CreateStockAlertBody` is imported from `@api/schemas.zod`.

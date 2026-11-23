@@ -1,36 +1,34 @@
 ---
 source: src/modules/delivery/controllers/patch-shipment.ts
-sha256: be897a5fa5b67fe5ff7eef70be82a4a748d17b0733a7aa6a215a98f1ba4ba2f8
-generated_at: 2026-11-14T19:37:51.128731+00:00
-model: ollama:qwen3.8:27b
+source_sha256: be897a5fa5b67fe5ff7eef70be82a4a748d17b0733a7aa6a215a98f1ba4ba2f8
+context_sha256: d20ed8776531d90a15f5260e7dd361e9130b85be2227e7c2a00943e38ea0b723
+generated_at: 2026-11-22T04:46:13.800633+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/controllers/patch-shipment.ts
 
 ## Purpose
-
-HTTP handler for `PATCH /delivery/shipments/:id`. It lets staff correct a shipment's tracking code by validating the request, delegating to the delivery service, and returning the updated `Shipment`.
+Express controller for `PATCH /delivery/shipments/:id`, used by staff to correct a shipment's tracking code. It validates the id and body, delegates the update to the delivery service, and sends back the updated shipment.
 
 ## Key elements
-
-- **`patchShipment`** — The sole export. Signature: `(request: Request<{ id?: string }>, response: Response) => Promise<void> | void`. Steps:
-  1. Extracts and validates the `:id` param via `requireId`.
-  2. Parses the body against `UpdateShipmentBody` (Zod schema from `@api/schemas.zod`).
-  3. Calls `deliveryService.editShipmentTracking(id, trackingCode, authContext, callerContext)`.
-  4. On success, responds with the `Shipment` payload via `successResponse`; on service refusal, calls `refused`; on unexpected error, hands off to `catchAs`.
+- `patchShipment(request, response)`: the only export. It does the following:
+  1. Resolves the shipment id with `requireId`, using the not-found key `delivery.shipment-not-found`. If that fails, it returns an already-resolved promise.
+  2. Validates `request.body` against `UpdateShipmentBody` (imported from `@api/schemas.zod`) with `parseBody`. If that fails, it returns an already-resolved promise.
+  3. Calls `deliveryService.editShipmentTracking(id, body.trackingCode, request.authContext, callerContextOf(request))`.
+  4. If `refused(response, result)` handles the result, it stops. Otherwise it responds with `successResponse<Shipment>(response, result.data)`.
+  5. Passes any rejection to `catchAs(response, 'patchShipment')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Provides the `parseBody`, `refused`, and `catchAs` helpers used for request parsing, service-refusal formatting, and error mapping.
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId` for extracting and validating the route parameter.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to pull the authenticated caller context forwarded to the service layer.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the 200 reply.
-- **`src/modules/delivery/services/index.ts`** — Source of `deliveryService`; the handler calls `editShipmentTracking` on it.
-- **`src/modules/delivery/routes.ts`** — Registers `patchShipment` on the `PATCH /delivery/shipments/:id` route.
-- **`src/types/index.ts`** — Source of the `Shipment` type used in the response generic.
+- `@infrastructure/http/controller` (`src/infrastructure/http/controller.ts`): supplies `parseBody`, `refused` and `catchAs`.
+- `@infrastructure/http/ids` (`src/infrastructure/http/ids.ts`): supplies `requireId`.
+- `@infrastructure/http/request` (`src/infrastructure/http/request.ts`): supplies `callerContextOf`.
+- `@infrastructure/http/response` (`src/infrastructure/http/response.ts`): supplies `successResponse`.
+- `../services` (`src/modules/delivery/services/index.ts`): supplies `deliveryService`, which holds the business logic in `editShipmentTracking`.
+- `@types` (`src/types/index.ts`): supplies the `Shipment` type used for the response.
+- `src/modules/delivery/routes.ts`: this is the route registration module for the delivery module. The controller itself does not import it, so the link is through the dependency graph only. The file doesn't show how the route is wired.
 
 ## Notes
-
-- **No `If-Match` / optimistic concurrency.** The module docstring and the function comment both state this is intentional: only one mutable field (tracking code) is in play, so last-write-wins is acceptable.
-- **Synchronous signature, async body.** The function is not `async`; it either returns `Promise.resolve()` (early-exit on validation failure) or returns the service Promise chain. Route middleware that expects a thenable still works because both branches are thenables.
-- **Auth context is passed through, not consumed here.** `request.authContext` and `callerContextOf(request)` are forwarded to the service; this controller does no authorization checks of its own.
+- The handler deliberately has no `If-Match` / optimistic-concurrency check. Only the tracking code can be changed, so the last write wins.
+- It returns a promise, not an async function. Early validation exits return `Promise.resolve()` after the helper has already written the error response.
+- `request.authContext` is passed to the service directly. The handler does no authorization checks itself, so any enforcement happens in the service or in upstream middleware.

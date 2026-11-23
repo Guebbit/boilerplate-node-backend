@@ -1,47 +1,38 @@
 ---
 source: src/modules/cart/tests/integration/product-removal-protects-orders.test.ts
-sha256: 1cd6acd96305817caa05c05ea70601e96c3d80c63f34b81a2e66799205259235
-generated_at: 2026-11-08T05:22:11.467882+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T04:41:23.602721+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/integration/product-removal-protects-orders.test.ts
 
 ## Purpose
-
-Integration test verifying that a product removed (hard or soft) or deactivated *after* an order is placed does not invalidate that order. Confirms the order stays `pending`, card/offline payments still succeed, no spurious emails fire, and inventory level rows are cleaned up (hard delete only) or preserved (soft delete / deactivation). Also guards that a failed write never emits the `PRODUCT_DELETED` event.
+Integration test suite asserting that removing or deactivating a product *after* an order was placed does not disturb that order. A pending order stays `pending`, no email is sent, and card or offline payment still succeeds. It also checks that `inventory` drops the stock-level row only on a hard delete, and that a failed write never announces the deletion. It lives under `cart` because checkout is where the protected order is placed, and every module involved is one `cart` depends on, so their real `subscribe()` hooks run.
 
 ## Key elements
-
-- **`placePendingOrder(product)`** – Runs the full real checkout (cart → shipping → `orderConfirm`) to produce a pending order for one unit of the given product. Waits for the confirmation email to land on the mocked mailer, then clears the mock so later assertions only see post-deletion effects.
-- **`placedMailSent()`** – Polls via `eventually` + `settleOutboxNudges` until the mocked `enqueueEmail` has been called (the `order.created` email riding the outbox relay).
-- **`describe('hard-deleting…')`** – Three tests: order stays pending with no email; `paymentService.createIntent` still succeeds; `recordOfflinePayment` still succeeds and flips order to `paid`. Asserts `stockLevelRepository.findByProductId` resolves to `null` (level row deleted).
-- **`describe('soft-deleting…')`** – Order stays pending, no email, card payment still works.
-- **`describe('deactivating…')`** – Order stays pending, stock hold retained (level row non-null), card and offline payments still work.
-- **`describe('a soft delete or a restore')`** – Level row survives soft delete and restore; only hard delete removes it.
-- **`describe('a write that fails…')`** – Spies on `productRepository.deleteOne` / `.save` to reject; asserts the event never fired (cart line intact) and the DB row is unchanged.
+- **`jest.mock` of `@infrastructure/adapters/mailer`**: replaces `enqueueEmail` with `mockEnqueueEmail`, so cases can assert which mail was enqueued.
+- **`placedMailSent()`**: polls with `eventually`, settling outbox nudges until the placed-order mail (carried by `order.created` through the outbox relay) lands on the mock.
+- **`placePendingOrder(product)`**: creates a user and address, adds one unit to the cart, sets shipping to `pickup`, and runs the real `cartService.orderConfirm`. It then waits for the placement email and clears the mock, so later assertions only see post-removal mail. It returns `{ user, orderId }`.
+- **Setup/teardown**: `setupTestDb()`, `registerCheckoutModules([paymentsModule])` and `mockEnqueueEmail.mockClear()` before each test. `resetDomainEvents()` and `jest.restoreAllMocks()` after each.
+- **Test groups**:
+  - *Hard delete* (`productService.removeById(id, true)`): the level row is removed (`stockLevelRepository.findByProductId` resolves to a null value). The order stays `pending` with no email. `paymentService.createIntent` and `recordOfflinePayment` (order becomes `paid`) still succeed.
+  - *Soft delete* (`removeById(id, false)`): the order stays pending and card-payable, with no email.
+  - *Deactivation* (`updateById(id, { active: false })`): the order stays pending, its stock hold remains, and card and offline payment still work.
+  - *Soft delete / restore*: the level row is left alone throughout.
+  - *Failed writes*: `productRepository.deleteOne` or `save` is mocked to reject once. `removeById` rejects with `mongo is down`, the cart line stays, and the product row is unchanged (for a soft delete, `deletedAt` stays unset).
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/cart/services/index.ts` | `cartService.setItemById`, `cartService.orderConfirm` drive the real checkout. |
-| `src/modules/cart/repository.ts` | `cartRepository.setShippingMethod`, `cartRepository.findByUserId` for setup and post-failure assertions. |
-| `src/modules/products/services/index.ts` | `productService.removeById`, `.updateById`, `.restoreById` trigger the deletion/deactivation under test. |
-| `src/modules/products/repository.ts` | `productRepository` spied on (`deleteOne`, `save`) to simulate write failures. |
-| `src/modules/products/index.ts` | Re-export source for `productService` import. |
-| `src/modules/inventory/tests/factories.ts` | `stockLevelRepository.findByProductId` asserts level-row lifecycle. |
-| `src/modules/orders/tests/factories.ts` | `readOrder` reads order status after each scenario. |
-| `src/modules/payments/module.ts` | Registered via `registerCheckoutModules` so its real `subscribe()` hooks fire. |
-| `src/modules/payments/index.ts` | `paymentService.createIntent` / `.recordOfflinePayment` exercise the payment path. |
-| `src/infrastructure/adapters/mailer.ts` | `enqueueEmail` is mocked; call-count assertions gate "no spurious email" checks. |
-| `src/kernel/events.ts` | `resetDomainEvents` in `afterEach` clears subscriber state between tests. |
-| `src/kernel/outbox.ts` | `settleOutboxNudges` flushes queued outbox messages so event-driven side effects (email) complete. |
-| `src/modules/addresses/tests/factories.ts` | `giveAddress` satisfies the checkout pre-condition. |
+- **`@infrastructure/adapters/mailer`**: mocked; the tests assert on `enqueueEmail` calls.
+- **`@kernel/outbox`**: `settleOutboxNudges` flushes the event relay so subscribers have run before assertions.
+- **`@kernel/events`**: `resetDomainEvents` clears listeners between tests.
+- **`cart` services and repository**: `cartService.orderConfirm` drives checkout, and `cartRepository.findByUserId` inspects the cart after failed writes.
+- **`products`**: `productService` (`removeById`, `updateById`, `restoreById`) is the system under test, with `productRepository` spied on for failure injection.
+- **`inventory`**: `stockLevelRepository` verifies the level row's presence or absence.
+- **`payments`**: `paymentsModule` is registered for checkout, and `paymentService` is used to attempt payment.
+- **Test factories**: `addresses`, `users`, `products` and `orders` factories supply `giveAddress`, `createUser`, `createProduct`/`readProduct` and `readOrder`.
+- **Shared test helpers**: `@tests/setup-test-db`, `@tests/callers`, `@tests/eventually` and `@tests/checkout-modules`.
 
 ## Notes
-
-- This is a true **integration** test: all `subscribe()` hooks from cart, products, inventory, orders, and payments run for real. Only the mailer is mocked.
-- `placedMailSent()` is awaited **before** clearing the mock in `placePendingOrder`, ensuring the confirmation email is not conflated with any (incorrect) post-deletion email.
-- The failed-write tests confirm that domain events are emitted **after** the repository write succeeds — a write-level invariant of the products service.
-- `registerCheckoutModules([paymentsModule])` in `beforeEach` wires the payments subscriber; without it, `orderConfirm` would reject because the payments module is not registered.
+- Because the placement email is awaited and then cleared, `expect(mockEnqueueEmail).not.toHaveBeenCalled()` only reflects mail triggered after the removal or deactivation.
+- Hard-delete tests re-read the product with `readProduct` before calling `removeById`.
+- The failure tests rely on the event being emitted only after the repository write succeeds. `cart`'s own `PRODUCT_DELETED` listener drops the line unconditionally, so a surviving cart line shows the event never fired.

@@ -1,35 +1,31 @@
 ---
 source: src/modules/orders/services/reencrypt.ts
-sha256: ded9f0bd4eeff0494694c234f58d36ac394d6509144663b594cbcb26dece6a93
-generated_at: 2026-11-08T06:59:58.846953+00:00
-model: ollama:qwen3.8:27b
+source_sha256: dd2eaba9d39437122b93fb19b311b82e6740d87030e498914530954c8bddc815
+context_sha256: 841248064b0e985e271790b39024179d67869c557a99f905c60cdb89a299fcf4
+generated_at: 2026-11-22T06:22:47.162705+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/reencrypt.ts
 
 ## Purpose
-
-Re-encrypts all PII ciphertext in order documents (postal addresses, free-text notes) and in timeline staff notes onto the newest key in the PII encryption key ring. Serves as the orders-domain half of the ops-level key-rotation script (see `@infrastructure/security/reencrypt`).
+Re-encrypts all PII stored by the orders module onto the newest `NODE_PII_ENCRYPTION_KEY`: each order's encrypted addresses and notes, plus the text of every staff note on order timelines. It backs the ops script `reencrypt` (see `@infrastructure/security/reencrypt`).
 
 ## Key elements
-
-- **`fieldsOf(order: OrderDocument): EncryptedField[]`** – Enumerates every encrypted sub-field of one order (each address path × each postal field, plus `notes`), returning the stored ciphertext, its dotted path, a label, and an AAD binding derived from the order's `_id`.
-- **`noteFieldsOf(event: OrderEventDocument): EncryptedField[]`** – Returns the single encrypted `text` field of a timeline note, bound to `event.orderId` via `timelineNoteAad`.
-- **`reencryptOrders(dryRun?: boolean)`** *(exported)* – Drives the two-phase re-encryption: calls `orderRepository.reencrypt` for all orders, then `orderEventRepository.reencrypt` filtered to `{ type: 'note_added', text: { $exists: true } }`, and finally merges the two reports with `mergeReports`. Passes the live key ring from `getPiiEncryptionKeyRing()`.
+- `fieldsOf(order)` (private): builds the list of `EncryptedField`s for one order. It covers every address path in `ADDRESS_PATHS` and each field returned by `addressFieldsOf(path)`, skipping fields that are `undefined`. It also covers `notes` when present. Each field's binding is `piiBinding(...)` over an AAD tied to the order's `_id` (`addressAad` or `notesAad`). Labels look like `orders.<path>.<field>` and `orders.notes`.
+- `noteFieldsOf(event)` (private): returns the single `text` field of an order event, or none if `text` is undefined. Its binding is `timelineNoteAad(String(event.orderId))`, so it is bound to the parent order, and its label is `orderevents.text`.
+- `reencryptOrders(dryRun = false)` (exported): runs `orderRepository.reencrypt` with the PII key ring and `fieldsOf`. It then runs `orderEventRepository.reencrypt`, filtered to `{ type: 'note_added', text: { $exists: true } }`, with `noteFieldsOf`. It returns the two reports combined with `mergeReports`. With `dryRun` it counts what a real run would move and writes nothing.
 
 ## Relationships
-
-- **`@infrastructure/security/reencrypt`** – Supplies the `EncryptedField` type and `mergeReports` used to combine order and event reports.
-- **`@infrastructure/security/pii-encryption`** – Provides `getPiiEncryptionKeyRing` (the target key ring) and `piiBinding` (wraps an AAD into the binding shape the repository expects).
-- **`@domain-primitives/postal-address`** – Supplies `POSTAL_ADDRESS_FIELDS`, the canonical list of sub-fields within each address path.
-- **`../pii`** – Provides `ADDRESS_PATHS`, `addressAad`, `notesAad`, and `timelineNoteAad`; these define the AAD material that makes each ciphertext non-portable outside its context.
-- **`../model`** – Source of the `OrderDocument` and `OrderEventDocument` types consumed by the field-mapping functions.
-- **`../repository`** – `orderRepository` and `orderEventRepository` expose the `.reencrypt()` method that performs the actual read-rewrite loop; this file only supplies the config (key ring, field mapper, filter).
-- **`./index`** (services barrel) – Re-exports `reencryptOrders` for external consumers.
+- `@infrastructure/security/reencrypt`: provides `mergeReports` and the `EncryptedField` type that the field builders produce.
+- `@infrastructure/security/pii-encryption`: provides `getPiiEncryptionKeyRing()` and `piiBinding`.
+- `../pii`: provides the AAD builders (`addressAad`, `notesAad`, `timelineNoteAad`), `ADDRESS_PATHS` and `addressFieldsOf`.
+- `../repository`: `orderRepository` and `orderEventRepository` do the actual `reencrypt` work. This file only supplies the key ring, filter and field extractors.
+- `../model`: supplies the `OrderDocument` and `OrderEventDocument` types.
+- `@types` (`src/types/index.ts`): supplies `OrderBillingAddress`.
 
 ## Notes
-
-- Timeline re-encryption is scoped to `type: 'note_added'` events only; other event types (e.g. an override's `reason`) are stored as plain text and are **not** treated as ciphertext.
-- AAD bindings are per-document: address/note fields bind to the order `_id`, while timeline notes bind to `event.orderId`. This means a field cannot be decrypted under a different document ID even with the correct key.
-- Execution is sequential (orders → events → merge); there is no parallelism or batching visible here—those concerns live in the repository `.reencrypt` implementations.
-- `dryRun` short-circuits writes at the repository layer; this file simply forwards the flag.
+- The order pass runs first, and the event pass starts only after it resolves. Both are chained as promises.
+- Only `note_added` event text is ciphertext. An override's reason is stored as written, so it is not touched.
+- Each value's AAD includes the owning order's id, so ciphertexts are bound to their order.
+- `vatNumber` exists only on the billing address. The `order[path]` value is typed as `OrderBillingAddress | undefined` so that field can be indexed, and `addressFieldsOf` requests `vatNumber` only for that path.

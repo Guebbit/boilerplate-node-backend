@@ -1,46 +1,47 @@
 ---
 source: src/modules/payments/tests/integration/hand-refund.test.ts
-sha256: acb1d3744ffdcfc082f5b5b6cb73d53a2595ff7e7a558510ad8bd54aea8e2e86
-generated_at: 2026-11-14T21:15:02.234819+00:00
-model: ollama:qwen3.8:27b
+source_sha256: acb1d3744ffdcfc082f5b5b6cb73d53a2595ff7e7a558510ad8bd54aea8e2e86
+context_sha256: b13592b97d0ea068ca1cf9241494d661ca51b8c35e908f2c77a1fb83bba5307f
+generated_at: 2026-11-22T06:57:18.149060+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/hand-refund.test.ts
 
 ## Purpose
-
-Integration tests for the operator-side hand-refund lifecycle on offline (cash) payments. Every path that opens a refund record is verified to leave it `pending`; `settleRefundByHand` is the single action that flips it to `succeeded`. The tests run against a real MongoDB instance and exercise the system only through `paymentService`'s public API.
+Integration tests (real Mongo, via the payments service's public API) for refunds on hand-paid (cash/offline) payments from the operator's side. They check that every path that opens a refund record leaves it `pending`, and that `paymentService.settleRefundByHand` is the only way to mark the money as returned.
 
 ## Key elements
-
-- **`cashOrder()`** – Seeds a user, a product (50.00 × 2), an order, and records a 100.00 offline cash payment via `paymentService.recordOfflinePayment`.
-- **`paymentOf(orderId)`** – Fetches the stored payment document through the payments repository.
-- **`owedRows()`** – Filters the in-memory `audited` array to rows where `action === 'payment.refund_owed_by_hand'`.
-- **`settle(paymentId, refundId)`** – Calls `paymentService.settleRefundByHand` as an admin caller.
-- **`describe('the operator refunding a cash payment')`** – Verifies a single partial refund opens one `pending` record, emits one `PAYMENT_REFUND_OWED_BY_HAND` outbox event and one audit row, and emits **no** `PAYMENT_REFUNDED` event.
-- **`describe('the cancel listener on a cash payment')`** – Confirms the cancellation listener is idempotent (duplicate delivery writes nothing extra) and that it opens the *remaining* amount when a partial operator refund already exists.
-- **`describe('settleRefundByHand')`** – Covers: settling one named record (status flag, `PAYMENT_REFUNDED` outbox, `admin.payment.refund_settled_by_hand` audit, other records untouched); 409 `PAYMENT_REFUND_NOT_OPEN` on double-settle; 409 `PAYMENT_REFUND_IN_FLIGHT` on a card refund the provider left failed; 404 on an unknown refund id; and that the action is surfaced to any caller holding `create:Refund` (admin *and* moderator).
-- **`describe('refundLegalDue')`** – Verifies `paymentService.refundLegalDue` returns `undefined` when no deadline is stamped or the refund id is missing, and `{ dueBy, dueRule }` when the refund carries both fields.
+- **Setup**: `setupTestDb()`. Before each test it registers the checkout modules with `paymentsModule` and installs an audit sink that collects entries into `audited`. After each test it calls `resetDomainEvents()` and `jest.restoreAllMocks()`.
+- **Helpers**:
+  - `cashOrder()` creates a user, a product at 50.00 and an order of 2 units, then records an offline cash payment as admin (100.00 total).
+  - `paymentOf(orderId)` loads the stored payment through `paymentRepository` and throws if none exists.
+  - `owedRows()` filters the audit entries for `payment.refund_owed_by_hand`.
+  - `settle(paymentId, refundId)` calls `settleRefundByHand` as admin.
+- **`the operator refunding a cash payment`**: `refundOrderPayment` with a 30.00 amount returns success. It leaves one `pending` refund with no `settledByHand`, and no `PAYMENT_REFUNDED` outbox event is written. It writes one `owed` audit row (target type `order`, metadata with `refundId`, `amount` and `reason: 'goodwill'`) and one `PAYMENT_REFUND_OWED_BY_HAND` outbox event with the expected payload.
+- **`the cancel listener on a cash payment`**: `refundForOrder` opens one 100.00 `cancellation` record, one owed row and one outbox event, and a redelivery adds nothing. When a 30.00 operator refund is already pending, it opens the remaining 70.00 record and writes two owed rows.
+- **`settleRefundByHand`**:
+  - Settling one named record sets its status to `succeeded` and `settledByHand` to `true`, and leaves the other record `pending`.
+  - It emits exactly one `PAYMENT_REFUNDED` event and writes an `admin.payment.refund_settled_by_hand` audit row. It does not write `admin.payment.refunded`, and it writes no new owed row.
+  - A record that is already settled gives 409 `PAYMENT_REFUND_NOT_OPEN`.
+  - A card refund left `failed` after a provider error gives 409 `PAYMENT_REFUND_IN_FLIGHT`, because the sweep owns it.
+  - An unknown refund id gives 404.
+  - `getForOrder` exposes `actions.settleRefundByHand` (the open refund ids) to admins and to moderators, so the flag follows the `create:Refund` key.
+- **`refundLegalDue`**: returns `undefined` when no deadline is set or the refund does not exist. Otherwise it returns `{ dueBy, dueRule }` as stamped on the refund.
 
 ## Relationships
-
-- **`src/modules/payments/services/index.ts`** – `paymentService` is the sole API under test (`recordOfflinePayment`, `settleRefundByHand`, `getForOrder`, `refundLegalDue`).
-- **`src/modules/payments/repository.ts`** – The repository is used to read the persisted payment document for assertions.
-- **`src/modules/payments/events.ts`** – `PAYMENT_REFUND_OWED_BY_HAND` and `PAYMENT_REFUNDED` event names are queried from the outbox.
-- **`src/kernel/outbox.ts`** – `outboxEventModel` is read to assert deferred events; `settleOutboxNudges()` flushes them before assertions.
-- **`src/kernel/events.ts`** – `resetDomainEvents()` is called in `afterEach` to clear the domain-event bus.
-- **`src/modules/payments/module.ts`** – `paymentsModule` is registered via `registerCheckoutModules` in `beforeEach` to wire the service to the repository.
-- **`src/infrastructure/observability/audit.ts`** – `registerAuditSink` captures audit entries into the local `audited` array; `AuditEntry` is the row type.
-- **`src/modules/payments/tests/factories.ts`** – `refundOrderPayment`, `refundForOrder`, and `payByCard` provide higher-level test actions (operator refund, cancel-listener simulation, card payment).
-- **`scenarios/support/doubles/payments/fake.ts`** – The fake payment provider is spied on in the in-flight card-refund test to simulate a provider failure.
-- **`tests/support/checkout-modules.ts`** – `registerCheckoutModules` wires the payments module into the test app.
-- **`tests/support/callers.ts`** – `asAdmin`, `asModerator`, `callerContextAs` supply caller identity and context for service calls.
-- **`src/modules/users/tests/factories.ts`**, **`src/modules/products/tests/factories.ts`**, **`src/modules/orders/tests/factories.ts`** – Seed the user, product, and order documents required by `cashOrder()`.
+- **Service and data**: it calls `paymentService` (`src/modules/payments/services/index.ts`, which provides `recordOfflinePayment`, `settleRefundByHand`, `getForOrder` and `refundLegalDue`), reads state through `paymentRepository` (`src/modules/payments/repository.ts`), and loads `paymentsModule` (`src/modules/payments/module.ts`) through `registerCheckoutModules` (`tests/support/checkout-modules.ts`).
+- **Events and outbox**: `PAYMENT_REFUND_OWED_BY_HAND` and `PAYMENT_REFUNDED` come from `src/modules/payments/events.ts`. The tests query `outboxEventModel` and call `settleOutboxNudges` from `src/kernel/outbox.ts`, and they call `resetDomainEvents` from `src/kernel/events.ts`.
+- **Audit**: `registerAuditSink` and `AuditEntry` come from `src/infrastructure/observability/audit.ts`.
+- **Factories and callers**:
+  - `createUser`, `createProduct`, and `createOrder`/`toOrderItem` come from the users, products and orders factories (`src/modules/users/tests/factories.ts`, `src/modules/products/tests/factories.ts`, `src/modules/orders/tests/factories.ts`).
+  - `refundOrderPayment`, `refundForOrder` and `payByCard` come from the payments `src/modules/payments/tests/factories.ts`.
+  - `asAdmin`, `asModerator` and `callerContextAs` come from `tests/support/callers.ts`.
+- **Provider double**: `fakePaymentProvider` (`scenarios/support/doubles/payments/fake.ts`) has `refund` mocked to reject once for the in-flight case.
+- **Not imported directly**: `src/modules/payments/services/refunds.ts` is not imported here, so it is reached only through the service.
 
 ## Notes
-
-- `settleOutboxNudges()` **must** be called before asserting on `PAYMENT_REFUNDED` rows in `outboxEventModel`; the event is enqueued lazily and only materialises after the nudge.
-- The audit sink is a module-level array (`audited`) reset in every `beforeEach`; there is no per-test isolation beyond that reset.
-- `fakePaymentProvider` is **not** a stand-in for the service layer—it only replaces the external gateway in the single in-flight-card-refund test. All other paths go through the real service code.
-- The test asserts a *negative* audit check: `admin.payment.refunded` must **not** appear, distinguishing the hand-settle path from the card-refund path.
-- Permission model tested: `settleRefundByHand` is offered based on the `create:Refund` key, so a moderator sees the action just as an admin does.
+- The first test checks that a pending record stays unsettled "however privileged the caller" (an admin here).
+- The cancel listener has no caller, so its owed rows are attributed to the system.
+- Outbox assertions run after `settleOutboxNudges()`.
+- Two imports use the `@tests/...` alias with paths (`@tests/checkout-modules`, `@tests/callers`) that differ from the `tests/support/...` paths in the graph.

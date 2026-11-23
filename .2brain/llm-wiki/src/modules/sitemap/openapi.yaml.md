@@ -1,33 +1,30 @@
 ---
 source: src/modules/sitemap/openapi.yaml
-sha256: 8d618e3ab0d9a607c41117d8deaea09be8cdea486c15403e0d6722afd043bc7f
-generated_at: 2026-11-14T21:59:48.006485+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8d618e3ab0d9a607c41117d8deaea09be8cdea486c15403e0d6722afd043bc7f
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T07:49:05.430393+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/sitemap/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 module contract that defines the three public, unauthenticated XML endpoints the sitemap module must expose: a stable index, a pages file, and paginated products files. It exists so the API surface, caching policy, and response shapes are documented alongside the implementation and can be validated against the shared contract infrastructure.
+OpenAPI 3.1.0 contract (version `0.1.0`) for the sitemap module. It describes three public, unauthenticated XML endpoints that expose the shop's pages and public products to search engines, all grouped under the `Sitemap` tag (family `Catalogue`).
 
 ## Key elements
-
-- **`/sitemap/index.xml` (GET, `getSitemapIndex`)** – Sitemap index listing `pages.xml` plus one `products-{page}.xml` per run. The stable address named in the frontend's `robots.txt`.
-- **`/sitemap/pages.xml` (GET, `getSitemapPages`)** – Static shop pages (source: `staticPages` in `shared/rules/frontend-links.yaml`), one URL per active language with `xhtml:link` alternates. No `lastmod`.
-- **`/sitemap/products-{page}.xml` (GET, `getSitemapProducts`)** – One run (≤ 50 000 URL entries) of active, non-deleted public products, oldest id first. `lastmod` = product `updatedAt`. Unknown page numbers return 404.
-- **Tag `Sitemap`** (`x-family: Catalogue`) – Groups all three operations; no other tags are defined.
-- **`components.schemas.SitemapDocument`** – Declared as `type: string`; represents any sitemaps.org 0.9 document (`urlset` or `sitemapindex`) served as `application/xml`. The actual XML element structure is not modeled.
-- **Shared references** – 404 response pulled from `shared/contracts/openapi.root.yaml`; static-page list referenced in prose from `shared/rules/frontend-links.yaml`.
-- **Cache policy** – Every 200 response carries `Cache-Control: public, max-age=3600`.
+- `GET /sitemap/index.xml` (`getSitemapIndex`): the sitemap index, listing `pages.xml` and one `products-{page}.xml` per run of public products. It is always an index, so the address named in the frontend's `robots.txt` stays stable as the catalogue grows. Built from the live catalogue on each request.
+- `GET /sitemap/pages.xml` (`getSitemapPages`): static pages from `staticPages` in `shared/rules/frontend-links.yaml`. It has one `url` per active language, with `xhtml:link` alternates for every language and `x-default`, and no `lastmod`.
+- `GET /sitemap/products-{page}.xml` (`getSitemapProducts`): one run of public products (active and not deleted), oldest id first, one `url` per active language with alternates and `x-default`.
+  - `lastmod` is the product's `updatedAt`, which a translation edit also moves and a sale does not.
+  - A run holds as many products as keep the file at or under 50,000 `url` entries.
+  - The `page` path parameter is a required integer ≥ 1, matching the numbering the index lists. A number the index does not list returns `404`.
+- `components.schemas.SitemapDocument`: a plain `string` schema for a sitemaps.org 0.9 `urlset` or `sitemapindex`, served as `application/xml` rather than JSON.
 
 ## Relationships
-
-- **`src/modules/sitemap/module.ts`** – The implementation module whose routes/handlers are specified here. The `operationId` values (`getSitemapIndex`, `getSitemapPages`, `getSitemapProducts`) are the anchors the module's route registration maps to.
+- No graph neighbors are recorded for this file, so no dependency-graph interactions are documented.
 
 ## Notes
-
-- `SitemapDocument` is intentionally opaque (`type: string`); do not expect a detailed XML schema here. Validate structure via tests or the sitemaps.org spec.
-- The products path uses a path parameter (`{page}`) rather than a query string, so the URL shape is `/sitemap/products-1.xml`, not `/sitemap/products.xml?page=1`.
-- `lastmod` on product URLs tracks `updatedAt` and shifts on translation edits but **not** on price/sale changes—this is a deliberate semantic choice documented in the description.
-- The 50 000 URL cap per products file is a hard rule; the index must enumerate exactly as many `products-{page}.xml` entries as exist for the current catalogue.
+- All operations set `security: []`, so they are public.
+- Every `200` response carries `Cache-Control: public, max-age=3600`.
+- The responses are XML, so clients should not expect JSON.
+- The `404` response on the products endpoint is a `$ref` to the shared `NotFound` response in `shared/contracts/openapi.root.yaml`; the pages endpoint description refers to `staticPages` in `shared/rules/frontend-links.yaml`. Both are textual references in the file, not recorded graph dependencies.

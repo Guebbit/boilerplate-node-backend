@@ -1,35 +1,36 @@
 ---
 source: src/infrastructure/observability/metrics-http.ts
-sha256: cb9745e775be48b77e7b7b85108cb843724107aabe7c6d423956f0f0fa6bcacb
-generated_at: 2026-11-08T03:40:12.314993+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 90f39bb09380d32426cec03a5f837ff3861b16c07a8760609c157bc49054a517
+context_sha256: 73d529bab1e3be398442984bdc358bbc05b902266e79d750aa75b307696377ce
+generated_at: 2026-11-22T02:59:21.565359+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/observability/metrics-http.ts
 
 ## Purpose
-Defines and exposes four Prometheus metrics for HTTP request observation (total counter, duration histogram, error counter, in-flight gauge) plus the helper functions to record them. This file is the *definition and write* side only; serialization to the registry, read-back for the overview endpoint, and per-request tracing live elsewhere. It exists so that a single import gives the middleware everything needed to stamp a completed request into the process-wide registry.
+Defines and records the Prometheus HTTP request metrics: a request counter, a duration histogram, an error counter, and an in-flight gauge. These are always-on aggregates for dashboards and alerts, as opposed to per-request traces. This file only defines and records the metrics. The registry lives in `metrics-registry.ts`, and the read-back into JSON lives in `src/modules/observability/http-readback.ts`.
 
 ## Key elements
-- **`httpRequestsTotal`** (Counter) — total requests by `method`, `route`, `status_code`; the RED-metric numerator.
-- **`httpRequestDuration`** (Histogram) — request duration in ms by `method`, `route`; deliberately omits `status_code` to avoid bucket × status cardinality blow-up.
-- **`httpRequestErrorsTotal`** (Counter) — 4xx/5xx responses; a convenience pre-filter over `httpRequestsTotal`.
-- **`httpInflightRequests`** (Gauge) — unlabelled live request count; increases on start, decreases on finish.
-- **`UNMATCHED_ROUTE`** — constant `'unmatched'`, the single label value for requests that hit no Express route (prevents unbounded cardinality from path-based labels).
-- **`getRouteLabel(request)`** — resolves the mounted route template via `routeTemplateOf`, prepends `request.baseUrl`, strips a trailing slash, and falls back to `UNMATCHED_ROUTE`.
-- **`recordRequestMetric({method, route, statusCode, durationMs})`** — increments the total counter, observes the histogram, and conditionally increments the error counter in one call.
-- **`incrementInflight()` / `decrementInflight()`** — paired inc/dec on the in-flight gauge.
+- `httpRequestsTotal`: a `Counter` of requests by `method`, `route` and `status_code`. It is the numerator for rate and error ratio.
+- `httpRequestDuration`: a `Histogram` of request duration in milliseconds. It is labelled by `method` and `route` only, with no `status_code`.
+- `httpRequestErrorsTotal`: a `Counter` of responses with status >= 400, using the same labels as `httpRequestsTotal`. It duplicates a status-filtered `httpRequestsTotal`, and `HighErrorRate` does not read it.
+- `httpInflightRequests`: an unlabelled `Gauge` of requests currently being processed.
+- `UNMATCHED_ROUTE`: the constant `'unmatched'`, used as the route label when no route matched.
+- `getRouteLabel(request)`: returns the matched route template as `baseUrl + template`, with a trailing slash stripped and `/` kept as is. It returns `unmatched` when no route matched. It must be called after routing, so callers use it inside a `finish` listener.
+- `recordRequestMetric({ method, route, statusCode, durationMs })`: increments the counter, observes the histogram, and increments the error counter if `statusCode >= 400`. It is called once per response.
+- `incrementInflight()` / `decrementInflight()`: adjust the in-flight gauge.
 
 ## Relationships
-- **`src/infrastructure/http/request.ts`** — provides `routeTemplateOf`, the single source of truth for extracting the Express route template from a `Request` object.
-- **`src/infrastructure/observability/metrics-registry.ts`** — provides the shared `metricsRegistry` instance into which all four metrics are registered; owns `getPrometheusMetrics` and process collectors.
-- **`src/infrastructure/observability/metric-config.ts`** — supplies `counterConfig`, `histogramConfig`, `gaugeConfig` factory functions that inject generated metadata (name, help text, default buckets) from `metrics.generated.ts`.
-- **`src/infrastructure/http/middlewares/request-logger.ts`** — the primary *consumer*: calls `incrementInflight` on request start and `decrementInflight` + `recordRequestMetric` on the `finish` event.
-- **`src/modules/observability/http-readback.ts`** — reads the exported counters/gauge to build the JSON response for `GET /observability/metrics/overview`.
-- **`tests/unit/infrastructure/observability/metrics-http.test.ts`** — unit tests for `getRouteLabel` and `recordRequestMetric`.
+- `src/infrastructure/observability/metric-config.ts`: its `counterConfig`, `histogramConfig` and `gaugeConfig` helpers build each metric's configuration from the metric data definitions.
+- `src/infrastructure/observability/metrics-registry.ts`: every metric is registered on `metricsRegistry`.
+- `src/infrastructure/http/request.ts`: `routeTemplateOf` supplies the route template that `getRouteLabel` uses.
+- `src/modules/observability/http-readback.ts` and `src/modules/observability/controllers/get-observability-metrics-overview.ts`: the read-back reads these counters to build the `GET /observability/metrics/overview` JSON.
+- `src/infrastructure/http/middlewares/request-logger.ts` and `src/app/telemetry.ts`: these are graph neighbors. The file itself says only that its recording functions are called by the metrics middleware on `finish`.
+- `tests/unit/infrastructure/observability/metrics-http.test.ts`: the unit tests for this module.
 
 ## Notes
-- **In-flight gauge pairing is caller responsibility.** `incrementInflight` and `decrementInflight` are not tied together by the library; a missed decrement (error path, client abort) permanently inflates the gauge. The middleware must guarantee exactly one dec per inc.
-- **`getRouteLabel` must be called after routing.** It reads `request.route` and `request.baseUrl`, which Express only populates during the routing phase. Calling it in an early middleware (before the router) will always return `UNMATCHED_ROUTE`.
-- **Cardinality guard is structural, not runtime.** The design prevents unbounded series by using the *matched template* (finite set of routes) rather than the raw URL path. There is no runtime cardinality check; adding a new label derived from request data would silently break this.
-- **Histogram label set is narrower than the counter's.** `httpRequestDuration` has no `status_code` label, so any PromQL query correlating duration with status must cross-join the two series externally.
+- **Cardinality:** `route` is always the matched template and never the raw path. prom-client never evicts series, so using raw paths would let scanners grow the registry without bound.
+- **Gauge pairing:** every `incrementInflight()` needs exactly one `decrementInflight()`, including on error and client-abort paths. A missed decrement makes the gauge drift upward permanently.
+- **Errors:** 4xx and 5xx are both counted as errors. Splitting client faults from server faults is left to queries over `status_code`.
+- **Histogram buckets:** they are roughly logarithmic and tighter at the low end, because percentiles can only resolve to a bucket boundary.

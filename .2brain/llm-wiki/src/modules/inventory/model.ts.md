@@ -1,43 +1,35 @@
 ---
 source: src/modules/inventory/model.ts
-sha256: 5dce50748c7850749a6cb0d89c88a26d28be7ba27b364acfed63096b76017ce8
-generated_at: 2026-11-14T20:04:08.920202+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:19:42.486496+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/model.ts
 
 ## Purpose
-
-Defines the Mongoose schemas, model instances, and document interfaces for the three collections the inventory module owns: the append-only **StockMovement** ledger, the **StockLevel** counter row (one per product), and the **Reservation** hold (one per order). All persistence-level concerns (index definitions, serialization transforms, enum constraints) live here; queries and business rules are delegated to `repository.ts` and `services/` respectively.
+Defines the three Mongoose collections the inventory module owns: the stock movement ledger, the per-product stock level, and the order hold (reservation). The stock level is the only place `onHand`/`reserved` live; the product record holds no stock.
 
 ## Key elements
-
-- **`MOVEMENT_REASONS`** – `Object.values(StockMovementReason)` read off the generated enum so the schema's `enum:` list can never drift from the contract.
-- **`StockMovementDocument` / `stockMovementSchema` / `stockMovementModel`** – The ledger row. Stores per-column deltas (`onHandDelta`, `reservedDelta`, `backorderedDelta`) so the collection is replayable. Indexes: `(productId, createdAt desc)` and `(createdAt desc)`.
-- **`applyStockMovementTransform`** – Serialization normalizer (`_id`→`id`, drops `__v`) built via `applySerialization`.
-- **`StockLevelDocument` / `stockLevelSchema` / `stockLevelModel`** – One document per product holding `onHand`, `reserved`, `available`, `backorderLimit`, `backordered`, and a monotonically-incrementing `version`. `productId` is `unique: true` (makes `openLevel` upsert idempotent). Indexes: `(available, _id)` for the stock board, `backorderLimit desc`, `backordered desc`.
-- **`applyStockLevelTransform`** – Same serialization pattern.
-- **`ReservationItem`** – Embedded line item (`productId`, `quantity`, optional `kind`: `'stock'` | `'backorder'`).
-- **`ReservationStatus`** / **`OPEN_RESERVATION_STATUSES`** – Four states (`held`, `committed`, `shipped`, `released`); the open subset is what still sets units aside.
-- **`ReservationDocument` / `reservationSchema`** – One hold per order. `orderId` is `unique: true` (idempotent reservation). Never serialized to a client.
-- **`reservationItemSchema`** – `_id: false` sub-schema for embedded items.
+- **`MOVEMENT_REASONS`**: array built from `Object.values(StockMovementReason)`, used as the ledger schema's `enum:` so it cannot drift from the contract.
+- **`StockMovementDocument` / `StockMovementModel` / `stockMovementSchema` / `stockMovementModel`**: the append-only ledger. Fields: `productId` (ObjectId ref `Product`), `reason`, `onHandDelta`, `reservedDelta`, `backorderedDelta` (all default 0, one column per counter so summing each column replays the counter), optional `reference` (order) and `note`. The document type is derived from the contract's `StockMovement`, with storage-specific overrides (ObjectId `productId`, `Date` timestamps). Indexes: `stockmovements_productId_createdAt` and `stockmovements_createdAt`.
+- **`applyStockMovementTransform`**: serialization normalizer (`_id` → `id`, drops `__v`), built with `applySerialization`.
+- **`StockLevelDocument` / `StockLevelModel` / `stockLevelSchema` / `stockLevelModel`**: one row per product (unique `productId`). Counters: `onHand`, `reserved`, `available` (stored as `onHand - reserved`), `backorderLimit` (`number | null`; 0 closes backordering, `null` means no cap), `backordered`, and `version` (incremented on every write). Indexes: `stocklevels_available__id`, `stocklevels_backorderLimit` and `stocklevels_backordered`.
+- **`applyStockLevelTransform`**: serialization transform for stock levels.
+- **`ReservationItem`**: one claimed line, with `productId`, `quantity` and optional `kind` (`HoldKind`; absent reads as `stock`).
+- **`ReservationStatus` / `OPEN_RESERVATION_STATUSES`**: statuses are `held`, `committed`, `shipped` and `released`. The open set, which still sets units aside, is `held` and `committed`.
+- **`ReservationDocument` / `ReservationModel` / `reservationSchema`**: the hold. One per order (unique `orderId`), with an embedded `items` array (`reservationItemSchema`, no `_id`, `quantity` min 1), `status`, `expiresAt` and optional `committedAt`. The file shown cuts off partway through `reservationSchema`, so its remaining fields, indexes and model export are not covered here.
 
 ## Relationships
-
-- **`src/infrastructure/persistence/serialize.ts`** – Imports `applySerialization` to build `applyStockMovementTransform` and `applyStockLevelTransform`.
-- **`src/modules/inventory/domain/index.ts`** – Imports the `HoldKind` type used in `ReservationItem`.
-- **`@types`** (shared) – Imports `StockMovementReason` and `StockMovement` so the schema mirrors the contract rather than restating it.
-- **`src/modules/inventory/repository.ts`** – The sole writer: performs atomic `$inc` against `stockLevelModel` and appends to `stockMovementModel`. This file's comment on `min: 0` defers enforcement to that file's `$gte` guard.
-- **`src/modules/inventory/services/holds.ts`** – Drives `reservationModel` state transitions between the four `ReservationStatus` values.
-- **`src/modules/inventory/services/reserve.ts` / `allocate.ts`** – Consume `OPEN_RESERVATION_STATUSES` and the reservation document's allocation timestamp for ordering.
-- **`src/modules/inventory/index.ts`** – Re-exports the models and interfaces for consumers.
+- Imports `applySerialization` from `@infrastructure/persistence/serialize` (`src/infrastructure/persistence/serialize.ts`) for the transforms, and `StockMovementReason`/`StockMovement` from `@types`.
+- Imports the `HoldKind` type from `./domain`, which resolves to the `src/modules/inventory/domain/index.ts` neighbor.
+- Comments point to `./repository` (`src/modules/inventory/repository.ts`) for queries, including `applyDelta`, `conditionFor`, `applyTransition` and `stockBoard`. They point to `./services` (`services/holds.ts`, and the `reserve` and `allocate` services) for rules. These comments also describe the `PRODUCT_CREATED` listener's `openLevel` upsert.
+- The module's tests (`src/modules/inventory/tests/factories.ts` and the contract and integration tests) and `scenarios/flows/backdate.ts` are listed as graph neighbors, but the visible content shows no interaction with them.
 
 ## Notes
-
-- **No `min: 0` on `onHand`/`reserved`/`available` in the schema.** Mongoose skips `min`/`max` validation on `$inc` updates, so the real floor is the `$gte` guard in `repository.ts#applyDelta`. Adding a schema-level `min` would be dead weight.
-- **`available` is stored, not derived.** It is kept in lockstep via the same `$inc` call; this lets the stock-board query filter on an indexed column rather than computing `onHand - reserved` at read time.
-- **`version` on StockLevel** is bumped by `$inc` on every write. The catalogue's mirrored copy records the version it was snapshotted at, so a stale write can never overwrite a newer one.
-- **`backorderLimit: null` means "no cap"; `0` means "closed."** A row lacking the field reads as `0`.
-- **Reservation is intentionally never exposed to clients.** The comment states the customer's order document is the canonical view; publishing the hold would create a second source of stock state for the frontend.
-- **Index names are explicit** (e.g. `'stockmovements_productId_createdAt'`) because Mongo identifies indexes by name as much as by key; a name mismatch causes a startup failure rather than a silent no-op.
+- The schema has no `min: 0` on `onHand`, `reserved`, `available` or `backordered`. Their writes go through `$inc`, which Mongoose does not validate. The real floor is the `$gte` guard in the update filter, in `repository.ts`.
+- `available` is stored, not derived, so the stock board's `maxAvailable` filter can use an index.
+- A unique `orderId` makes reserving idempotent: a retried insert fails and no counter moves.
+- The hold keeps its own copy of the items so releasing does not need the `orders` module, which would create a dependency cycle.
+- There is deliberately no contract type for reservations, because they are never serialized to clients.
+- A `released` hold can be taken again (`released → held`). `shipped` is terminal.
+- The `kind` comments conflict: `ReservationItem` documents `stock | preorder` (via `HoldKind`), while the item sub-schema's enum is `['stock', 'backorder']`.

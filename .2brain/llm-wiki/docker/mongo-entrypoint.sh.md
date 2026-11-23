@@ -1,32 +1,36 @@
 ---
 source: docker/mongo-entrypoint.sh
-sha256: 55d1f2513967a3d5a31aa6a30e60bea9951f7ebe4ad70d72087dcadaea0fc7f5
-generated_at: 2026-11-08T02:20:36.880949+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T01:30:31.047372+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/mongo-entrypoint.sh
 
 ## Purpose
-
-Wrapper entrypoint for the MongoDB container that generates replica-set keyFile and wire-TLS material (self-signed CA + server certificate) on first boot, with correct ownership, before handing off to the official image's `docker-entrypoint.sh`. Replaces an earlier one-shot service approach that broke podman-compose 1.6/libpod's dependency resolution.
+A wrapper entrypoint for the MongoDB container. On first boot it creates the replica-set keyFile and the wire-TLS material (a self-signed CA and a server certificate) with the ownership mongod needs. It then hands off to the official image's own entrypoint script. It replaced a separate one-shot init service because podman-compose 1.6/libpod refuses to start services that transitively depend on an already-exited container. With a wrapper, only `database` itself needs this logic.
 
 ## Key elements
-
-- **KeyFile generation** — `openssl rand -base64 756` written to `/keyfile-dir/mongo-keyfile`; guarded by `[ ! -s … ]` so it runs once. `chmod 400`, `chown 999:999`.
-- **CA creation** — Self-signed 10-year RSA-4096 root CA (`/keyfile-dir/mongo-ca.key` / `.crt`), unencrypted key (`-nodes`). First-boot only.
-- **Server PEM creation** — RSA-4096 key + CSR (SAN: `DNS:database, DNS:localhost, IP:127.0.0.1`), signed by the CA above, then concatenated (key then cert) into `/keyfile-dir/mongo-server.pem`. Temp files in `/tmp` are removed.
-- **CA cert sharing** — Copies `mongo-ca.crt` to `/ca-dir/mongo-ca.crt` every boot (idempotent) so `app`/`cron`/`setup`/`mongo-rs-init` can verify mongod's identity without access to the private keys in `/keyfile-dir`.
-- **Final handoff** — `exec docker-entrypoint.sh "$@"`, which drops privileges to the `mongodb` user (uid/gid 999) via `gosu` before starting `mongod`.
+- **keyFile generation**: if `/keyfile-dir/mongo-keyfile` is missing or empty, it writes `openssl rand -base64 756`, sets mode `400`, and chowns it to `999:999` (the image's `mongodb` user).
+- **TLS bootstrap**: runs only while `/keyfile-dir/mongo-server.pem` is absent or empty.
+  - Creates a self-signed root CA (`mongo-ca.key` / `mongo-ca.crt`, RSA 4096, 10 years, unencrypted via `-nodes`).
+  - Creates a server key and CSR with `CN=database`. The SAN is `DNS:database, DNS:localhost, IP:127.0.0.1`.
+  - Signs the CSR with the CA, using `mongo-ca.srl` as the serial file.
+  - Concatenates key and cert into `mongo-server.pem`, the single-file format `--tlsCertificateKeyFile` expects.
+  - Deletes the temporary files in `/tmp`.
+  - Sets `chmod 400` and `chown 999:999` on the PEM and the CA key.
+- **Shared CA copy**: on every boot it runs `mkdir -p /ca-dir`, copies the CA cert to `/ca-dir/mongo-ca.crt`, and sets `chmod 444` on both copies.
+- **Handoff**: `exec docker-entrypoint.sh "$@"` runs the official image's entrypoint, passing through the container's command arguments.
 
 ## Relationships
-
-No graph-neighbor files are recorded.
+No graph neighbors. The comments refer to these things outside the dependency graph:
+- The compose production configuration's `mongod` command uses `$SERVER_PEM` for `--tlsCertificateKeyFile` and `$CA_CERT` for `--tlsCAFile`. It also passes `--tlsAllowConnectionsWithoutCertificates`.
+- The `/keyfile-dir` volume is mounted only by `database`. The `/ca-dir` (`mongo-ca-dir`) volume is shared with `app`, `cron`, `setup` and `mongo-rs-init`, which need only the CA cert to verify the server.
+- Clients that verify against the CA: `NODE_DB_URI`'s `tlsCAFile`, the healthcheck, `mongo-rs-init`, and the `mongosh`/`mongodump` commands in the backup documentation.
 
 ## Notes
-
-- The script must run as **root** (the container's default user) because it `chown`s to uid 999; the real `mongodb` user is only active after `docker-entrypoint.sh` calls `gosu`.
-- All generation blocks are guarded by `[ ! -s … ]` (file must be non-empty), making them first-boot-only. The CA-cert copy to `/ca-dir` is deliberately **not** guarded — it re-copies every boot to survive a `/ca-dir` volume being recreated independently.
-- No passphrase is used on any private key (`-nodes`); there is no human present at container boot to supply one.
-- A deployment with a real CA can pre-place `SERVER_PEM` (cert + key concatenated) and `CA_CERT` in the `/keyfile-dir` volume before first boot; the script will skip generation.
-- The SAN is hardcoded to `DNS:database` (the compose service name) plus loopback addresses for in-container `mongosh`/`mongodump` calls. If the service name changes, this script must be updated.
+- It must run as root, the container's default user. The `chown` to uid/gid 999 needs that, and the official entrypoint later drops to `mongodb` via `gosu`.
+- TLS is verified by the client side only. Mutual TLS is intentionally not used.
+- To use a CA-issued certificate, place the combined cert-then-key PEM at `$SERVER_PEM` and the CA cert at `$CA_CERT` before first boot. The TLS block is skipped once `$SERVER_PEM` exists.
+- The check is on `$SERVER_PEM` only, so if `mongo-ca.crt` or `mongo-ca.key` is lost while the PEM remains, they are not regenerated.
+- The CA cert is re-copied to `/ca-dir` on every boot. This covers a `/ca-dir` volume recreated without `/keyfile-dir`.
+- The script uses `set -euo pipefail`.

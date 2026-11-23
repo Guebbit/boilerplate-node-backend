@@ -1,32 +1,27 @@
 ---
 source: src/modules/example/rate-limits.ts
-sha256: 8d5d57054c43b946119611f5a1f91ed632bba541f7fca4d6df7dbb18a1f86e31
-generated_at: 2026-11-08T05:51:55.538918+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e7fa5f96903caf3c06f5174ab3c7f363ebf9ce6eba84a3cd5380b93e776cdb27
+context_sha256: 42d159c330ac0ee73ac8a6b84f4bb5f79b129e87189d7a4845c421e8b5e7855d
+generated_at: 2026-11-22T05:10:34.568126+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/rate-limits.ts
 
 ## Purpose
-
-Declares this module's rate-limit budgets as data and turns them into Express middleware via the shared `buildRateLimiter` helper. Each budget defines *what* is limited (a route's write action), *how* it is keyed (account vs. address), and *how much* is allowed (pulled from the generated file). Delete this file if the module no longer needs any budget.
+Declares the example module's rate-limit budgets as data and turns them into Express middleware. It defines one budget, for creating examples, keyed per authenticated account, and exposes both the middleware and the budget list. The module is a template: its header says to delete this file (and the route mount) if a module needs no budget.
 
 ## Key elements
-
-- **`CREATE_EXAMPLE_BUDGET`** — A `RateLimitBudget` for `POST /examples`. Spreads the numeric limits from `exampleRateLimitData.exampleCreate` (in `./rate-limits.generated`), keys by authenticated account (`accountIdOf` + `KEYED_BY_AUTHENTICATED_ACCOUNT`), and spends on successful writes.
-- **`createExampleLimiter`** (export) — The `RequestHandler` produced by `buildRateLimiter(CREATE_EXAMPLE_BUDGET)`. Mounted on the `POST /examples` route.
-- **`exampleRateLimits`** (export) — `readonly RateLimitBudget[]` containing all budgets declared by this module. Referenced by `./module.ts`'s `rateLimits` field.
+- `CREATE_EXAMPLE_BUDGET` (private): a `RateLimitBudget` that spreads `exampleRateLimitData.exampleCreate` from `./rate-limits.generated`. It adds `keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT` and `keyGenerator: accountIdOf`. Limits are per account, not per address, so one noisy account can't starve others behind the same address. A successful create spends the budget.
+- `createExampleLimiter`: a `RequestHandler` built with `buildRateLimiter(CREATE_EXAMPLE_BUDGET)`. It is the limiter for `POST /examples`.
+- `exampleRateLimits`: a `readonly RateLimitBudget[]` containing the module's budgets. `module.ts` lists it as `rateLimits`.
 
 ## Relationships
-
-- **`@infrastructure/http/middlewares/rate-limit`** — Source of `buildRateLimiter`, `accountIdOf`, and `KEYED_BY_AUTHENTICATED_ACCOUNT`. The only middleware factory every module is expected to use.
-- **`./module.ts`** — Consumes `exampleRateLimits` and lists it under its `rateLimits` property (the module manifest).
-- **`./routes.ts`** — Mounts `createExampleLimiter` on the `POST /examples` endpoint.
-- **`src/types/rate-limit-budget.ts` / `src/types/index.ts`** — Define the `RateLimitBudget` interface used for typing the budget objects.
-- **`tests/unit/manifest.test.ts`** — Validates that `exampleRateLimits` is consistent with the module manifest.
+- `src/infrastructure/http/middlewares/rate-limit.ts`: supplies `buildRateLimiter`, `accountIdOf` and `KEYED_BY_AUTHENTICATED_ACCOUNT`. This is the single limiter builder every module uses.
+- `src/types/rate-limit-budget.ts` (also exported through `src/types/index.ts`, imported here as `@types`): defines the `RateLimitBudget` type.
+- `src/modules/example/module.ts`: consumes `exampleRateLimits` as its `rateLimits`.
+- `src/modules/example/routes.ts`: presumably mounts `createExampleLimiter` on `POST /examples`. The doc comment names that route.
+- `src/modules/example/tests/unit/manifest.test.ts`: a neighbor in the graph. Its content isn't visible here, so the exact check isn't known.
 
 ## Notes
-
-- **Account-keyed, not address-keyed.** The route requires sign-in; keying on the wallet address would let one noisy account exhaust the budget for every other account behind that address.
-- **Numeric limits come from `./rate-limits.generated`** — a generated file not listed in the dependency graph. Regenerate it (via the tooling in `docs/tools/security.md#the-rate-limit-budgets`) before changing limits; do not hard-code numbers here.
-- **One file per module.** The convention is one `rate-limits.ts` per feature module; adding a budget for a *different* module does not belong here.
+- The numeric limits (window, max) are not defined in this file. They come from the generated data `exampleRateLimitData.exampleCreate`, imported from `./rate-limits.generated`.

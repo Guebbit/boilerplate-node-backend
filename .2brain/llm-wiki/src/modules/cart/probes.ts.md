@@ -1,31 +1,27 @@
 ---
 source: src/modules/cart/probes.ts
-sha256: cd70fec93809790c0a9c3a21c3c77bc29397ddba5e1a74b7b09693f11d6d7df6
-generated_at: 2026-11-08T05:15:31.425494+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cd70fec93809790c0a9c3a21c3c77bc29397ddba5e1a74b7b09693f11d6d7df6
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T04:34:23.289596+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/probes.ts
 
 ## Purpose
-
-Exports the cart module's probe collection: a set of `Probe` request definitions that exercise failure and boundary paths the OpenAPI contract can describe but cannot trigger. Each probe encodes *why* it exists in a `why` string so the intent is self-documenting.
+Defines the cart module's "probes": requests that the API contract (OpenAPI) cannot describe on its own, such as ones that trigger specific failure paths. They are exported as a collection of `Probe` objects from `@guebbit/openapi-runnable-collections`. The module header says the wider definition of a probe, where probes are emitted, and which `{{seedToken}}` values they may use are documented elsewhere (in `scripts/contracts/client-collections-bundle.ts`).
 
 ## Key elements
-
-- **`probes: Probe[]`** (exported const) — the four probe entries:
-  - *Checkout with empty cart* — `POST /cart/checkout`; the only clean way to observe the `checkout_failed` event.
-  - *Add a nonexistent product* — `POST /cart/items` with a zero-UUID; guards against the cart silently storing a dangling reference.
-  - *Quantity on a hidden product* — `PATCH /cart/items/{{seedInactiveProductId}}`; proves the shared service-level catalogue gate applies to the patch route too.
-  - *Zero quantity* — `POST /cart/items` with `quantity: 0`; confirms the schema's `min: 1` is enforced rather than treated as a remove shortcut.
+- `probes: Probe[]` is the only export. It holds four probes. Each has a `name`, a `why` (the reason the probe exists), a `method`, a `path` and `auth: 'bearer'`. Some also have a `body`.
+  - **Checkout with an empty cart:** `POST /cart/checkout`. The cart must be cleared first. The API refuses and emits `checkout_failed`, which the frontend cart store also reports. The seeded non-admin user starts with an empty cart so this state is reachable.
+  - **Add a product that does not exist:** `POST /cart/items` with a well-formed body (`productId` `000000000000000000000000`, `quantity` 1). It checks that the service does not store a dangling reference. The contract can describe the 404 but not a request that earns one.
+  - **Set a quantity on a product the storefront will not show:** `PATCH /cart/items/{{seedInactiveProductId}}` with `quantity: 1`. It checks that the PATCH route inherits the catalogue-gate refusal from the service shared with `POST /cart/items`. The `why` text says it answers 404 either way, because the cart holds no such line.
+  - **A quantity the schema forbids:** `POST /cart/items` with `productId: '{{seedProductId}}'` and `quantity: 0`. The contract requires a quantity of at least one, and removing a line has its own endpoint, so zero is a validation failure.
 
 ## Relationships
-
-- **Type import:** `Probe` from `@guebbit/openapi-runnable-collections` — shapes the array elements.
-- **Doc-comment reference:** `scripts/contracts/client-collections-bundle.ts` owns the surrounding probe framework (emission target, seed-token vocabulary). This file is a leaf that the bundle consumes.
+None. The file has no graph neighbors; its only import is the `Probe` type from the external package `@guebbit/openapi-runnable-collections`.
 
 ## Notes
-
-- `{{seedToken}}` placeholders (e.g. `{{seedProductId}}`, `{{seedInactiveProductId}}`) are resolved at bundle time by the script above; they are **not** literal path segments or values at runtime.
-- All probes use `auth: 'bearer'`; the seeded non-admin user is assumed to start with an empty cart, which is what makes the first probe's pre-state reachable without setup steps.
-- The file is intentionally side-effect-free: it exports a frozen data structure and imports only a type.
+- Seed placeholders are `{{seedProductId}}` and `{{seedInactiveProductId}}`. Their valid values are defined outside this file.
+- The path parameter in the PATCH probe is a seed token, not an OpenAPI-style `{productId}`.
+- The empty-cart checkout probe depends on state: the cart must be cleared before it is sent.

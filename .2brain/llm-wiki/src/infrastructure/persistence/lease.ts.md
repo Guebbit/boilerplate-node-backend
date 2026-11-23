@@ -1,46 +1,41 @@
 ---
 source: src/infrastructure/persistence/lease.ts
-sha256: 639c1f74496526c453f95a51e55cc89d379e7409dc84c9d20217f38513fd336f
-generated_at: 2026-11-08T03:43:15.108524+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 22394d173992d39e12d5367294a77876695e17d9fac09d8b6323b5c0ff79d958
+context_sha256: 425bdc84baf43ee9e11dc8dc81f5160cc75f1960939df86d8953eeabbea4b0f9
+generated_at: 2026-11-22T03:02:57.579756+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/lease.ts
 
 ## Purpose
-
-Provides a MongoDB-backed mutual-exclusion lease so that a scaled-out cron container fleet runs a periodic job exactly once per window. One atomic `findOneAndUpdate` upsert decides the holder; no separate lock store (e.g. Redis) is needed. Fencing tokens are deliberately omitted—the repo contract requires every lease-guarded job to be idempotent.
+A Mongo-backed mutual-exclusion lease. A single atomic upsert decides which process runs a periodic job, so a scaled-up cron container can't run the same job twice in one window. It also stores each job's last success and last error, which health reporting reads. Fencing is deliberately not implemented. The repo relies on lease-guarded jobs being idempotent instead.
 
 ## Key elements
-
-- **`LeaseDocument`** – Interface for the `leases` collection. `_id` is the job name (not a generated id); carries `owner`, `expiresAt`, `lastSuccessAt`, `lastError`.
-- **`leaseModel`** – Mongoose model (collection `leases`, `timestamps: true`). No TTL index; rows persist until manually deleted so a retired job stays visible as stale.
-- **`LeaseSummary`** – Projected shape (`name`, `lastSuccessAt`, `lastRunAt`, `lastError`) consumed by the health endpoint.
-- **`listLeaseSummaries()`** – Returns all lease documents projected to `LeaseSummary[]`, sorted by name. Only jobs that have attempted acquisition appear here; there is no separate "expected jobs" registry.
-- **`withLease<T>(name, ttlMs, run)`** – Main entry point. Generates a UUID token, acquires the lease atomically, runs `run()`, and releases (recording success or failure) on both paths. Returns `undefined` without calling `run` if another holder already owns the lease.
-- **`recordJobOutcome(name, outcome)`** – Upserts the lease row with the job's result *without* participating in mutual exclusion. Used by `scripts/run-script.ts` so every crontab job (lease-guarded or not) is visible to health/metrics.
-- **`acquireLease`** (private) – Single `findOneAndUpdate` with `$or` on expiry/ownership; a duplicate-key (E11000) response means "someone else has it" and is returned as `false`.
-- **`releaseLease`** (private) – Sets `expiresAt` to the Unix epoch (`RELEASED`) so the next acquisition's strict `$lt` check succeeds even within the same millisecond. Filters on `owner: token` so a stale release cannot clobber a new holder.
-- **`RELEASED`** – `new Date(0)` constant; the sentinel value meaning "no active holder."
+- `LeaseDocument` / `LeaseModel`: the document shape and its Mongoose model type. `_id` is the job name. Fields are `owner`, `expiresAt`, optional `lastSuccessAt` and `lastError`, plus Mongoose timestamps.
+- `leaseModel`: the Mongoose model `Lease`, stored in the `leases` collection. `timestamps: true` is on, and no TTL index exists.
+- `LeaseSummary`: a job's `name`, `lastSuccessAt`, `lastRunAt` (taken from `updatedAt`) and `lastError`.
+- `listLeaseSummaries()`: returns every lease document, projected to `LeaseSummary` and sorted by `_id`.
+- `withLease(name, ttlMs, run)`: the main entry point. It runs `run` only if the lease is acquired, and returns `undefined` without calling `run` if another holder has it. It releases the lease on both success and throw. The result of `run` passes through, and a throw from `run` is rethrown after release.
+- `recordJobOutcome(name, outcome)`: upserts the outcome (`lastSuccessAt`, or `lastError`) without taking a lease. A new row gets `owner: 'none'` and an already-expired `expiresAt`. Failures are logged and swallowed.
+- Internal `acquireLease`: one `findOneAndUpdate` upsert. It matches when the lease is missing, expired (`expiresAt < now`), or already owned by the same token. A duplicate-key error (via `isDuplicateKey`) means "someone else holds it" and returns `false`. Other errors are rethrown.
+- Internal `releaseLease`: filters on `owner: token`. It sets `expiresAt` to `RELEASED` and records either `lastSuccessAt` (clearing `lastError`) or `lastError`. A failed release is logged and swallowed.
+- `RELEASED`: `new Date(0)`, the Unix epoch, used as the expiry for released leases.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/logger.ts`** – `logger.warn` is called when `releaseLease` or `recordJobOutcome` fails, preventing a release/recording error from masking the job's real outcome.
-- **`src/infrastructure/persistence/mongo-errors.ts`** – `isDuplicateKey` is used in `acquireLease` to distinguish an E11000 (lease contention) from a genuine error.
-- **`src/modules/observability/services/job-health.ts`** – Consumes `listLeaseSummaries` to build the `GET /observability/health` response; `lastRunAt` / `lastSuccessAt` are surfaced there.
-- **`src/infrastructure/observability/metrics-registry.ts`** – Exports `job_last_success_timestamp_seconds` and `job_last_run_timestamp_seconds` from the same lease data.
-- **`scripts/run-script.ts`** – Calls `recordJobOutcome` for every job (lease-guarded or not) so health and metrics cover the full crontab.
-- **`scripts/ops/run-job.ts`** – Expected caller of `withLease` for lease-guarded periodic jobs.
-- **`tests/integration/persistence/lease.test.ts`** – Integration tests for acquire/release/contention semantics.
-- **`tests/unit/scripts/run-script.test.ts`** – Verifies that `recordJobOutcome` is invoked for each job.
-- **`tests/unit/infrastructure/observability/metrics-registry.test.ts`** – Tests metric exports that read lease-derived timestamps.
-- **`src/modules/observability/tests/contract/api.contract.test.ts`** – Contract-tests the health endpoint that surfaces `LeaseSummary` fields.
+- `@infrastructure/persistence/mongo-errors`: supplies `isDuplicateKey`, which `acquireLease` uses to detect lost races.
+- `@infrastructure/adapters/logger`: used to warn when a release or an outcome record fails.
+- `@guebbit/js-toolkit`: `extractErrorMessage` turns a thrown value into the stored `lastError` string.
+- `scripts/run-script.ts`: calls `recordJobOutcome` for every crontab job, whether or not it is lease-guarded.
+- `scripts/ops/prepare-job.ts`: a related ops script. The code states that `scripts/ops/` jobs must be idempotent.
+- `src/modules/observability/services/job-health.ts`: reads lease data via `listLeaseSummaries` for `GET /observability/health`.
+- `src/infrastructure/observability/metrics-registry.ts`: exports the job timestamps (`job_last_success_timestamp_seconds`, `job_last_run_timestamp_seconds`) from the lease data.
+- `tests/integration/persistence/lease.test.ts` covers this file directly. The other listed tests (the observability contract test, `command-metrics`, `metrics-registry` and `run-script` tests) are related through the dependency graph.
 
 ## Notes
-
-- **No fencing.** Two holders can briefly coexist if one crashes mid-run. The repo contract (`docs/reference/data.md`) mandates idempotency of all `scripts/ops/` jobs; needing a fencing token is treated as a bug signal, not a feature to add.
-- **`RELEASED` = epoch, not `new Date()`.** A release and the next acquire can share a millisecond; a strict `$lt` comparison against "now" would fail on equality. Epoch is always strictly less than any real timestamp.
-- **Release failures are swallowed (logged, not thrown).** A failed release simply lets the lease ride out `ttlMs`, identical to a crash. Throwing would replace the job's real success/error with an infrastructure error.
-- **`recordJobOutcome` upserts with `$setOnInsert` for `owner`/`expiresAt`.** A job that never calls `withLease` still gets a row, but it is always immediately acquirable and never blocks a later `withLease` for the same name.
-- **`_id` is the job name.** There is no separate lookup step; the upsert targets the document directly by name.
-- **Stryker markers** (`// Stryker disable all` … `// Stryker restore all`) wrap the two `logger.warn` fallback paths to exclude them from mutation-testing coverage.
+- `RELEASED` is the epoch rather than `new Date()` because `acquireLease` uses a strict `$lt`. A release stamped "now" could tie with the next acquisition's `now` in the same millisecond and lose that race.
+- The duplicate-key branch in `acquireLease` handles two cases the same way: a contended first insert, and a live lease held by a different token. Both mean "someone else has it".
+- A lease can expire while its holder is still running, so two holders can briefly coexist. This is accepted, with idempotent jobs as the mitigation.
+- Rows are never expired automatically. A retired job's row stays and reads as stale until someone deletes it by hand, so staleness alerts keep firing. No registry of expected job names exists.
+- `lastRunAt` means the row was last touched (an outcome recorded, or a lease taken or released), not that the job succeeded.
+- `releaseLease` and `recordJobOutcome` wrap their warn logs in `// Stryker disable all` / `restore all`, which excludes them from mutation testing.

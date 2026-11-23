@@ -1,38 +1,32 @@
 ---
 source: src/modules/inventory/services/types.ts
-sha256: d7edfd3eb092eeb55935e61e95e088299249631e111969210c06ba563f887e74
-generated_at: 2026-11-08T06:04:22.743245+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d7edfd3eb092eeb55935e61e95e088299249631e111969210c06ba563f887e74
+context_sha256: f43fa1c241df93d5a618d9f4c0270dc86e61bcb83a794471b9169c4e26374836
+generated_at: 2026-11-22T05:24:29.520362+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/services/types.ts
 
 ## Purpose
-
-Defines the input and output type shapes for all inventory stock operations (reserve, hold, top-up, level reads, movement reads). It exists so the service layer and its external consumers share a single vocabulary for "what a stock operation takes and what it answers back."
+Type-only module defining the input and output shapes of the inventory stock operations (reserve, give back, top-up, stock reads). It holds no runtime logic, only interfaces and a union type shared by the services that act on stock.
 
 ## Key elements
-
-- **`StockLine`** — A product line being held, released, or shipped. Carries `kind` (`stock` | `backorder`) and an optional `spill` flag that only the reserve operation reads.
-- **`StockShortfall`** — One line a hold could not cover: `requested` vs `available` (allowance remainder for preorders, not shelf count).
-- **`ReserveOutcome`** — Discriminated union: `{ held: true, expiresAt, owed }` or `{ held: false, shortfalls }`. Replaces a bare boolean so a refusal names the exact shortfalls at the moment of refusal.
-- **`TopUp`** — Per-product breakdown of how a hold was topped up after parcel loss: `shelf` (from free units) + `owed` (claimed against restock, outside the backorder cap).
-- **`StockPosition`** — Sellable quantity of one product: `available` (total a line may claim) vs `shelf` (on-shelf units only).
-- **`LevelFilters`** — Extends `PaginationInput` with optional `lowOnly` for stock-board reads.
-- **`MovementFilters`** — Optional `productId` / `reason` filters for ledger reads.
+- `StockLine`: a line being held or given back. It has `productId` (string; the repository converts), `quantity`, optional `kind` (`HoldKind`: `stock` by default, or `backorder`) and optional `spill`. `spill` is read only by a reserve: it takes the shelf units available and claims the rest against the backorder cap, for a released product open to backorder. The catalogue decides this, never the inventory module.
+- `StockShortfall`: a line a hold could not cover, with `productId`, `title`, `requested` and `available`. For a preorder line, `available` is the remaining allowance, not shelf stock.
+- `ReserveOutcome`: a discriminated union on `held`.
+  - `held: true` carries `expiresAt` and `owed`, a per-product list of units owed rather than on the shelf (empty if none).
+  - `held: false` carries `shortfalls`.
+- `TopUp`: the result of topping up a hold for one product after a lost parcel. `shelf` is units reserved from the free shelf, and `owed` is units claimed as a backorder.
+- `StockPosition`: what can be sold of a product now. `available` is everything a line may ask for, and `shelf` is only the units on the shelf.
+- `LevelFilters`: stock-board read filters. It extends `PaginationInput` and adds `lowOnly`.
+- `MovementFilters`: ledger read filters, `productId` and `reason` (`StockMovementReason`).
 
 ## Relationships
-
-- **Imports from** `src/types/index.ts` — `StockMovementReason` (used in `MovementFilters`).
-- **Imports from** `src/modules/inventory/domain/index.ts` — `HoldKind` (discriminates shelf vs. backorder lines).
-- **Imports from** `src/infrastructure/persistence/search.ts` — `PaginationInput` (base for `LevelFilters`).
-- **Consumed by** every inventory service implementation (`reserve.ts`, `holds.ts`, `top-up.ts`, `levels.ts`, `allocate.ts`) and re-exported through `services/index.ts`.
-- **Consumed by** external modules: `src/modules/cart/services/view.ts`, `src/modules/orders/services/place.ts`, `src/modules/orders/services/fulfillment.ts` — all read `ReserveOutcome`, `StockLine`, or `StockPosition` as their contract with the inventory layer.
-- **Domain context**: `src/modules/inventory/domain/transitions.ts` defines the state transitions these types parameterize.
+- Imports `StockMovementReason` from `@types` (`src/types/index.ts`), `HoldKind` from `../domain` (`src/modules/inventory/domain/index.ts`), and `PaginationInput` from `@infrastructure/persistence/search` (`src/infrastructure/persistence/search.ts`).
+- The neighbouring services (`allocate`, `holds`, `levels`, `reserve`, `top-up`) sit in the same folder and fit these shapes by name (reserve, top-up, levels). The cart and orders services (`src/modules/cart/services/view.ts`, `src/modules/orders/services/place.ts`, `src/modules/orders/services/fulfillment.ts`) are also graph neighbours. The file content does not show how any of them use these types.
 
 ## Notes
-
-- All IDs are **strings** in these types; the repository layer performs the numeric conversion. Callers never pass `number` IDs here.
-- `spill` on `StockLine` is intentionally opaque to hold/release operations — only `reserve.ts` interprets it. The catalogue (product configuration) decides whether a product is open to backorder, not this module.
-- `ReserveOutcome.held.expiresAt` is the **single authoritative deadline**. Callers must not re-derive an expiry from `holdMinutes`; the reservation record is the source of truth.
-- `StockPosition.available` ≥ `StockPosition.shelf` always holds; the gap is the backorder-cap room. A line that "spills" draws from that gap.
+- `ReserveOutcome.expiresAt` is documented as the same value the reservation was written with. Callers should not compute their own deadline from `holdMinutes`.
+- A reserve returns a result rather than a boolean so a refusal can name the short line and the count left, read at the moment of refusal.
+- A hold can carry the same product under both `stock` and `backorder` kinds once part of a preorder is allocated. Callers giving back or shipping a line must name which `kind`.

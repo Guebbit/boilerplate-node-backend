@@ -1,33 +1,29 @@
 ---
 source: scripts/contracts/personal-data-assembly.ts
-sha256: 7f2b6b7ca2652bac1db9086ab679afe53c099c23c04a207452f7d1972b0412ba
-generated_at: 2026-11-08T02:43:56.670894+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T01:59:23.420710+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/personal-data-assembly.ts
 
 ## Purpose
-
-Assembles the `POST /account/export` response schema by collecting `x-personal-data` declarations from each contributing module's `openapi.yaml` and merging them into the `account` module's `AccountExportResponse` stub. This eliminates a hand-maintained list of export sections: adding or removing a module automatically adds or removes its section.
+Builds the schema of the `POST /account/export` response from what each module declares about its own section. Modules list their contributions under an `x-personal-data` key in their own `openapi.yaml`. This file adds one property per declared section to the `AccountExportResponse` stub in the `account` module's staged OpenAPI file. Removing a module therefore removes its section, and no hand-maintained list is needed. The logic is pure (text and declarations in, text out), and the caller owns disk access.
 
 ## Key elements
-
-- **`PersonalDataSection`** (interface) — Describes one declared export section: owning module, property key, required flag, and schema (with `$ref`s still relative to the declaring module).
-- **`retarget`** (internal) — Recursively rewrites in-file `$ref`s (`#/…`) to `../<module>/openapi.yaml#/…` so references resolve correctly after the schema is copied into the owner's document. Cross-file relative refs are left untouched (all fragments share the same directory depth).
-- **`readPersonalDataSections`** — Reads each module's `openapi.yaml` from disk (via `readModuleFragment`), extracts its `x-personal-data` map, and returns a flat array of `PersonalDataSection` in the order of the supplied `modules` list. Skips modules that have no `openapi.yaml`.
-- **`assemblePersonalData`** — Parses the owner's YAML text, locates the `AccountExportResponse` stub, and inserts one property (plus a `required` entry if applicable) per section. Throws on duplicate keys or a missing/malformed stub. Returns the serialized YAML string.
-- **`stageExportSchema`** — The single entry point called by the bundler. Reads declarations from the **real** `src/modules` tree, rewrites the **staged** copy of `account/openapi.yaml` in place. No-ops if the staged owner file doesn't exist.
+- `PersonalDataSection` (interface): one declared section, with `module`, `key` (the property name), `required`, and `schema` (`$ref`s still relative to the declaring module's file).
+- `readPersonalDataSections(modulesRoot, modules)`: reads each module's `openapi.yaml` via `readModuleFragment` and returns its `x-personal-data` entries as sections, in the order of `modules`. It skips modules with no `openapi.yaml`. `required` defaults to `true`. Each schema is passed through `retarget`.
+- `assemblePersonalData(ownerText, sections)`: parses the owner's YAML and finds `components.schemas.AccountExportResponse`. It adds each section to `properties`, and to `required` when the section is required. It returns the YAML re-serialized with `lineWidth: 0` and `indent: 4`. It throws if the stub is missing, if it lacks `properties` or `required`, or if two sections share a key.
+- `stageExportSchema(stagedModulesRoot, modulesRoot, modules)`: the entry point the OpenAPI bundler calls. It rewrites `account/openapi.yaml` in the staged `src/modules` tree in place, using sections read from the real modules. It does nothing if the staged tree has no `account/openapi.yaml`.
+- `retarget` (private): rewrites in-file `$ref`s (`#/...`) to `../<module>/openapi.yaml#/...` so they still resolve from the owner's document. Cross-file refs are left unchanged.
+- `EXPORT_OWNER` (`'account'`) and `EXPORT_SCHEMA` (`'AccountExportResponse'`): constants naming the stub.
 
 ## Relationships
-
-- **`scripts/contracts/fragments.ts`** — Provides `readModuleFragment`, which this file uses to parse a module's `openapi.yaml` into a plain object.
-- **`scripts/contracts/openapi-bundle.ts`** — The caller of `stageExportSchema`; this file is the one contract-assembly step the bundler invokes.
-- **`tests/unit/scripts/contracts/personal-data-assembly.test.ts`** — Unit tests covering section reading, ref retargeting, stub assembly, and duplicate-key errors.
+- `./fragments`: supplies `readModuleFragment`, used to read and parse each module's fragment.
+- `openapi-bundle.ts`: the caller. Its bundling step calls `stageExportSchema` on the staged copy of the module tree.
+- `tests/unit/scripts/contracts/personal-data-assembly.test.ts`: unit tests for this module.
 
 ## Notes
-
-- Reads declarations directly from disk rather than through `redocly bundle`, because the bundler only follows `$ref` chains and cannot surface a top-level key that nothing references (same reason error codes are collected this way).
-- `required` defaults to `true` when a module omits the field in its `x-personal-data` entry.
-- Output YAML is serialized with `lineWidth: 0, indent: 4` to keep the staged file diff-friendly.
-- The function is intentionally pure (`assemblePersonalData` takes/returns strings); `stageExportSchema` is the thin I/O wrapper.
+- Declarations are read straight from disk rather than through `redocly bundle`. Bundling follows only `$ref` chains and cannot see a top-level key that nothing points at.
+- Cross-file `$ref`s are not rewritten. This relies on every fragment sitting at the same directory depth.
+- Duplicate-key detection compares against the stub's existing `properties` too, so a section cannot overwrite `exportedAt` or `profile`.
+- Section order in the output follows the `modules` order.

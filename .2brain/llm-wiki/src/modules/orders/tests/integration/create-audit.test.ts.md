@@ -1,42 +1,37 @@
 ---
 source: src/modules/orders/tests/integration/create-audit.test.ts
-sha256: 1a0e054a743f8aa29cbbe586a511572204797b05766e6239595cf73067003086
-generated_at: 2026-11-08T07:03:49.852393+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2f270cc5b2fa9c38ae9d680ba7ed48867cab7d96566650ed0bf1c3792a8ad012
+context_sha256: 1470624692da46b93eacc36e1fa70a7c83c2d182323b63f3372370927832492d
+generated_at: 2026-11-22T06:26:57.538876+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/create-audit.test.ts
 
 ## Purpose
-
-Integration test that verifies the `order_created` audit row always records the **real** caller role (`actorRoleName`) rather than a hard-coded label (e.g. "customer"). It guards against a regression where checkout's own purchase path could mask the true identity of the actor in the audit trail.
+Integration test asserting that creating an order writes an `order_created` audit event reflecting the real caller's role name (`actorRoleName`), never a forced or fixed label. This guards against any path, including checkout's own purchases, hardcoding the role to something like "customer".
 
 ## Key elements
-
-- **`contextAs(role, id?)`** – local helper that builds a `CallerContext` with a named tenant role, mimicking what a resolved HTTP request would produce.
-- **`jest.mock('@infrastructure/observability/audit', …)`** – fully **replaces** the audit port with `auditPortMock()` from `tests/support/ports` (not a `jest.spyOn`).
-- **`jest.mock('@infrastructure/observability/analytics', …)`** – stubs `emitAnalyticsEvent` to isolate the audit assertion from analytics side-effects.
-- **`describe('create — the audit row records the real caller…')`** – two cases:
-  - Moderator places an order → audit row has `actorRoleName: 'moderator'`.
-  - Admin places an order → audit row has `actorRoleName: 'admin'`.
-- **`setupTestDb()`** – initialises the in-memory Mongo instance for the test run.
+- `jest.mock('@infrastructure/observability/audit', ...)`: replaces the audit port wholesale with `auditPortMock()` from `@tests/ports` rather than spying on it. The in-file comment defers to `cancel.test.ts` for the reasoning: `jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes.
+- `jest.mock('@infrastructure/observability/analytics', ...)`: keeps the real module but stubs `emitAnalyticsEvent` as `jest.fn()`.
+- `setupTestDb()`: sets up the test database for the suite.
+- `afterEach(() => jest.restoreAllMocks())`: restores mocks after each test.
+- `contextAs(role, id = 'test-moderator')`: builds a `CallerContext` with `caller: callerAs(role, id)`, `actorRoleName: role`, and `analyticsConsent: false`.
+- Tests (in `describe('create — the audit row records the real caller, never a forced label')`):
+  - A moderator-placed order is audited with the orders `ORDER_CREATED` action, `outcome: 'success'` and `actorRoleName: 'moderator'`.
+  - An admin-placed order is audited with `actorRoleName: 'admin'`, not silently as a customer.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/orders/services/index.ts` | `orderService.create` is the system under test. |
-| `src/modules/orders/audit.ts` | Provides `ordersAuditActions.ORDER_CREATED` used in assertions. |
-| `src/infrastructure/observability/audit.ts` | Fully mocked; observed via `observePort(auditPort.emitAuditEvent)`. |
-| `tests/support/ports.ts` | Supplies `auditPortMock()` (the replacement) and `observePort` (the assertion helper). |
-| `tests/support/callers.ts` | `callerAs` builds the `CallerContext.caller` field inside `contextAs`. |
-| `tests/support/setup-test-db.ts` | Bootstraps the shared test database. |
-| `src/modules/users/tests/factories.ts` | `createUser` creates the buyer fixture. |
-| `src/modules/products/tests/factories.ts` | `createProduct` creates the purchasable item fixture. |
-| `src/types/index.ts` / `src/types/auth-context.ts` | Source of the `CallerContext` type used by `contextAs`. |
+- `src/infrastructure/observability/audit.ts`: mocked in this file. `observePort` is applied to its `emitAuditEvent` export to get the spy the assertions run against.
+- `src/modules/orders/audit.ts`: supplies the `ordersAuditActions` constants, used here for the expected `ORDER_CREATED` action name.
+- `src/modules/orders/services/index.ts`: exports `orderService`, whose `create` method is the code under test.
+- `src/modules/users/tests/factories.ts`: `createUser()` creates the buyer.
+- `src/modules/products/tests/factories.ts`: `createProduct()` creates the product ordered.
+- `tests/support/ports.ts`: provides `auditPortMock` and `observePort`.
+- `tests/support/callers.ts`: provides `callerAs`.
+- `tests/support/setup-test-db.ts`: provides `setupTestDb`.
+- `src/types/index.ts` and `src/types/auth-context.ts`: provide the `CallerContext` type, imported from `@types`.
 
 ## Notes
-
-- The audit port is **replaced** (`jest.mock`), not spied on. The file's comment points to `cancel.test.ts` for the full rationale: `jest.spyOn` cannot redefine the non-configurable getter exposed by a CommonJS namespace import.
-- `afterEach(() => jest.restoreAllMocks())` runs after every test to prevent cross-test leakage of the replaced port.
-- The module-level JSDoc states the invariant explicitly: no code path may force `actorRole` / `actorRoleName` to a fixed value, even for checkout-initiated purchases.
+- The buyer (the order's user) is distinct from the caller. The audited role comes from the `CallerContext` passed to the order creation call, not from the buyer.
+- The default caller id `'test-moderator'` is used even for the admin case.

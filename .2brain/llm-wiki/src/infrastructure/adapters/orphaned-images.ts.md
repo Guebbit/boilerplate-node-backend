@@ -1,36 +1,33 @@
 ---
 source: src/infrastructure/adapters/orphaned-images.ts
-sha256: 584ebc0c073b361ab5f28497636530fda4576f7dac26376d9d0dff72346bbba0
-generated_at: 2026-11-14T17:54:21.608063+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b9c5798cb1c810a7bbbb3fc36c49fcc9a95bf98f21dcb801eebe90fd8fea9098
+context_sha256: c0a2b73ae1f09f69f11b6765905a09fafa1c370a2ce63edfa8d03d55d911a04e
+generated_at: 2026-11-22T02:40:50.735297+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/orphaned-images.ts
 
 ## Purpose
-
-Implements the nightly `reap:orphaned-images` sweep: it compares every file on disk in the originals and thumbnails directories against the set of filenames still referenced by live documents, then deletes anything unreferenced. Kept as a standalone, tested function rather than inlined into a cron script so the logic is unit-testable and independent of job scheduling.
+Sweeps stored images that no current document references. It is the work behind the nightly `reap:orphaned-images` job, kept as a tested function rather than living in a cron script. Orphans arise from refused uploads that never reached their close hook, replayed `POST /products` requests (the retry's upload stays), and throwaway Mongo databases reseeded under files on a persistent disk.
 
 ## Key elements
-
-- **`reapOrphanedImages(collections)`** *(exported)* — Entry point. Resolves the two image directories, gathers the live reference set, calls `pruneUnreferenced` on each, and returns an `OrphanSweep` summary. Logs the result via `logger.info`.
-- **`OrphanSweep`** *(exported interface)* — `{ originalsChecked, originalsReaped, thumbnailsChecked, thumbnailsReaped }` — the audit record of one sweep.
-- **`referencedFilenames(collections)`** *(internal)* — Queries every supplied collection through the raw Mongoose driver (no repository layer), extracts `imageUrl` / `thumbnailUrl` strings, and returns a `Set` of basenames still in use.
-- **`MIN_AGE_MS`** — Set to `HOUR_MS`; files younger than this are never deleted (guards against a promoted image that hasn't yet been saved to its row).
+- `reapOrphanedImages(collections)` — the exported entry point. Builds the set of referenced filenames, then prunes the originals directory (`public/images`) and the thumbnails directory, logs the result, and returns an `OrphanSweep`.
+- `OrphanSweep` — exported interface with `originalsChecked`, `originalsReaped`, `thumbnailsChecked` and `thumbnailsReaped` counts.
+- `referencedFilenames(collections)` (private) — reads `imageUrl` and `thumbnailUrl` from every given collection with the raw Mongo driver (`mongoose.connection.db`). It returns the basenames of non-empty string URLs, or an empty set if there is no DB handle.
+- `MIN_AGE_MS` — equal to `HOUR_MS`. Files younger than this are never swept.
 
 ## Relationships
-
-- **`src/app/jobs.ts`** — The caller. Registers the nightly `reap:orphaned-images` job that invokes `reapOrphanedImages`.
-- **`src/infrastructure/adapters/filesystem.ts`** — Provides `pruneUnreferenced`, the actual file-deletion primitive. This module delegates all disk I/O to it.
-- **`src/infrastructure/adapters/image-store.ts`** — Supplies the directory layout constants (`IMAGES_SEGMENT`, `publicRoot`, `thumbnailsDirectory`) so paths stay consistent with the rest of the image pipeline.
-- **`src/domain-primitives/time.ts`** — Source of `HOUR_MS`, the minimum-age threshold.
-- **`src/infrastructure/adapters/logger.ts`** — Structured logging of sweep results.
-- **`tests/integration/orphaned-images.test.ts`** — Integration test that exercises the sweep end-to-end against a real filesystem and in-memory Mongo.
+- `src/app/jobs.ts` — the job layer that calls `reapOrphanedImages` (the module doc names the `reap:orphaned-images` job). The collection list is expected to come from `resolveImageTargets`'s keys.
+- `src/infrastructure/adapters/filesystem.ts` — provides `pruneUnreferenced(dir, keep, minAgeMs)`, which does the file deletion and returns `{ checked, reaped }`.
+- `src/infrastructure/adapters/image-store.ts` — provides `IMAGES_SEGMENT`, `publicRoot()` and `thumbnailsDirectory()`, which locate the directories to sweep.
+- `src/infrastructure/adapters/logger.ts` — the sweep summary is logged through its `logger`.
+- `src/domain-primitives/time.ts` — supplies `HOUR_MS`.
+- `tests/integration/orphaned-images.test.ts` — tests this function.
 
 ## Notes
-
-- **Raw-driver query, not repositories.** `referencedFilenames` intentionally bypasses module-specific repositories and reads `imageUrl`/`thumbnailUrl` via `mongoose.connection`. A new domain module that stores image URLs needs only to appear in the `collections` array passed by the job; no change to this file.
-- **Basename comparison only.** The reference set stores `path.basename(url)`, not full paths. Promoted URLs and on-disk files share only their filename; directories are handled separately by `pruneUnreferenced`.
-- **Subdirectory carve-out.** `pruneUnreferenced` (in `filesystem.ts`) only removes files *directly* in the given directory. Subdirectories like `images/seed/`, `images/system/`, `images/thumbs/` are untouched — the same boundary the `.gitignore` `public/images/*` rule draws.
-- **Age is a safety net, not a policy.** A file older than one hour is still kept if any document references it. Conversely, a file younger than one hour is kept *even if* unreferenced, to avoid racing an in-flight promotion.
-- **Stryker annotation.** The `logger.info` line is excluded from mutation testing (`Stryker disable next-line all`) because it is a side-effect-only statement.
+- The only keep test is "does a document still name this basename". Age does not matter, because promoted images are durable. The one-hour grace period exists only because an upload is promoted just before its row is saved.
+- Matching is by basename only, since a promoted URL and the file on disk share only that.
+- `images/seed/` and `images/system/` are never touched. `pruneUnreferenced` only handles files directly under the directory it is given, so subdirectories are skipped.
+- Raw driver reads are deliberate. The sweep must reach every collection generically, the same constraint `image.worker.ts` is under, so it avoids module repositories and a new image-bearing module needs no change here.
+- The log call is marked `Stryker disable` and is excluded from mutation testing.

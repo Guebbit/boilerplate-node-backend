@@ -1,33 +1,33 @@
 ---
 source: src/modules/payments/services/transfer.ts
-sha256: 267dd44cbcf92351969756a9a16417b27a5fb8cf7884bdc754df33861efb4840
-generated_at: 2026-11-08T07:30:01.924295+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 67532ab2fd0ef4ce09d90e2e155de52ecb72fbc1a522a08951b7ac4a941359c8
+context_sha256: 8a5b3c71a1e52ff23326d0198cfbe03709a11d7d61e423eca9dbd45ba2f82b97
+generated_at: 2026-11-22T06:54:10.713036+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/transfer.ts
 
 ## Purpose
-
-Handles the payment-creation step for bank-transfer orders. When an order is placed with `paymentMethod: 'bank_transfer'`, this module opens a `requires_action` payment row (carrying the reference, deadline, and instructions) and mails the transfer instructions to the buyer. It exists so that the transfer payment is tied to the order lifecycle (`order.created`) rather than being created lazily at settlement time.
+Opens the payment for a bank-transfer order. Money is owed from the moment such an order is placed, so on `order.created` this file creates a `requires_action` payment row carrying the RF reference, the deadline, and (on the wire) the transfer instructions, then mails those instructions to the buyer. An operator later finds the row by reference, records the money on it (`./offline`), and settles it through the shared `settlePayment`.
 
 ## Key elements
-
-- **`openTransferPayment(orderId: string): Promise<void>`** — The sole export. Listens to `order.created`; validates that the order is a bank-transfer order with a `payBy` deadline and still payable; inserts the payment row via the repository; and, if the row was freshly created and the feature flag is on, mails instructions. Idempotent under at-least-once outbox delivery (insert only when absent; mail only on the inserting call).
+- `openTransferPayment(orderId: string): Promise<void>`: the `order.created` listener.
+  - Loads the order with `orderService.getById`.
+  - Does nothing unless `paymentMethod === 'bank_transfer'`, `payBy` is set, and `isPayable(order.status)`.
+  - Calls `paymentRepository.openTransfer(orderId, buyerIdOf(order), { amount: orderTotal(order), currency, transferReference: buildReference(orderId), payBy })`.
+  - If the call reports `created`, it mails the instructions via `mailTransferInstructions(order, opened.payment)`.
 
 ## Relationships
-
-- **`@modules/orders`** (`src/modules/orders/index.ts`) — Pulls in `orderService.getById`, `buyerIdOf`, `isPayable` (from `domain/lifecycle.ts`), and `orderTotal` (from `domain/totals.ts`) to read and validate the order.
-- **`../repository`** (`src/modules/payments/repository.ts`) — Calls `paymentRepository.openTransfer` to insert the `requires_action` row; the repository returns a `created` flag used for idempotency.
-- **`../domain`** (`src/modules/payments/domain/index.ts`) — Calls `buildReference` (implemented in `domain/transfer-reference.ts`) to generate the RF reference stored on the row.
-- **`../config`** (`src/modules/payments/config.ts`) — Reads `bankTransferEnabled()` to decide whether to send instructions (feature-flag / deployment gate).
-- **`./notify`** (`src/modules/payments/services/notify.ts`) — Calls `mailTransferInstructions(order, payment)` to deliver the wire instructions to the buyer.
-- **`@infrastructure/adapters/logger`** — Emits a `logger.warn` when the row was created but the deployment no longer offers transfers (operator-facing visibility).
-- **`src/modules/payments/services/index.ts`** — Re-exports this module so callers can import `openTransferPayment` from the services barrel.
+- **`@modules/orders`** (`index.ts`): provides `orderService`, `buyerIdOf`, `isPayable` and `orderTotal`. These are the order lookup and the status, buyer and total helpers.
+- **`../repository`**: `paymentRepository` is used to insert the payment row (via its `openTransfer` method) and report whether it was newly created.
+- **`../domain`** (`transfer-reference.ts`): `buildReference` generates the transfer reference from the order id.
+- **`../config`**: `bankTransferEnabled()` decides whether the deployment still offers transfers.
+- **`./notify`**: `mailTransferInstructions` sends the instructions email.
+- **`@infrastructure/adapters/logger`**: used to warn the operator when a row is opened but no mail can be sent.
 
 ## Notes
-
-- The function is **fire-and-forget** (`Promise<void>`); callers (the outbox consumer) do not await a result. All error paths resolve to `undefined`.
-- `bankTransferEnabled()` is checked **after** the insert, not before. This means a row is still created even when the flag is off, but no email is sent. The design intent is that the operator can still record the money manually on that row.
-- If a payment already exists for the order (e.g., a card payment was recorded first, or an operator pre-filled it), the function is a silent no-op — it does not overwrite or log.
-- The `created` flag on the repository result is the sole idempotency signal; do not rely on query-then-insert.
+- **Idempotent** under the outbox's at-least-once delivery. The row is inserted only if absent, and only the call that inserted it (`created`) sends the mail.
+- **Existing payments are left untouched.** If a card payment or an operator-recorded payment already exists, nothing changes and no mail is sent.
+- **Transfers disabled since the order was placed.** The row is still created, but no mail is sent and a `logger.warn` is emitted.
+- **Silent no-ops.** Non-transfer orders, orders without `payBy`, and orders that are no longer payable return `undefined` without logging.

@@ -1,52 +1,43 @@
 ---
 source: src/modules/payments/tests/integration/staff-reads.test.ts
-sha256: 634777c22458493d14034a9f5eb5bc87364b02196231c073cfdef74a5f45f2c0
-generated_at: 2026-11-14T21:20:18.487150+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 41a2874e2eec04c58eb33a2c9844ece17ba89d386f344e774ab32c33c8b593c9
+context_sha256: f29543d91ef14d22f8b89719a2e6d99a5eb9acc1932935c56582b0ed74127954
+generated_at: 2026-11-22T07:03:01.605448+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/staff-reads.test.ts
 
 ## Purpose
-
-Integration tests (against a real MongoDB) for the three staff-facing payment reads — **list**, **refunds**, and **needs-attention** — verifying that every `displayStatus` label the server derives is the label its filter matches, that provider-specific identifiers (provider refs, failure reasons) reach staff but not the payer, and that a needs-attention row clears once its underlying problem is resolved.
+Integration tests, run against a real Mongo database, for the three reads behind the staff Payments page: the list (`paymentService.listPayments`), the refunds, and the needs-attention list (`paymentService.listAttention`). They check that every server-derived `displayStatus` label is found by its own filter, that the provider's ids reach staff only, and that a needs-attention row clears once its stored problem is fixed.
 
 ## Key elements
-
-- **`seedPayment(overrides)`** — Seeds a full chain (user → product → order → payment document) and returns the triple. Uses a module-level `sequence` counter to guarantee unique emails.
-- **`seedEveryLabel()`** — Creates one payment per `PaymentDisplayStatus` value (incomplete, pending, succeeded, refund_pending, partially_refunded, refunded, failed, canceled) and returns a `Map<PaymentDisplayStatus, string>` of label → payment id.
-- **`refundRecord(overrides)`** — Returns a refund sub-document shaped to the schema, with a random `idempotencyKey`.
-- **`backdate(payment, minutesAgo)`** — Overwrites `updatedAt` with a past timestamp (`timestamps: false`) to simulate elapsed time.
-- **`idsOf(filters)`** — Calls `paymentService.listPayments` and extracts the ordered array of payment ids from the first page.
-- **`staleRefund(hoursAgo)`** — Seeds a payment whose single refund failed a configurable number of hours ago.
-- **`attentionRows()`** — Calls `paymentService.listAttention()` and returns the items array.
-- **`describe` blocks:**
-  - *listPayments by displayStatus* — each label returns exactly the one payment that derives to it.
-  - *listPayments rows carry the actions of the caller* — refund / settleRefundByHand / cancelRefund / pay flags vary by payment state and method.
-  - *listPayments filters and sort* — method, provider, amount range, orderId, reference, created date, received date, `payBy` deadline (null = earliest), and row composition (orderNumber, email).
-  - *what each audience is sent* — staff see `providerRef`, `providerRefundRef`, `failureReason`; the payer sees none of them.
+- **Setup**: `setupTestDb()` runs at module level. `beforeEach` calls `registerCheckoutModules([paymentsModule])`. `afterEach` calls `resetDomainEvents()`.
+- **`refundRecord(overrides)`**: builds a schema-valid refund subdocument with defaults (10.00 EUR, `succeeded`, `goodwill`, and a random idempotency key).
+- **`seedPayment(overrides)`**: creates a user, a product, an order and a `paymentModel` document (50.00 EUR, `succeeded`, provider `fake`, method `card`). It uses a module-level counter to keep payer emails unique. It returns `{ user, order, payment }`.
+- **`idOf`**, **`idsOf(filters)`**: `idOf` returns a seeded row's payment id as a string. `idsOf` returns the ids on the first page of an admin `listPayments`.
+- **`backdate(payment, minutesAgo)`**: rewrites `updatedAt` with `timestamps: false`, because a normal save would stamp it with now.
+- **`staleRefund(hoursAgo)`**: seeds a payment with a single failed refund created that many hours ago.
+- **`attentionRows()`**: returns the `items` from `listAttention()`.
+- **`seedEveryLabel()`**: seeds one payment per `PaymentDisplayStatus`. The labels are incomplete, pending, succeeded, refund_pending, partially_refunded, refunded, failed and canceled. It returns a map of label to payment id.
+- **Test groups**, as far as the visible part of the file shows:
+  - `listPayments by displayStatus`: for each label, filtering returns exactly that payment and the row's `displayStatus` matches.
+  - `listPayments rows carry the actions of the caller`: asserts the per-row `actions` object. Refund is offered only on money that arrived and is not fully returned. `settleRefundByHand` and `cancelRefund` list the pending refund ids of a manual/cash payment. `pay` is always false.
+  - `listPayments filters and sort`: covers filters on method, provider, amount range, order id, reference, `createdTo` and `receivedFrom`. It also covers sorting by amount and by `payBy` (a payment with no deadline counts as earliest), and checks that each row carries its order's number and email.
+  - `what each audience is sent`: compares `getForOrder` for an admin and for the customer. Staff get the provider refund ref and failure reason, and the payer gets neither.
 
 ## Relationships
-
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module scope to connect to a real Mongo instance for the whole suite.
-- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules([paymentsModule])` in `beforeEach` wires the payments module into the checkout event-bus registry.
-- **`src/kernel/events.ts`** — `resetDomainEvents()` in `afterEach` clears queued domain events so they don't leak between tests.
-- **`src/modules/payments/services/index.ts`** — `paymentService` is the system under test; all `listPayments`, `getForOrder`, and `listAttention` calls go through it.
-- **`src/modules/payments/model.ts`** — `paymentModel` is used for direct `create`, `findById`, and `updateOne` (backdating) operations; `PaymentDocument` type is imported.
-- **`src/modules/payments/module.ts`** — `paymentsModule` is the registered module instance passed to `registerCheckoutModules`.
-- **`src/modules/payments/services/refunds.ts`** — `refundForOrder` is imported (used in truncated portion of the file for refund-specific assertions).
-- **`src/modules/users/tests/factories.ts`** — `createUser` seeds the payer.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds the purchasable item.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder` / `toOrderItem` build the order that the payment references.
-- **`src/types/index.ts`** — `PaymentDisplayStatus` enum and `PaymentAttentionItem` type shape the test assertions.
-- **`tests/support/callers.ts`** — `asAdmin()`, `asCustomer(id)`, `callerContextAs` produce the caller context passed to every service call.
-- **`tests/support/response.ts`** — `asSuccess` unwraps the result envelope from `getForOrder`.
-- **`tests/support/environment.ts`** — `withEnvironmentOverrides` is imported (used in truncated portion for env-dependent assertions).
+- Seeds data through the users, products and orders test factories, and writes payments directly via `paymentModel` (`payments/model`).
+- Exercises `paymentService` (`payments/services`). It imports `refundForOrder` from `payments/services/refunds`, but the visible part of the file doesn't show it being used.
+- Uses `paymentsModule` with `registerCheckoutModules` (`tests/support/checkout-modules`) to register the module.
+- `tests/support/callers` supplies `asAdmin`, `asCustomer` and `callerContextAs`, which stand in for the staff and payer audiences.
+- `asSuccess` (`tests/support/response`) unwraps service responses.
+- `withEnvironmentOverrides` comes from `tests/support/environment`.
+- `resetDomainEvents` (`@kernel/events`) clears event state between tests.
+- `PaymentDisplayStatus` and `PaymentAttentionItem` are types and enums from `@types`.
+- `setupTestDb` comes from `tests/support/setup-test-db`.
 
 ## Notes
-
-- `seedPayment` increments a module-level `sequence` to keep emails unique; this means tests are **order-dependent** in their email generation but not in their assertions (each test seeds its own rows).
-- `backdate` passes `{ timestamps: false }` to Mongoose to suppress the automatic `updatedAt` stamp — necessary for any test that checks `receivedFrom` / date-range filters against a known timestamp.
-- The `payBy` sort test asserts that a payment with `payBy: null` sorts **first** in ascending order (treated as earliest deadline) and **last** in descending order.
-- `refundRecord` generates a random `idempotencyKey` on every call, so duplicate refund records in different tests won't collide on uniqueness constraints.
-- The audience test (staff vs. payer) calls `getForOrder` twice with different caller contexts and also checks the list row, confirming the filtering is consistent across both read paths.
+- Each case overrides only the stored field it reads on. Labels are derived from stored `status`, `amountRefunded` and `refunds`, so the seeds set those fields directly.
+- Hand-paid (manual) payments are seeded with `providerRef: undefined` and `method: 'cash'`.
+- `seedPayment` has two stacked JSDoc blocks, so the first one, which documents an `overrides` param, is orphaned.

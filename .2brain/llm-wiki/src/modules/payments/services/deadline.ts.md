@@ -1,29 +1,24 @@
 ---
 source: src/modules/payments/services/deadline.ts
-sha256: f24f9d80428f3c36227ecb3b767aa047f3b00eca3cafd1f570225d49ac3588d5
-generated_at: 2026-11-14T21:05:58.121181+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 199efb0320ad01a3a2933f442fb9750e089ffc09cc530e0b50b51043bb47ae08
+context_sha256: f3641e3ca2e194edcc4f5e8a579a35f9d5de026cc7cc3d1a01b11775cfd058db
+generated_at: 2026-11-22T06:49:19.396727+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/deadline.ts
 
 ## Purpose
-
-Reads the legally stamped refund deadline (date + governing rule) from an already-opened payment record. It exists so callers (e.g. task openers) can date and justify work without re-deriving the rule from scratch; if the law sets no deadline, it returns `undefined` and the caller picks its own date.
+Exposes the legal deadline of a withdrawal or return refund, together with the rule that sets it. The `tasks` module reads it to date the work it opens and to explain why. If the law sets no deadline for a refund, nothing is returned here and the caller chooses its own.
 
 ## Key elements
-
-- **`refundLegalDue(paymentId, refundId): Promise<RefundDue | undefined>`** — Looks up the payment by ID, finds the matching refund record, calls `refundDueBy` to compute the date, and returns `{ dueBy, dueRule }`. Returns `undefined` when the payment or refund is missing, when the law sets no deadline, or when `dueRule` is absent on the record.
+- `refundLegalDue(paymentId, refundId): Promise<RefundDue | undefined>`: loads the payment through the payment repository, finds the refund whose `_id` (stringified) equals `refundId`, and returns `{ dueBy, dueRule }`. It returns `undefined` if the payment or refund is missing, if the refund has no `dueRule`, or if `refundDueBy` yields no date.
 
 ## Relationships
-
-- **`src/modules/payments/domain/index.ts`** — Imports `refundDueBy` (computes the deadline date from a refund record) and the `RefundDue` type (shape of `{ dueBy, dueRule }`).
-- **`src/modules/payments/domain/lifecycle.ts`** — Likely the defining module for `refundDueBy` / `RefundDue`, surfaced to this file through the `domain/index.ts` barrel.
-- **`src/modules/payments/repository.ts`** — Imports `paymentRepository` and calls `.findById(paymentId)` to fetch the payment that carries the refund.
-- **`src/modules/payments/services/index.ts`** — Barrel file that re-exports this module so consumers can import from the services package root.
+- `src/modules/payments/domain/index.ts`: supplies `refundDueBy` (computes the deadline from a refund record) and the `RefundDue` type (the return shape).
+- `src/modules/payments/repository.ts`: supplies `paymentRepository`, whose `findById` is used to fetch the payment and its embedded `refunds`.
+- The module doc says `tasks` is the consumer. This file does not import it.
 
 ## Notes
-
-- The refund is matched by `String(record._id) === refundId` — a string comparison against the MongoDB `_id`. Ensure callers pass the same string format they received.
-- The function requires **both** `refund.dueRule` to be truthy **and** `dueBy` to be defined before returning a result; a record with one but not the other yields `undefined`.
-- This is a read-only query; it never mutates the payment or refund.
+- The deadline is the one "as it was stamped when the record opened". The stored `dueRule` on the refund must be present, and `refundDueBy` must also return a value, for a result to come back.
+- `undefined` covers several cases (no legal deadline, missing payment, missing refund), so callers cannot tell them apart.

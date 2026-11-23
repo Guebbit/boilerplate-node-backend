@@ -1,42 +1,45 @@
 ---
 source: src/modules/payments/tests/integration/reconcile.test.ts
-sha256: b2459f09aac1a1b311f6ef0213dbe3f366d1b07cb85988598e90bdb11741622a
-generated_at: 2026-11-08T07:33:52.866169+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d0b72e6af3e0be5d1fddfce207669e89913f8d1b73ff337ede6e4c8a1164fc1c
+context_sha256: 788928a3fc1c4c44c5a394716df32867689239f5177dd77ab172fa18675827a6
+generated_at: 2026-11-22T06:58:28.680306+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/reconcile.test.ts
 
 ## Purpose
-
-Integration tests for the payment reconciliation sweep and the cancel-time provider query. The core scenario: the PSP charges a card but the confirming webhook is lost, leaving the payment stuck in an in-flight state. The sweep asks the provider about those stale payments and settles them; the cancel path asks the provider once when it refuses to close an intent that already succeeded.
+Integration tests for recovering from payment webhooks that never arrived. They cover the reconciliation sweep (`paymentService.reconcileStalePayments`), which asks the provider about stale unsettled payments. They also cover the order-cancel path, which asks the provider once when it refuses to close an intent that already succeeded. A "lost webhook" is simulated by confirming the payment at the fake PSP without telling the application.
 
 ## Key elements
-
-- **`chargedAtProvider()`** — Fixture: creates a user, product, order, opens a payment intent, then confirms the charge on `fakePaymentProvider` without telling the app (simulating a lost webhook).
-- **`unconfirmedIntent()`** — Fixture: creates an order and opens an intent but never attempts the payment (card never presented).
-- **`paymentStatusOf(orderId)` / `orderStatusOf(orderId)`** — Small async helpers to read payment/order status for assertions.
-- **`describe('reconcileStalePayments')`** — Verifies the sweep settles a lost-webhook payment, respects the 200-per-run batch cap, skips payments younger than the grace window, and is idempotent (second call moves 0).
-- **`describe('reconcileStalePayments, on a payment nobody attempted or that stopped')`** — Edge cases: unconfirmed intents are left alone (reservation expiry untouched), a declined payment is not flipped back to open, and a `requires_action` payment still settles once the provider reports success.
-- **`describe('cancelling an order whose intent already succeeded at the provider')`** — Cancel flow where the provider already charged; asserts refund via outbox and final status pair (`succeeded` / `canceled`).
+- `chargedAtProvider()`: helper that creates a user, product (25.00, 10 on hand) and order. It then creates a payment intent and confirms it at the fake provider with `pm_card_visa`, so no webhook is seen. Returns `{ user, orderId }`.
+- `unconfirmedIntent()`: helper that creates an order and an intent but never presents a card. Returns `{ user, orderId, paymentId }`.
+- `paymentStatusOf` / `orderStatusOf`: helpers that read the payment status or order status for an order id, or `undefined` if missing.
+- `describe('reconcileStalePayments')`:
+  - settles a provider-charged payment: the payment becomes `succeeded` and the order `paid`, with 1 payment moved.
+  - requests at most 200 payments per run: it spies on `paymentRepository.findStaleInFlight` and expects it to be called with `(Date, 200)`.
+  - leaves payments younger than the grace window alone (returns 0, order stays `pending`).
+  - is idempotent: a second sweep after settlement returns 0.
+- `describe('... on a payment nobody attempted or that stopped')`:
+  - an unconfirmed intent stays `requires_confirmation`, and its reservation `expiresAt` is unchanged.
+  - a `declined` payment stays declined even when `retrieve` is mocked to return `open`.
+  - a payment stuck at `requires_action` (`pm_card_authentication_required`) is settled to `succeeded`/`paid` once the provider has succeeded.
+- `describe('cancelling an order whose intent already succeeded at the provider')`: `orderService.cancelOnRequestById` succeeds. After `settleOutboxNudges()`, the payment is `succeeded` and the order is `canceled`.
 
 ## Relationships
-
-- **`scenarios/support/doubles/payments/fake.ts`** — `fakePaymentProvider` is the stand-in PSP; tests call `.confirm()` to simulate a provider-side charge and mock `.retrieve()` for the "provider says open" case.
-- **`src/modules/payments/services/index.ts`** — `paymentService` provides `createIntent`, `reconcileStalePayments`, `confirmPayment`; the unit under test.
-- **`src/modules/payments/repository.ts`** — `paymentRepository.findByOrderId` reads state; `findStaleInFlight` is spied on to assert the batch-limit argument.
-- **`src/modules/payments/module.ts`** — `paymentsModule` is registered via `registerCheckoutModules` in `beforeEach` so event listeners are active.
-- **`src/modules/orders/index.ts`** — `orderService.getById` and `orderService.cancelOnRequestById` drive the order-side assertions and the cancel test.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges()` flushes the outbox so the `order.canceled` event reaches the refund listener before asserting.
-- **`src/kernel/events.ts`** — `resetDomainEvents()` in `afterEach` clears accumulated domain events between tests.
-- **`src/modules/inventory/tests/factories.ts`** — `reservationRepository.findByOrderId` is used to assert that reconciliation does not alter reservation expiry on unconfirmed intents.
-- **`src/modules/users/tests/factories.ts`**, **`src/modules/products/tests/factories.ts`**, **`src/modules/orders/tests/factories.ts`** — Provide `createUser`, `createProduct`, `createOrder`, `toOrderItem` fixtures.
-- **`tests/support/callers.ts`** — `asCustomer` and `testCallerContext` supply the caller identity for service calls.
-- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules` wires the payments module (and its event subscriptions) into the test harness.
+- `paymentService` (`payments/services`) provides `createIntent`, `confirmPayment` and `reconcileStalePayments`. These are the code under test.
+- `paymentRepository` (`payments/repository`) is used to read payments (`findByOrderId`) and is spied on for `findStaleInFlight`.
+- `orderService` (`orders`) provides `getById` and `cancelOnRequestById`.
+- `scenarios/support/doubles/payments/fake.ts` supplies `fakePaymentProvider`, the fake PSP. The tests call its `confirm` and spy on its `retrieve`.
+- `kernel/events` (`resetDomainEvents`) is called after each test. `kernel/outbox` (`settleOutboxNudges`) is awaited so that outbox-delivered events reach their listeners.
+- `tests/checkout-modules` (`registerCheckoutModules`) registers `payments/module` before each test.
+- `tests/callers` provides `asCustomer` and `testCallerContext`.
+- The users, products and orders `tests/factories` files supply `createUser`, `createProduct`, `createOrder` and `toOrderItem`.
+- `inventory/tests/factories` supplies `reservationRepository`, used to check reservation expiry.
+- `@tests/setup-test-db` (`setupTestDb`) and `@tests/environment` (`withEnvironmentOverrides`) are imported from outside the listed neighbors.
 
 ## Notes
-
-- The grace window is zeroed per-test via `withEnvironmentOverrides({ NODE_PAYMENT_RECONCILE_MINUTES: '0' })`; without this override the sweep skips any payment younger than the production window.
-- The "lost webhook" is modelled purely by confirming on the fake PSP and *not* calling any application endpoint—no real network or webhook simulation is involved.
-- The cancel test relies on the outbox (not inline delivery) for the `order.canceled` → refund listener hop; forgetting `settleOutboxNudges()` will leave the payment un-refunded and the assertion will fail.
-- Batch cap is asserted structurally (spy on `findStaleInFlight` with a literal `200`), not by actually creating 200+ records.
+- Sweep tests set `NODE_PAYMENT_RECONCILE_MINUTES: '0'` through `withEnvironmentOverrides` to make payments stale immediately. The grace-window test deliberately does not set it.
+- `reservationRepository` is imported from the inventory *tests/factories* module, not from `src/modules/inventory/repository.ts`.
+- Spies (`findStaleInFlight`, `retrieve`) are restored manually with `mockRestore()` inside the tests.
+- The cancel test expects the payment to remain `succeeded` while the order becomes `canceled`. The test title says the money is "returned", but it asserts only these two statuses.

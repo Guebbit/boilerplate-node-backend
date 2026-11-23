@@ -1,29 +1,27 @@
 ---
 source: scripts/pairing/linked-worktree.ts
-sha256: ad847546d95ec88fb976951aec2b90ba90609ac8fac8039634e28a2675498051
-generated_at: 2026-11-08T02:56:12.694563+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1a979ffe101e713030e3fbead076d1b3453792f5dc132c568d1c00f2714568af
+context_sha256: d70910caa1139475dfa6cf70e1f57e4a77f627071da731c110d6169e8822c83e
+generated_at: 2026-11-22T02:12:18.550143+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/pairing/linked-worktree.ts
 
 ## Purpose
-
-Detects whether a given directory is a **linked `git worktree** (as opposed to the repository's main working tree) and exposes a guard predicate for the "worktree → main" write direction that `sync:frontend` must refuse. It exists so pairing/sync scripts can distinguish between two checkouts that share a repository but differ in which one is the canonical main.
+Detects whether a checkout is a linked `git worktree` (as opposed to a repository's main working tree), and uses that to decide whether a write from one checkout into another should be refused. It exists so `sync:frontend` can enforce that frontend main only takes a contract from backend main.
 
 ## Key elements
-
-- **`isLinkedWorktree(directory: string): boolean | undefined`** — Runs `git rev-parse --path-format=absolute --git-dir --git-common-dir` via `execFileSync`. If the two reported paths differ, the checkout is a linked worktree. Returns `undefined` when the directory is not inside a git checkout at all.
-- **`writesIntoMainFromWorktree(source: string, target: string): boolean`** — Convenience predicate: `true` only when `source` is a linked worktree **and** `target` is the main working tree. Used as the guard condition that blocks a contract write in the unsafe direction.
+- `isLinkedWorktree(directory)` — runs `git -C <directory> rev-parse --path-format=absolute --git-dir --git-common-dir` and compares the two paths. Returns `true` if they differ (linked worktree), `false` if they match (main working tree), and `undefined` if git fails, i.e. the directory is not inside a git checkout.
+- `writesIntoMainFromWorktree(source, target)` — returns `true` only when `source` is a linked worktree and `target` is a main checkout. A side that is not a git checkout yields `false`.
 
 ## Relationships
-
-- **`scripts/git-base.ts`** — Supplies `gitEnvironment()`, which is passed as the `env` option to `execFileSync`. This strips inherited `GIT_DIR` / `GIT_WORK_TREE` variables (set by git hooks) so that `-C directory` is honoured rather than overridden by the hook's own checkout.
-- **`scripts/pairing/sync-to-frontend.ts`** — Consumes `writesIntoMainFromWorktree` to refuse a sync when the source is a linked worktree and the target is the main frontend checkout.
-- **`tests/unit/scripts/pairing/linked-worktree.test.ts`** — Unit-tests both exports (worktree vs. main, non-repo directory, the direction predicate).
+- `scripts/git-base.ts` — supplies `gitEnvironment()`, passed as `env` to the `git` call.
+- `scripts/pairing/sync-to-frontend.ts` — the `sync:frontend` consumer described in the doc comments. It refuses the worktree → main write that `writesIntoMainFromWorktree` detects.
+- `tests/unit/scripts/pairing/linked-worktree.test.ts` — unit tests for this module.
 
 ## Notes
-
-- The `env: gitEnvironment()` argument is load-bearing. Without it, running inside a `pre-commit` or similar hook makes `execFileSync` inherit `GIT_DIR`/`GIT_WORK_TREE`, which causes `git -C directory` to resolve against the *hook's* checkout instead of the directory you actually want to inspect.
-- `stdio` is set to `['ignore', 'pipe', 'ignore']` so the stderr message "not a git repository" (expected outside a repo) is silenced; the `catch` block then returns `undefined` rather than throwing.
-- `output.trim().split('\n', 2)` relies on the two rev-parse flags emitting exactly one line each in a known order; there is no delimiter handling beyond that.
+- `gitEnvironment()` matters when the caller runs inside a git hook. Git exports `GIT_DIR`/`GIT_WORK_TREE` there, which override `-C` and would point the call at the hook's checkout instead of `directory`.
+- Stderr is discarded, and any `git` failure is mapped to `undefined`. A non-repository is the expected answer in that case, not an error.
+- `--path-format=absolute` is what makes the two paths comparable as plain strings.
+- Tri-state result: callers must distinguish `undefined` from `false`. `writesIntoMainFromWorktree` does this with strict `=== true` / `=== false` checks.

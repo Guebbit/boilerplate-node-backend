@@ -1,43 +1,49 @@
 ---
 source: scenarios/flows/actions.ts
-sha256: d85d4082c21053049fa9e7d08f63af811684c2d2a0f9c730cf0d22c61216ca34
-generated_at: 2026-11-14T17:15:03.027290+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 66c6e081e1b1c4482f4dfb71bc4ba2d1ce70c728ef919e8cc6db92a89cbf0603
+context_sha256: c2bcf42be90cd3263e979ff0202fe17e2053d3c0bb3d0f9c015217049e422a55
+generated_at: 2026-11-22T01:42:50.661185+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/flows/actions.ts
 
 ## Purpose
-Provides one function per "thing a person does" (check out, pay, ship, deliver, etc.), each a thin HTTP wrapper over the endpoint a browser would call. They deliberately go through the full middleware stack (auth, caller context, rate limiters) rather than invoking a service directly, because only that path emits the audit entry, actor scope, and domain event that a bare service call would skip.
+Defines the "verbs" that the shop's scenario history is written in: one function per user or operator action (stock, checkout, pay, ship, hold, and so on). Each is a thin wrapper over the HTTP endpoint a browser would call. They go through the real request path instead of calling a service. This is the only way the audit entries, actor scope and domain events come out right, because the middleware stack (authentication, caller context, rate limiters) has to run.
 
 ## Key elements
-
-- **`Line`** – interface for an order line (`productId`, `quantity`).
-- **`CARD`** – const object of fake-provider payment-method handles (`visa`, `declined`, `challenge`) declared in `scenarios/support/doubles/payments/fake.ts`.
-- **`receiveStock`** – posts opening stock to `/inventory/levels/{id}/receive`.
-- **`ensureAddress`** *(private)* – if the caller has no addresses, creates one so checkout isn't refused.
-- **`checkout`** – adds lines to cart, sets shipping method (defaults to `pickup`), reads the cart summary for `expectedTotal`, posts to `/cart/checkout`; returns the new order id.
-- **`openPayment`** – posts to `/payments`; returns the payment id.
-- **`submitCard`** – posts to `/payments/{id}/confirm` via `caller.attempt` (expects possible 409); returns the payment status string, mapping 409 → `'declined'`.
-- **`syncPayment`** – posts to `/payments/{id}/sync` to settle a `requires_action` payment; returns status.
-- **`checkoutAndPay`** – composes `checkout` + `openPayment` + `submitCard(CARD.visa)` in one call.
-- **`recordOfflinePayment`** – posts a non-provider payment (cash, bank transfer, other) to `/orders/{id}/payments`.
-- **`startProcessing`** – posts to `/orders/{id}/process`.
-- **`readFulfillment`** *(private)* – fetches an order's fulfillment orders and shipments in two sequential GETs.
-- **`inSequence`** *(private)* – awaits an async step over an array one at a time.
-- **`shipOrder`** – creates a shipment for every open physical fulfillment order.
-- **`shipPart`** – ships a partial quantity of one product from the first fulfillment order.
-- **`holdOrder`** – posts a hold (with reason) to the first fulfillment order.
-- **`deliverOrder`** – records delivery for every shipment in `shipped` status.
+- `Line`: exported `{ productId, quantity }` order-line type.
+- `CARD`: the fake payment provider's method handles. `visa` settles immediately, `declined` returns a retryable 409, and `challenge` requires 3-D Secure and then `/sync`.
+- `receiveStock(owner, productId, quantity)`: posts opening stock to `/inventory/levels/:id/receive`. The catalogue seeds with no stock.
+- `checkout(caller, lines, options)`: the customer half of an order. It does the following in order:
+  - Ensures the shopper has an address (private `ensureAddress`).
+  - Adds each line to the cart.
+  - Sets the shipping method (default `pickup`).
+  - Reads the cart total.
+  - Posts `/cart/checkout` with `expectedTotal`.
+  - Returns the order id.
+- `openPayment(caller, orderId)`: creates a payment intent and returns its id.
+- `submitCard(caller, paymentId, paymentMethodRef)`: confirms the payment and returns its status. A 409 returns `'declined'`, and any other non-200 response throws.
+- `syncPayment(caller, paymentId)`: settles a `requires_action` payment after the 3-D Secure challenge and returns its status.
+- `checkoutAndPay(caller, lines, options)`: `checkout`, then `openPayment`, then `submitCard` with `CARD.visa`. Returns the order id.
+- `recordOfflinePayment(owner, orderId, method)`: the admin records cash, bank transfer or other money.
+- `startProcessing(owner, orderId)`: moves a paid order to `processing` via `/orders/:id/process`.
+- `shipOrder(owner, orderId)`: ships every open physical fulfillment order in full, one shipment each.
+- `shipPart(owner, orderId, productId, quantity)`: ships part of one line, leaving the order `partially_fulfilled`.
+- `holdOrder(owner, orderId, reason)`: puts the order's first fulfillment order on hold.
+- `deliverOrder(owner, orderId)`: records shipment arrival, moving the order from `shipped` to `delivered`. The visible content cuts off before its body.
+- Private helpers: `readFulfillment` (GETs fulfillment orders and shipments) and `inSequence` (runs async steps strictly one after another).
 
 ## Relationships
-
-- **`scenarios/flows/client.ts`** – exports the `Caller` type (and its `call` / `attempt` methods) that every function in this file receives and invokes.
-- **`scenarios/flows/shop-history.ts`** – the "history" this file's module docblock references; `shop-history.ts` composes these verbs into named narrative scenarios, so the audit trail they produce is the storyline that file asserts.
+- `client.ts`: supplies the `Caller` type, which is imported as a type only. Every function takes a `Caller` and issues its HTTP requests through it. `submitCard` uses the variant that returns status and data instead of throwing, so it can treat a 409 as a decline.
+- `shop-history.ts`: not shown in this file's content. Doc comments say the history rows call these verbs, and that two of the three payment rows deliberately want a decline or a 3-D Secure outcome.
 
 ## Notes
-
-- `submitCard` uses `caller.attempt` (not `call`) specifically because a 409 is a *valid* business outcome here (card declined); it maps that to the string `'declined'` instead of throwing, leaving the flow to decide whether to retry.
-- `checkout` defaults the shipping method to `pickup` because it requires no address; a flow that needs real shipment passes `standard` (or another tracked method) explicitly.
-- Sequential helpers (`inSequence`, the `for…await` in `checkout`) exist because the application's per-order transaction rejects concurrent mutations on the same order.
-- `receiveStock` is needed because the catalogue now seeds every product at `onHand: 0`; without a prior receive call no product is purchasable.
+- Permission requirements are documented per function, for example `inventory.any.create`, `payments.any.create`, `delivery.any.start` and `delivery.any.update`. The `owner` parameter must be a caller holding them.
+- `submitCard` returns the outcome instead of asserting success, so callers decide whether a decline or challenge is acceptable.
+- `inSequence` exists because the app's per-order transaction does not accept concurrent calls, so fulfillment steps run serially.
+- `shipPart` and `holdOrder` act on the first fulfillment order only (`fulfillmentOrders[0]`), with no emptiness check.
+- `shipOrder` sends no tracking code, since the scenario's shipping methods are not `tracked`.
+- `startProcessing` is used instead of a status override so seeded orders carry ordinary history, not status-correction audit rows.
+- The cart's shipping method is set with `PUT /cart/shipping-method`, not in the checkout body.
+- `checkout` defaults to `pickup` because demo products are physical and `pickup` needs no shipping address. Billing still needs an address.

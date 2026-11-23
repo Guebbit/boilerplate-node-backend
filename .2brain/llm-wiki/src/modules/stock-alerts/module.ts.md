@@ -1,41 +1,37 @@
 ---
 source: src/modules/stock-alerts/module.ts
-sha256: fc7386ea264afb48125c6b0322a2fad49c54bc1ab7eaa4fed7bc721daa13d47f
-generated_at: 2026-11-14T22:03:36.652102+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e55e01c78b19bb8720088f829faef340a6b1d280d6ca92ced1ed938c4e948845
+context_sha256: b15679e6c617dee151fd20ec32b20f9a41984e4fc9c3ee127dc0f232ba7bae5d
+generated_at: 2026-11-22T07:54:49.027882+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stock-alerts/module.ts
 
 ## Purpose
-
-Module manifest for the stock-alerts feature: a signed-in buyer registers to receive a single notification when a product they could not order becomes buyable again. This file wires together the module's routes, config, jobs, personal-data handlers, and domain-event subscriptions into one `AppModule` object that the kernel registry discovers.
+Manifest entry for the `stock-alerts` module. It declares the module to the kernel registry: its routes, config slice, jobs, personal-data handling, event subscription, locales and email templates. Per the file's doc comment, a signed-in buyer asks to be told once when a product they can't order becomes available again. The module owns the requests and the one mail, and a five-minute sweep asks `inventory` which waiting products are no longer `out_of_stock`. Nothing announces a restock.
 
 ## Key elements
-
-- **`default` export** — An object satisfying `AppModule` with `name: 'stock-alerts'`, mounted routes, config, jobs, personal-data hooks, event subscriptions, and locale/template paths.
-- **`mounts`** — Registers the `router` (from `./routes`) at the base path `/stock-alerts`.
-- **`config`** — Exposes `stockAlertsConfig.slice` for the kernel's config system.
-- **`jobs`** — Attaches `stockAlertsJobs` (from `./jobs`) for scheduled work.
-- **`personalData`** — Declares a `stockAlerts` section with `collect` (export a user's rows) and `erase` (hard-delete rows, joining the caller's transaction via the `session` argument).
-- **`subscribe()`** — Registers two domain-event handlers:
-  - `PRODUCT_BUYABLE_AGAIN` → calls `stockAlertService.onBuyableAgain(productId)`.
-  - `PRODUCT_DELETED` → checks `productService.isLive(productId)` first; only deletes alerts if the product is genuinely gone (guards against a retried delivery arriving after a restore).
-- **`locales` / `templates`** — Absolute paths to the module's `locales/` and `templates/` directories.
+- **default export** – an object `satisfies AppModule` with:
+  - `name: 'stock-alerts'`
+  - `mounts`: the `router` at `/stock-alerts`
+  - `config`: `[stockAlertsConfig.slice]`
+  - `jobs`: `stockAlertsJobs`
+  - `personalData`: one section, `stockAlerts`
+    - `collect` returns `stockAlertService.exportRows(userId)`.
+    - `erase` calls `stockAlertService.removeByUserId(userId, session)`. It joins the caller's hard-delete transaction.
+  - `subscribe`: registers a `PRODUCT_DELETED` handler through `onDomainEvent`. The handler checks whether the product is still live (via `productService` from the products module). If it is not live, it calls `stockAlertService.removeByProductId(productId)`.
+  - `locales` and `templates`: the `locales` and `templates` directories next to the module, resolved with `__dirname`.
 
 ## Relationships
-
-- **`src/kernel/events.ts`** — Imports `onDomainEvent` to register the two subscriptions above.
-- **`src/kernel/registry.ts`** — Imports the `AppModule` type that the default export must satisfy.
-- **`src/modules/products/index.ts`** — Imports `PRODUCT_BUYABLE_AGAIN`, `PRODUCT_DELETED` (event constants) and `productService` (for the `isLive` check in the deletion handler). This is the only direction of cross-module dependency; `products` has no import back into stock-alerts.
-- **`src/modules/stock-alerts/service.ts`** — Imports `stockAlertService`, used in all three event/personal-data call sites.
-- **`src/modules/stock-alerts/routes.ts`** — Imports `router` for the HTTP mount.
-- **`src/modules/stock-alerts/jobs.ts`** — Imports `stockAlertsJobs` for the kernel job runner.
-- **`src/modules/stock-alerts/config.ts`** — Imports `stockAlertsConfig` for the config slice.
-- **`tests/integration/erasure.test.ts`** — Integration test exercising the account-erasure path (the `collect`/`erase` hooks declared here) end-to-end.
+- `@kernel/registry`: supplies the `AppModule` type that the manifest must satisfy.
+- `@kernel/events`: supplies `onDomainEvent`, used to subscribe to `PRODUCT_DELETED`.
+- `@modules/products` (`index.ts`, which re-exports from `module.ts` and `services/`): supplies the `PRODUCT_DELETED` event constant and the `productService` used in the delete handler.
+- `./routes`, `./jobs`, `./service`, `./config`: the sibling files that provide the router, jobs, service methods and config slice wired here.
+- `src/modules.ts`: the module list that presumably includes this manifest.
+- `tests/integration/erasure.test.ts`: likely covers account erasure through the `personalData` hook.
+- `notifications` (per the doc comment): writes the inbox row from this module's event.
 
 ## Notes
-
-- The `PRODUCT_DELETED` handler intentionally defers to `productService.isLive()` before deleting. A retried delivery can re-fire the event *after* a product is restored; in that case the buyer's alert still stands and must be preserved.
-- The `erase` hook receives a `session` and joins the caller's hard-delete transaction rather than opening its own — callers (e.g. an account-erasure orchestrator) control the atomicity boundary.
-- The outgoing notification mail is written by the `notifications` module reacting to an event this module emits; the code for that hand-off is not visible here.
+- The delete handler skips products that are live again. A retried `PRODUCT_DELETED` delivery can arrive after a restore, and the buyer's request should still stand for a product on sale.
+- `erase` takes the caller's `session`, so the removal is part of the caller's transaction rather than a separate one.

@@ -1,36 +1,46 @@
 ---
 source: src/modules/notifications/openapi.yaml
-sha256: ea89e1bc33d6f757b657f37913ecd9f69043c7a551a353de3b535dcb6aed3afe
-generated_at: 2026-11-08T06:32:20.227118+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1f2c08d5604d89a24b4a02b29c0647e4d8b0b0f58e5e5c3f33595669c6358207
+context_sha256: e0f8d4768fc28b1df25182cb190614b965c1898810925be1b57cc7c9635f0b7b
+generated_at: 2026-11-22T05:54:26.954457+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 contract for the notifications module: the signed-in user's in-app inbox (personal notifications) and shop work notices for staff. It defines the REST endpoints, the SSE live stream, the schema variants for notification payloads, and the account-data-export section contributed by this module.
+OpenAPI 3.1 contract for the notifications module: the signed-in user's in-app notifications (their own, plus shop "work notices" for staff). It defines the HTTP paths, the module's schemas, and the module's section of the account data export.
 
 ## Key elements
-
-- **`/notifications` GET** (`listNotifications`) — returns the caller's full inbox (bounded by a per-user cap, never paginated) plus staff work notices the caller still holds permission for.
-- **`/notifications` DELETE** (`dismissAllNotifications`) — hard-deletes all of the caller's notifications; optional `audience` query param limits the deletion to `own` or `staff`.
-- **`/notifications/stream` GET** (`getNotificationsStream`) — Server-Sent Events endpoint delivering `notifications.created`, `notifications.deleted`, `notifications.read` events (payloads defined in `asyncapi.yaml`). Uses **cookie auth** because `EventSource` cannot set an `Authorization` header.
-- **`/notifications/read-all` POST** (`readAllNotifications`) — sets `readAt` on every unread notification; idempotent.
-- **`/notifications/{id}` GET / DELETE** — fetch or permanently delete a single notification; foreign/unknown/malformed ids all return the same 404.
-- **`x-personal-data`** — declares the `notifications` and `staffNotifications` sections added to the `POST /account/export` response by the bundler.
-- **`components/schemas`** — `NotificationSeverity` (enum: info/success/warning/error), `NotificationAudience` (own/staff), and per-code params schemas (`WebhookDisabledParams`, `TaskOpenedParams`, `TaskAssignedParams`, …) following a discriminated-union pattern where the client switches on `code` to get typed `params`.
+- **Tag `Notifications`** (`x-family: Core`): all operations file under it.
+- **`x-personal-data`**: this module's section of `POST /account/export`, which the bundler adds to `AccountExportResponse`.
+  - `notifications`: an array of `Notification`, the whole inbox, read and unread. It is empty, never absent.
+  - `staffNotifications`: an array of `StaffNoticeExport`. It holds when and which kind of notice, never `params`, because those name other people's orders and accounts.
+- **Paths:**
+  - `GET /notifications` (`listNotifications`): the caller's inbox, newest first. It also includes `audience: staff` notices for permission sets the caller holds right now. It is never paginated, because the per-user cap bounds the inbox, and it never answers 404.
+  - `DELETE /notifications` (`dismissAllNotifications`): hard-deletes all of the caller's notifications. The optional `audience` query narrows it to one group. It returns 204 even when nothing was there.
+  - `GET /notifications/stream` (`getNotificationsStream`): a Server-Sent Events stream (`text/event-stream`) of created, deleted and read events.
+  - `POST /notifications/read-all` (`readAllNotifications`): sets `readAt` on every unread notification. It is idempotent and returns 204.
+  - `GET /notifications/{id}` (`getNotificationById`): fetches one of the caller's own notifications.
+  - `DELETE /notifications/{id}` (`deleteNotificationById`): permanently deletes one of the caller's own notifications.
+- **Schemas (visible portion):**
+  - `NotificationSeverity`: `info`, `success`, `warning` or `error`. It describes meaning, not look.
+  - `NotificationAudience`: `own` or `staff`.
+  - `WebhookDisabledParams`: `subscriptionId`.
+  - `TaskOpenedParams`: `taskId`, `kind`, optional `category`, and optional `work`, an opaque staff-screen path.
+  - `TaskAssignedParams`: the start of another params variant.
+  - `Notification`: one variant per `code`, each with its own typed `params`.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — every standard response (401, 403, 404, 422, 204) and the `IdPathParam` parameter are `$ref`-imported from this file; the `Id` type used in params schemas is also pulled from here.
-- **`src/modules/observability/openapi.yaml`** — the SSE stream endpoint explicitly mirrors its per-process delivery model and its cookie-auth fallback on the observability module's `GET /observability/events` endpoint.
+- `asyncapi.yaml` (same directory) documents the events of the live stream. This file's `/notifications/stream` operation points to it for the channels and their payloads.
 
 ## Notes
-
-- **Auth split:** all REST paths use `bearerAuth`; the stream path uses `cookieAuth` (HttpOnly refresh cookie) because the browser `EventSource` API cannot attach an `Authorization` header.
-- **Per-process SSE:** a notification written by another worker process will *not* appear on an open stream; the client recovers via a fresh `GET /notifications` on reconnect.
-- **Routing order:** the literal path `/notifications/stream` is mounted above the parameterised `/{id}` route so Express does not treat `stream` as an id.
-- **No 404 on list:** an empty inbox is the same state as "no notifications yet"; the endpoint always returns 200 (or 401/403), never 404.
-- **Staff visibility is permission-gated and time-bound:** a staff member sees only work notices written while their role was active; losing the role hides prior notices, gaining it does not retroactively show old ones.
-- **Payloads are code + params, never rendered text:** the backend stores a `code` string and a typed `params` object; the frontend localises from its own locale files (same convention as the account module's `ReauthRequest`).
+- The backend stores a `code` and `params`, never text. The frontend translates `code` from its own locale files, so a client switches on `code` to get the right `params` shape.
+- Responses, the `IdPathParam` parameter and the `Id` schema are `$ref`'d from a shared root contract rather than defined here. The `ReauthRequest` pattern in the account module's contract is cited as the model for the per-`code` typed `params`.
+- `/notifications/stream` must be mounted above `/{id}` in the router. Express matches in mount order, so the literal segments (`stream`, `read-all`) must not be read as an id.
+- The stream uses `cookieAuth` (the HttpOnly refresh cookie), because an `EventSource` cannot set an `Authorization` header. All other operations use `bearerAuth`.
+- Staff notices are visible only while the caller holds the required permission sets. A member who loses a role stops seeing them, and a member promoted later sees only those written after.
+- A notification belonging to someone else returns the same 404 on get and delete as an unknown or malformed id, so a probe cannot tell them apart.
+- `DELETE /notifications` is a hard delete of membership, while `read-all` is an action that only moves `readAt`.
+- The stream carries only what is written while it is open. A client should call `GET /notifications` first, on login, reload or reconnect.
+- Cross-copy fan-out of stream events uses Redis pub/sub.

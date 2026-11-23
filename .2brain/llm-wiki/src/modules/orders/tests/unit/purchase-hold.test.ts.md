@@ -1,31 +1,34 @@
 ---
 source: src/modules/orders/tests/unit/purchase-hold.test.ts
-sha256: 51a278288db53dd8e252747fe4a6c8cab84880e5b6c37cbc0cd591ea403d1627
-generated_at: 2026-11-08T07:13:29.730430+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4a9122483a7c39c39407554dba66783e0d8d4361df10c7d07d42518a19c1df72
+context_sha256: c0759d15e72d392e567fd22416c235a3487768c147ee2d9a420ed0a6c563e0d5
+generated_at: 2026-11-22T06:37:27.895856+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/purchase-hold.test.ts
 
 ## Purpose
-
-Unit tests for the pure domain function `purchaseHoldUntil`, verifying the rule that a buyer's own cancellations trigger a purchase hold when their count within a sliding window meets or exceeds a threshold. All tests are deterministic, pinning "now" to a fixed date.
+Unit tests for `purchaseHoldUntil`, the pure rule that decides when a buyer's own cancellations amount to a purchase hold. The clock, the cancel limit and the window are all passed as arguments, so the tests run against a fixed `NOW` (`2026-10-19T12:00:00.000Z`) with no clock mocking.
 
 ## Key elements
-
-- **`NOW`** — fixed `Date('2026-10-19T12:00:00.000Z')` used as the clock argument for every test.
-- **`daysAgo(days)`** — local helper that returns a `Date` `days` before `NOW` (uses `DAY_MS`).
-- **`describe('purchaseHoldUntil')`** — core rule tests: below limit → `undefined`; exactly at limit → oldest counted cancel + window; above limit → second-oldest counted cancel + window (the moment the count drops below the limit); cancels outside the window ignored; cancel exactly one window old treated as aged out; order-independence; empty array → `undefined`.
-- **`describe('the 7-day cap on an automatic hold')`** — verifies the hold end is clamped to at most `NOW + 7d` regardless of window length; an end already sooner than the cap is preserved; the boundary is inclusive (an end exactly 7 days out is kept).
+- `NOW`: the fixed instant the hold is judged at.
+- `daysAgo(days)`: helper that builds a `Date` that many days (using `DAY_MS`) before `NOW`.
+- `describe('purchaseHoldUntil')`: tests the core rule, called as `purchaseHoldUntil(cancelTimes, limit, windowDays, now)`:
+  - Returns `undefined` below the limit, with no cancels, and when a cancel is older than the window.
+  - A cancel exactly one window old counts as aged out.
+  - At exactly the limit, the hold ends at the oldest counted cancel plus the window.
+  - Above the limit, the hold ends when the count falls back below the limit, i.e. at the second-oldest cancel plus the window in the 4-cancels/limit-3 case.
+  - The result is independent of input order (checked against the reversed array, using `toReversed()`).
+- `describe('the 7-day cap on an automatic hold')`:
+  - A 90-day window still yields `now + 7 days`.
+  - An end already sooner than the cap is kept (6.5-day-old oldest cancel gives an end 12 hours out).
+  - An end exactly 7 days away is kept (14-day window, oldest cancel 7 days ago).
 
 ## Relationships
-
-- **`src/domain-primitives/time.ts`** — imports `DAY_MS` for all date arithmetic in helpers and expected values.
-- **`src/modules/orders/domain/index.ts`** — imports `purchaseHoldUntil` from the domain barrel (the SUT).
-- **`src/modules/orders/domain/purchase-hold.ts`** — the module that actually implements `purchaseHoldUntil`; this test file exercises its public contract.
+- Imports `purchaseHoldUntil` from `../../domain` (`src/modules/orders/domain/index.ts`), which exposes the implementation in `purchase-hold.ts`.
+- Imports `DAY_MS` from `@domain-primitives/time` (`src/domain-primitives/time.ts`) to build dates and expected values.
 
 ## Notes
-
-- The "above limit" case is the subtliest: with 4 cancels and a limit of 3, the hold lasts until the **second-oldest** cancel ages out (not the oldest), because that is the point at which the in-window count falls back to 2.
-- Window boundary is inclusive: a cancel exactly `window` days old is considered aged out.
-- The 7-day cap is a hard ceiling on the hold duration from `NOW`; the function must not return a date beyond `NOW + 7d` even when the window is large (e.g., 90 or 14 days).
+- The 7-day cap is tested only through `purchaseHoldUntil`'s result. The tests pass no cap argument, so the cap is fixed inside the function.
+- `toReversed()` requires a runtime that supports it (ES2023).

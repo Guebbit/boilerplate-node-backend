@@ -1,30 +1,31 @@
 ---
 source: src/modules/cart/controllers/put-cart-shipping-method.ts
-sha256: 5ef6a89491a0af93e5b24dbb2efcdbc16d6c87c9672661b21b0401cb799b65a2
-generated_at: 2026-11-14T19:28:15.211645+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5ef6a89491a0af93e5b24dbb2efcdbc16d6c87c9672661b21b0401cb799b65a2
+context_sha256: d97e806267cbe458feec236b24690be7dbb45bae4eac1ac386a534692fb24c37
+generated_at: 2026-11-22T04:31:43.815738+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/controllers/put-cart-shipping-method.ts
 
 ## Purpose
-
-Thin HTTP adapter for `PUT /cart/shipping-method`. Validates the incoming body, delegates to `cartService.setShippingMethod`, and serialises the updated (re-priced) cart back to the client. Exists so the Express route layer stays a single-line registration.
+Express controller for `PUT /cart/shipping-method`. It is a thin HTTP adapter over `cartService.setShippingMethod`. It sets or clears (`null`) the shipping method the cart plans to ship by, and returns the updated cart priced against that choice.
 
 ## Key elements
-
-- **`putCartShippingMethod`** (exported) — Express handler. Extracts `userId` from `request.authContext`, Zod-validates the body via `parseBody(SetCartShippingMethodBody, …)`, calls `cartService.setShippingMethod(userId, body.shippingMethodId)`, then either responds `200` with `CartResponse` (via `successResponse`) or propagates a refusal/error (`refused`, `catchAs`). A `null` `shippingMethodId` in the body clears the current method.
+- `putCartShippingMethod(request, response)`: the only export, a request handler. Its flow:
+  1. Reads the user id from `request.authContext!.id`. The non-null assertion assumes auth middleware has already run.
+  2. Validates `request.body` with `parseBody(SetCartShippingMethodBody, ...)`. `SetCartShippingMethodBody` is a schema imported from `@api/schemas.zod`. If validation fails the handler returns early, since `parseBody` handles the response.
+  3. Calls `cartService.setShippingMethod(userId, body.shippingMethodId)`.
+  4. If `refused(response, result)` is true, it returns without further output. Otherwise it sends `successResponse<CartResponse>(response, result.data)`.
+  5. Any rejection goes to `catchAs(response, 'setCartShippingMethod')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — supplies the three helpers used here: `parseBody` (Zod validation + early-return), `refused` (checks a domain `Refused` result and short-circuits the response), and `catchAs` (maps thrown errors to an error response).
-- **`src/infrastructure/http/response.ts`** — provides `successResponse`, the standard 200 JSON envelope writer.
-- **`src/modules/cart/routes.ts`** — registers this handler on the `PUT /cart/shipping-method` route.
-- **`src/modules/cart/services/index.ts`** — exports the `cartService` singleton whose `setShippingMethod` method contains the actual business logic.
-- **`src/types/index.ts`** — source of the `CartResponse` and `SetCartShippingMethodRequest` type aliases used in the handler signature and response payload.
+- `src/infrastructure/http/controller.ts`: provides `parseBody` (body validation), `refused` (turns a refused service result into an HTTP response) and `catchAs` (error handler tagged with the operation name).
+- `src/infrastructure/http/response.ts`: provides `successResponse`, used to send the updated cart.
+- `src/modules/cart/services/index.ts`: provides `cartService`, which holds the business logic called here.
+- `src/types/index.ts` (imported as `@types`): provides the `CartResponse` and `SetCartShippingMethodRequest` types.
+- `src/modules/cart/routes.ts`: the route file that mounts this handler. It is not imported here.
 
 ## Notes
-
-- **No `If-Match` / optimistic concurrency handling.** The comment states this intentionally: there is no `GET` on this URL to fetch an ETag, and the cart enforces its own line-item rules server-side.
-- **Non-null assertion on `request.authContext!`** — assumes an upstream auth middleware has already populated it; the handler does not guard against a missing auth context.
-- **Zod schema lives in `@api/schemas.zod`**, not in the cart module; the controller imports it from the API-schema package.
+- There is no `If-Match` handling. The source comment says this is because the URL has no GET and the cart has its own line rules.
+- The handler is not `async`. It returns the promise chain, or `undefined` when body validation fails.

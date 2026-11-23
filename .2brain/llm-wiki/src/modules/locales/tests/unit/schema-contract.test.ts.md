@@ -1,32 +1,41 @@
 ---
 source: src/modules/locales/tests/unit/schema-contract.test.ts
-sha256: 0889f3837e69ce9eb3042d713c3b3e4b240647c1872f32b5e08f3dc4aeadcf86
-generated_at: 2026-11-14T20:25:18.383095+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6a8eb7a6e5384139ee169ca0701f1c68fe831a2a83f10d652a13a00651f4b716
+context_sha256: 07c5d7c553ed96795cfd7c4859e1eed4fbf1da7e9f995338616092adba80af6d
+generated_at: 2026-11-22T05:51:42.917500+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/tests/unit/schema-contract.test.ts
 
 ## Purpose
-
-Unit tests that lock down the schema contracts of `localeSchema` and `localeEntrySchema` (required fields, unique indexes, field-level normalisation, defaults, enums) and the `deriveBaseLanguage` helper. They exist to guarantee that the two unique indexes (`locales_tag`, `localeEntries_locale_app_key`) and the tag/app/locale normalisation rules cannot be silently weakened, because those rules are what make the translation tier addressable and merges safe as upserts.
+Unit tests that pin the contracts of the locale Mongoose schemas (`localeSchema`, `localeEntrySchema`) and the `deriveBaseLanguage` helper. They guard the two unique indexes that make the translation tier addressable (`locales_tag` and `localeEntries_locale_app_key`, which lets a merge be an upsert) and the tag normalisation that keeps those indexes from being bypassed by case variants like `EN-gb` vs `en-GB`.
 
 ## Key elements
-
-- **`stored(schema, path, value)`** – local helper that invokes a path's `set` option (the value setter) to verify what a raw input becomes at storage time, without running full validation.
-- **`normalises(schema, path)`** – local helper that reads a path's `lowercase` / `trim` option flags.
-- **`describe('localeSchema')`** – asserts required paths, the `locales_tag` unique index, tag canonicalisation (`'  EN-gb '` → `'en-GB'`), defaults (`direction: ltr`, `active: true`, `revision: 0`), and the `direction` enum.
-- **`describe('deriveBaseLanguage')`** – asserts primary-subtag extraction (`'en-GB'` → `'en'`), passthrough for bare tags, and case/whitespace normalisation.
-- **`describe('localeEntrySchema')`** – asserts required paths (`app`, `key`, `locale` — not `value`), the compound unique index `localeEntries_locale_app_key`, locale/app normalisation vs. key's intentional lack of lowercasing, `value` defaulting to `''`, and `timestamps: true` on both schemas.
+- `stored(schema, path, value)` — helper that runs a string path's own `set:` option on a value, returning what would be stored.
+- `normalises(schema, path)` — helper returning a path's schema options (`lowercase`, `trim`) so tests can assert them.
+- `describe('localeSchema')` — asserts:
+  - required paths are `baseLanguage`, `name`, `nativeName`, `tag`;
+  - a single unique index `locales_tag` on `tag+1`;
+  - `tag` is trimmed and canonicalised (`'  EN-gb '` → `en-GB`, `zh-hant-tw` → `zh-Hant-TW`), and a malformed tag such as `en-a` is stored as written rather than throwing;
+  - `baseLanguage` is lowercase and trimmed;
+  - defaults are `direction = LocaleDirection.ltr`, `active = true`, `revision = 0`;
+  - the `direction` enum equals `Object.values(LocaleDirection)`.
+- `describe('deriveBaseLanguage')` — takes the primary subtag (`en-GB` → `en`), leaves bare tags alone (`it`), and lowercases and trims input (`'  EN-gb '` → `en`).
+- `describe('localeEntrySchema')` — asserts:
+  - required paths are `app`, `key`, `locale` (`value` is deliberately not required);
+  - a compound unique index `localeEntries_locale_app_key` on `locale+1, app+1, key+1`;
+  - `locale` is canonicalised (`PT-br` → `pt-BR`), `app` is lowercased, and `key` is trimmed but not lowercased;
+  - `value` defaults to `''`;
+  - `timestamps` is enabled on both schemas.
 
 ## Relationships
-
-- **`src/modules/locales/model.ts`** — the system under test; provides `localeSchema`, `localeEntrySchema`, and `deriveBaseLanguage`.
-- **`src/types/index.ts`** — supplies the `LocaleDirection` enum used to assert the `direction` field's allowed values and default.
-- **`tests/support/schema.ts`** — provides the assertion helpers (`requiredPaths`, `indexSpecs`, `indexOptionSpecs`, `defaultOf`, `enumOf`, `optionsOf`) that extract schema metadata as comparable strings/values.
+- `src/modules/locales/model.ts` — source of `localeSchema`, `localeEntrySchema` and `deriveBaseLanguage`, the code under test.
+- `src/types/index.ts` — supplies the `LocaleDirection` enum (imported via `@types`) used for the direction default and enum checks.
+- `tests/support/schema.ts` — schema-introspection helpers (imported via `@tests/schema`): `defaultOf`, `enumOf`, `indexOptionSpecs`, `indexSpecs`, `optionsOf`, `requiredPaths`.
 
 ## Notes
-
-- `stored` exercises **only** the `set` setter, not the full Mongoose validation pipeline. A malformed tag like `'en-a'` is expected to pass through the setter unchanged and be rejected later by schema validation — these tests deliberately do not cover that path.
-- Index assertions are on the **string representation** of the spec (e.g. `'locales_tag: unique=true'`), not on a live database, so they verify the *declaration* in the schema definition.
-- In `localeEntrySchema`, `key` is trimmed but **not** lowercased, while `locale` and `app` are both lowercased. This asymmetry is intentional and tested: `Cart.Empty` and `cart.empty` must remain distinct.
+- The tests inspect schema definitions only. They don't touch a database, so they verify index declarations, not index enforcement.
+- `baseLanguage` is required but never supplied by callers. A `pre('validate')` hook derives it, but that hook is not exercised here; only the required flag and `deriveBaseLanguage` are tested.
+- Keys are intentionally case-sensitive: `Cart.Empty` and `cart.empty` are distinct keys, so lowercasing them would silently merge two strings.
+- An empty-string `value` is a legitimate translation, so "declared but untranslated" stays distinguishable from a missing key.

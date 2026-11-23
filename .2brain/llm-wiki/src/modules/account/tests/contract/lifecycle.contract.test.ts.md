@@ -1,43 +1,42 @@
 ---
 source: src/modules/account/tests/contract/lifecycle.contract.test.ts
-sha256: ad66ec59a85df5a24eea027a6473266c9b14fea770fb59da4bb38208b3efcc4f
-generated_at: 2026-11-08T04:31:34.449291+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5986dfcbfef47a42544384e9293cd3369027b0cfdd343daf8b841de4bc04f764
+context_sha256: 4ae3b5087602d2737380c46720d700d3d6118063ddb340e30a7a0e74db364842
+generated_at: 2026-11-22T03:50:10.572923+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/contract/lifecycle.contract.test.ts
 
 ## Purpose
-
-Contract tests for account-lifecycle endpoints that `api.contract.test.ts` does not cover: scheduled account deletion and restore, password-reset request (including anti-enumeration and greeting-security), logout-everywhere, and password breach-check. Each success flow is driven for real by reading the one-time token back out of the mocked mail queue, so the assertion body is what a client would actually receive.
+Contract tests for the account-lifecycle endpoints that `api.contract.test.ts` doesn't cover: scheduled account deletion and restore, password-reset request, logging out of all sessions, the password breach check, and the expired-token sweep (named in the module doc). Each success path is driven for real, with the mailed token read back from the mocked mail queue, so the response checked against the spec is what a client would actually receive.
 
 ## Key elements
-
-- **`jest.mock('@infrastructure/adapters/mailer')`** — replaces `enqueueEmail` with a `jest.fn()` while preserving the rest of the module, allowing tests to inspect queued mails.
-- **`queued(template: string): Promise<void>`** — polls until a mail with the given template name appears in the mock's call history.
-- **`mailedToken(template: string): string`** — extracts the `#token=…` fragment from the newest queued mail's `linkUrl`.
-- **`mailedGreeting(template: string): string`** — reads the `greeting` field from the newest queued mail of a template.
-- **`describe('DELETE /account and POST /account/restore')`** — asserts 202 on delete, DB `deletedBy` set, 204 on restore, DB `deletedAt` cleared; 422 for a bogus token.
-- **`describe('POST /account/password/reset')`** — asserts 204 + queued mail for a known address; asserts identical observable response (status, body minus `instance`, `set-cookie`, `etag`) and *no* queued mail for an unknown address; 422 for a non-email body.
-- **`describe('the name in a mailed greeting')`** — security: verified user's username appears in the reset greeting; unverified user and signup-verification mails must show the generic `"Hello!"`.
-- **`describe('DELETE /account/sessions')`** — asserts 204 and that all session rows for the user are gone.
-- **`describe('POST /account/password/check')`** — asserts 200 for a breached password, 200 for a clean one, 422 for empty.
+- **`jest.mock('@infrastructure/adapters/mailer')`**: keeps the real module but replaces `enqueueEmail` with a resolved `jest.fn()`, so tests can inspect queued mails. The mock is cleared in `beforeEach`.
+- **`setupTestDb()`**: sets up the test database.
+- **`queued(template)`**: polls with `eventually` until a mail of that template has been enqueued. Needed because `POST /account/password/reset` responds before the mail is queued, so response time can't reveal whether an address is registered.
+- **`mailedToken(template)`**: takes the newest queued mail of a template, extracts `#token=...` from `linkUrl` (third argument), and URL-decodes it. Throws if none is found.
+- **`mailedGreeting(template)`**: returns the `greeting` of the newest queued mail of a template, or `''` if there is none.
+- **Test groups**:
+  - `DELETE /account` and `POST /account/restore`: request returns 202 and sets `deletedBy: 'owner'`. Restore with the mailed `account.deletion-scheduled` token returns 204 and clears `deletedAt`. An unissued token returns 422.
+  - `POST /account/password/reset`: known address returns 204 and mails a token. An unknown address gets the same status, body (via `withoutInstance`), `set-cookie` and `etag` as a known one, and nothing is queued. A malformed email returns 422.
+  - The name in a mailed greeting: the username appears in a reset mail only for a verified address. For an unverified address, and for signup verification mails, the greeting is `Hello!`.
+  - `DELETE /account/sessions`: returns 204 and leaves no session rows for the user.
+  - `POST /account/password/check`: a bundled-breach-list password returns 200 with `breached: true`. A non-breached password returns 200. An empty password returns 422.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/mailer.ts`** — mocked at module level; tests read `enqueueEmail.mock.calls` to extract tokens and greetings.
-- **`src/modules/users/tests/factories.ts`** — provides `createUser` (seeds test users with configurable `verifiedAt`, `username`) and `userRepository`.
-- **`src/modules/users/repository.ts`** — `userRepository.findById` is used to assert post-request DB state (`deletedBy`, `deletedAt`).
-- **`src/modules/account/tests/factories.ts`** — provides `sessionRowsOf` to query session rows for a user ID.
-- **`tests/support/contract.ts`** — imported as a side-effect; presumably registers global contract-test matchers or reporters.
-- **`tests/support/eventually.ts`** — `eventually` powers the `queued` poller and the anti-enumeration "no mail within 200 ms" assertion.
-- **`tests/support/http.ts`** — `api()` builds Supertest requests; `authenticateAs` creates a user and returns a bearer token.
-- **`tests/support/problem.ts`** — `withoutInstance` strips the `instance` field so error-body comparisons ignore the per-request identifier.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` called once at module scope to initialise the test database.
+- `src/infrastructure/adapters/mailer.ts`: partially mocked (`enqueueEmail`) to capture outgoing mail.
+- `tests/support/*`:
+  - `contract` is imported for its side effects, which presumably register the spec-checking of responses.
+  - `setup-test-db` provides `setupTestDb`.
+  - `eventually` polls for conditions.
+  - `http` provides `api()` and `authenticateAs()`.
+  - `problem` provides `withoutInstance`.
+- `src/modules/users/tests/factories.ts`: provides `createUser` and `userRepository`, used to seed users and read back state.
+- `src/modules/users/repository.ts`: not imported directly. Users are read through `userRepository` re-exported from the users test factories.
+- `src/modules/account/tests/factories.ts`: provides `sessionRowsOf`, used to verify sessions are deleted.
 
 ## Notes
-
-- The `queued` helper exists because `POST /account/password/reset` intentionally responds **before** the mail is enqueued; response timing must not distinguish registered from unregistered addresses.
-- `mailedToken` uses `findLast` on the mock's call array and a regex on `linkUrl`; it throws if no token is found, which surfaces as a clear test failure.
-- The anti-enumeration comparison uses `withoutInstance` on the body and also checks `set-cookie` and `etag` headers, but explicitly excludes `RateLimit-*` headers (they vary per caller by design).
-- The greeting tests are a security guard: the `username` field is a free-form display name, so printing it in a mail to an unverified address would allow an attacker to inject arbitrary text (phishing) from the shop's own domain.
+- The unknown-address test waits `eventually(() => false, 200)` so that "nothing queued" is checked after the detached mail work has had its full window, not racing it. The RateLimit headers are deliberately excluded from the comparison because they count per caller.
+- The greeting tests exist because `username` is a free display name. Printing it in a mail to an unproven address would put caller-chosen text in a stranger's inbox, from the shop's own domain.
+- The module doc lists an expired-token sweep, but no test for it appears in this file.

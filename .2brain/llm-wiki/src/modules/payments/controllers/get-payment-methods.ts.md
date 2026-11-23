@@ -1,29 +1,25 @@
 ---
 source: src/modules/payments/controllers/get-payment-methods.ts
-sha256: e31e1662236bb4cf540b9f0eb726036e34eea6e030d2c2cb7f2d3c844ceed410
-generated_at: 2026-11-08T07:17:10.549013+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e31e1662236bb4cf540b9f0eb726036e34eea6e030d2c2cb7f2d3c844ceed410
+context_sha256: 746fe27a17ee09bbaea7cb79a96190609112e34d76a7f750d1c6961b4fb13566
+generated_at: 2026-11-22T06:41:10.916279+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/controllers/get-payment-methods.ts
 
 ## Purpose
-
-Express handler for `GET /payments/methods`. It returns the shop's available payment methods in a standard success envelope. The endpoint is intentionally public (no auth) so that a guest can discover checkout options before creating an account.
+Express controller for `GET /payments/methods`. It returns the payment methods the shop offers, so the frontend doesn't hard-code them. The endpoint is public, so guests can see checkout options before signing up.
 
 ## Key elements
-
-- **`getPaymentMethods`** (exported) — The sole controller function. Accepts an Express `Request`/`Response`, calls `listPaymentMethods()` to fetch the configured method list, and sends it back via `successResponse` typed as `PaymentMethodsResponse`.
+- `getPaymentMethods(_request, response)`: the request handler. It calls `listPaymentMethods()` and sends `{ methods }` through `successResponse<PaymentMethodsResponse>`. It ignores the request.
 
 ## Relationships
-
-- **`src/modules/payments/routes.ts`** — Registers this handler on the `GET /payments/methods` route (this file is the target it imports).
-- **`src/modules/payments/config.ts`** — Provides `listPaymentMethods()`, the source of truth for which methods the shop supports.
-- **`src/infrastructure/http/response.ts`** — Supplies the `successResponse` helper that wraps the payload in the project's standard response envelope.
-- **`src/types/index.ts`** — Defines the `PaymentMethodsResponse` type used to shape the response body (`{ methods: ... }`).
+- `src/modules/payments/config.ts`: supplies `listPaymentMethods`, the source of the method list.
+- `src/infrastructure/http/response.ts`: supplies `successResponse`, which writes the HTTP response.
+- `src/types/index.ts`: supplies the `PaymentMethodsResponse` type (imported via the `@types` alias) that types the payload.
+- `src/modules/payments/routes.ts`: a graph neighbor. The route wiring presumably lives there, but this file doesn't show it.
 
 ## Notes
-
-- The `Request` parameter is unused (prefixed with `_`); the endpoint accepts no query or body data.
-- No middleware (auth, rate-limit, etc.) is applied here — the controller itself performs no guard logic, so public access is enforced (or omitted) at the routing layer.
-- The handler is a thin, stateless pass-through: all real logic lives in `listPaymentMethods()` in the module's config.
+- The handler is synchronous and has no auth or validation. The module doc says the endpoint is intentionally public.
+- The payload shape is `{ methods: ... }`. The type of the entries comes from `PaymentMethodsResponse`.

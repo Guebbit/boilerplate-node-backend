@@ -1,34 +1,31 @@
 ---
 source: src/modules/observability/services/dependency-health.ts
-sha256: 2087e193f59a5d60e9dabfea9d77bc8950d45e4e375a2f565d40a22d2369a43a
-generated_at: 2026-11-08T06:40:44.748806+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6fc083c1cc5992ba2b96e038e51f27641028c5e3e8ee987095d019ef1769337a
+context_sha256: 8654c5bbe836cdf35c1e2c54815f9a924f362664b2a20acb7c0fb7468587317c
+generated_at: 2026-11-22T06:02:49.676797+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/services/dependency-health.ts
 
 ## Purpose
-
-Provides a **readiness** snapshot of the three backing services (database, cache, queue) by reading their already-tracked in-memory state — zero I/O. Serves `GET /observability/health` and is explicitly kept separate from the liveness endpoint (`GET /`) that drives the orchestrator's restart decision, so a degraded Redis reports as degraded without killing a healthy container.
+Reports the current readiness of every backing service (database, cache, queue) in one shared vocabulary. It backs `GET /observability/health` and is deliberately separate from liveness (`GET /livez`), so a degraded dependency never triggers a container restart. It does no I/O: each dependency already tracks its own state, so this only reads memory.
 
 ## Key elements
-
-- **`DependencyHealth`** (interface) — the payload shape: `{ database, cache, queue }`, each typed as `DependencyStatus`.
-- **`DATABASE_STATES`** (const map) — translates Mongoose `readyState` integers (0–3) into the shared `DependencyStatus` vocabulary.
-- **`dependencyHealth()`** (exported function) — returns a `DependencyHealth` by reading `connection.readyState`, calling `cacheState()`, and calling `queueState()`. Pure memory read; no network or disk.
-- **`overallStatus(dependencies)`** (exported function) — pure fold over the three statuses; returns `'ok'` only if every status is `'ready'` or `'disabled'`, otherwise `'degraded'`. Accepts the map as a parameter so it stays testable without touching any adapter.
+- `DependencyHealth` — interface with `database`, `cache` and `queue` fields, each a `DependencyStatus`.
+- `DATABASE_STATES` (internal) — maps Mongoose `readyState` integers to `DependencyStatus`: `0` → `unavailable`, `1` → `ready`, `2` → `connecting`, `3` → `unavailable`.
+- `dependencyHealth()` — returns a `DependencyHealth` snapshot. The database state comes from `connection.readyState`, and an unmapped value falls back to `unavailable`. The cache and queue states come from `cacheState()` and `queueState()`.
+- `overallStatus(dependencies)` — pure function that returns `'ok'` if every status is `ready` or `disabled`, and `'degraded'` otherwise.
 
 ## Relationships
-
-- **Imports from `src/infrastructure/runtime/database.ts`** — reads `connection.readyState` (Mongoose connection object).
-- **Imports from `src/infrastructure/adapters/cache.ts`** — calls `cacheState()` to get the cache's current `DependencyStatus`.
-- **Imports from `src/infrastructure/adapters/queue.ts`** — calls `queueState()` for the queue's current `DependencyStatus`.
-- **Imports from `src/infrastructure/adapters/managed-connection.ts`** — uses the `DependencyStatus` type as the shared vocabulary across all three backends.
-- **`src/modules/observability/services/index.ts`** — barrel file in the same directory; expected re-export surface for the observability service layer.
-- **`src/modules/observability/tests/unit/dependency-health.test.ts`** / **`dependency-up.test.ts`** — unit tests covering the state-mapping and overall-status logic.
+- `src/infrastructure/runtime/database.ts` — supplies `connection`, whose `readyState` is read.
+- `src/infrastructure/adapters/cache.ts` and `src/infrastructure/adapters/queue.ts` — supply `cacheState()` and `queueState()`.
+- `src/infrastructure/adapters/managed-connection.ts` — defines the `DependencyStatus` type shared by all three backends (type-only import).
+- `src/modules/observability/services/health.ts` and `src/modules/observability/metrics.ts` are graph neighbors, but this file does not import them.
+- Tests: `src/modules/observability/tests/unit/dependency-health.test.ts` and `src/modules/observability/tests/unit/dependency-up.test.ts`.
 
 ## Notes
-
-- `readyState 3` (Mongoose "disconnecting") maps to `'unavailable'`, **not** `'connecting'`. Rationale: a disconnecting connection is on its way out and will not resume serving, so treating it as "nearly ready" would misreport a shutdown as a startup.
-- `'disabled'` is treated as a passing status in `overallStatus`, meaning a dependency can be intentionally turned off (e.g., cache disabled in a minimal deployment) without degrading the overall health.
-- The `dependencyHealth()` function performs **no I/O whatsoever** — it never pings, queries, or waits. Each adapter is responsible for keeping its own state current; this file only reads.
+- `disabled` counts as healthy in `overallStatus`, so an intentionally turned-off dependency does not make the overall status `degraded`.
+- `disconnecting` (Mongoose state `3`) is mapped to `unavailable` rather than `connecting`, so a shutdown is not reported as a startup.
+- `overallStatus` returns only `ok` or `degraded`. The per-dependency map says which part is missing.
+- Do not use this for liveness or restart decisions.

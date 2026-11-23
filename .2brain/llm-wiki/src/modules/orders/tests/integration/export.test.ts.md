@@ -1,41 +1,43 @@
 ---
 source: src/modules/orders/tests/integration/export.test.ts
-sha256: e820647219bd81749507ceb9e6359d7cdf7a7e192bcc03fa94f173a27d44a578
-generated_at: 2026-11-08T07:04:44.197474+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 769083489a665a4d35a4de625193ac4136f044498dde058792bcdd0af372d01a
+context_sha256: b1fad62b05df5546db06be64568c114570097e140d2e121acb9adc7f0558de76
+generated_at: 2026-11-22T06:27:56.830859+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/export.test.ts
 
 ## Purpose
-Integration test for `orderService.openOrderExport` (the orders CSV endpoint) against a real MongoDB. Verifies the CSV contract (column order, formula escaping, read scoping), the row-cap refusal path, and the audit row's content invariants.
+Integration test suite (real Mongo) for the orders CSV export, exercised through the orders service's `openOrderExport`. It covers the export's filters and ordering, formula escaping, the row cap, the audit event it emits, and read-scope enforcement.
 
 ## Key elements
-- **`csvOf`** — unwraps the success result of `openOrderExport` and streams it to text via `node:stream/consumers`; throws a descriptive error if the result is a refusal.
-- **`orderOf`** — composes `createUser` → `createProduct` → `createOrder` into one buyer/order pair with optional `status` and `createdAt`.
-- **`staff`** — the admin caller context (`callerContextAs('admin', 'admin-1')`) passed to every export call.
-- **`describe('the file')`** — asserts header column order, row count/order, absence of address fields, formula-injection escaping (leading `'`), and customer read-scope filtering.
-- **`describe('the cap')`** — sets `NODE_ORDER_EXPORT_MAX_ROWS` via `setEnvironment`; verifies over-cap returns `422 / ORDER_EXPORT_TOO_LARGE` with no audit event, and at-cap passes.
-- **`describe('the audit row')`** — asserts the single audit call carries `action: ADMIN_ORDERS_EXPORTED`, a boolean-masked filter, and `rowCount`, but never a raw email or row payload.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces the audit module with `auditPortMock()` from `@tests/ports` before any import resolves.
+- **`staff`**: an admin `callerContextAs('admin', 'admin-1')` used as the actor in every export.
+- **`csvOf(opened)`**: reads the result of `openOrderExport` into a string via `text(opened.source.pipe(opened.csv))`. It throws if the result has a `'success'` key (a refusal).
+- **`orderOf(email, status?, createdAt?)`**: creates a user, a product priced `10.00`, and an order of 2 units for that buyer. The default status is `paid`, and `createdAt` is optional.
+- **`describe('the file')`**:
+  - Checks the exact header, spelled out literally from `src/modules/orders/openapi.yaml` rather than imported.
+  - Checks one line per matching order, filtered by `status: 'paid'` and sorted by `createdAt`.
+  - Checks that no address data appears.
+  - Checks that a cell starting with `=` is prefixed with `'`.
+  - Checks that a customer caller only gets their own orders.
+- **`describe('the cap')`**:
+  - With `NODE_ORDER_EXPORT_MAX_ROWS=1`, two orders produce a refusal: `success: false`, status 422, code `ORDER_EXPORT_TOO_LARGE`. The cap value appears in the response, and no audit event is emitted.
+  - An export exactly at the cap succeeds.
+- **`describe('the audit row')`**: expects exactly one `emitAuditEvent` call with action `ordersAuditActions.ADMIN_ORDERS_EXPORTED` and metadata `{ filter: { status: 'paid', email: true }, rowCount: 1 }`. The raw email must not appear anywhere in the call arguments.
 
 ## Relationships
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/orders/services/index.ts` | Source of `orderService.openOrderExport` under test. |
-| `src/modules/orders/audit.ts` | Provides `ordersAuditActions.ADMIN_ORDERS_EXPORTED` asserted in the audit test. |
-| `src/infrastructure/observability/audit.ts` | Fully replaced via `jest.mock`; its `emitAuditEvent` is the port observed with `observePort`. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem` used by `orderOf`. |
-| `src/modules/products/tests/factories.ts` | `createProduct` used by `orderOf`. |
-| `src/modules/users/tests/factories.ts` | `createUser` used by `orderOf`. |
-| `src/types/index.ts` | `OrderStatus` enum values for filter/fixture setup. |
-| `tests/support/callers.ts` | `asAdmin`, `asCustomer`, `callerContextAs` supply caller context. |
-| `tests/support/environment.ts` | `setEnvironment` toggles `NODE_ORDER_EXPORT_MAX_ROWS` at runtime. |
-| `tests/support/ports.ts` | `observePort` captures port calls; `auditPortMock` backs the `jest.mock` factory. |
-| `tests/support/setup-test-db.ts` | `setupTestDb` initialises the real Mongo instance before tests run. |
+- **`src/modules/orders/services/index.ts`**: provides `orderService`, whose `openOrderExport` is the unit under test.
+- **`src/modules/orders/audit.ts`**: provides `ordersAuditActions`, used to assert the audit action name.
+- **`src/infrastructure/observability/audit.ts`**: replaced in tests with `auditPortMock()` from `tests/support/ports.ts`. `observePort` then watches `emitAuditEvent`.
+- **`tests/support/setup-test-db.ts`** (`setupTestDb`): provides the Mongo lifecycle.
+- **`tests/support/environment.ts`** (`setEnvironment`): sets the cap variable.
+- **`tests/support/callers.ts`** (`asAdmin`, `asCustomer`, `callerContextAs`): provides caller identities.
+- **`tests/support/ports.ts`** (`observePort`, `auditPortMock`): provides audit port observation and the mock.
+- **Factories** in `src/modules/users/tests/factories.ts`, `src/modules/products/tests/factories.ts` and `src/modules/orders/tests/factories.ts`: build the fixture data (`createUser`, `createProduct`, `createOrder`, `toOrderItem`).
+- **`src/types/index.ts`**: provides `OrderStatus`.
 
 ## Notes
-- The audit port is **replaced** (`jest.mock`), not spied on. `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import exposes. The full rationale lives in `cancel.test.ts`.
-- The header assertion hard-codes the entire column list to pin the OpenAPI contract; if a column is reordered in the service's constant, both the produced file and this expectation shift together, so the test still catches the swap.
-- Formula-escaping test expects a **leading single-quote** (`'=cmd@…`) as the CSV injection defense; it also asserts the un-prefixed form does not appear.
-- `afterEach(jest.restoreAllMocks)` covers the port mock restoration; the `jest.mock` module factory itself persists for the whole file.
+- The audit port is replaced rather than spied on, because `jest.spyOn` cannot redefine the non-configurable getter of a CommonJS namespace import. The file points to `cancel.test.ts` for the full reasoning.
+- The cap refusal must happen before any row is read, and it must not emit an audit event.
+- `afterEach` calls `jest.restoreAllMocks()`.

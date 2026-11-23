@@ -1,32 +1,31 @@
 ---
 source: docker/observability/umami-init.sh
-sha256: a51c4a44874c4dcb71b71f4568a554cf76d351c3a118aad6cf19cecd2def8d5e
-generated_at: 2026-11-08T02:24:24.681463+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a51c4a44874c4dcb71b71f4568a554cf76d351c3a118aad6cf19cecd2def8d5e
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T01:34:17.727334+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/observability/umami-init.sh
 
 ## Purpose
-
-One-shot init script that stamps the admin username/password (from `.env`) onto Umami's factory-seeded admin account and inserts a default website row with a known ID. It exists because Umami ships with hardcoded credentials (`admin` / `umami`) and offers no environment-variable override, so the stack needs this bridge step to be log-in-ready without manual DB work.
+A one-shot POSIX shell init script for Umami (analytics). Umami has no env var for admin credentials and always seeds a fixed `admin` / `umami` account on first boot. This script waits for that account to exist, then overwrites its username and password with values from the environment and seeds a default website, so the stack is ready to log in with no manual step.
 
 ## Key elements
-
-- **`ADMIN_ID`** — Hardcoded UUID (`41e2b680-…`) that Umami v2 uses for its seeded admin row; stable across v2 releases.
-- **Wait loop** (`until psql … | grep -q 1; sleep 2; done`) — Polls Postgres until the seeded admin row exists before proceeding.
-- **Credential UPDATE** — Sets `username` and `password` (bcrypt-hashed via `pgcrypto.crypt`) on the admin row. Guarded by `WHERE password = crypt('umami', password)` so it fires **only** while the factory default is still in place.
-- **Website INSERT** — Creates a `website` row with the fixed `UMAMI_WEBSITE_ID`, name, and domain from env. Uses `ON CONFLICT (website_id) DO NOTHING` for idempotency and to preserve later UI edits.
-- **psql variable passing** (`-v uname=… -v pw=…` etc.) — Values are quoted safely by psql rather than interpolated into the SQL string.
+- **`ADMIN_ID`**: the fixed UUID (`41e2b680-648e-4b09-bcd7-3e2b10c06264`) of Umami's seeded admin user.
+- **Wait loop**: polls `psql "$DATABASE_URL"` every 2s until a row with `ADMIN_ID` exists in the `"user"` table.
+- **Credential `UPDATE`**: sets `username` from `$UMAMI_ADMIN_USER` and `password` from `$UMAMI_ADMIN_PASSWORD`, hashed with pgcrypto `crypt(..., gen_salt('bf', 10))`. This produces a bcrypt hash that Umami's bcryptjs can verify.
+- **Website `INSERT`**: creates a `"website"` row with the fixed id `$UMAMI_WEBSITE_ID`, plus `$UMAMI_WEBSITE_NAME` and `$UMAMI_WEBSITE_DOMAIN`. The row is owned by the admin user. `ON CONFLICT (website_id) DO NOTHING` makes it idempotent.
+- **`CREATE EXTENSION IF NOT EXISTS pgcrypto`**: ensures the hashing functions are available.
 
 ## Relationships
-
-No graph-neighbor files are recorded. The script is invoked as a one-shot container entrypoint (or `docker compose run`-style command) against the shared Postgres database referenced by `DATABASE_URL`.
+No graph neighbors. It relies on these inputs at runtime:
+- `DATABASE_URL`, `UMAMI_ADMIN_USER`, `UMAMI_ADMIN_PASSWORD`, `UMAMI_WEBSITE_ID`, `UMAMI_WEBSITE_NAME` and `UMAMI_WEBSITE_DOMAIN` from the environment. The header comment says the admin values come from `.env`.
+- A Postgres database that Umami has already migrated and seeded.
 
 ## Notes
-
-- **First-run only by design.** Once the admin password is no longer the literal string `"umami"`, the UPDATE's `WHERE` guard is false and the script becomes a no-op for credentials. A `down`/`up` cycle with the `umami_db_volume` intact therefore never resets a changed password.
-- **Changing `UMAMI_ADMIN_PASSWORD` in `.env` later has no effect.** Update the password in the Umami UI, or delete the Postgres volume and re-run from scratch.
-- The website INSERT *is* idempotent across runs (idempotent by `ON CONFLICT`), so re-running the script after a volume reset will recreate the same website row but will not clobber UI edits made under the same ID.
-- Script uses POSIX `sh` (not `bash`); `set -e` is the only shell option.
-- Requires the `pgcrypto` extension to be creatable in the target database (`CREATE EXTENSION IF NOT EXISTS`).
+- **First-run only.** The `UPDATE` is guarded by `password = crypt('umami', password)`, which is true only while the factory default password is still set. Later `down`/`up` cycles with the Postgres volume intact never reset credentials.
+- **Changing `UMAMI_ADMIN_PASSWORD` in `.env` later does not re-apply.** Change it in the Umami UI, or reset the `umami_db_volume` to start fresh.
+- Values are passed to psql as variables (`-v`) and interpolated with `:'name'`, so they are quoted safely. `ON_ERROR_STOP=1` makes SQL failures abort the script, and `set -e` is also on.
+- The wait loop has no timeout and hides psql errors (`2>/dev/null`), so it loops forever if the database is unreachable or Umami never seeds the account.
+- The hardcoded admin UUID is described as stable across Umami v2 releases.

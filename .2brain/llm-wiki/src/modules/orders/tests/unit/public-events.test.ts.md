@@ -1,34 +1,34 @@
 ---
 source: src/modules/orders/tests/unit/public-events.test.ts
-sha256: 98b17d9d7173500e4bd977fd785bf45f32e8e833b78b90661438d6dd896344d5
-generated_at: 2026-11-14T20:57:42.687102+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4c0cda869dbd0ae6f75d50f7183433a39b02866e2fd0904c48a5640ac6010e2f
+context_sha256: 8f0b91d21e8a190bf588aa287c78066c62883762fa6aaab363689e5676e7a54f
+generated_at: 2026-11-22T06:37:22.021648+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/public-events.test.ts
 
 ## Purpose
-
-Verifies that the orders module's public-event projections (the `publicEvents` registry on the module manifest) emit the correct webhook `eventType` strings and payload shapes for each domain event, and that the AsyncAPI contract stays in sync with the code.
+Unit tests for the orders module's public (webhook) events. They check the event name and payload that subscribers receive when the module's manifest projects a domain event through `toPublicEvent`. The file also checks that the AsyncAPI contract stays in sync with the code.
 
 ## Key elements
-
-- **`ORDER_CREATED` projection test** — asserts the subscriber receives `{ eventType: 'order.created', data: { orderId } }`.
-- **`ORDER_STATUS_CHANGED` projection test** — asserts only the `to: 'paid'` transition produces a public event (`order.paid`); any other transition produces no public event (asserted via `toBeUndefined()`).
-- **`ORDER_CANCELED` projection tests** — asserts the payload includes `cause` but deliberately omits `refund` (refund policy is a `payments` concern). Covers both `refund: true` and `refund: false`, and the `'lost'` cause specifically.
-- **Contract-sync test** — reads the module's AsyncAPI YAML file, parses the `OrderCanceledPayload.cause.enum`, and asserts it equals `Object.keys(CANCEL_CAUSES)`. Guards against the YAML copy drifting from the code's list.
-- **`ORDER_REDACTED` projection test** — asserts the subscriber receives `{ eventType: 'order.redacted', data: { orderId } }`.
+- **`ORDER_CREATED` test**: projects to `order.created` with `{ orderId }` only.
+- **`ORDER_STATUS_CHANGED` test**: projects to `order.paid` when `to` is `'paid'`. Any other move, such as `'shipped'`, is expected to be `toBeUndefined`, so nothing is announced.
+- **`ORDER_CANCELED` tests**:
+  - Run with `it.each([true, false])` over `refund`.
+  - Project to `order.canceled` with `{ orderId, cause }`.
+  - Assert that `refund` is not in the payload. Whether money is owed is a `payments` policy, and `payment.refunded` is announced when money actually moves.
+  - A separate case checks that `cause: 'lost'` is passed through, so subscribers don't assume stock was restocked.
+- **Contract test**: parses `src/modules/orders/asyncapi.webhooks.yaml` (located via `MODULES_ROOT`) with `yaml`. It asserts that `OrderCanceledPayload.properties.cause.enum` equals `Object.keys(CANCEL_CAUSES)`.
+- **`ORDER_REDACTED` test**: projects to `order.redacted` with `{ orderId }` only.
 
 ## Relationships
-
-- **`src/modules/orders/module.ts`** — the system under test; the file imports its default export (`ordersModule`) and calls `.publicEvents[eventKey].toPublicEvent(...)` in every test.
-- **`src/modules/orders/events.ts`** — supplies the domain-event constants (`ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_CANCELED`, `ORDER_REDACTED`) used as registry keys.
-- **`src/modules/orders/services/cancel.ts`** — supplies `CANCEL_CAUSES`, the source-of-truth list compared against the AsyncAPI enum.
-- **`tests/support/paths.ts`** — provides `MODULES_ROOT` so the contract-sync test can locate the YAML file on disk.
-- **`tests/support/stub.ts`** — provides `asStub<never>()`, which casts a plain object to satisfy the `never`-typed input slot on the projection signature.
+- `src/modules/orders/module.ts`: the default export `ordersModule` provides `publicEvents[...]`, whose `toPublicEvent` is the code under test.
+- `src/modules/orders/events.ts`: provides the keys `ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_CANCELED` and `ORDER_REDACTED`, used to look up each projection.
+- `src/modules/orders/services/cancel.ts`: provides `CANCEL_CAUSES`, the source of truth for the cause enum compared against the contract.
+- `tests/support/paths.ts`: provides `MODULES_ROOT`, used to build the path to the module's contract file.
+- `tests/support/stub.ts`: provides `asStub`, used to build partial event inputs.
 
 ## Notes
-
-- The projection input slot is typed `never` so a single registry type can hold projections for every module. `asStub<never>()` is the escape hatch; don't expect runtime type safety at the call site.
-- The contract-sync test is a *file I/O* test (reads YAML from disk), not a pure unit test — it will fail if the file is missing or the schema path changes.
-- `refund` is intentionally absent from the public `order.canceled` payload; subscribers learn of actual money movement via a separate `payment.refunded` event.
+- Inputs are built with `asStub<never>(...)`. The projection slot takes `never` so one registry can hold every module's projections, so tests must cast.
+- The AsyncAPI enum is a hand-maintained copy of the code's list, because no contract file can import it. The contract test is what catches drift between the two.

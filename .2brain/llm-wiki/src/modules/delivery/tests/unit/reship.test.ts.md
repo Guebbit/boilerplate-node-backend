@@ -1,31 +1,33 @@
 ---
 source: src/modules/delivery/tests/unit/reship.test.ts
-sha256: 7ca08a4ba5c548a36e4675773b26ce6d26aea7592bcd1dda6f29b61f6133b087
-generated_at: 2026-11-08T05:47:02.583366+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7ca08a4ba5c548a36e4675773b26ce6d26aea7592bcd1dda6f29b61f6133b087
+context_sha256: 077a98d3407ba7835a54b7cd175230ec0ea8341ea3da1e105db13cc50bd0521a
+generated_at: 2026-11-22T05:05:37.486165+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/unit/reship.test.ts
 
 ## Purpose
-
-Unit tests for the pure reshipment (reopening) domain logic: verifying that `planReopening` picks units from the latest physical fulfillment orders first, that `shareOwed` caps each order at its reopened quantity, and that `withLoss` correctly adjusts or removes lines when units move to the owed order.
+Unit tests for the pure "reship" logic of the delivery module: choosing which fulfillment orders give back their shipped units (latest first), refusing when the order did not ship enough, and sharing the owed part of a reopening so no fulfillment order hands over more than it reopened. Everything is tested without services or I/O.
 
 ## Key elements
-
-- **`line(productId, quantity, shipped?)`** – test factory for a `FulfillmentLine`; defaults `shipped` to `quantity`.
-- **`fulfillmentOrder(id, number, lines, physical?)`** – test factory for a `ReopenableFulfillmentOrder`; defaults `physical` to `true`.
-- **`describe('planReopening', …)`** – four cases: latest-first ordering, refusal when shipped < returned, refusal for digital orders, and line scoping (only requested productIds are reopened).
-- **`describe('shareOwed', …)`** – two cases: distributing owed units in plan order without exceeding each order's reopened amount; empty-owed returns empty arrays.
-- **`describe('reopening through withLoss', …)`** – one case: partially reopened line gets `shippedQuantity` zeroed; a line fully moved to the owed order is dropped from the result.
+- `line(productId, quantity, shipped = quantity)`: test helper building a `FulfillmentLine` (shipped in full by default, `canceledQuantity: 0`, title `Product <id>`).
+- `fulfillmentOrder(id, number, lines, physical = true)`: helper building a `ReopenableFulfillmentOrder`.
+- `describe('planReopening')`:
+  - takes units from the latest fulfillment order first (`fo2` before `fo1`);
+  - refuses (asserted with `toBeUndefined()`) when fewer units shipped than come back;
+  - refuses (also `toBeUndefined()`) for a non-physical (digital) fulfillment order;
+  - only opens units for the requested product lines.
+- `describe('shareOwed')`:
+  - distributes owed units across plan entries in plan order, capped at what each reopened;
+  - gives an empty list for a fulfillment order when nothing is owed. Results are read with `.get(fulfillmentOrderId)`, so the return value is keyed by fulfillment order id.
+- `describe('reopening through withLoss')`: with `withLoss`, a line reopened in full goes back to `shipped = 0`, and a line owed entirely is dropped from the fulfillment order.
 
 ## Relationships
-
-- Imports `planReopening`, `shareOwed`, `withLoss` and the types `FulfillmentLine`, `ReopenableFulfillmentOrder` from **`src/modules/delivery/domain/index.ts`** (the barrel that re-exports from `reship.ts` and `lost.ts`).
-- No direct interaction with the `services/*` neighbors; those are integration-level consumers, not unit-test targets here.
+- Imports `planReopening`, `shareOwed`, `withLoss` and the types `FulfillmentLine` and `ReopenableFulfillmentOrder` from the delivery domain barrel (`src/modules/delivery/domain/index.ts`). The implementations live in the domain files `reship.ts` and `lost.ts`, with `FulfillmentLine` coming from `fulfillment.ts`. The listed neighbors suggest these are re-exported through the barrel.
+- The listed services (`holds.ts`, `override-sync.ts`, `preorder-sweep.ts`, `read.ts`, `release-date-impact.ts`, `slip.ts`) are not imported or referenced in this test.
 
 ## Notes
-
-- Refusal cases assert `toBeUndefined()` — the domain functions signal "cannot reship" by returning `undefined` rather than throwing.
-- The `withLoss` test uses `.filter(Boolean)` because the function removes lines entirely when their full quantity moves to the owed order; expect an array shorter than the input.
-- The `line` helper's `shipped` default mirrors production where a freshly shipped line has `shippedQuantity === quantity`; pass an explicit third arg to simulate partial shipping.
+- The `withLoss` test builds its expected value with an odd `[ {...} ].filter(Boolean)` construct. The comment explains that `b` was owed in full and so leaves the fulfillment order.
+- `planReopening` refusal is asserted with `toBeUndefined()` rather than an exception.

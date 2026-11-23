@@ -1,32 +1,28 @@
 ---
 source: src/modules/account/oauth/deletion-redirect.ts
-sha256: 487049bedea708342f7b7d9e4c4553a7855a0140480f013fe390b0186329707e
-generated_at: 2026-11-08T04:12:12.498802+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 487049bedea708342f7b7d9e4c4553a7855a0140480f013fe390b0186329707e
+context_sha256: c6d93c2cb1a013822936d4fb0b70739d3237fae9470adbdd05659cb945e3b6fd
+generated_at: 2026-11-22T03:31:41.528051+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/oauth/deletion-redirect.ts
 
 ## Purpose
-
-Carries the deletion-restore claim check (minted by `buildDeletionPending`) in a cookie across the OAuth provider's redirect, rather than in the URL. This mirrors the pattern used by `./mfa-redirect.ts` for the 2FA challenge. The `POST /account/login/restore` endpoint reads this cookie when its request body omits `challenge`.
+Manages the single cookie used by the OAuth deletion-grace continuation. The cookie carries the claim check minted by `buildDeletionPending` across the OAuth provider's redirect, so the token is not placed in the URL. This is the same reason `./mfa-redirect.ts` carries the 2FA challenge this way. `POST /account/login/restore` reads the cookie when its body omits `challenge`.
 
 ## Key elements
-
-- **`DELETION_CHALLENGE_COOKIE`** — constant holding the cookie name, derived from `cookieData.oauthDeletionChallenge.name`.
-- **`createDeletionChallengeCookie(response, challenge, expiresAt)`** — sets the cookie on the OAuth callback redirect response. `maxAge` is computed so the cookie expires at the same instant as the claim check itself.
-- **`destroyDeletionChallengeCookie(response)`** — clears the cookie after the claim check has been consumed.
-- **`readDeletionChallengeCookie(request)`** — reads the cookie off an incoming request; returns `string | undefined`.
+- `createDeletionChallengeCookie(response, challenge, expiresAt)` sets the claim-check cookie on the callback's redirect response. It sets `maxAge` to the time remaining until `expiresAt` (ISO 8601), floored at 0, so the cookie lifetime tracks the check's expiry. It spreads `hostCookieOptions()` into the options.
+- `destroyDeletionChallengeCookie(response)` clears the cookie, using the same `hostCookieOptions()`. It is called once the check has been spent.
+- `readDeletionChallengeCookie(request)` returns the cookie value from an incoming request, or `undefined` if none was set.
+- `DELETION_CHALLENGE_COOKIE` (module-private) is the cookie name, taken from `cookieData.oauthDeletionChallenge.name`.
 
 ## Relationships
-
-- **`src/infrastructure/http/cookies.ts`** — imports `cookieOf`, used by `readDeletionChallengeCookie` to extract the cookie value from the request.
-- **`src/modules/account/session/cookies.ts`** — imports `hostCookieOptions`, spread into the `Set-Cookie` options in both create and destroy so the cookie is host-scoped consistently with other session cookies.
-- **`src/modules/account/controllers/get-oauth-callback.ts`** — expected caller of `createDeletionChallengeCookie`; the doc comment refers to "the callback's redirect response."
-- **`src/modules/account/controllers/post-login-restore.ts`** — expected consumer of `readDeletionChallengeCookie` (and `destroyDeletionChallengeCookie` after the check is spent); the doc comment notes it reads the cookie "whenever its body omits `challenge`."
+- `src/infrastructure/http/cookies.ts`: supplies `cookieOf`, which the read helper uses.
+- `src/modules/account/session/cookies.ts`: supplies `hostCookieOptions`, which sets the cookie attributes on both set and clear.
+- `src/modules/account/controllers/get-oauth-callback.ts`: the callback that sets this cookie on its redirect response. This is inferred from the doc comment and parameter descriptions, not shown in this file.
+- `src/modules/account/controllers/post-login-restore.ts`: the restore endpoint that reads the cookie when `challenge` is missing from its body, per the module doc.
 
 ## Notes
-
-- The cookie's lifetime is tied to the claim check's `expiresAt`, not a fixed window. If `expiresAt` is already in the past, `maxAge` clamps to `0` (immediate expiry).
-- The cookie is intended to be set once per OAuth sign-in and cleared exactly once after the check is spent. Calling `destroyDeletionChallengeCookie` without a prior `create` is a no-op in terms of data loss but still sends a `Set-Cookie: …=; Max-Age=0`.
-- The claim check value is stored **plaintext** in the cookie (not hashed), consistent with how the MFA challenge cookie is handled.
+- The cookie is cleared with the same options it was set with. Express's `clearCookie` generally needs matching options (apart from `maxAge`) to remove a cookie.
+- A past `expiresAt` produces `maxAge` of 0, not a negative value.

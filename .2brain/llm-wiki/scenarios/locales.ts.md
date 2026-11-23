@@ -1,42 +1,54 @@
 ---
 source: scenarios/locales.ts
-sha256: 696b9db38b7b0e9d42ede2d852a88e3c63007534db4294ea92fb66d44469cb97
-generated_at: 2026-11-08T02:30:19.700139+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1558e0816708c4b480c71c2c4ccb1a0df00130e03b6b7033e5e00fe06ec36a09
+context_sha256: cb69f85c77b1c693b67659fcd7069cfd4d8cf1704d4e24845109060d920ab8c0
+generated_at: 2026-11-22T01:44:06.315642+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/locales.ts
 
 ## Purpose
-
-Seed fixture module for the dynamic-locale tier of the demo dataset. Defines five languages (each exercising a distinct state: source/fallback, downloadable-only, deployed-and-overridable, inactive draft, and registered-but-empty) plus sixteen translated string entries, then wires them into the shop seed pipeline and the demo-history flow.
+Defines the dynamic locale tier's slice of the demo dataset: five languages and sixteen translated entries, chosen so that every state a language and its entries can be in is represented. It also supplies this module's seed function and one demo-history step. Rows are inserted directly, so `revision` is stated explicitly instead of being bumped by the repository.
 
 ## Key elements
-
-- **`SEED_LOCALE_TAGS`** — Named constants mapping role names (`source`, `downloadable`, `answerable`, `draft`, `empty`) to IETF tags. `source` is resolved via `getFallbackLocale()`; the rest are hardcoded tags.
-- **`localeFixtures`** (exported) — Array of five `makeLocale` results, one per tag. `revision` is set explicitly (or omitted for the source/empty rows) because these bypass the repository's auto-bump.
-- **`LOCALE_ENTRIES`** — Internal 16-tuple array of `[id, localeKey, app, key, value]` rows, grouped by demonstration purpose (Spanish frontend+backend, Italian backend, French draft).
-- **`localeEntryFixtures`** (exported) — `LOCALE_ENTRIES` mapped through `makeLocaleEntry`, resolving the `app` field to a `backendApp()` or `frontendApp()` call.
-- **`seedLocalesCollection`** — Async function that `Promise.all`s `insertIfAbsent` over both collections (languages first, then entries) and returns the combined `SeedOutcome[]`.
-- **`driveLocaleEntryEdit`** — Accepts a `Caller` and issues a `PUT` to override the Italian `generic.error-unauthorized` entry, contributing one step to the demo audit-trail history.
-- **`shopModule`** (exported) — Object with `seed`, `baseline: true`, and `driveHistoryEdit`, registered into the generated `shop-modules` table so `npm run regenerate` picks it up automatically.
+- `SEED_LOCALE_TAGS` (internal) names each language by what it demonstrates:
+  - `source`: the deployment's fallback locale, from `getFallbackLocale()`.
+  - `downloadable`: `es`, which exists only as rows.
+  - `answerable`: `it`, which has a deployed file and is also registered here.
+  - `draft`: `fr`.
+  - `empty`: `ja`.
+- `localeFixtures` holds the five languages, built with `makeLocale`:
+  - English: the fallback, with no entries and the default revision.
+  - Spanish: active.
+  - French: inactive, but has entries.
+  - Italian: active, and the only one with a deployed API file.
+  - Japanese: inactive and empty.
+- `LOCALE_ENTRIES` (internal) is a list of `[id, locale, app, key, value]` rows in groups:
+  - Ten Spanish frontend entries, including a deep key (`static-pages.about.features.catalogue.title`).
+  - Two Spanish backend entries, which are stored but not applied.
+  - Two Italian backend entries, which override deployed strings.
+  - Two French draft entries.
+- `localeEntryFixtures` maps those rows through `makeLocaleEntry`, resolving the tag via `SEED_LOCALE_TAGS` and the app via `backendApp()` or `frontendApp()`.
+- `seedLocalesCollection` (internal) inserts all languages first and then all entries, using `insertIfAbsent`. It returns the combined `SeedOutcome[]`.
+- `driveLocaleEntryEdit` (internal) sends a `PUT` through the `Caller` to `/locales/it/apps/<backend>/entries/<id>`. This overrides the Italian "unauthorized" string so the audit trail shows a wording edit.
+- `shopModule` (the export that wires the above together) is `{ seed, baseline: true, driveHistoryEdit }`.
 
 ## Relationships
-
-- **`scenarios/seed.ts`** — Imports `insertIfAbsent` (idempotent insert helper) and the `SeedOutcome` type; this module's `seedLocalesCollection` returns an array of that type.
-- **`src/modules/locales/factories.ts`** — Imports `makeLocale` and `makeLocaleEntry` to build the fixture objects.
-- **`src/modules/locales/repository.ts`** — Imports `localeRepository` and `localeEntryRepository`, passed to `insertIfAbsent` during seeding.
-- **`src/modules/locales/apps.ts`** — Imports `backendApp` and `frontendApp` to populate the `app` field on entries.
-- **`src/infrastructure/i18n/index.ts`** (re-exporting from `catalog.ts`) — Imports `getFallbackLocale()` to resolve the `source` tag at runtime.
-- **`scenarios/flows/client.ts`** — Imports the `Caller` type, used as the parameter for `driveLocaleEntryEdit`.
-- **`scenarios/shop-modules`** (generated) — Consumes `shopModule` to register seeding and the history step in the `seedShop` pipeline.
-- **`tests/cross-cutting/scenario-fixtures.test.ts`** — Consumes the exported fixtures to validate cross-cutting invariants (e.g., entry locale references resolve to a seeded language).
-- **`src/modules/locales/tests/unit/service.test.ts`** — May import fixtures to exercise service-level logic against known locale states.
+- `@scenarios/seed` provides `insertIfAbsent` and `SeedOutcome`.
+- `./flows/client` provides the `Caller` type used by `driveLocaleEntryEdit`.
+- `@modules/locales/factories` provides `makeLocale` and `makeLocaleEntry`.
+- `@modules/locales/apps` provides `backendApp` and `frontendApp`.
+- `@modules/locales/repository` provides `localeRepository` and `localeEntryRepository`, the seeding targets.
+- `@infrastructure/i18n` provides `getFallbackLocale`.
+- `shopModule` is collected into `shopModules` (`./shop-modules`, generated via `npm run regenerate`) and run by `seedShop`. `driveHistoryEdit` is called from there rather than hardcoded into the history flow.
+- The comments say `./products` depends on the fallback language being active, because `planTranslations` validates each product's fallback-locale `translations` row against it.
+- The comments tie the fixtures to `mergeCapabilities` and `applyLocaleOverrides` behavior.
 
 ## Notes
-
-- **Insertion order matters.** Languages are seeded before entries because an entry references its locale by tag; inserting entries first would create rows whose locale doesn't yet exist in the collection.
-- **`revision` is manual here.** The normal repository `create`/`update` path bumps revision automatically; these fixtures set it (or omit it) explicitly to model the desired state without side-effects.
-- **The `source` locale has no entries.** Its dictionary lives in a deployed `en.json` file, not in dynamic rows—deliberately different from the other four.
-- **`shopModule` is the single coupling point** into the seed pipeline and the history flow. Deleting this file removes the module from the generated table entirely; there is no separate registration to clean up.
-- **IDs are hand-assigned hex bands** per group (e.g., `…1001`–`…100a` for Spanish frontend, `…3001`–`…3002` for Spanish backend) and are not auto-generated; tests and other fixtures may reference them directly.
+- Languages must be seeded before entries. Otherwise a dictionary could be published that the manifest doesn't list.
+- `baseline: true` means the `blank` scenario seeds this module too, because a spec that creates its own product still needs the fallback language active.
+- Entry ids are fixed per group and not derived. Each group has its own hex band (`f1xxx`, `f2xxx`, `f3xxx`).
+- The Spanish backend entries are deliberately stored but skipped, because Spanish has no deployed dictionary. The Italian ones apply because the API has a deployed Italian dictionary file.
+- The frontend and backend entries use the same keys without colliding, which shows that apps are separate keyspaces.
+- Deleting this file removes its seed and history step together.

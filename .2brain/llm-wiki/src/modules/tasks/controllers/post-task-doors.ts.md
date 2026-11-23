@@ -1,36 +1,37 @@
 ---
 source: src/modules/tasks/controllers/post-task-doors.ts
-sha256: 874c887c5ae811c8b97501a003242123a9e14f41d60761e758403df92c09e7cf
-generated_at: 2026-11-14T22:06:37.501769+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 06261993ea857278b07ff3dad07500294d05f777cc6180250a743a44af80906c
+context_sha256: 9e223216137616c348e55afdcfcb4c12130f09a6da1501c4161524ce8b474fd4
+generated_at: 2026-11-22T07:58:24.899967+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/tasks/controllers/post-task-doors.ts
 
 ## Purpose
-
-Defines the three bodyless task-status transition endpoints — `POST /tasks/:id/resolve`, `/mark-spam`, `/reopen` — as thin Express handlers. Each one extracts the task ID from the URL, delegates to the matching `taskService` method, and replies `200` with the updated task. All three are built from a single shared factory so they stay structurally identical.
+Defines the three bodyless task status endpoints, `POST /tasks/:id/resolve`, `/mark-spam` and `/reopen`. All three share one handler shape: read the id, call the matching `taskService` method, and answer 200 with the resulting task. The file builds them from a single factory so the behavior stays identical across doors.
 
 ## Key elements
-
-- **`doorController`** (module-private factory) — Given a log name and a service method with the signature of `taskService.resolve`, returns an Express handler that: reads the `:id` param, calls the service with caller context, sends `200` on success, short-circuits on refusal, and funnels errors through `catchAs`.
-- **`postTaskResolve`** — `doorController('postTaskResolve', taskService.resolve)` for `POST /tasks/:id/resolve` (staff).
-- **`postTaskMarkSpam`** — `doorController('postTaskMarkSpam', taskService.markSpam)` for `POST /tasks/:id/mark-spam` (staff).
-- **`postTaskReopen`** — `doorController('postTaskReopen', taskService.reopen)` for `POST /tasks/:id/reopen` (staff).
+- `doorController(name, run)` (internal): returns an Express handler.
+  - It calls `requireId` with `notFound: 'generic.error-item-gone'`. If the id is missing or invalid, the handler stops (it returns a resolved promise).
+  - Otherwise it calls `run(id, callerContextOf(request))`.
+  - If `refused(response, result)` handles the result, it returns without a success response. Otherwise it sends `successResponse<Task>(response, result.data, 200)`.
+  - Rejections go to `catchAs(response, name)`. `name` is used for the log line and the module-surface docs.
+- `postTaskResolve`: `POST /tasks/:id/resolve` (staff), backed by `taskService.resolve`.
+- `postTaskMarkSpam`: `POST /tasks/:id/mark-spam` (staff), backed by `taskService.markSpam`.
+- `postTaskReopen`: `POST /tasks/:id/reopen` (staff), backed by `taskService.reopen`.
 
 ## Relationships
-
-- **`src/modules/tasks/services/index.ts`** — imports `taskService`; each exported handler binds one of its methods (`resolve`, `markSpam`, `reopen`).
-- **`src/modules/tasks/routes.ts`** — registers the three exported handlers on their respective POST routes.
-- **`src/infrastructure/http/ids.ts`** — `requireId` extracts and validates the URL `:id` param; early-returns a 404 if absent.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf` pulls authenticated-caller metadata from the Express request.
-- **`src/infrastructure/http/response.ts`** — `successResponse<Task>` formats the `200` JSON reply.
-- **`src/infrastructure/http/controller.ts`** — `refused` short-circuits policy denials; `catchAs` maps thrown errors to an HTTP error response (and logs with the door name).
-- **`src/types/index.ts`** — `Task` type parameterises the success response payload.
+- `src/modules/tasks/services/index.ts`: provides `taskService`, whose `resolve`, `markSpam` and `reopen` methods are the door implementations. They are passed in by reference.
+- `src/infrastructure/http/ids.ts`: `requireId` extracts and validates the `:id` param.
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `successResponse` writes the 200 response.
+- `src/infrastructure/http/controller.ts`: `refused` short-circuits when the service result is a refusal, and `catchAs` is the error handler.
+- `src/types/index.ts`: supplies the `Task` type for the response payload.
+- `src/modules/tasks/routes.ts`: the route wiring that consumes these three exports (inferred from the graph; the file itself doesn't show the registration).
 
 ## Notes
-
-- All three doors are **bodyless** (no request body is read) and **staff-only** per the JSDoc annotations.
-- The `name` argument to `doorController` is used solely for the `catchAs` log line and module-surface documentation; it does not affect routing.
-- Adding a new status door requires only one new exported `doorController(…)` line plus the corresponding service method — no new handler boilerplate.
-- `requireId` returning `undefined` causes an early `Promise.resolve()` return; the handler never falls through to the service call in that case.
+- The "(staff)" restriction appears only in the doc comments. This file enforces no authorization, so it must be applied elsewhere, presumably in the routes or the service.
+- The handlers take no request body.
+- The `run` parameter is typed as `taskService['resolve']`, so `markSpam` and `reopen` must share that signature.
+- The module header's `@see` points to a lifecycle section in the tasks module documentation.

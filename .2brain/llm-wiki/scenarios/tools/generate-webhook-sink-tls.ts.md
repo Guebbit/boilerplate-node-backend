@@ -1,36 +1,37 @@
 ---
 source: scenarios/tools/generate-webhook-sink-tls.ts
-sha256: 6f717efeea0baf5cd3068b695ff33cb7e87f9c79c1e41dbf26fa6124376c8e67
-generated_at: 2026-11-08T02:35:39.927599+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f2c2af227e473a9e36d4fa79fcfe0dd1aebf65cd3af8a48416242debe6380241
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T01:49:45.135931+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/tools/generate-webhook-sink-tls.ts
 
 ## Purpose
-
-One-shot authoring script (run via `npm run scenario:tls`) that regenerates the demo webhook sink's TLS fixture pair — a test CA and a leaf certificate — and commits them to `scenarios/support/tls/`. It exists so the fixtures can be rebuilt when the ten-year validity expires without needing a human to run raw `openssl` commands.
+An authoring-time script (`npm run scenario:tls`) that regenerates the TLS fixtures for the demo webhook sink. It builds a throwaway test CA and a leaf certificate signed by it, then writes three public PEM files into `scenarios/support/tls/`. Output is committed, so normal runs never need `openssl`. Remake it when the ten-year validity runs out.
 
 ## Key elements
-
-- **`TLS_DIRECTORY`** — Resolved path to `scenarios/support/tls/`, the commit destination for the three PEM files.
-- **`CA_CONFIG` / `LEAF_CONFIG`** — Inline `openssl` config strings. The CA is path-length-0 with `nameConstraints` restricted to `127.0.0.0/8`, `localhost`, and `webhook-tester-tls`. The leaf is `CA:FALSE`, `serverAuth`, with SANs `IP:127.0.0.1, DNS:localhost, DNS:webhook-tester-tls`.
-- **`openssl(directory, argv)`** — Thin wrapper around `execFileSync('openssl', …)` scoped to a working directory.
-- **`remake()`** — Generates an ECDSA P-256 CA key, self-signs the CA, generates a leaf key, signs a CSR with the CA, verifies the chain against `127.0.0.1`, copies the three public PEMs into `TLS_DIRECTORY`, then deletes the scratch directory (destroying the CA private key). Runs in a `mkdtempSync` scratch dir; cleanup is in `finally`.
-- **Top-level call** — The script executes `remake()` immediately on import; it is not a library.
+- `TLS_DIRECTORY`: the destination, `../support/tls` relative to the script.
+- `VALIDITY_DAYS`: `'3650'`, shared by the CA and the leaf.
+- `LEAF_ALT_NAMES`: the leaf's SANs: `IP:127.0.0.1`, `DNS:localhost`, `DNS:webhook-tester-tls`.
+- `CA_CONFIG`: openssl config for the CA. It is a critical `CA:TRUE, pathlen:0` root with `keyCertSign`/`cRLSign` usage. Name constraints limit it to `127.0.0.0/255.0.0.0`, `localhost` and `webhook-tester-tls`.
+- `LEAF_CONFIG`: the leaf's CSR config and the `v3_leaf` extensions (`CA:FALSE`, `digitalSignature`, `serverAuth`, the SANs, CN `127.0.0.1`).
+- `openssl(directory, argv)`: wraps `execFileSync('openssl', …)` with `cwd` set to the scratch directory and inherited stdio. It throws on a non-zero exit.
+- `remake()`: the main routine, run at module load:
+  1. Create a temp scratch directory and write `ca.cnf` and `leaf.cnf` into it.
+  2. Generate an ECDSA P-256 CA key and a self-signed CA certificate (`req -x509`).
+  3. Generate a leaf key and CSR, then sign the CSR with the CA (`x509 -req`, `-CAcreateserial`).
+  4. Run `openssl verify -CAfile ca.pem -verify_ip 127.0.0.1 leaf.pem` as a sanity check.
+  5. Copy out `webhook-sink-ca.pem`, `webhook-sink-cert.pem` and `webhook-sink-key.pem`.
+  6. Remove the scratch directory in a `finally` block.
 
 ## Relationships
-
-No dependency-graph neighbors are recorded for this file. It is a standalone CLI tool whose *output* is consumed by:
-
-- `scenarios/support/tls/` (the three committed PEM fixtures).
-- `tests/unit/scenarios/webhook-sink-tls.test.ts` (asserts the fixtures are still valid; fails ~1 month before expiry).
-- The frontend Cypress sink, which serves the same cert/key pair (synced via `npm run sync:frontend`).
+No dependency-graph neighbors. It is a standalone script that interacts only with the `openssl` CLI and the filesystem, and it writes the three PEM files into `scenarios/support/tls/`. Its header comment says to run `npm run sync:frontend` after remaking, because the frontend's Cypress sink serves the same pair.
 
 ## Notes
-
-- **`openssl` is required at author time only.** The script shells out to the `openssl` binary; the generated PEMs are committed, so normal runs never need it.
-- **The CA private key never leaves the scratch dir.** It is generated, used to sign the leaf once, and destroyed with `rmSync`. Only the CA *certificate*, leaf cert, and leaf key are kept.
-- **The leaf private key is committed on purpose** (it is a loopback demo key, not a secret).
-- **After regenerating, run `npm run sync:frontend`** so the frontend's Cypress sink picks up the new pair.
-- The script uses `__dirname` to resolve the output path, so it must be run as a file (via `tsx`), not imported as a module.
+- The CA private key lives only in the scratch directory and is deleted afterwards, so no further certificates can be issued under that CA. The `finally` block ensures cleanup even if a step fails.
+- The leaf private key (`webhook-sink-key.pem`) is committed on purpose. The CA's name constraints stop a trusted copy of the CA from vouching for real hosts.
+- It needs the `openssl` CLI because `node:crypto` can't build X.509 certificates.
+- It runs under `tsx` and uses `__dirname`, so it assumes CommonJS-style module semantics.
+- The `copyFileSync` calls assume `scenarios/support/tls/` already exists. The script does not create it.

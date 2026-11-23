@@ -1,41 +1,33 @@
 ---
 source: src/modules/returns/domain/reasons.ts
-sha256: 7cb3b05144cf5a59fffdbc05cd7f1dc7324acaff8c58d3a5ec89c03cc3f22054
-generated_at: 2026-11-08T07:58:11.584025+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3930ff4d7effcdd0004f3c366cb92f1564ddc6d31100fd71f70c5d417fd5493e
+context_sha256: 119fee7025b2be4147121b07360f6c40b066757692b0162447fb30f2ec701831
+generated_at: 2026-11-22T07:23:37.991188+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/domain/reasons.ts
 
 ## Purpose
-
-Pure domain logic that answers one question: *which return reasons is a buyer still allowed to name right now?* It encodes the two statutory clocks (the 30-day withdrawal window and the 2-year guarantee of conformity) without depending on any service, transport, or storage layer.
+Pure domain logic that decides which return reasons a buyer can still give, based on the two deadlines an order froze at delivery: the withdrawal deadline and the conformity (legal guarantee) deadline. It encodes the Consumer Rights Directive Art. 9/16 and Directive 2019/771 Art. 10, and nothing else. It also works out which policy exceptions a staff-opened return waived.
 
 ## Key elements
-
-- **`WITHDRAWAL_WINDOW_REASONS`** — readonly list (`withdrawal`, `other`) tied to the shop's withdrawal period. `other` is explicitly a goodwill return, not a legal right.
-- **`CONFORMITY_REASONS`** — readonly list (`defective`, `wrong_item`) tied to the 2-year legal guarantee; unaffected by Art. 16 excluded-goods restrictions.
-- **`FrozenDeadlines`** — the minimal input shape: optional `withdrawUntil` / `conformityUntil` dates that the order froze at delivery. Absence means "clock has not started."
-- **`reasonsOpenAt(order, now)`** — returns the list of reasons still permissible at `now`, in contract order (withdrawal → conformity → other). Empty once both deadlines have passed.
-- **`isGuaranteeReason(reason)`** — boolean check: is this a conformity reason (i.e. not subject to Art. 16 excluded goods)?
-- **`isReasonOpen(order, reason, now)`** — convenience wrapper over `reasonsOpenAt` for a single reason.
-- **`policyExceptionsOf(order, reason, requestedAt, takesExcludedGoods)`** — computes the `ReturnPolicyException[]` a staff-opened return waives: `window_closed` if the reason's deadline had passed, `excluded_goods` if the return includes Art. 16-excluded lines *and* the reason is not a guarantee reason.
+- `WITHDRAWAL_WINDOW_REASONS`: `withdrawal` and `other`. These follow the shop's withdrawal period (30 days by default) and the Art. 16 exclusion. `other` is a goodwill return, not a legal one.
+- `CONFORMITY_REASONS`: `defective` and `wrong_item`. These are the legal guarantee, which lasts two years from delivery and also covers made-to-order goods.
+- `FrozenDeadlines`: the input shape, with optional `withdrawUntil` and `conformityUntil` dates.
+- `reasonsOpenAt(order, now)`: returns the reasons still open, in the order `withdrawal`, conformity reasons, `other`. It returns an empty list once both deadlines have passed.
+- `isGuaranteeReason(reason)`: true if the reason is in `CONFORMITY_REASONS`.
+- `isReasonOpen(order, reason, now)`: true if the reason appears in `reasonsOpenAt`.
+- `policyExceptionsOf(order, reason, requestedAt, takesExcludedGoods)`: returns `ReturnPolicyException[]` for a staff-opened return. It adds `window_closed` if the reason was not open on the day the buyer asked. It adds `excluded_goods` if the return takes Art. 16-excluded goods and the reason is not a guarantee reason.
+- The private `isOpen` helper treats a missing deadline as open and a present one as open while `now <= deadline`.
 
 ## Relationships
-
-- **`src/types/index.ts`** — source of the `ReturnReason` and `ReturnPolicyException` types imported here.
-- **`src/modules/returns/domain/index.ts`** — barrel file; re-exports this module for consumers.
-- **`src/modules/returns/services/deadlines.ts`** — computes the `FrozenDeadlines` values that this module reads.
-- **`src/modules/returns/services/options.ts`** — calls `reasonsOpenAt` to build the list of selectable reasons presented to a buyer.
-- **`src/modules/returns/services/create.ts`** — validates a buyer-submitted reason via `isReasonOpen` before persisting.
-- **`src/modules/returns/services/receive.ts`** — calls `policyExceptionsOf` when staff open a return outside the normal window.
-- **`src/modules/returns/services/notify.ts`** — may inspect `isGuaranteeReason` to pick the correct notification template.
-- **`src/modules/returns/tests/unit/domain.test.ts`** — unit-tests every export in this file.
-- **`src/modules/returns/tests/unit/deadlines.test.ts`** — tests the deadline computation that feeds `FrozenDeadlines` into this module.
+- Imports `ReturnReason` and the `ReturnPolicyException` type from `src/types/index.ts` (via the `@types` alias).
+- Sits in the `domain` folder next to `src/modules/returns/domain/index.ts` and `refund-due.ts`. The `index.ts` re-export is not visible in this file.
+- The services neighbors (`create.ts`, `deadlines.ts`, `notify.ts`, `options.ts`, `receive.ts`) and the tests (`deadlines.test.ts`, `domain.test.ts`) are linked in the dependency graph. This file's content does not show how each one uses it.
 
 ## Notes
-
-- **`undefined` ≠ expired.** A missing deadline means the clock hasn't started yet; `isOpen` treats that as "still open." Only a concrete `Date` in the past closes a window.
-- **Order in `reasonsOpenAt` is intentional** ("contract order"): `withdrawal` first, then the two conformity reasons, then `other`. Consumers that display reasons to users rely on this sequence.
-- **`policyExceptionsOf` is the only function that can return a non-empty array.** All other functions are simple queries. It exists solely for the staff-opened-return path; buyer-opened returns never record exceptions.
-- **Pure & side-effect free.** No I/O, no config reads, no date-locale dependencies. Safe to call in any context.
+- A missing deadline means "not started yet", so the right counts as open. A missing `withdrawUntil` keeps `withdrawal` and `other` open. A missing `conformityUntil` keeps the conformity reasons open.
+- The deadline check is inclusive: a request exactly at the deadline instant is still accepted.
+- Buyer-opened returns waive nothing. `policyExceptionsOf` is meant for staff-opened returns, and its result depends on the caller passing the right `requestedAt`.
+- Art. 16 only removes the right of withdrawal, so `defective` and `wrong_item` never record `excluded_goods`.

@@ -1,31 +1,35 @@
 ---
 source: src/modules/orders/module.yaml
-sha256: 72d1a8c65e5d79a9ef4c4cec56b7c5d00be1d614c31891ec3777ca4b3dead306
-generated_at: 2026-11-14T20:39:05.849665+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 72d1a8c65e5d79a9ef4c4cec56b7c5d00be1d614c31891ec3777ca4b3dead306
+context_sha256: 4266bfa4ff2ebbb2efc0d89757c425e998fb00586efd76d2324ef5f5fb496fa0
+generated_at: 2026-11-22T06:16:06.045174+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/module.yaml
 
 ## Purpose
-
-Module manifest for the **orders** subdomain (group `shop`). It declares what a checkout produces (status machine, totals, invoice link), the modules it depends on with a one-line note on *why*, the rate-limit budgets that guard two sensitive endpoints, and the single scheduled job that handles PII retention.
+Declarative manifest for the `orders` module. It describes what a checkout produces (status machine, totals, invoice link), assigns the module to the `core` subdomain and `shop` group, and declares its module dependencies, rate limits and scheduled jobs.
 
 ## Key elements
-
-- **`dependsOn`** – Six modules (access, account, inventory, products, shop, users). Each entry carries an inline comment naming the *specific* field or behavior the order module consumes (e.g. `access` for the `ownOrderFlag` audit bit on self-cancels, `inventory` for hold → commit → ship → release).
-- **`rateLimits.ordersExport`** – Budget of 10 CSV exports (`GET /orders/export`) per shared window, keyed on **ACCOUNT**. Overridable via `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`. Audited.
-- **`rateLimits.ordersNote`** – Budget of 30 staff timeline notes (`POST /orders/{id}/timeline/notes`) per shared window, keyed on **ACCOUNT**. Overridable via `NODE_ORDER_NOTE_RATE_LIMIT_MAX`. Audited.
-- **`jobs.reapOrders`** – Cron `10 2 * * *`. Anonymizes a buyer's remaining PII after the order retention window and independently unsets a timeline row's staff text after *that row's* own window.
+- **`summary`**: "What a checkout produces: its status machine, its totals and its invoice link."
+- **`subdomain` / `group`**: `core` / `shop`.
+- **`dependsOn`**: modules this one relies on, each annotated with why:
+  - `access`: the audit flag of a cancel on the caller's own order (`ownOrderFlag`).
+  - `account`: `operatorIdentity`, and the `termsVersion` an order freezes.
+  - `inventory`: holds, commits, ships and releases its units.
+  - `products`: a line copies the catalogue row's fields at purchase time.
+  - `shop`: the currency a total is frozen in, and the seller on its emails.
+  - `users`: a buyer's stored locale for emails; its hard delete runs the erase hook.
+- **`rateLimits.ordersExport`**: "Order CSV exports", namespace `orders-export`, env var `NODE_ORDER_EXPORT_RATE_LIMIT_MAX`, default max 10, shared window. Bounds `GET /orders/export`, keyed on the account. Audited.
+- **`rateLimits.ordersNote`**: "Order staff notes", namespace `orders-note`, env var `NODE_ORDER_NOTE_RATE_LIMIT_MAX`, default max 30, shared window. Bounds `POST /orders/{id}/timeline/notes`, keyed on the account. Audited.
+- **`jobs.reapOrders`**: `reap:orders`, runs on cron `10 2 * * *`. Anonymizes an order's remaining PII once its retention window has passed, and unsets a timeline row's staff text once its own window has.
 
 ## Relationships
-
-- **`src/modules/orders/openapi.yaml`** / **`src/modules/orders/asyncapi.webhooks.yaml`** – Sibling API specs (REST / webhook) that this module manifest governs; the rate-limit `bounds` comments reference the concrete endpoints defined in those specs.
-- **`src/modules/delivery/module.yaml`** – Listed as a graph neighbor but no direct reference or interaction is visible in this file.
+- `src/modules/orders/module.ts` is the sibling module file. This manifest declares the module's metadata, limits and job, while the implementation lives alongside it. The content here does not show how the two are wired together.
 
 ## Notes
-
-- Rate-limit keys are deliberately **ACCOUNT**, not buyer, order, or shipping address. The `bounds` comments explain the reasoning: an address-keyed budget would let a single manager behind a shared address starve every other caller; an order-keyed budget would let a script fan out.
-- `windowMs: shared` is the convention here—both limits share the platform's global window rather than defining their own.
-- `reapOrders` applies **two independent retention windows** (order-level PII vs. individual timeline-row staff text); they are not the same clock.
-- The `dependsOn` inline comments are load-bearing documentation: they record *which field* is consumed, not just that a dependency exists. Treat them as the contract between the two modules.
+- Both rate limits are keyed on the account rather than the address. The export's step-up already makes the caller a person, and an address-keyed budget would let one manager behind a shared address starve others.
+- The note limit is set well above a person logging calls and well below a script filling a customer's file. Each note writes a row that outlives the window and goes into the buyer's data export.
+- `windowMs: shared` means the window is not set per limit in this file.
+- Both limits are marked `audited: true`.

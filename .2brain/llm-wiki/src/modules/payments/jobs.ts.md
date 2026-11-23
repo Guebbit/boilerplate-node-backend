@@ -1,33 +1,30 @@
 ---
 source: src/modules/payments/jobs.ts
-sha256: 048515419179b017b2d45b7ea57d9fdf2f5c6d58bfba544c777a1f5d88c0853b
-generated_at: 2026-11-08T07:21:27.766563+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5545eb48b81e97def90a8963f86768965ff252843b8a21d838e0c8f64bc65044
+context_sha256: 6679d2ad72d9e87d433ac618de593c8c0b8a4100ae0c9c0ea91b955557921311
+generated_at: 2026-11-22T06:45:38.393401+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/jobs.ts
 
 ## Purpose
-
-Declares the two scheduled jobs owned by the `payments` module: the abandoned-attempt reaper and the effect-retry sweep. Each entry is a `JobDeclaration` that binds a pre-generated job descriptor (from `jobs.generated`) to the concrete service function(s) that perform the work.
+Declares the scheduled jobs owned by the `payments` module: the abandoned-payment reaper and the periodic payment-effects sweep (refund retries and stale-payment reconciliation). It pairs each job's generated scheduling data with the function that runs it, so the kernel registry can schedule them.
 
 ## Key elements
-
-- **`paymentsJobs: readonly JobDeclaration[]`** — the sole export. A two-element array:
-  - *Reap payments* — calls `reapAbandonedPayments()` on its interval.
-  - *Sweep payment effects* — runs `retryOpenRefunds()` then `reconcileStalePayments()` sequentially; configured with a 10-minute lease (`ttlMs`) to prevent a second pass from issuing the same idempotency keys while a hung provider is still in-flight.
+- `paymentsJobs: readonly JobDeclaration[]` — the module's job list, with two entries:
+  - **reapPayments** — spreads `paymentsJobData.reapPayments` and runs `reapAbandonedPayments()`.
+  - **sweepPaymentEffects** — spreads `paymentsJobData.sweepPaymentEffects` and runs `retryOpenRefunds()` followed by `reconcileStalePayments()`. It has a lease with `ttlMs` of 10 minutes (`10 * MINUTE_MS`).
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** — supplies the `JobDeclaration` type that each array element conforms to.
-- **`src/modules/payments/services/retention.ts`** — source of `reapAbandonedPayments`, wired into the first job.
-- **`src/modules/payments/services/effects.ts`** — source of `retryOpenRefunds` and `reconcileStalePayments`, wired into the second job.
-- **`src/domain-primitives/time.ts`** — provides `MINUTE_MS` used in the lease TTL calculation.
-- **`src/modules/payments/module.ts`** — the module entry point that (transitively) registers `paymentsJobs` with the scheduler.
-- **`src/modules/payments/tests/unit/jobs.test.ts`** — unit tests for the job declarations and wiring.
+- `src/kernel/registry.ts` — supplies the `JobDeclaration` type that each entry conforms to.
+- `src/modules/payments/services/retention.ts` — provides `reapAbandonedPayments`, called by the reap job.
+- `src/modules/payments/services/effects.ts` — provides `retryOpenRefunds` and `reconcileStalePayments`, called in sequence by the sweep job.
+- `src/domain-primitives/time.ts` — provides `MINUTE_MS`, used for the lease TTL.
+- `src/modules/payments/module.ts` — a graph neighbor; this file does not import it.
+- Tests: `src/modules/payments/tests/unit/jobs.test.ts` and `tests/integration/ops-payment-effects-job.test.ts` cover these jobs.
 
 ## Notes
-
-- The job metadata (name, interval, etc.) is **not** hand-written here; it comes from `./jobs.generated`. Editing schedule or name should happen in the generator's source, not in this file.
-- The sweep job's `.then()` chain means a failure in `retryOpenRefunds` skips `reconcileStalePayments` for that pass—there is no independent retry of the second step.
-- The 10-minute lease is deliberately double the stated 5-minute interval (per the inline comment) to tolerate a single hung provider pass without double-firing idempotency keys.
+- Per-job metadata (such as intervals) is not defined here. It comes from the generated `paymentsJobData`, imported from `./jobs.generated`.
+- The sweep runs its two steps sequentially, and `reconcileStalePayments` only starts after `retryOpenRefunds` resolves.
+- The lease exists because a hung provider can keep one pass running past its interval. It stops a second pass from sending the same idempotency keys while the first is still running.

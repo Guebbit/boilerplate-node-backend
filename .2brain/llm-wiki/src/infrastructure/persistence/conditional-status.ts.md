@@ -1,29 +1,29 @@
 ---
 source: src/infrastructure/persistence/conditional-status.ts
-sha256: b15b2e9067e31242a7bbca57076c2c13f22db58ba0dd11ad826a31c907f2a231
-generated_at: 2026-11-14T18:12:53.359162+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ed8f2ab8cbd50e38a1b969d3116ddd17ad5c65711fe98f712a84bb9eef7ac31e
+context_sha256: 183bc8d42745668bb66db7768861e702ecb0eb7491888822d7cf2b0cba19f33a
+generated_at: 2026-11-22T03:01:41.994648+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/conditional-status.ts
 
 ## Purpose
-
-Provides a single atomic primitive — "set status to `to` only if it is still in one of `from`" — so that every module's lifecycle transition is race-safe at the database level. The status condition lives in the MongoDB filter rather than a prior read, guaranteeing that two concurrent writes cannot both succeed. This eliminates a whole class of double-ship / double-refund bugs without each repository re-implementing the pattern.
+Provides the single shared atomic "move to status X only if currently in one of Y" write used by every module's lifecycle. The status condition is placed in the query filter rather than checked in a prior read, so two racing writers cannot both succeed. This prevents silent double-ships or double-refunds.
 
 ## Key elements
-
-- **`ConditionalStatusOptions`** (interface) — optional extras the caller passes alongside the status move: `set` (additional fields stamped in the same `$set`, e.g. `paidAt`, `committedAt`) and `session` (a Mongoose `ClientSession` to join the write to the caller's transaction).
-- **`updateStatusIfIn`** (generic function, the sole runtime export) — calls `model.findOneAndUpdate` with a filter of `{ ...match, status: { $in: from } }` and an update of `{ $set: { ...set, status: to } }`. Returns the hydrated document after the write, or `null` if the document was not in a permitted `from` state (or did not match). Uses `returnDocument: 'after'` and conditionally spreads `session` into the options.
+- `ConditionalStatusOptions` — optional extras for the write:
+  - `set`: extra fields (e.g. `paidAt`, `committedAt`) written in the same statement as the status change.
+  - `session`: a Mongoose `ClientSession`, so the write joins the caller's transaction (e.g. alongside an outbox row).
+- `updateStatusIfIn(model, match, from, to, options?)` — runs `findOneAndUpdate` with filter `{ ...match, status: { $in: from } }` and update `$set: { ...set, status: to }`. Returns a promise of the updated document (`returnDocument: 'after'`), or `null` if no document matched or its status was not in `from`.
 
 ## Relationships
-
-- **Consumed by every domain repository** (`delivery`, `example`, `inventory`, `orders`, `payments`, `returns`, `tasks` repositories). Each repository calls `updateStatusIfIn` to perform its module's lifecycle transition, passing its Mongoose model, the document's identifying filter, the allowed `from` statuses, the target `to` status, any stamped fields, and the ambient transaction session.
-- **Tested by** `tests/integration/persistence/conditional-status.test.ts`, which exercises the concurrency and null-return semantics.
+- Used by the module repositories: `src/modules/delivery/repository.ts`, `src/modules/example/repository.ts`, `src/modules/inventory/repository.ts`, `src/modules/orders/repository.ts`, `src/modules/payments/repository.ts`, `src/modules/returns/repository.ts` and `src/modules/tasks/repository.ts`, which share this one implementation instead of writing their own conditional update.
+- Covered by `tests/integration/persistence/conditional-status.test.ts`.
 
 ## Notes
-
-- The `match` parameter is spread into the filter alongside the `status: { $in: … }` clause. Callers are responsible for including the correct scope discriminator (`_id`, `orderId`, etc.); the function does not add one.
-- `session` is optional and nullable; when `null` or omitted it is simply not passed to Mongoose, so the write runs outside any explicit transaction.
-- Because the condition is evaluated by mongod while it holds the document, the "read-then-write" anti-pattern is structurally impossible here — but it still applies to any *other* code that reads status separately before calling this function.
-- The file is a pure helper with no imports beyond Mongoose types; it owns no state and performs no business-rule checks (valid transitions are enforced by the caller's `from` array).
+- A `null` result is ambiguous by design: it means either "not found/not matched" or "status was not in `from`". Callers must interpret it.
+- `status` is applied last in the `$set`, so a `status` key inside `set` is overridden by `to`.
+- `session` is only passed to Mongoose when truthy; `null` or `undefined` means no transaction.
+- `from` is copied into a new array for `$in`, so a readonly array is accepted.
+- Never replace this with a read-then-write: that reintroduces the race the file exists to prevent (see the `@see` reference in the file's module doc, on deciding and enforcing staying separate).

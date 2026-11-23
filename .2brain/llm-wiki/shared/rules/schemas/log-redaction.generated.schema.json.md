@@ -1,26 +1,29 @@
 ---
 source: shared/rules/schemas/log-redaction.generated.schema.json
-sha256: 3f132716ce0d7748f5c0fdf85031a260e6198ec8815c3a18c10c97e0cd5fc388
-generated_at: 2026-11-08T03:11:01.981098+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3f132716ce0d7748f5c0fdf85031a260e6198ec8815c3a18c10c97e0cd5fc388
+context_sha256: d7762dbd6bbf8f62f813f3ec9baa0597b3773da5b811b36632daa4be31f4face
+generated_at: 2026-11-22T02:27:51.733156+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/schemas/log-redaction.generated.schema.json
 
 ## Purpose
-JSON Schema (draft 2020-12) that validates the shape of a log-redaction configuration object. It enforces that four required string-array fields are present, non-empty, and that no extra properties are allowed, ensuring a single source of truth for what the logger must redact before writing to disk.
+A generated JSON Schema (draft 2020-12) that defines the shape of the log-redaction rules configuration. It validates that a rules document supplies the four lists used to decide which log data to redact, and it rejects anything else.
 
 ## Key elements
-- **`sensitiveFields`** – Array of exact field names (e.g. `password`, `apiKey`) that must be scrubbed from log payloads. Requires ≥ 1 entry.
-- **`sensitiveKeyFragments`** – Array of substrings to match against object *keys* (e.g. `"secret"`, `"token"`) so any key containing the fragment is redacted. Requires ≥ 1 entry.
-- **`personalFields`** – Array of PII field names (e.g. `email`, `ssn`) subject to stricter redaction rules. Requires ≥ 1 entry.
-- **`traceUrlSecrets`** – Array of secret patterns to strip from trace/URL strings (e.g. query-param tokens). Requires ≥ 1 entry.
-- **`required` / `additionalProperties`** – All four properties are mandatory; any unknown key causes validation failure (`additionalProperties: false`).
+All four properties are required. Each one is an array with at least one item, and each item is a non-empty string.
+
+- `sensitiveFields`: field names treated as sensitive.
+- `sensitiveKeyFragments`: key-name fragments that mark a key as sensitive.
+- `personalFields`: field names holding personal data.
+- `traceUrlSecrets`: secret names relating to trace URLs.
+
+The schema sets `additionalProperties: false`, so unknown keys are rejected.
 
 ## Relationships
-- **`src/infrastructure/adapters/logger.ts`** – The logger adapter loads and validates its redaction configuration against this schema at startup. If the config object fails validation (missing field, empty array, extra key), the logger will reject the configuration or throw, preventing silent under-redaction.
+- `src/infrastructure/adapters/logger.ts` is the related neighbor in the dependency graph. It is the logger adapter that this redaction rules shape applies to. The schema file contains only the structure, so the exact way the logger loads or uses these lists is not visible here.
 
 ## Notes
-- All four arrays enforce `minItems: 1` and `minLength: 1` on every string, so an empty array or empty-string entry is invalid—configuration must explicitly list at least one value per category.
-- The schema is purely structural; it does *not* prescribe *how* redaction is applied (replace, hash, drop). That behavior lives in the logger adapter.
-- Because `additionalProperties` is `false`, adding a new redaction category requires both a schema change here and a matching code change in the logger.
+- The `.generated.` name indicates the file is produced by tooling. Edit the source it is generated from, not this file, or the changes will be overwritten. The generator is not identifiable from this content.
+- The schema enforces only non-emptiness. It does not check for duplicates or for what the strings mean (for example, exact names versus fragments).

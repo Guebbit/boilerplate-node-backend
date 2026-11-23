@@ -1,51 +1,53 @@
 ---
 source: src/modules/payments/tests/integration/cancel-redelivery.test.ts
-sha256: 511537ea356805ddd3c4cf21f43ea7396260067071ad8ceff1a937d739b71a72
-generated_at: 2026-11-14T21:12:17.651844+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1babb9c0bd31076a0bacf15f9cd49480f5d3f9c0a5f4072e1935210832875e93
+context_sha256: 7ced6d0c158bd194c2503bbc868c32537eaf2b285c09078b141035a151cf5d19
+generated_at: 2026-11-22T06:55:55.813108+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/cancel-redelivery.test.ts
 
 ## Purpose
-
-Integration tests proving that a redelivered `ORDER_CANCELED` event never produces a second refund. The outbox re-delivers an event until its listener succeeds, and staff may void the first refund in between; the payment must deduplicate by the outbox `eventId` (stored in `handledCancelEvents`), not by the refund record's existence. Tests drive the real listener via `emitDomainEvent` with an explicit `eventId`, real Mongo, and the fake payment provider.
+Integration test suite proving that a redelivered `order.canceled` event never refunds twice. The outbox redelivers an event until its listener resolves, and staff may have voided the refund the first delivery opened in between. The payment must therefore remember the event id (`handledCancelEvents`) rather than infer "done" from the refund still being present. Tests drive the real listener through `emitDomainEvent` with an `eventId`, against real Mongo and the fake payment provider.
 
 ## Key elements
-
-- **`freshOrder`** – creates a 100.00 order (2 × 50.00) with user, product, and order.
-- **`paidCardOrder`** – `freshOrder` + `payByCard` + `settleOutboxNudges`; returns `{ user, orderId }`.
-- **`cashOrder`** – `freshOrder` + `recordOfflinePayment` (cash); returns `orderId`.
-- **`paymentOf(orderId)`** – loads the stored payment via `paymentRepository.findByOrderId`; throws if absent.
-- **`field(orderId, key)`** – reads a single typed field (`amountRefunded`, `refunds`, `handledCancelEvents`, `status`) from the stored payment.
-- **`deliverCancel(orderId, eventId)`** – emits `ORDER_CANCELED` with `refund: true, cause: 'operator'` and the given `eventId` (the outbox row id).
-- **`voidRefund(orderId, index?)`** – staff cancels the refund via `paymentService.cancelRefund`; asserts success.
-- **Describe: "a redelivered cancel event after staff voided the refund"** – four tests covering card (provider called once), cash (one owed-by-hand event), a *different* `eventId` legitimately refunds, and emit-without-`eventId` falling back to legacy (no dedup).
-- **Describe: "a cancel event that found nothing to return"** – two tests: fully-refunded-then-voided card order, and a not-yet-succeeded intent whose settlement arrives after the cancel; both verify the event is still marked handled and a replay pays nothing.
-- **Describe: "a cancel event that fails or races itself"** – four tests (last truncated): write-throw leaves no mark so next delivery succeeds; `markCancelEventHandled` failure still stamped by the write that opens the refund; persistent write failure bounded by `CANCEL_EVENT_WRITE_RETRIES + 1` attempts; two concurrent deliveries open exactly one refund.
+- **Setup:** `setupTestDb()`, `registerCheckoutModules([paymentsModule])` before each test, and `resetDomainEvents()` plus `jest.restoreAllMocks()` after each.
+- **Helpers:**
+  - `freshOrder`: a 100.00 order (two units at 50.00).
+  - `paidCardOrder`: a card order paid in full.
+  - `cashOrder`: a cash order recorded as paid offline by an admin.
+  - `paymentOf` and `field`: read the stored payment or one of its fields.
+  - `deliverCancel(orderId, eventId)`: emits `ORDER_CANCELED` with `refund: true`, `cause: 'operator'` and the given `eventId`, as the relay does.
+  - `voidRefund`: staff void a refund via `paymentService.cancelRefund`.
+- **`describe` blocks:**
+  - *Redelivered cancel after staff voided the refund:*
+    - A card is not paid again: no new record, and the provider is asked once.
+    - A hand-paid refund is not owed twice: one record, one owed row, one `PAYMENT_REFUND_OWED_BY_HAND` event.
+    - A different event id still refunds.
+    - An emit without an event id remembers nothing.
+  - *Cancel event that found nothing to return:*
+    - The event marks itself when the refund was already requested and the provider refused it.
+    - The event marks itself on a not-yet-succeeded payment, so money that lands later via `applyWebhookSettlement` is not paid twice.
+  - *Cancel event that fails or races itself:*
+    - A write that throws marks nothing.
+    - A crash before the mark pays nothing twice, because the write that opens the refund also stamps the event.
+    - A write that keeps missing makes the listener fail after `CANCEL_EVENT_WRITE_RETRIES + 1` attempts without marking the event.
+    - Concurrent deliveries of one event open one record. This test is cut off in the visible content.
 
 ## Relationships
-
-- **`src/kernel/events.ts`** – `emitDomainEvent` is the entry point that triggers the listener under test; `resetDomainEvents` clears state in `afterEach`.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes pending outbox work before assertions; `outboxEventModel` is queried to count `PAYMENT_REFUND_OWED_BY_HAND` rows.
-- **`src/modules/orders/index.ts`** – exports `ORDER_CANCELED` (event name) and `orderService` (used for `cancelOnRequestById` in the late-settlement test).
-- **`src/modules/orders/services/index.ts`** – provides the order service implementation that emits the cancel event.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem` for order fixtures.
-- **`src/modules/payments/services/index.ts`** – `paymentService` used for `recordOfflinePayment`, `cancelRefund`, `createIntent`, and `applyWebhookSettlement`.
-- **`src/modules/payments/services/refunds.ts`** – exports `CANCEL_EVENT_WRITE_RETRIES`, the retry bound asserted in the persistent-write-failure test.
-- **`src/modules/payments/repository.ts`** – `paymentRepository` is the read path (`findByOrderId`) and is spied on for `addRefund`/`markCancelEventHandled` injection in failure tests.
-- **`src/modules/payments/events.ts`** – `PAYMENT_REFUND_OWED_BY_HAND` event name for outbox row assertions.
-- **`src/modules/payments/module.ts`** – `paymentsModule` registered via `registerCheckoutModules` in `beforeEach`.
-- **`src/modules/payments/tests/factories.ts`** – `payByCard`, `refundOrderPayment` helpers for setup.
-- **`scenarios/support/doubles/payments/fake.ts`** – `fakePaymentProvider` (spied on for `refund` call counts) and `setFakeRefundFailure` to simulate provider rejections.
-- **`src/modules/users/tests/factories.ts`** – `createUser` entity helper.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` entity helper.
-- **`tests/support/callers.ts`** – `asAdmin`, `asCustomer`, `callerContextAs` for RBAC-aware service calls.
+- **`@kernel/events`:** `emitDomainEvent` and `resetDomainEvents` fire and reset the listener under test.
+- **`@kernel/outbox`:** `outboxEventModel` counts owed-by-hand rows, and `settleOutboxNudges` flushes pending outbox work.
+- **`@modules/orders`:** supplies `ORDER_CANCELED`.
+- **`@modules/payments/services`:** `paymentService` provides `recordOfflinePayment`, `createIntent`, `cancelRefund` and `applyWebhookSettlement`.
+- **`@modules/payments/services/refunds`:** `CANCEL_EVENT_WRITE_RETRIES` sets the retry bound.
+- **`@modules/payments/repository`:** `paymentRepository` is read directly. `addRefund` and `markCancelEventHandled` are spied on to inject failures.
+- **`@modules/payments/events`:** `PAYMENT_REFUND_OWED_BY_HAND`.
+- **`@modules/payments/module`:** `paymentsModule` is registered for the tests.
+- **`@scenarios/support/doubles/payments/fake`:** `fakePaymentProvider` (`refund` is spied on, `confirm` is called) and `setFakeRefundFailure`.
+- **Test factories:** the users, products, orders and payments `tests/factories` modules (`payByCard`, `refundOrderPayment`), plus `@tests/callers`, `@tests/checkout-modules`, `@tests/environment` and `@tests/setup-test-db`.
 
 ## Notes
-
-- Idempotency is keyed on the outbox **`eventId`** string, not on refund-record existence. A `deliverCancel` without an `eventId` (legacy emit) must still work but records nothing in `handledCancelEvents`.
-- The test uses `withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' })` to eliminate wall-clock wait in retry-sensitive tests.
-- `deliverCancel` returns the listener's boolean result (`true` = handled, `false` = failed); tests assert both outcomes to verify the outbox will or won't redeliver.
-- The concurrent-delivery test (truncated in the source) uses `Promise.all` to fire two identical deliveries simultaneously, asserting exactly one refund record and no hang.
-- `settleOutboxNudges()` is called after emissions to let the outbox process queued events before assertions run.
+- Card-refund tests wrap their body in `withEnvironmentOverrides({ NODE_PAYMENT_REFUND_RETRY_MINUTES: '0' })`.
+- `deliverCancel` returns `true` when the listener resolves and `false` when it throws. The tests use this to model the outbox redelivery contract.
+- `mockResolvedValue(null)` on `addRefund` simulates a write that keeps missing.

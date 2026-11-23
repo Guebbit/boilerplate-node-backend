@@ -1,44 +1,39 @@
 ---
 source: src/modules/shop-tasks/services/notices.ts
-sha256: e4a71f476136a1728515a78bbe89955200a494fd5e5a93ffefa92b05ecfe8d6b
-generated_at: 2026-11-14T21:53:12.149470+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7ebea83f401973062c5f1d20cef82ddc844a7629925904294278044561d43e48
+context_sha256: a324b6cdd8aa679ee76b9093a36b08ddda228e5323d72d49e74395b7b2bd9607
+generated_at: 2026-11-22T07:43:09.106405+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/services/notices.ts
 
 ## Purpose
-
-Maps each shop-related domain event to the notification rows that should be written: a buyer-facing inbox message (parcel lost, preorder delayed, stock restocked, cart/wishlist line removed) or a work notice for the staff who can act (purchase hold, return request). Each handler is a pure payload-to-rows mapping; the actual writing, capping, and live push are delegated to `notificationsService`.
+Maps shop domain events to inbox rows: messages for buyers (removed cart/wishlist items, stock alerts, refused cart merges, held fulfillment orders, lost shipments, delayed preorders) and work notices for staff (purchase holds, return requests). Each function turns an event payload into the rows to write. The actual writing, cap and live push are done by `notificationsService`.
 
 ## Key elements
-
-- **`removedFor`** (private helper) – Expands a multi-user removal event into one notification row per affected user for cart-line or wishlist-item removal.
-- **`shopNotices`** (exported object) – One method per subscribed event:
-  - `onCartLinesRemoved` / `onWishlistItemsRemoved` – Buyer inbox warning per affected user.
-  - `onStockAlertSent` – Buyer inbox info: a watched product is back in stock.
-  - `onCartMergeRefused` – Buyer inbox warning listing all lines that could not be merged.
-  - `onFulfillmentOrderHoldNoticed` – Buyer inbox warning with the staff-visible notice text (never the internal reason).
-  - `onShipmentLost` – Buyer inbox warning with reason, owed item titles, and shop-day-formatted `expectedAt`.
-  - `onFulfillmentOrderDelayedNotice` – Buyer inbox warning informing of a moved/missed preorder date (informational only).
-  - `onPurchaseHoldPlaced` – Staff notification (via `notifyStaff`) with a dedupe key, routed link, and the user's frontend page URL.
-  - `onReturnRequested` – Staff notification for a return decision; **skips** `reason === 'withdrawal'` (a right, not a decision).
+- `shopNotices` – exported object with one handler per event; `module.ts` subscribes each one.
+  - `onCartLinesRemoved` / `onWishlistItemsRemoved` – one `warning` row per affected user, built by the private `removedFor` helper (codes `shop-tasks.cart-line-removed` / `shop-tasks.wishlist-item-removed`).
+  - `onStockAlertSent` – `info` message `shop-tasks.stock-alert` (the only buyer message that is not `warning`).
+  - `onCartMergeRefused` – one `warning` message listing all refused lines.
+  - `onFulfillmentOrderHoldNoticed` – `shop-tasks.fulfillment-held`; includes the optional `message`; staff's reason is never passed.
+  - `onShipmentLost` – `shop-tasks.shipment-lost`; includes optional `message`, the titles still `owed`, and `expectedAt` converted to a shop day. Staff's note is never included.
+  - `onFulfillmentOrderDelayedNotice` – `shop-tasks.fulfillment-delayed`; passes `titles`, `agreedAt` and optional `expectedAt` as shop days. Informational only.
+  - `onPurchaseHoldPlaced` – staff notice via `notifyStaff` (`shop-tasks.staff.purchase-hold-placed`), linked to the staff user page, deduped by `purchase-hold-placed:<userId>:<until>`.
+  - `onReturnRequested` – staff notice via `notifyStaff` (`shop-tasks.staff.return-requested`) under `DEPLOYMENT_TENANT_ID`, deduped by `return-requested:<returnId>`.
+- `removedFor` – non-exported helper that builds the per-owner rows.
 
 ## Relationships
-
-- **`src/kernel/events.ts`** – Provides the `DomainEventMap` type used to type every handler's payload.
-- **`src/kernel/access/tenant.ts`** – Imports `DEPLOYMENT_TENANT_ID` as the fixed tenant for the return-request staff notice.
-- **`src/infrastructure/http/frontend-link.ts`** – Imports `FRONTEND_LINK_RULES` to build the staff link to the user's page in `onPurchaseHoldPlaced`.
-- **`src/modules/notifications/index.ts`** – Exports `notificationsService`; this file calls its `create()` for buyer inbox rows and `notifyStaff()` for staff work notices.
-- **`src/modules/notifications/services/index.ts`** – The services layer implementing the writing, capping, and live push behind `notificationsService`.
-- **`src/modules/shop/index.ts`** – Imports `shopDayOf` to convert timestamps into the shop-day string the inbox renders.
-- **`src/modules/shop-tasks/staff-routing.ts`** – Imports `SHOP_STAFF_ROUTES` to supply the route code for each staff notice (the notifications service has no knowledge of these codes).
-- **`src/modules/shop-tasks/services/index.ts`** – Re-exports `shopNotices` so other parts of the module can import it.
+- `@modules/notifications` (`notificationsService`): `create` for buyer rows and `notifyStaff` for staff notices.
+- `../staff-routing` (`SHOP_STAFF_ROUTES`): supplies the routing for each staff code, since `notifications` doesn't know these codes.
+- `@infrastructure/http/frontend-link` (`FRONTEND_LINK_RULES`): supplies the link template for the purchase-hold notice.
+- `@kernel/access/tenant` (`DEPLOYMENT_TENANT_ID`): tenant for return-request notices.
+- `@kernel/events` (`DomainEventMap`): types the event payloads.
+- `@modules/shop` (`shopDayOf`): formats dates as shop days in the lost-shipment and delayed notices.
 
 ## Notes
-
-- **Erased accounts:** Any buyer-facing handler whose payload has `userId === undefined` short-circuits to `Promise.resolve()` — no row is written and no error is raised.
-- **Two notification paths:** Buyer messages go through `notificationsService.create()` (one call, many rows); staff notices go through `notificationsService.notifyStaff()` (one call per event) and carry their own `route`, `link`, and `dedupeKey` because the notifications layer is unaware of shop-tasks routing.
-- **Dedupe keys** on staff notices (`purchase-hold-placed:{userId}:{until}`, `return-requested:{returnId}`) prevent duplicate alerts if the same event fires more than once.
-- **`shopDayOf`** is applied to `expectedAt`/`agreedAt` before passing into notification params so the inbox displays a shop-local day rather than a raw timestamp.
-- **Severity convention:** Buyer notices are `warning` except stock-restock which is `info`; the file doc-block calls this out explicitly.
+- Buyer notices for hold, lost shipment and delay resolve to a no-op when `userId` is `undefined` (erased account).
+- `onReturnRequested` skips returns whose `reason` is `'withdrawal'`, which are born approved and counted by the digest instead.
+- `notifyStaff` handlers discard its result (`.then(() => undefined)`) to return `Promise<void>`.
+- Optional params are spread in only when present (`message`, `owed`, `expectedAt`).
+- The module header describes how each event maps to inbox rows; see `src/modules/shop-tasks/module.ts` for where the handlers are subscribed.

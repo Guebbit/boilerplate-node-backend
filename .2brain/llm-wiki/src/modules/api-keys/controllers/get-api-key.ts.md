@@ -1,32 +1,32 @@
 ---
 source: src/modules/api-keys/controllers/get-api-key.ts
-sha256: 0751d9c16d8f884de1f6316098959eb9987819c68c3ce6c21cfff7f9ee613ec2
-generated_at: 2026-11-08T05:01:43.286062+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0751d9c16d8f884de1f6316098959eb9987819c68c3ce6c21cfff7f9ee613ec2
+context_sha256: f3591014b74f894246cb44698b5ca12ad92372446f69a7fc4d10ec3d056fe9c4
+generated_at: 2026-11-22T04:20:36.761581+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/api-keys/controllers/get-api-key.ts
 
 ## Purpose
-
-HTTP controller that handles `GET /api-keys/:id`. It validates the route parameter, looks up a single API key scoped to the caller's tenant via the service layer, and returns the key's metadata (never its secret). All failure modes—malformed id, unknown id, cross-tenant access—produce an identical 404 to avoid leaking existence.
+Express controller for `GET /api-keys/:id`. It returns a single API key (credential) belonging to the calling tenant, never including its secret. A malformed id, an unknown id, and another tenant's id all produce the same 404 response.
 
 ## Key elements
-
-- **`getApiKey(request, response)`** — The sole export. Extracts and validates `:id`, calls `apiKeysService.getApiKey` with the tenant caller context, then either sends a `200` with the `ApiKey` payload or a `404`/error via the `refused`/`catchAs` helpers.
+- `getApiKey(request, response)` is the exported handler.
+  - It validates the `:id` param with `requireId`, using the `generic.error-item-gone` not-found message. If validation fails it returns `Promise.resolve()` and the response has already been handled.
+  - It calls `apiKeysService.getApiKey(id, tenantCallerContextOf(request))`.
+  - If `refused(response, result)` handles the result, it stops. Otherwise it sends `successResponse<ApiKey>(response, result.data, 200)`.
+  - Rejections go to `catchAs(response, 'getApiKey')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs` (unified error envelope) and `refused` (service-level rejection → 404).
-- **`src/infrastructure/http/ids.ts`** — Supplies `requireId`, which validates the `:id` param and short-circuits with a generic 404 if malformed.
-- **`src/infrastructure/http/request.ts`** — Supplies `tenantCallerContextOf`, which derives the tenant-scoped caller context from the request for service-layer authorization.
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standard shape for 200 JSON replies.
-- **`src/modules/api-keys/routes.ts`** — Registers `getApiKey` on the `GET /api-keys/:id` route.
-- **`src/modules/api-keys/services/index.ts`** — Exposes `apiKeysService.getApiKey(id, callerContext)`, which performs the actual lookup and tenancy check.
-- **`src/types/index.ts`** — Provides the `ApiKey` type used as the response payload type parameter.
+- `src/infrastructure/http/ids.ts`: supplies `requireId`, which parses and validates the route id.
+- `src/infrastructure/http/request.ts`: supplies `tenantCallerContextOf`, which builds the tenant caller context passed to the service.
+- `src/infrastructure/http/response.ts`: supplies `successResponse`, used for the 200 reply.
+- `src/infrastructure/http/controller.ts`: supplies `refused` (handles service-level refusals) and `catchAs` (error handling for rejected promises).
+- `src/modules/api-keys/services/index.ts`: provides `apiKeysService`, which does the actual lookup.
+- `src/types/index.ts`: provides the `ApiKey` type for the response payload.
+- `src/modules/api-keys/routes.ts`: the route file that registers this handler for `GET /api-keys/:id`.
 
 ## Notes
-
-- The 404 body uses the i18n key `generic.error-item-gone` for malformed ids, and the `refused` helper returns the same shape for cross-tenant / not-found cases—deliberately indistinguishable to the caller.
-- The handler is a plain function (not a class method), consistent with the module's functional style.
-- `requireId` returning a falsy value causes an early `Promise.resolve()` return; no further service call is made.
+- The handler always returns a Promise, including on the early-return path.
+- The controller adds no tenant-scoping or 404 logic of its own. The 404 behavior comes from `requireId` and the service result via `refused`, with tenant scoping carried by the caller context.

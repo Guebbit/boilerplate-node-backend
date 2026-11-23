@@ -1,40 +1,36 @@
 ---
 source: src/modules/account/tests/unit/tokens.test.ts
-sha256: 8b7344c5c51b052cde1543f647626d7ddcd621fc7a7d240a21fd7731115f85b9
-generated_at: 2026-11-08T04:50:40.411618+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8efa497afa375432361ed9e236ee5b72ef7bf3dd0ba97577033e556515ac3811
+context_sha256: bb6cfe16adc35088462e00896efb9298e6ce77ac4b1117dca5b531aa5c03281b
+generated_at: 2026-11-22T04:09:31.911360+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/tokens.test.ts
 
 ## Purpose
-
-Unit tests for the session/token configuration module (`session/config.ts`). Every value in that module controls a JWT lifetime, cookie `maxAge`, or signing secret — misreads cause silent security or availability bugs rather than request failures. The tests pin the documented contract: per-tier env-var routing, integer parsing with safe fallbacks, ring shape invariants, and the boot-gate validation logic.
+Unit tests for the session/token configuration module imported from `@modules/account/session/config`. That module is pure env-var parsing, but each value sets a JWT lifetime or signing secret, so a wrong variable silently yields sessions that are too long or too short. The tests pin down the documented contract: each tier reads its own env var, falls back to defaults, parses seconds as integers, and each signing ring defaults to the empty ring rather than `undefined`.
 
 ## Key elements
-
-- **`TOKEN_ENV_KEYS`** — const list of every env var the module reads; passed to `withoutEnvironmentInThisFile` so no ambient value can leak into assertions.
-- **`describe('getExpiryTime')`** — verifies per-tier var routing, default-tier fallback, empty-string → tier-default (not NaN), and base-10 parsing.
-- **`describe('getExpiryTimeMilliseconds')`** — confirms the ×1000 scaling and same tier routing; asserts a finite number (not NaN) on unset to prevent silent cookie loss.
-- **`describe('token signing rings')`** — single-secret → one-element array, comma-split → ordered ring, unset → `[]` (never `undefined`).
-- **`describe('the access-token TTL')`** — reads `NODE_TOKEN_ACCESS_TIME`, falls back to 600 s, empty string → default, and explicitly ignores session-tier vars.
-- **`describe('getCookieMaxAgeMilliseconds')`** — tier → ms; no tier → `undefined` (browser-session cookie).
-- **`windowProblems` helper** — calls `sessionConfig.slice.inspect` with a production-shaped env to exercise the reuse-window > grace-window invariant.
-- **`describe('the token windows check')`** — passes when reuse > grace, fails on equality (strict `>`), fails when reversed.
-- **`describe('getSessionMode')`** — defaults to `'jwt'`, trims/case-insensitive parsing, throws on unknown values.
-- **`describe('the boot gate for the signing rings')`** — uses `assertConfigIn` with `sessionConfig.slice` to verify: placeholders rejected in JWT mode, cookie mode exempt from ring and reuse-window requirements, mode selector read with same trim/case logic.
+- `TOKEN_ENV_KEYS` — every env var the module reads (`NODE_SESSION_MODE`, `NODE_SESSION_TIME_SHORT/MEDIUM/LONG`, `NODE_TOKEN_ACCESS_TIME`, `NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`, `NODE_TOKEN_ROTATION_GRACE_MS`, `NODE_TOKEN_REUSE_WINDOW_MS`). It is passed to `withoutEnvironmentInThisFile` so each test starts with them cleared.
+- `windowProblems(grace?, reuse?)` — helper that runs `sessionConfig.slice.inspect(...)` with `NODE_ENV: 'production'` and returns the `checks` array.
+- `describe('getExpiryTime')` — checks the distinct env var per `RememberTier`. With no tier it uses the short tier and ignores `NODE_TOKEN_ACCESS_TIME`. Unset or empty values fall back to the tier default (86,400 for short, 2,592,000 for long). Parsing is base 10, so `'0900'` gives 900.
+- `describe('getExpiryTimeMilliseconds')` — the seconds value times 1000, with the same tier routing, and never `NaN`.
+- `describe('token signing rings')` — `getAccessTokenRing` and `getRefreshTokenRing` return a one-element ring for a plain value. A comma-separated value becomes an ordered ring, newest first. Unset gives `[]`.
+- `describe('the access-token TTL')` — `getAccessExpiryTime` reads `NODE_TOKEN_ACCESS_TIME` and falls back to 600 (also for an empty value). It ignores the refresh tier variables.
+- `describe('getCookieMaxAgeMilliseconds')` — returns the tier in milliseconds, or `undefined` (a browser-session cookie) when no tier was ticked.
+- `describe('the token windows check')` — the boot check requires the reuse window to be strictly greater than the grace window. It passes for 10000 against 86400000 and on the defaults. It reports an exact error message when the reuse window equals or is shorter than the grace window.
+- `describe('getSessionMode')` — defaults to `jwt`. Values are trimmed and case-insensitive (`'  Cookie '` gives `cookie`). An unknown value throws with a message mentioning `NODE_SESSION_MODE`.
+- `describe('the boot gate for the signing rings')` — uses `assertConfigIn([sessionConfig.slice], ...)` with a production-shaped config containing placeholder secrets. `jwt` mode refuses the placeholders, naming `NODE_TOKEN_ACCESS, NODE_TOKEN_REFRESH`. `cookie` mode does not require them, even when unset, and reads the mode trimmed and in any case. A further test covers the reuse-window check in a mode with no rotation. The file is cut off partway through that test, so its remaining assertions are not covered here.
 
 ## Relationships
-
-- **`src/modules/account/session/config.ts`** — the module under test; all functions under assertion (`getExpiryTime`, `getExpiryTimeMilliseconds`, `getAccessExpiryTime`, `getCookieMaxAgeMilliseconds`, `getAccessTokenRing`, `getRefreshTokenRing`, `getSessionMode`, `sessionConfig`) are imported from here.
-- **`src/infrastructure/config/define.ts`** — provides `assertConfigIn`, the boot-gate assertion helper used to validate the slice's required-key and conditional-requirement rules.
-- **`src/types/index.ts`** — source of the `RememberTier` enum used to parameterise tier-specific assertions.
-- **`tests/support/environment.ts`** — provides `setEnvironment` (per-test env mutation) and `withoutEnvironmentInThisFile` (auto-delete of `TOKEN_ENV_KEYS` before/after each test) for hermetic execution.
+- `src/modules/account/session/config.ts` — the module under test. Its getters and `sessionConfig` are imported.
+- `src/infrastructure/config/define.ts` — provides `assertConfigIn`, used to exercise the slice's boot gate directly.
+- `src/types/index.ts` — provides `RememberTier` (`short`, `medium`, `long`) for the tier arguments.
+- `tests/support/environment.ts` — provides `setEnvironment` and `withoutEnvironmentInThisFile`, which set and clear env vars.
 
 ## Notes
-
-- The file relies on `withoutEnvironmentInThisFile` to clear **all** token-related vars before every test; a missing key in `TOKEN_ENV_KEYS` would let an ambient value silently satisfy an assertion.
-- Empty-string → tier-default is tested explicitly in several suites: `parseInt('')` yields `NaN`, which would propagate into `expiresIn` (rejected by jose) or `maxAge` (silently dropped by Express). The contract is "unparseable ≡ absent".
-- The window check uses **strict** `reuse > grace` (not `>=`). The tests assert that equal values are rejected because a token superseded exactly `grace` ms ago is already expired by both cutoffs simultaneously — there is no instant where a replay is distinguishable from normal expiry.
-- The boot-gate tests construct a `placeholders` object that is production-shaped for all *other* keys so that only the ring / mode interaction is under observation.
-- The file is truncated in the provided content; the final `describe` block for the boot gate (cookie-mode exemption from the reuse-window check) is incomplete.
+- Env vars are cleared before each test so that ambient values (including those from `tests/support/setup-environment.ts`) cannot make an assertion pass.
+- Tests use distinct values per tier so that swapped or shared variables are detected.
+- Several fallback tests exist because an unusable value would otherwise become `NaN`. `NaN` is rejected by jose as `expiresIn`, and Express silently drops a `NaN` cookie `maxAge`.
+- The empty-ring default is the shape a test run sees. Outside test, the boot gate refuses an unset ring.

@@ -1,54 +1,67 @@
 ---
 source: src/modules/payments/services/view.ts
-sha256: 671a2d247dafa272cc118e30616475cd3e6700c0f1f1141978aca393bc01d815
-generated_at: 2026-11-14T21:10:21.789018+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 93d8fec94e466d137ac48f0a8fa439b5141377d3b66b59aef938905ed1794ea7
+context_sha256: 8a4d1cd75fb853dc679ab11ac46018d7f35a37115146d5876f3b35f42118e8f9
+generated_at: 2026-11-22T06:54:35.435130+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/view.ts
 
 ## Purpose
-
-Read-side service that returns a payment (or its refund records) to the caller with a computed `actions` object describing what that caller may do next (pay, sync, refund, settle, cancel). It is the source of the payment panel on the order page and the payload of `GET /payments/:id`–style routes, mirroring the `OrderActions` pattern the orders module uses.
+Read side of the payments service. It fetches payments (by order, by id, or a single refund), presents them on the wire, and attaches an `actions` object, the contract's `PaymentActions`. The `actions` flags tell the caller what they may do next, in the same way `orders` publishes `OrderActions`.
 
 ## Key elements
-
-- **`getForOrder(orderId, authContext)`** — Fetches the single payment for an order, scoped to the caller, and returns it with `actions`. 404 if no payment exists.
-- **`listForOrder(orderId, authContext)`** — Reads the order first (for authorization), then returns `{ items: Payment[] }` (0 or 1 element). Used by `GET /orders/:id/payments`.
-- **`orderIdOf(paymentId)`** — Unscoped lookup of the order id behind a payment; used by system notices that must name the order regardless of the reader's scope.
-- **`getById(paymentId, authContext)`** — Fetches a single payment by its own id with `actions`.
-- **`getRefund(paymentId, refundId, authContext)`** — Returns one refund record nested under a payment; single 404 for any miss.
-- **`refundOf(payment, refundId, authContext)`** — Synchronous helper for write services that already hold the `PaymentDocument`; finds a refund by id in the presented shape.
-- **`withActions(payment, order?, authContext)`** — Serializes the document via `presentPayment` and attaches the `actions` object. The core computation lives in the private helpers below.
-- **`presentWithActions(payment, authContext)`** — Wraps `withActions` and performs an additional order read (via `orderService`) so the `pay` flag can be evaluated.
-- **`mayPay`** *(private)* — True when the payment is confirmable (or an open transfer with a resolvable provider), the order is still `isPayable`, and the caller is the payer holding `checkout:Cart`.
-- **`maySync`** *(private)* — True when the payment is in an in-flight status, not hand-recorded, and the caller is the payer. Deliberately narrower than `mayPay` so the two flags are never both true.
-- **`mayRefund`** *(private)* — Checks the caller holds `create:Refund` on the `Payment` subject.
-- **`settleableByHand` / `cancelableRefunds`** *(private)* — Return the list of refund ids an operator may settle or void, filtered through `mayBeSettledByHand` / `mayBeCanceled`.
-- **`isPayerWithCheckout`** *(private)* — Combines identity match (`payment.userId === authContext.id`) with the `checkout:Cart` ability check.
+- `getForOrder(orderId, authContext?)`: the payment behind an order, for the order page's payment panel. It returns a 404 reject when none is visible.
+- `listForOrder(orderId, authContext?)`: backs `GET /orders/{id}/payments`. It reads the order first through `orderService.getForCaller`. If the caller can't see the order, the result is a 404 with the "order not found" message. Otherwise it returns `{ items }` holding zero or one payment.
+- `getById(paymentId, authContext?)`: one payment by its own id. A missing payment and another caller's payment get the same 404.
+- `getRefund(paymentId, refundId, authContext?)`: one refund, addressed through its payment. Missing payment, missing refund and another's payment all give the same 404.
+- `refundOf(payment, refundId, authContext?)`: finds one refund by id on an already loaded payment. This avoids picking whichever refund is newest when a racing request added another.
+- `orderIdOf(paymentId)`: the order id of a payment, read with no caller scope. It is used for notices such as the staff notice for a refund with an unknown outcome. It returns `undefined` if the payment is missing.
+- `withActions(payment, order, authContext?)`: presents a payment and adds `actions`:
+  - `pay`
+  - `sync`
+  - `refund`
+  - `settleRefundByHand` (a list of refund ids)
+  - `cancelRefund` (a list of refund ids)
+  - `syncRefunds`
+- `presentWithActions(payment, authContext?)`: for write responses (confirm, sync, intent). It loads the order, which is used for `pay` only, then calls `withActions`.
+- Private predicates behind the flags:
+  - `isPayerWithCheckout`
+  - `mayRefund`
+  - `mayPay`
+  - `maySync`
+  - `maySyncRefunds`
+  - `settleableByHand`
+  - `cancelableRefunds`
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — Wraps results in `generateSuccess` / `generateReject` envelopes.
-- **`src/infrastructure/i18n/index.ts`** — Provides `t()` for localizing the 404 message string.
-- **`src/infrastructure/i18n/context.ts`** — I18n context infrastructure backing the `t` call.
-- **`src/kernel/ability.ts`** — `holds()` evaluates permission keys (`checkout:Cart`, `create:Refund`).
-- **`src/kernel/permissions.ts`** — `callerForSubject()` resolves the caller's ability context for a given subject type.
-- **`src/modules/orders/index.ts`** — Exports `orderService` (used for authorization reads in `listForOrder` and for the order lookup in `presentWithActions`) and `isPayable` (gates whether the order can still reach `paid`).
-- **`src/modules/orders/model.ts`** — Source of the `OrderDocument` type used in `withActions` and the `mayPay` helper.
-- **`src/modules/orders/services/index.ts`** — Implementation behind `orderService` that `listForOrder` and `presentWithActions` call.
-- **`src/modules/orders/domain/lifecycle.ts`** — Domain logic (e.g. `isPayable`) that determines whether an order can still transition to `paid`.
-- **`src/modules/payments/domain/index.ts`** — Re-exports status sets and predicates consumed by the action helpers.
-- **`src/modules/payments/domain/lifecycle.ts`** — Defines `CONFIRMABLE_PAYMENT_STATUSES`, `IN_FLIGHT_PAYMENT_STATUSES`, `REFUNDABLE_PAYMENT_STATUS`, and status-related predicates.
-- **`src/modules/payments/domain/disputes.ts`** — Provides `hasOpenChargeback` used to gate the `refund` action.
-- **`src/modules/payments/model.ts`** — `PaymentDocument` type for the repository row.
-- **`src/modules/payments/presenter.ts`** — `presentPayment` serializes a `PaymentDocument` to the wire `Payment` shape (including staff-only fields gated by `readsAllPayments`).
-- **`src/modules/payments/providers/index.ts`** — `resolvePaymentProvider()` is checked to decide whether an open transfer can be taken over with a card.
+- **`../repository` (`paymentRepository`)**: `findByOrderId` and `findByIdScoped` do the lookups. Both take `callerScope(authContext)` from `./scope`.
+- **`../presenter`**: `presentPayment(payment, readsAllPayments(authContext))` builds the wire shape. The boolean controls the staff-only fields.
+- **`../domain`**: supplies the status sets (`CONFIRMABLE_PAYMENT_STATUSES`, `IN_FLIGHT_PAYMENT_STATUSES`, `REFUNDABLE_PAYMENT_STATUS`) and the predicates (`hasOpenChargeback`, `isHandRecorded`, `isOpenTransfer`, `mayBeSettledByHand`, `mayBeCanceled`).
+- **`../providers`**: `resolvePaymentProvider()` decides whether an open transfer can be taken over with a card.
+- **`../model`**: provides the `PaymentDocument` type.
+- **`@modules/orders`**: `orderService` (`getForCaller`, `getById`, `callerScope`) loads the order. `isPayable` checks that the order can still reach `paid`. `OrderDocument` is imported as a type.
+- **`@kernel/permissions` and `@kernel/ability`**: `callerForSubject(authContext, 'Payment')` together with `holds(...)` checks the abilities `checkout:Cart` and `create:Refund`.
+- **`@infrastructure/http/response`**: `generateSuccess` and `generateReject` build the responses.
+- **`@infrastructure/i18n`**: `t(...)` provides the translated "order not found" message for the 404.
+- **`./refund-settlement`**: `remainingOf` gives the refundable remainder.
+- **`./errors`**: `paymentNotFound()` produces the standard 404.
 
 ## Notes
-
-- `mayPay` and `maySync` are designed to be mutually exclusive: in-flight statuses yield `sync`, confirmable/declined statuses yield `pay`. A consumer should never see both `true`.
-- The `refund` action requires three independent gates beyond `mayRefund`: status must be `REFUNDABLE_PAYMENT_STATUS`, `remainingOf(payment) > 0`, and no open chargeback (`hasOpenChargeback`). A status-only check is insufficient.
-- `orderIdOf` intentionally omits caller scoping; it exists for system-generated notices (e.g., refund-unknown staff alert) that must name the order regardless of who is reading.
-- `presentWithActions` performs an extra order read solely to evaluate `pay`. When the order is irrelevant (e.g., a succeeded payment), callers can invoke `withActions` directly with `order = undefined` to skip that read.
-- The `actions` shape intentionally mirrors `OrderActions` from the orders module so the UI can treat both uniformly.
+- `pay` and `sync` are never both true. `maySync` covers only in-flight, provider-backed payments, while `pay` covers payments awaiting confirmation, declined payments, and open transfers.
+- `pay` needs all of these:
+  - a confirmable status, or an open transfer with a provider available;
+  - an order that is still payable;
+  - a caller who is the payer and holds `checkout:Cart`.
+- The `order` argument is optional. When it is absent, as for list rows or already succeeded payments, `pay` is `false`.
+- `refund` needs all of these:
+  - the caller holds `create:Refund`;
+  - the payment status equals `REFUNDABLE_PAYMENT_STATUS`;
+  - `remainingOf(payment) > 0`;
+  - there is no open chargeback.
+- `mayRefund` checks `create:Refund` by name on purpose. A moderator holds exactly that key, and a broader check would hide the action from them.
+- `cancelRefund` returns a subset of what `settleRefundByHand` returns, minus refunds that settled and later came back.
+- `syncRefunds` needs `create:Refund`, the refundable status, a non-hand-recorded payment, and a `providerRef`.
+- `isPayerWithCheckout` is `false` when there is no `authContext`, for another customer, and for a payment whose account was erased (`userId` missing).
+- `getById` and `getRefund` return the same 404 for "missing" and "not yours", so they don't reveal which payment ids exist.

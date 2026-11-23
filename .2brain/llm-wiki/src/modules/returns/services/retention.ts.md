@@ -1,33 +1,32 @@
 ---
 source: src/modules/returns/services/retention.ts
-sha256: ea6ae3e74f01b95b166acdb41c4e26d4632514926248d82d90df6ab918bc6fcb
-generated_at: 2026-11-08T08:06:16.621417+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e360f805a5c41f66a43d617ffaf1460ac03abb4c961a1b8a20e133842d752517
+context_sha256: b1f96a7dd9a9042802e57d383ac688ce21889f07180b0edc2f88b9184cbf5d6b
+generated_at: 2026-11-22T07:32:24.403328+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/retention.ts
 
 ## Purpose
-
-Implements the free-text retention sweep for returns: after a return has been quiet (no updates) for longer than a configured number of days, its free-text fields are wiped while the row itself remains as a legal record. Exposes a single function consumed by the `reap:returns` job.
+Implements the free-text retention policy for returns. A return row is a legal record and is kept, but the free text a person typed (or staff wrote about them) is wiped once the return has been inactive long enough.
 
 ## Key elements
-
-- **`scrubReturnText(): Promise<number>`** — Computes a cutoff date (`now − returnTextRetentionDays() × DAY_MS`), calls `returnRepository.scrubFreeTextBefore(cutoff)` to unset `note` and `declineMessage` on qualifying rows, logs an info line if any rows were affected, and resolves with the scrubbed count.
+- `scrubReturnText(): Promise<number>`: the sweep run by `reap:returns`.
+  - Computes a cutoff of `Date.now() - returnTextRetentionDays() * DAY_MS`.
+  - Calls `returnRepository.scrubFreeTextBefore(cutoff)`. Per the doc comment, this unsets `note` and `declineMessage` on every return whose `updatedAt` is older than the cutoff.
+  - Logs an info message (`'Wiped free text on returns past retention.'`) with the `scrubbed` count, only when that count is greater than 0.
+  - Resolves to the number of returns that lost their text.
 
 ## Relationships
-
-- **`src/modules/returns/repository.ts`** — Calls `returnRepository.scrubFreeTextBefore(date)`; the repository owns the actual SQL/ORM operation.
-- **`src/modules/returns/config.ts`** — Reads `returnTextRetentionDays()` (a function, so the value may be env-derived) to determine the retention window.
-- **`src/domain-primitives/time.ts`** — Imports `DAY_MS` for the millisecond arithmetic in the cutoff calculation.
-- **`src/infrastructure/adapters/logger.ts`** — Imports `logger` to emit the post-sweep info log.
-- **`src/modules/returns/jobs.ts`** — Expected caller of `scrubReturnText` as the `reap:returns` sweep (per the module docstring).
-- **`src/modules/returns/services/index.ts`** — Re-exports this module so consumers can import from the services barrel.
-- **`src/modules/returns/tests/integration/retention.test.ts`** — Integration tests exercising `scrubReturnText` against a real database.
+- `src/modules/returns/repository.ts`: provides the `returnRepository` object whose `scrubFreeTextBefore` method does the actual update.
+- `src/modules/returns/config.ts`: `returnTextRetentionDays()` supplies the retention window. The doc comment names the env var as `NODE_RETURN_TEXT_RETENTION_DAYS`.
+- `src/domain-primitives/time.ts`: `DAY_MS` converts days to milliseconds.
+- `src/infrastructure/adapters/logger.ts`: provides the `logger` used for the info log.
+- `src/modules/returns/jobs.ts`: the doc comment says this function is the `reap:returns` sweep, so this is the job-side neighbor.
+- `src/modules/returns/services/index.ts` and `src/modules/returns/tests/integration/retention.test.ts`: neighbors in the dependency graph. The file's content does not show how they interact with it.
 
 ## Notes
-
-- **`updatedAt` is the clock**, not the closing/approval date. An approved return whose goods never arrive stays "quiet" as long as no staff action touches it, and gets scrubbed on the same timeline as any other return.
-- **Only free text is targeted.** The reason code (a constrained value, not free text) and the row itself are never modified or deleted.
-- The retention threshold is read via a *function call* (`returnTextRetentionDays()`), implying it can vary at runtime (e.g., per-environment config) rather than being a fixed constant.
-- A Stryker `disable` comment suppresses mutation testing on the `logger.info` line, since mutating a pure logging side-effect is meaningless.
+- The cutoff is based on `updatedAt`, not the closing date. An approved return whose goods never arrive stays quiet for as long as staff leave it, and its text is wiped like any other.
+- The reason code is not free text, so it is not wiped. Only `note` and `declineMessage` are.
+- The logging call is marked `// Stryker disable next-line all`, so it is excluded from mutation testing.

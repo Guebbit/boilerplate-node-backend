@@ -1,45 +1,44 @@
 ---
 source: src/modules/account/services/tokens.ts
-sha256: a0e03d813b9951079f56b6527131f0f57dbc15c4ac497eb9d770978be94e7447
-generated_at: 2026-11-14T18:52:12.824850+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8c63a00226481e755a2fc80858be34aa8ed72cef633494b37a6d0fee2cda56ac
+context_sha256: 69e1557b9001d0239ccf2983d3b4f2871e475733cc9030c16d8fb6467b82cbe5
+generated_at: 2026-11-22T03:42:37.058413+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/tokens.ts
 
 ## Purpose
-
-Central manager for the one-time verification tokens an account holds in the `verificationtokens` collection (password reset, email verification, email change + undo, deletion restore, MFA login challenge). It defines what "live" means, separates finding from spending, and guarantees that spending a link and performing the unlocked action happen in a single database transaction so a partial failure never burns the token or leaves a half-applied action.
+Owns the one-time tokens an account holds in `verificationtokens`: reset, verification, deletion confirmation, email-change and its undo, and the login MFA challenge. It defines what "live" means (exists, right type, not expired) in one place. It also provides the spend-and-act primitive that makes a link single-use, and the shared refusal path for dead links.
 
 ## Key elements
-
-- **`issueToken`** — Mints a 128-bit random token, stores only its hash, and returns the plaintext for the email link or MFA challenge response. Replaces any existing live token of the same kind atomically.
-- **`removeTokens`** — Deletes all tokens of the given kinds for an account (e.g., after a password change).
-- **`tokenSentAt`** — Returns the last-sent timestamp for a token kind, used for resend cooldowns.
-- **`findLiveTokenEntry`** — Looks up the account and raw row for a live token of a given type without spending it. Returns `undefined` for every refusal reason. Used by MFA challenge (needs `entry.amr`).
-- **`findLiveToken`** — Convenience wrapper returning only the `UserDocument`.
-- **`spendLiveToken`** — Atomically deletes the token row inside a caller-supplied `ClientSession`. Returns `false` on a race loss (treated identically to "token not found").
-- **`spendThen`** — Composes `spendLiveToken` + the action's writes in one `withTransaction`. On success, nudges the outbox. On failure or race loss, nothing commits. Non-DB side effects (email, audit, session cleanup) must run *after* this resolves.
-- **`redeemLiveToken`** — `findLiveToken` → `spendThen` in one call, for confirm flows whose action is a single transaction on the holder. Password reset and MFA challenge bypass this (they check something between find and spend).
-- **`OneTimeTokenFlow`** (type) — The union of flows that spend a link token.
-- **`recordOneTimeTokenRejected`** — Increments the `authOneTimeTokenRejectedTotal` metric and writes an audit row for a refused link.
-- **`refuseLink`** — Builds the uniform 422 `ResponseReject` (i18n message, no distinction between unknown / expired / already-used) and calls `recordOneTimeTokenRejected`.
+- `issueToken(userId, type, ttlMs, amr?)`: generates a 128-bit random hex token and stores only its `hashToken` digest via `verificationTokenRepository.issue`. It returns the plaintext once. `amr` is stored only for MFA challenges. It is `@internal` and deliberately not exposed on `accountService`.
+- `removeTokens(userId, types)`: deletes all of the account's tokens of the given kinds.
+- `tokenSentAt(userId, type)`: returns when a token of that kind was last sent, for resend cooldowns.
+- `findLiveTokenEntry(type, token)`: finds a live token without spending it. It returns `{ user, entry }`, where the user is loaded with credentials, or `undefined` for any refusal. `verifyLoginChallenge` uses it to read `entry.amr`.
+- `findLiveToken(type, token)`: the same lookup, returning only the holder.
+- `spendLiveToken(type, token, session)`: deletes the token row inside a given transaction. It returns `true` only for the request whose write removed the row.
+- `spendThen(type, token, act)`: runs the spend and `act` in one `withTransaction`, so both commit or neither does. It returns `act`'s result, or `undefined` if the spend was lost. After a successful commit it calls `nudgeOutbox()`.
+- `redeemLiveToken(type, token, act)`: `findLiveToken` followed by `spendThen`, for confirm flows that need nothing between the two steps.
+- `OneTimeTokenFlow`: type union of the confirm flows: `password_reset`, `email_verify`, `email_change`, `email_change_undo`, `account_restore`.
+- `recordOneTimeTokenRejected(context, flow)`: increments `authOneTimeTokenRejectedTotal` and writes an anonymous failure audit record.
+- `refuseLink(context, flow, messageKey)`: records the rejection and returns a 422 `generateReject` with the translated message.
 
 ## Relationships
-
-- **`src/modules/account/repository.ts`** — All token reads/writes go through `verificationTokenRepository`; this file is its sole caller within the services layer.
-- **`src/infrastructure/security/hash-token.ts`** — Every token value is digested via `hashToken` before storage or lookup; plaintext never touches the database.
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` provides the Mongoose `ClientSession` that binds spend + action into one atomic unit.
-- **`src/kernel/outbox.ts`** — `nudgeOutbox` wakes the relay after a successful `spendThen` commit so pending event rows are picked up.
-- **`src/modules/account/audit.ts` / `src/modules/account/metrics.ts`** — Rejected links are counted (`authOneTimeTokenRejectedTotal`) and audited (via `accountAuditActions` from `src/modules/account/audit.ts`) inside `recordOneTimeTokenRejected`.
-- **`src/infrastructure/http/response.ts` / `src/infrastructure/i18n/index.ts`** — `refuseLink` assembles the 422 body with `generateReject` and the localized message from `t`.
-- **`src/modules/account/services/email-change.ts`, `src/modules/account/services/account-deletion.ts`, `src/modules/account/services/deletion-sign-in.ts`, `src/modules/account/services/oauth.ts`** — Downstream consumers that call `issueToken`, `redeemLiveToken`, `findLiveTokenEntry`, or the raw find/spend halves depending on whether they need to inspect the row before spending.
-- **`src/modules/account/services/index.ts`** — Re-exports this module's public surface for the rest of the account module.
+- `src/modules/account/repository.ts`: `verificationTokenRepository` does all persistence (`issue`, `removeOfTypes`, `lastSentAt`, `findLive`, `spend`), and `VerificationTokenRow` comes from there.
+- `src/infrastructure/security/hash-token.ts`: `hashToken` digests tokens before any storage or lookup.
+- `src/infrastructure/runtime/database.ts`: `withTransaction` supplies the session that `spendThen` shares with `act`.
+- `src/kernel/outbox.ts`: `nudgeOutbox` wakes the relay after a committed spend.
+- `src/infrastructure/observability/audit.ts` and `src/modules/account/audit.ts`: `recordAudit` is called with the account module's audit action for a rejected one-time token.
+- `src/modules/account/metrics.ts`: provides the `authOneTimeTokenRejectedTotal` counter.
+- `src/infrastructure/http/response.ts` and `src/infrastructure/i18n/index.ts`: `generateReject` and `t` build the 422 reply in `refuseLink`.
+- `src/infrastructure/i18n/context.ts`, `src/modules/account/services/account-deletion.ts`, `src/modules/account/services/deletion-sign-in.ts`, `src/modules/account/services/email-change.ts`, `src/modules/account/services/oauth.ts` and `src/modules/account/services/index.ts` are graph neighbors, but this file's content doesn't show how they interact with it. The account services are likely consumers of its token helpers.
 
 ## Notes
-
-- **Uniform refusal.** `refuseLink` deliberately returns the same 422 body for "never existed", "expired", and "already spent". Callers cannot distinguish them; this is a security choice, not a bug.
-- **`spendThen` return contract.** A successful `act` must resolve to something other than `undefined`; `undefined` is the sentinel for "this request did not win the spend." Forgetting to return a value from `act` silently converts a success into a refusal.
-- **Side-effect placement.** Anything that is not a database write (sending email, extra audit rows, session cleanup) must run *after* `spendThen` resolves, because the transaction driver may re-execute `act` on a transient error.
-- **Not on `accountService`.** `issueToken`, `findLiveToken`, `spendLiveToken`, and `redeemLiveToken` are intentionally kept out of the account service's public API; only this module's own confirm flows may call them.
-- **MFA challenge** reads `entry.amr` off the matched row, which is why it uses `findLiveTokenEntry` rather than `findLiveToken`.
+- `act` passed to `spendThen` or `redeemLiveToken` must do only database writes, each passed `session`. The driver may retry it on a transient error, so mail and audit rows must be sent after the call resolves.
+- `act` must resolve with something other than `undefined`. `undefined` means "spend lost or refused", and it also suppresses the outbox nudge.
+- Every refusal looks the same (unknown, expired, already used, lost race), so a caller cannot tell them apart. `refuseLink` follows this with one 422.
+- Rejections use the `auth.` metric and audit prefix, not `security.`, so a stale link doesn't page the platform operator.
+- A token kind that allows only one live link is replaced atomically in the same write by `issueToken`.
+- The 128-bit entropy is what makes the plain (unsalted) `hashToken` digest acceptable.
+- The `@internal` functions are intentionally kept off `accountService`.

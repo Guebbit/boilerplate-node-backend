@@ -1,33 +1,32 @@
 ---
 source: src/modules/returns/domain/restock.ts
-sha256: d8501296530aadf6421f2aaf1e22e90ecf8c4d7acebc8d6a0029d4abec2e786c
-generated_at: 2026-11-08T07:58:36.521859+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 14092723d1d7bdb9ba21155422c71c73303a1816f49dc5f52bd3597d88f4d8bd
+context_sha256: 95dc44a12c1e086eedd6fa46c2a778cba4909c72ccc73ea508e28ff02598fb9c
+generated_at: 2026-11-22T07:24:21.418023+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/domain/restock.ts
 
 ## Purpose
-
-Pure domain rule that decides how many units of each returned line go back on sale when goods are received. Staff can override the default (full quantity) per line—e.g. set a broken unit to 0. Keeping this as a stateless function makes the "broken unit never reaches the shelf" invariant testable without a database.
+Pure domain rule that decides how many units of each returned line go back on sale when a return is received. Staff can give a per-line restock count (e.g. 0 for a broken unit); with no count, everything is restocked. Keeping it pure makes the rule that stops broken units reaching the shelf (and hence a backorder buyer) testable without a database.
 
 ## Key elements
-
-- **`RestockRequest`** (exported interface) — one staff-supplied entry: `productId` + `restock` count.
-- **`ReturnedLine`** (internal interface) — the shape of a return line as this rule reads it; `productId` is typed as `{ toString(): string }` to stay decoupled from the concrete entity.
-- **`RestockVerdict`** (exported type) — discriminated union: `{ ok: true; restocked: number[] }` or `{ ok: false; index: number; reason: 'unknown-product' | 'duplicate' | 'too-many' }`.
-- **`resolveRestock(lines, requested)`** (exported const) — validates the optional staff request against the return's lines and returns per-line restock counts (defaulting to full quantity for unlisted lines) or the first failing request entry with its reason.
+- `RestockRequest`: `{ productId, restock }`, a staff-supplied count for one line.
+- `RestockVerdict`: discriminated union. `{ ok: true, restocked: number[] }` gives one count per returned line, in the line's own order. `{ ok: false, index, reason }` gives the position of the offending request entry and a reason: `'unknown-product' | 'duplicate' | 'too-many'`.
+- `resolveRestock(lines, requested)`: the rule itself.
+  - Lines not named in the request default to their full `quantity`.
+  - `requested` of `undefined` restocks everything.
+  - It rejects the first entry that names a product not in the return, names a product twice, or asks for more than the line's quantity.
+- `ReturnedLine` (internal, not exported): minimal line shape, with `productId` (anything with `toString()`) and `quantity`.
 
 ## Relationships
-
-- **`src/modules/returns/domain/index.ts`** — barrel file that re-exports this module's public API (`RestockRequest`, `RestockVerdict`, `resolveRestock`) to the rest of the domain.
-- **`src/modules/returns/services/receive.ts`** — service-layer caller that invokes `resolveRestock` as part of the goods-received workflow.
-- **`src/modules/returns/tests/unit/domain.test.ts`** — unit tests exercising `resolveRestock` (happy path, each refusal reason, default-to-full behaviour).
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — delivery-side tests that assert the downstream invariant (a unit set to 0 by this rule is excluded from shelf stock and therefore from backorder fulfillment).
+- Re-exported through `src/modules/returns/domain/index.ts`, the domain's public surface.
+- `src/modules/returns/services/receive.ts` is a neighbor; it presumably calls this rule when goods are received, which is the use the module doc describes.
+- `src/modules/returns/tests/unit/domain.test.ts` exercises the rule directly. `src/modules/delivery/tests/unit/fulfillment.test.ts` is also linked in the graph.
 
 ## Notes
-
-- `requested` is optional (`undefined`); when absent every line is restocked in full.
-- Validation is **first-error-wins**: the function returns on the first invalid entry and does not accumulate errors.
-- `ReturnedLine.productId` is matched via `String(one.productId)`—any object with a `toString` works, which is why the concrete entity type is not imported here.
-- The output array (`restocked`) is indexed identically to the input `lines` array, preserving line order.
+- Product ids are compared as strings (`String(productId)`), so ObjectId-like values work against string ids in requests.
+- Validation stops at the first bad entry, so only one failure is reported, identified by its request `index`.
+- Only the upper bound is checked (`restock > quantity`). The code does not check for negative or non-integer counts.
+- Returned lines are assumed to be one per product.

@@ -1,36 +1,28 @@
 ---
 source: src/modules/access/module.ts
-sha256: 64ee9f4a54c41d6dea3d9d3144ef1262466db13b8a86807ee251a6552fb5eed4
-generated_at: 2026-11-08T03:56:38.799049+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:16:33.004575+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/access/module.ts
 
 ## Purpose
-
-Module manifest for the **access** domain (tenants and memberships). It registers the module with the kernel registry, declares a single personal-data section for GDPR Art. 15 / erasure compliance, and deliberately exposes no HTTP routes. It exists as a module (not kernel code) because it owns the tenant/membership collections and is consumed by several sibling modules.
+Manifest entry for the `access` module, which owns the tenant and membership collections (the identity-and-access domain that `src/kernel/permissions.ts` and `src/kernel/ability.ts` query). It is deliberately routeless: nothing exposes shop creation or role grants over HTTP, so there is no URL to mount. Its only declared contribution is a personal-data section for data export and erasure.
 
 ## Key elements
-
-- **Default export** — An object satisfying `AppModule` from `@kernel/registry`. Contains:
-  - `name: 'access'` — the module identifier used by the registry.
-  - `personalData[0]` (`section: 'roles'`) — the sole personal-data descriptor:
-    - `collect(subject)` — calls `accessService.membershipsOf(userId)` and returns an array of `{ role, scope }` pairs. Deliberately omits the tenant id (single-tenant deployment; the scope alone answers "what can this account do").
-    - `erase({ userId }, session)` — delegates to `accessService.eraseMemberships(userId, session)`, which joins the caller's hard-delete transaction.
-- **`accessService`** (imported from `./services`) — the only service this manifest touches; provides membership read and erase operations.
+- **Default export** — an object typed with `satisfies AppModule` (from `@kernel/registry`), with `name: 'access'` and a single `personalData` entry.
+- **`personalData` section `'roles'`**
+  - `collect(subject)` — calls `accessService.membershipsOf(subject.userId)` and returns only `{ role, scope }` per membership. The tenant id is intentionally omitted: this deployment ships one shop, so the id adds nothing a data subject would recognise, and role/scope answer the Art. 15 "what can this account do" question.
+  - `erase({ userId }, session)` — delegates to `accessService.eraseMemberships(userId, session)`, so erasure runs inside the caller's own hard-delete transaction.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** — Provides the `AppModule` type constraint; this file's default export is validated against it.
-- **`src/modules.ts`** — The top-level barrel that imports and registers this module (alongside all others).
-- **`src/modules/access/services/index.ts`** — Supplies `accessService`; the sole service dependency used in `collect` and `erase`.
-- **`src/modules/account/module.ts`** (and `api-keys`, `example`, `orders`, `payments`, `returns`, `users`) — Sibling modules that consume the access domain's tenant/membership data through this barrel.
-- **`tests/integration/erasure.test.ts`** — Integration test that exercises the `erase` path end-to-end.
-- **`src/modules/access/authorization.yaml`** / **`openapi.yaml`** — Co-located config files in the same module directory; the OpenAPI spec is effectively empty for this module (no routes), and the authorization YAML describes role/scope rules the service enforces.
+- **`src/kernel/registry.ts`** — supplies the `AppModule` type that the manifest must satisfy.
+- **`src/modules/access/services/index.ts`** — provides `accessService`, used for both `membershipsOf` and `eraseMemberships`. Other modules also consume access only through this barrel.
+- **`src/modules.ts`** — the module list that registers this manifest.
+- **`src/modules/account/module.ts`**, **`src/modules/api-keys/module.ts`**, **`src/modules/audit-logs/module.ts`** — sibling module manifests in the same registry.
+- **`src/modules/access/authorization.yaml`** — the module's authorization definition, a graph neighbor of this module. This file doesn't reference it directly.
+- **`tests/integration/erasure.test.ts`** — integration test covering erasure, which exercises the `erase` hook.
 
 ## Notes
-
-- **Routeless by design.** The header comment is explicit: no boilerplate endpoint creates a shop or grants a role, so there is no URL to mount. If a future feature adds such an endpoint, this manifest would need a `routes` entry.
-- **`collect` intentionally drops tenant id.** The inline comment justifies this as a single-tenant deployment; if multi-tenant support is added, the shape of the returned object must change.
-- **`erase` is transactional.** It receives a `session` parameter and joins the caller's existing hard-delete transaction rather than opening its own — do not call it outside that contract.
+- The header names `account`, `api-keys`, `example`, `orders`, `payments`, `returns` and `users` as consumers of this module, all via the services barrel.
+- `./model.ts` explains why a routeless domain is still a module rather than kernel code. The header also points to `docs/understand/authorization.md#where-it-lives` for further background.

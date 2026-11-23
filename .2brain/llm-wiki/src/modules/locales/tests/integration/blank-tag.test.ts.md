@@ -1,28 +1,29 @@
 ---
 source: src/modules/locales/tests/integration/blank-tag.test.ts
-sha256: ce481ddee109b87726f124829a498024eb6e6711a7a7f04f0ae2dce8ccf76986
-generated_at: 2026-11-14T20:23:12.759850+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e432125c0282f68cb208d00804d87552f5b644dfe1f3bea7a199a124b60ca656
+context_sha256: 15734782a2660477def6808ea12388d4df4b92d6117c1194dac45ac552475d9a
+generated_at: 2026-11-22T05:49:40.015462+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/tests/integration/blank-tag.test.ts
 
 ## Purpose
-
-Integration test verifying that a locale tag that trims to an empty string (e.g. `%20`) produces a 404 response on both `PUT` and `PATCH /locales/{locale}`, rather than hanging or returning an unexpected status. It guards against a class of bugs where whitespace-only identifiers bypass validation and cause indefinite waits.
+Integration test guarding a regression: a `{locale}` path segment that is blank once trimmed (`/locales/%20`) must produce a normal response rather than hang. The tag normalizes to `''`, which matches no language id, so the write falls into the ordinary 404 path.
 
 ## Key elements
-
-- **`describe('PUT and PATCH /locales/{locale} with a blank tag')`** — top-level suite; calls `setupTestDb()` once before any test runs.
-- **`it('answers 404 to PATCH')`** — sends a `PATCH /locales/%20` with an admin bearer token and body `{ name: 'Blank' }`; asserts `response.status === 404`. Timeout: 15 s.
-- **`it('answers 404 to PUT')`** — sends a `PUT /locales/%20` with an admin bearer token and body `{ name, nativeName, direction }`; asserts `response.status === 404`. Timeout: 15 s.
+- `setupTestDb()`: called at module top level to prepare the test database for the suite.
+- `describe('PATCH /locales/{locale} with a blank tag')`: the single suite.
+- `it('answers 404 to PATCH')`:
+  - Authenticates as `admin` via `authenticateAs('admin')` and takes the `bearer` token.
+  - Sends `PATCH /locales/%20` with the `Authorization` header and body `{ name: 'Blank' }`.
+  - Asserts the response status is `404`.
+  - Has an explicit 15-second timeout (`15_000`), which makes a hang show up as a test failure.
 
 ## Relationships
-
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb()`, invoked at the top of the file to prepare an isolated database for the suite.
-- **`tests/support/http.ts`** — provides the `api()` supertest-style helper (used to issue `PATCH`/`PUT` requests) and `authenticateAs('admin')` (used to obtain a bearer token).
+- `tests/support/setup-test-db.ts` (imported as `@tests/setup-test-db`): provides `setupTestDb`, which sets up the database for this test.
+- `tests/support/http.ts` (imported as `@tests/http`): provides `api()`, the HTTP client used to issue the request, and `authenticateAs()`, which returns the admin bearer token.
 
 ## Notes
-
-- The locale segment is the URL-encoded space `%20`; the server is expected to normalize it to `''` and treat it as "no matching language," yielding the standard 404 path. The 15-second timeouts are intentionally generous to make a hang fail fast rather than blocking CI indefinitely.
-- The file has no exports; it is a self-contained test module.
+- The `%20` is a URL-encoded space. The test relies on the server trimming and normalizing it to an empty tag.
+- Only `PATCH` is covered, despite the module docstring speaking of "the write".

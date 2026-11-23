@@ -1,34 +1,33 @@
 ---
 source: scenarios/example.ts
-sha256: ba6bc6fa2ae78067f686384a9f0ecd18388d4daed8e55195aad17b628784412a
-generated_at: 2026-11-08T02:28:28.862196+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3b2c96f3b2dc11d0e26091a6fe52083f3e4b7547bffffc3ec3f54b1b08a3fb11
+context_sha256: 58711b868e559340d2e39f429e3f17fc1b94f196ab6df19f764805163c189316
+generated_at: 2026-11-22T01:42:32.536885+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/example.ts
 
 ## Purpose
-
-Provides the demo/seed dataset for the `example` module: a small set of fixed-example records (one per status for the editor, one published for the admin) so that UI screens and journey tests open on realistic content. The file is collected into a generated `shop-modules` registry and cleaned up by `demo:remove`.
+Defines the `example` module's slice of the demo dataset: a few example documents in each status, so the module's screens open with data. It is tied to the module via `group: example`, so `demo:remove` deletes this data along with the module.
 
 ## Key elements
-
-- **`SEED_EXAMPLE_IDS`** – Const map of four hardcoded ObjectIds (`editorPublished`, `editorDraft`, `editorArchived`, `adminPublished`). Gives tests/screens stable handles to specific rows without querying.
-- **`exampleFixtures`** – Array of `PinnedExample` objects built via `makeExample` and then overridden with a known `_id`. The editor owns three records (published, draft, archived); the admin owns one published record.
-- **`seedExampleCollection`** – Runs `insertIfAbsent` over every fixture through `exampleRepository`; returns `Promise<SeedOutcome[]>`. Idempotent — re-running the seed is a no-op for rows that already exist.
-- **`shopModule`** (exported) – `{ seed: seedExampleCollection }`. The single entry point consumed by the generated `shop-modules` table and ultimately by `seedShop`.
+- `SEED_EXAMPLE_IDS` (private const): four fixed ObjectId strings (`editorPublished`, `editorDraft`, `editorArchived`, `adminPublished`). They let journeys or screenshots reference a specific row instead of searching for it.
+- `exampleFixtures` (private): an array of `PinnedExample[]`. Each entry is built with `makeExample(...)` and then given its pinned `_id`.
+  - Three belong to the editor (`SEED_EDITOR_ID`), one per status: published, draft (no status or date given, so the factory default applies), and archived.
+  - One belongs to the admin (`SEED_ADMIN_ID`) and is published, so the public side has something to read.
+- `seedExampleCollection` (private): runs `insertIfAbsent(exampleRepository, fixture)` for every fixture and resolves to `SeedOutcome[]`.
+- `shopModule` (exported): `{ seed: seedExampleCollection }`, this module's entry in the `shop` fixture table.
 
 ## Relationships
-
-- **`scenarios/accounts.ts`** – Imports `SEED_ADMIN_ID` and `SEED_EDITOR_ID` so fixtures reference the same user accounts the rest of the demo data uses.
-- **`scenarios/seed.ts`** – Imports the `SeedOutcome` type and the `insertIfAbsent` helper that makes seeding idempotent.
-- **`src/modules/example/factories.ts`** – Imports `makeExample` and the `PinnedExample` type; all fixture shapes originate here.
-- **`src/modules/example/repository.ts`** – Imports `exampleRepository`, the persistence layer that `insertIfAbsent` writes through.
-- **`src/types/index.ts`** – Imports `ExampleStatus` enum used to set each fixture's status.
+- `scenarios/accounts.ts`: supplies `SEED_ADMIN_ID` and `SEED_EDITOR_ID`, which set the owner (`userId`) of each example.
+- `scenarios/seed.ts`: supplies `insertIfAbsent` and the `SeedOutcome` type used for seeding.
+- `src/modules/example/factories.ts`: supplies `makeExample` and the `PinnedExample` type for building fixtures.
+- `src/modules/example/repository.ts`: `exampleRepository` is the target that fixtures are inserted into.
+- `src/types/index.ts`: supplies the `ExampleStatus` enum (`published`, `archived`, and so on), imported via `@types`.
+- The comments say `shopModule` is collected into `shopModules` (`./shop-modules`) and run by `seedShop`. Those files are not among the listed neighbors.
 
 ## Notes
-
-- The ObjectIds are hardcoded hex strings, not generated at seed time. Do not replace them with `new Types.ObjectId()` or existing references in journeys/screenshot tests will break.
-- The file must remain importable without side effects: the only side effect is inside `seedExampleCollection`, which runs when the generated `shop-modules` table calls it.
-- Deleting this file is the supported way to remove the example module from the demo dataset; the generated `shop-modules.generated.ts` (produced by `npm run regenerate`) will drop the corresponding entry automatically.
-- Fixture `publishedAt` dates are in the future relative to typical "now" values — intentional, but be aware if you add date-dependent assertions.
+- Seeding is idempotent in intent: it uses `insertIfAbsent`, and the ids are pinned.
+- Per the file's comments, `shopModule` is picked up by `npm run regenerate`, which produces the `shopModules` table in `scenarios/shop-modules.ts`. Deleting this file therefore removes the entry. Nothing is registered by hand.
+- The admin's "Welcome" note is written to be copied as a template for new modules.

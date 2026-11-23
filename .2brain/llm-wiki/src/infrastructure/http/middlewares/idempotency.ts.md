@@ -1,55 +1,41 @@
 ---
 source: src/infrastructure/http/middlewares/idempotency.ts
-sha256: 77ff7bd2853cc18fac80afc431a2817f69a3f9e5651ec13763069ad779f42b6d
-generated_at: 2026-11-14T18:01:45.350745+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3a2a6189c3afa6493393868c7b1f04360a221140bebc419268eeeffef02688ee
+context_sha256: 6cecd978c4c888710ed3875cb6bc0c1a6322b7a15ecbe4ee3eaf113fbd30590a
+generated_at: 2026-11-22T02:50:04.217206+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/http/middlewares/idempotency.ts
 
 ## Purpose
-
-Per-route Express middleware that makes retried writes safe by storing a keyed ledger of request outcomes in Mongo. Mounted per route (never globally) because GETs and already-idempotent routes should not pay for replay protection. Supports two modes: opt-in (absent key → no protection, no refusal) and mandatory (`requireIdempotencyKey`, refuses with 400 if the key is missing). For do-not-retry operations, an expired in-flight lease yields a stored 409 "outcome unknown" rather than re-running the handler.
+Express middleware that makes retried writes safe via the `Idempotency-Key` header. It is mounted per route (never globally). The record ledger lives in Mongo rather than Redis, because the Redis cache runs `allkeys-lru` and could evict a live record and cause a silent duplicate write. Most routes are opt-in at the header level. A do-not-retry route uses `requireIdempotencyKey`, refuses a missing key with 400, and never re-runs a key past its lease. Instead it answers a stored 409 "outcome unknown" and notifies staff.
 
 ## Key elements
-
-- **`IDEMPOTENCY_KEY_HEADER`** / **`KEY_PATTERN`** – Header name and regex accepting both quoted (RFC 9651 Structured Field) and bare key forms, 1–200 word/`-` chars.
-- **`hasPrototypeKey(value)`** – Recursive guard that rejects any body containing an own `__proto__` property, working around a `canonicalize` bug that would silently drop the key and produce a colliding fingerprint.
-- **`fingerprintOf(request)`** – Builds a pseudonymised string from method + concrete path (`baseUrl + path`, not the route template) + canonicalised body. Pseudonymised rather than bare-hashed so a Mongo dump cannot be offline-cracked for secrets in the body.
-- **`callerKeyOf(request)`** – Resolves the caller identity (account id or `ip:<addr>`) used as the second half of the unique `(key, caller)` index, preventing cross-tenant key guessing.
-- **`DoNotRetrySubject`** (exported) – Route-supplied descriptor (`operation`, `subjectParam`) identifying the action and its target parameter for outcome-unknown notices.
-- **`OutcomeUnknownFacts`** (exported) – Extends `DoNotRetrySubject` with `tenantId`, `subjectId`, `since`, `recordId` for the sink callback.
-- **`OutcomeUnknownSink`** (exported type) – Fire-and-forget callback the infrastructure layer cannot import directly; the consuming module registers itself.
-- **`registerOutcomeUnknownSink(sink)`** (exported) – Installs the sink; unregistered state is valid (unit tests, non-shop projects).
-- **`settleIdempotencyMarks(timeoutMs)`** (exported) – Awaits all in-flight done-mark writes (tracked in `pendingMarks`) before the process exits, preventing a stranded `in_flight` record.
-- **`REPLAYED_HEADERS`** – Whitelist of headers preserved on replay: `WWW-Authenticate`, `Allow`, `ETag`, `Content-Location`. `Retry-After` is deliberately excluded.
-- **`IN_FLIGHT_LEASE_MS`** (5 min) – TTL after which an `in_flight` record is considered abandoned; a retry on an ordinary key re-runs the handler, a do-not-retry key gets 409.
-- **`isAbandoned(existing)`** – Checks state + `updatedAt` against the lease.
-- **`replayedHeadersOf(response)`** – Extracts only the whitelisted headers currently set on the response.
-- **`Claim`** / **`DoNotRetryFacts`** (internal) – Aggregated identity tuple (key, caller, fingerprint) plus optional do-not-retry metadata passed through the claim flow.
+- `IDEMPOTENCY_KEY_HEADER` / `KEY_PATTERN`: read the header and accept a key in either quoted (Structured Field String) or bare form. The inner value is 1–200 chars of `[\w-]`.
+- `hasPrototypeKey(value)`: recursively detects an own `__proto__` key in a body. `canonicalize` from `@guebbit/js-toolkit` silently drops that key, so such bodies are refused rather than mis-fingerprinted.
+- `fingerprintOf(request)`: a keyed hash (via `pseudonymise('idempotency', …)`) of method, concrete `baseUrl + path`, and the canonicalized JSON body. It is keyed so that a database dump cannot be used to guess passwords from `/signup` bodies. It uses the concrete path rather than the route template.
+- `callerKeyOf(request)`: `request.caller?.id`, or `ip:<ip>` for public routes. It scopes the `(key, caller)` unique index so one caller cannot read another's cached reply.
+- `DoNotRetrySubject`, `OutcomeUnknownFacts`, `OutcomeUnknownSink`: the types for the do-not-retry operation, its facts (tenant, subject id, `since`, `recordId`), and the port through which staff are notified.
+- `registerOutcomeUnknownSink(sink)`: registers the sink. A module outside `infrastructure` calls it, and the sink must not throw or reject. No sink registered is a supported state.
+- `Claim` / `DoNotRetryFacts`: internal shape of what a request knows when it claims a key.
+- `settleIdempotencyMarks(timeoutMs)`: waits, up to a timeout, for the in-progress done-mark writes tracked in `pendingMarks`. It is intended for shutdown.
+- `REPLAYED_HEADERS` / `replayedHeadersOf(response)`: the headers copied into the stored record and replayed on a retry (`WWW-Authenticate`, `Allow`, `ETag`, `Content-Location`). `Retry-After` is deliberately excluded.
+- `IN_FLIGHT_LEASE_MS` (5 minutes) / `isAbandoned(record)`: an `in_flight` record older than the lease is treated as abandoned. An ordinary key may then re-run, while a do-not-retry key answers "outcome unknown".
+- `requireIdempotencyKey`: the do-not-retry variant, referenced in the header docs. Its definition lies beyond the part of the file shown here.
 
 ## Relationships
-
-- **`idempotency-model.ts`** – Defines `idempotencyRecordModel` (Mongoose model) and `IdempotencyRecordDocument`; this file is the sole operational consumer.
-- **`@infrastructure/http/response`** – Uses `markDoNotRetry` (to flag the response before storage) and `rejectResponse` (for 400/409 answers).
-- **`@infrastructure/http/preconditions`** – `keepEtag` is imported, likely to preserve ETag handling across replayed responses.
-- **`@infrastructure/persistence/mongo-errors`** – `isDuplicateKey` detects a concurrent claim (unique-index violation) and routes into the replay/409 path.
-- **`@infrastructure/security/pseudonymise`** – Produces the keyed fingerprint so raw secrets never land in Mongo.
-- **`@infrastructure/adapters/logger`** – Structured log events for claim, conflict, and outcome-unknown paths.
-- **`@infrastructure/i18n`** – `t` for localised error/status messages in responses and notices.
-- **`@domain-primitives/time`** – `MINUTE_MS` constant for the in-flight lease duration.
-- **`@infrastructure/runtime/settle`** – `settleWithin` underpins `settleIdempotencyMarks` for graceful shutdown.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** – Expected caller of `settleIdempotencyMarks` during shutdown drain.
-- **`src/modules/account/routes.ts`** – Representative consumer that mounts the middleware on specific write routes.
-- **`scripts/audit/api-standards.yaml`** – Declares the `Idempotency-Key` header contract this middleware enforces.
+- `idempotency-model.ts`: provides `idempotencyRecordModel` and `IdempotencyRecordDocument`, the Mongo-backed ledger with TTL expiry.
+- `response.ts`: provides `markDoNotRetry` and `rejectResponse`.
+- `preconditions.ts`: provides `keepEtag`.
+- `mongo-errors.ts`: provides `isDuplicateKey`.
+- `logger.ts`: the logger.
+- `pseudonymise.ts`: the keyed hash used for fingerprints.
+- `settle.ts`: provides `settleWithin`, which backs `settleIdempotencyMarks`. `server-lifecycle.ts` is the likely caller at shutdown, but this is not visible in the shown content.
+- `time.ts`: provides `MINUTE_MS`.
+- `src/modules/account/routes.ts`, `src/modules/addresses/routes.ts`: route modules that mount this middleware.
 
 ## Notes
-
-- **Mongo, not Redis, by design.** The cache container uses `--maxmemory-policy allkeys-lru`; an LRU-evicted idempotency record would become a silent duplicate write under load. The ledger is a source of truth and lives next to other TTL-expiring durable data.
-- **Never returns 429 after a write.** All rate-budget checks happen before the key is claimed; once a handler has run, the only answers are the stored outcome or a 409.
-- **Concrete path in the fingerprint, not the route template.** Two orders at `/order/A/refund` and `/order/B/refund` have identical (empty) bodies; a template-based fingerprint would replay A's answer for B.
-- **Pseudonymised fingerprint, not a bare hash.** `POST /signup` carries a plaintext password; a raw SHA-256 in Mongo would enable offline dictionary attacks at hash speed.
-- **`hasPrototypeKey` is a hard refusal, not a warning.** The upstream `canonicalize` library drops an own `__proto__` key into its accumulator, causing two distinct bodies to fingerprint identically. The middleware refuses the request until the library is fixed.
-- **Outcome-unknown sink is fire-and-forget.** Implementations must not throw or reject; the 409 response is already being sent.
-- **The in-flight lease (5 min) is far above any real handler timeout.** A request still running past that point is already past every upstream timeout; treating it as dead is the safe default.
-- **`Retry-After` is stripped on replay.** A stored 503 must not advertise "retry later" for the entire retention window under a key that can never succeed.
+- The ledger never records a 429: budgets refuse before the key is claimed, and handlers must not answer 429 after a write.
+- The same key with a different fingerprint is treated as a client bug, not papered over.
+- The done-mark is written after the response is sent, so shutdown should call `settleIdempotencyMarks`. Otherwise a key can be left `in_flight`, and on a do-not-retry route a retry becomes a false "outcome unknown".

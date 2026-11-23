@@ -1,29 +1,39 @@
 ---
 source: src/modules/api-keys/tests/unit/credentials.test.ts
-sha256: 77e5b800efbdfb60571fbc3002fcd187063b28c7a6171503dd68f50c529d2719
-generated_at: 2026-11-14T19:23:39.556482+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 71e2450c31ca50d17b9b20d639b9214c5e753b5905a1c003d33b40c83febcfff
+context_sha256: d2b3aa41c8c1769a655f3344c46004d1c1ee0624681baf89ada2017989ccd4bc
+generated_at: 2026-11-22T04:25:46.428709+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/api-keys/tests/unit/credentials.test.ts
 
 ## Purpose
-
-Unit tests for the four credential functions exported from `credentials.ts` (`mintApiKey`, `parseApiKeyToken`, `verifyApiKey`, `displayIdOf`). Covers the one-way hashing half of the API-key lifecycle: generating a key, extracting its public prefix, verifying a token against its SHA-256 hash, and formatting a display identifier.
+Unit tests for the one-way hashing half of an API key's lifecycle: minting, parsing and verifying. They exercise the exports of `src/modules/api-keys/credentials.ts`.
 
 ## Key elements
-
-- **`describe('mintApiKey')`** — Verifies the returned `{ plaintext, publicPrefix, hash }` shape: `sk_` prefix, 8-char public prefix, hash ≠ plaintext, uniqueness across calls, round-trip with `verifyApiKey`, and an explicit NIST FIPS 180-2 SHA-256("abc") vector.
-- **`describe('parseApiKeyToken')`** — Checks prefix recovery from a real token; returns `undefined` for tokens that are too short, have a non-`_` byte after the 8-char prefix, or are unrelated (e.g. a JWT). Confirms that underscores *within* the prefix/secret are handled via position-based slicing rather than `split('_')`.
-- **`describe('verifyApiKey')`** — Negative cases: tampered plaintext and mismatched hash both return `false`.
-- **`describe('displayIdOf')`** — Confirms the `sk_` prefix is reattached to an 8-char ID for display.
+- **`mintApiKey` tests**
+  - The plaintext starts with `sk_`, and the public prefix is 8 characters long.
+  - The plaintext has the form `sk_<publicPrefix>_...`, and the hash differs from the plaintext.
+  - Each call yields a different secret and prefix.
+  - The returned hash passes `verifyApiKey`.
+  - `verifyApiKey('abc', ...)` accepts the NIST SHA-256 test vector `ba7816bf…15ad`, which confirms the hash is plain SHA-256 of the token.
+- **`parseApiKeyToken` tests**
+  - A minted token round-trips to `{ publicPrefix }`.
+  - It returns `undefined` for a token too short to hold a prefix and separator (`sk_tooshort`).
+  - It returns `undefined` when the byte after the 8-character prefix is not `_`.
+  - It returns `undefined` for an unrelated bearer token, such as a JWT-like string.
+  - Underscores inside the prefix or secret are handled: `sk_ab_cdefg_z9-_-...` parses to prefix `ab_cdefg`.
+- **`verifyApiKey` tests**
+  - A tampered plaintext (`${plaintext}x`) is rejected against the original hash.
+  - The correct plaintext is rejected against an unrelated hash.
+- **`displayIdOf` test**
+  - `displayIdOf('a1b2c3d4')` returns `sk_a1b2c3d4`, which is the prefix with `sk_` reattached and no secret.
 
 ## Relationships
-
-- **`src/modules/api-keys/credentials.ts`** — Sole dependency. All four functions under test (`mintApiKey`, `parseApiKeyToken`, `verifyApiKey`, `displayIdOf`) are imported from this module. No other files are imported or referenced.
+- Imports `mintApiKey`, `parseApiKeyToken`, `verifyApiKey` and `displayIdOf` from `@modules/api-keys/credentials`, which resolves to `src/modules/api-keys/credentials.ts`. That is the only module under test.
 
 ## Notes
-
-- The token grammar is `sk_` + **8 base64url chars** + `_` + secret. Because base64url's alphabet itself contains `_` and `-`, the parser must slice by fixed position (index 3 + 8) rather than splitting on underscores; one test explicitly guards against `split('_')` regressions.
-- The SHA-256 digest is asserted against a NIST FIPS 180-2 vector (see `docs/modules/api-keys.md` for the full table).
-- `verifyApiKey` is a pure plaintext-vs-hash comparison; there is no salt, IV, or HMAC involved in these tests.
+- The tests use position-based slicing rather than `split('_')`, because base64url's alphabet includes `_`.
+- `describe`, `it` and `expect` are used without imports, so they come from the test runner's globals.
+- The tests are pure and synchronous. Nothing is mocked and there is no I/O.

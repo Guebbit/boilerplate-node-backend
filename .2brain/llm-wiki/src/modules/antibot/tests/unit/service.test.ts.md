@@ -1,29 +1,27 @@
 ---
 source: src/modules/antibot/tests/unit/service.test.ts
-sha256: 762e35a04379ca233d0c4e961b8f36826141a4e0dc7da26c6e8e5ed3295e9ff8
-generated_at: 2026-11-08T05:01:06.606076+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 762e35a04379ca233d0c4e961b8f36826141a4e0dc7da26c6e8e5ed3295e9ff8
+context_sha256: c00bc65de8fb8b2b0abb155c8788cb94102c4f5213f75a59a07e0a9caad8582a
+generated_at: 2026-11-22T04:20:07.185736+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/antibot/tests/unit/service.test.ts
 
 ## Purpose
-
-Unit test verifying that `antibotService.config` signals a misconfigured provider via promise rejection rather than a synchronous throw, ensuring the controller's `.catch` chain can intercept the error.
+Unit test for `antibotService.config`. It pins down the contract that a misconfigured antibot provider is reported by returning a rejected promise, not by throwing synchronously. The reason, per the file's module doc, is that the controller chains `.catch` on the returned promise and would not see a synchronous throw.
 
 ## Key elements
-
-- **`describe('antibotService.config')`** — single test suite; no other cases exist in this file.
-- **`it('rejects, rather than throws, …')`** — the sole test case. Wraps the call in `withEnvironmentOverrides({ NODE_ANTIBOT_PROVIDER: 'no-such-provider' }, …)`, asserts the invocation itself does **not** throw, then asserts the returned promise rejects with a message matching `/NODE_ANTIBOT_PROVIDER|no-such-provider/`.
-- **Module-level JSDoc** — documents *why* the rejection contract matters (the controller chains `.catch` and would miss a synchronous throw).
+- `describe('antibotService.config')`: the only suite in the file.
+- Single test, "rejects, rather than throws, when the provider named is not one this build has":
+  - Sets `NODE_ANTIBOT_PROVIDER` to `'no-such-provider'` through `withEnvironmentOverrides`.
+  - Calls `antibotService.config()` inside `expect(...).not.toThrow()`, which asserts there is no synchronous throw, and stores the returned promise.
+  - Asserts that the promise rejects with an error whose message matches `/NODE_ANTIBOT_PROVIDER|no-such-provider/`.
 
 ## Relationships
-
-- **`src/modules/antibot/service.ts`** — the SUT; this file imports `antibotService` and exercises only its `.config` method.
-- **`tests/support/environment.ts`** — provides `withEnvironmentOverrides`, a helper that temporarily patches process environment variables for the duration of the callback and restores them afterwards.
+- `src/modules/antibot/service.ts`: provides `antibotService`, the unit under test. The test only calls its `config()` method.
+- `tests/support/environment.ts`: provides `withEnvironmentOverrides`, imported through the `@tests/environment` alias. It scopes the temporary `NODE_ANTIBOT_PROVIDER` value to the callback.
 
 ## Notes
-
-- The import alias `@tests/environment` maps to `tests/support/environment.ts` (not the colocated `src/modules/antibot/tests/` path); the graph neighbor listed as `tests/support/environment.ts` confirms this.
-- The test captures the promise in a `pending` variable before awaiting it, specifically to separate the "does it throw synchronously?" assertion from the "does it reject?" assertion.
-- Only one provider-misconfiguration path is covered here; other branches of `config` (e.g., valid provider, missing env var entirely) are not tested in this file.
+- The test returns the `expect(...).rejects` assertion from the callback, and returns the `withEnvironmentOverrides` result from the `it`. That means the environment override has to stay in place until the promise settles, which only works if `withEnvironmentOverrides` awaits the callback's return value. This is assumed from the code, not confirmed in `environment.ts`.
+- The error-message regex accepts either the env var name or the bad provider value, so the exact wording of the error is not pinned.

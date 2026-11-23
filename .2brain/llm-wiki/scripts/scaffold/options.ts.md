@@ -1,35 +1,49 @@
 ---
 source: scripts/scaffold/options.ts
-sha256: 9390c64526a041e67d4b780927aeb484a0d7cee6000935c75b18e35f0825c82a
-generated_at: 2026-11-14T17:41:40.255045+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cc95b7f8f89646267676bfd4ea047831f3fbb8897d1ea8e6dc698dbcdc9ff4ab
+context_sha256: b881a6140d0e60ae533b003da0a0259972bc139855925fbfa6d900dd27957664
+generated_at: 2026-11-22T02:15:53.228015+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/scaffold/options.ts
 
 ## Purpose
-
-Parses the raw CLI arguments passed to `scaffold:module` into a typed `ScaffoldOptions` object (or a `ParseRefusal` on bad input). The file is deliberately pure—`argv` in, options or refusal out—so the shell script or runner that invokes it can stay a thin I/O layer without any parsing logic of its own.
+Parses the `scaffold:module` command line into a typed `ScaffoldOptions` object. It is pure: `argv` goes in, and either options or a refusal comes out. This keeps the CLI's I/O layer a thin shell around it.
 
 ## Key elements
-
-- **`ScaffoldOptions`** — interface describing every knob a caller can set: `name`, optional `entity`, `group` (`foundation` | `shop`), `summary`, `audit`, `regenerate`.
-- **`ParseRefusal`** — minimal `{ error: string }` shape returned when the arguments are invalid.
-- **`USAGE`** — the multi-line help string printed when a refusal occurs.
-- **`parseArguments(argv)`** — the main parser. Extracts the single positional `name`, validates it via `isValidModuleName`, reads `--entity` / `--group` / `--summary` flags (via the internal `valueAfter` helper), checks `--no-audit` / `--no-regenerate` boolean flags, and returns either a populated `ScaffoldOptions` or a `ParseRefusal`.
-- **`isRefusal(result)`** — type guard that narrows the union to `ParseRefusal` (checks for the `error` key).
+- `ScaffoldOptions`: the parsed option set.
+  - `name`: the folder name.
+  - `entity?`: an optional explicit record type name.
+  - `group`: `'foundation'` or `'shop'` (the `ModuleDescriptor` group type minus `'example'`).
+  - `summary`: one sentence for the docs index.
+  - `audit`: whether to emit `audit.ts` and record actions.
+  - `regenerate`: whether to run `regenerate --no-sync` afterwards.
+- `USAGE`: the usage text, printed on a refusal.
+- `ParseRefusal`: `{ error: string }`, holding the reason the arguments are unusable.
+- `parseArguments(argv)`: returns `ScaffoldOptions | ParseRefusal`.
+  - It takes the single positional argument as the module name.
+  - It reads the `--entity`, `--group` and `--summary` values.
+  - It treats `--no-audit` and `--no-regenerate` as switches.
+- `isRefusal(result)`: a type guard that checks for an `error` key.
+- `valueAfter` (private): returns the token after a flag, or `undefined` if it is missing or starts with `--`.
 
 ## Relationships
-
-- **`scripts/scaffold/names.ts`** — imports `isValidEntityName` and `isValidModuleName` for validation of the positional name and `--entity` value.
-- **`scripts/docs/module-descriptor.ts`** — imports the `ModuleDescriptor` type solely to constrain `ScaffoldOptions['group']` to `Exclude<ModuleDescriptor['group'], 'example'>`.
-- **`scripts/scaffold/plan.ts` / `apply.ts`** — downstream consumers in the scaffold pipeline that receive the `ScaffoldOptions` object this file produces.
-- **`scripts/scaffold/scaffold-module.ts`** — the CLI entry point that calls `parseArguments` and branches on `isRefusal`.
-- **`tests/unit/scripts/scaffold/options.test.ts`** — unit tests for `parseArguments` and `isRefusal`.
+- Imports `isValidModuleName` and `isValidEntityName` from `./names` to validate the name and entity.
+- Imports the `ModuleDescriptor` type from `scripts/docs/module-descriptor.ts` to derive the allowed `group` values.
+- The other scaffold files (`apply.ts`, `plan.ts`, `scaffold-module.ts`, the templates) and the unit tests (`options.test.ts`, `apply.test.ts`, `plan.test.ts`) are graph neighbors. They presumably consume `ScaffoldOptions`, but this file does not show how.
 
 ## Notes
-
-- The `group` type uses `Exclude<…, 'example'>`, so the literal `'example'` value that exists on `ModuleDescriptor['group']` is deliberately not accepted at the scaffold level.
-- `--no-audit` and `--no-regenerate` are the *negation* flags; their absence means the feature is **on** (default `true`). The USAGE text makes this explicit, but it's an easy inversion to miss.
-- `valueAfter` treats a `--`-prefixed token as "no value follows," so `--entity --group` yields `undefined` for entity rather than the string `"--group"`.
-- The positional-argument filter in `parseArguments` works by checking whether the *previous* token is one of the value-taking flags (`--entity`, `--group`, `--summary`). This means a value that itself starts with `--` will be swallowed as the flag's value by `valueAfter` (returning `undefined`), not treated as a second flag.
+- Defaults:
+  - `group` is `foundation`.
+  - `summary` is `TODO: one sentence on what <name> is for.`
+  - `audit` and `regenerate` are `true`.
+- Validation order:
+  1. A missing name is refused.
+  2. A second positional argument is refused.
+  3. An invalid module name is refused. The message says digits are refused because permission keys are letters and dots only.
+  4. An invalid `--entity` (it must be PascalCase) is refused.
+  5. A `--group` other than `foundation` or `shop` is refused.
+- Positional detection skips any `--` token and any token directly after `--entity`, `--group` or `--summary`. An unknown `--flag` is silently ignored rather than refused.
+- If a value flag has no value, because it is last or followed by another flag, it falls back to its default. For `--entity`, that means it is treated as absent.
+- Because the token after a value flag is excluded from the positional list, a value that begins with `--` is not accepted as a flag value.

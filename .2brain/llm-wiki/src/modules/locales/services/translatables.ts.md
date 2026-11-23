@@ -1,31 +1,27 @@
 ---
 source: src/modules/locales/services/translatables.ts
-sha256: 48f9bc4d125a5588aa0a1894e63151348c1b2771921a045a01677f99ba665db3
-generated_at: 2026-11-08T06:26:37.426019+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 48f9bc4d125a5588aa0a1894e63151348c1b2771921a045a01677f99ba665db3
+context_sha256: 584bac966ffac0ddcc0dd57bd7b00997ddf7ff9e20f2f63b91f7d4ea7bab2e6d
+generated_at: 2026-11-22T05:48:32.877700+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/services/translatables.ts
 
 ## Purpose
-
-Holds the app-wide translatable-target lookup (entityType → target) for the locales module. The registry is supplied externally at boot because `locales` cannot import from `src/modules/*` to collect each module's manifest entry — the same circular-dependency wall that motivates `kernel/translation.ts`'s translation port.
+Holds the `translatables` registry as seen by the `locales` module: a lookup from `entityType` to its `TranslatableTarget`. The module never builds it. `locales` cannot import `src/modules/*`, so the module's `onRegistered` hook builds the lookup with `resolveTranslatables(modules)` once all enabled modules are known and passes it in here.
 
 ## Key elements
-
-- **`setTranslatables(registry)`** — Replaces the module-level `translatables` record with the supplied lookup. Called once at boot (by `../module.ts`'s `onRegistered` hook, which builds the lookup via `resolveTranslatables(modules)`); tests also call it to install/restore fixtures.
-- **`translatableTarget(entityType)`** — Returns the registered `TranslatableTarget` for a single entity type, or `undefined`. Uses `Object.hasOwn` to guard against prototype-pollution lookups (e.g. `"constructor"` from a URL parameter).
-- **`translatableCacheTags()`** — Returns a deduplicated array of every `cacheTag` value across all registered targets. Used to know which tags a language on/off/away event must clear so cached responses carrying old stored text are invalidated.
+- `setTranslatables(registry)`: replaces the module-level registry. It is called once at boot. Tests call it to install a fixture and to restore an empty one.
+- `translatableTarget(entityType)`: returns the declared `TranslatableTarget` for an `entityType`, or `undefined` if nothing registered it.
+- `translatableCacheTags()`: returns every distinct `cacheTag` across the registered targets, deduplicated with a `Set`. A translation write clears these tags. A language being switched on or off, or removed, must clear them too, because that changes which stored text cached responses may carry.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** — Provides the `TranslatableTarget` type imported here; the shape of each entry in the registry.
-- **`src/modules/locales/services/index.ts`** — Service barrel that re-exports this module so consumers can import from the locales services entry point.
-- **`src/modules/locales/services/languages.ts`** — Consumes `translatableCacheTags()` (or the target lookup) when a language is toggled or removed, to clear the right cache tags.
-- **`src/modules/locales/services/translations.ts`** — Consumes `translatableTarget()` to resolve where a translation write should land; relies on the registry being populated before any translation operations.
+- `src/kernel/registry.ts`: provides the `TranslatableTarget` type, which is imported as a type only.
+- `src/modules/locales/services/index.ts`, `src/modules/locales/services/languages.ts` and `src/modules/locales/services/translations.ts` are neighbors in the dependency graph. The file's own content does not show how they use it. The doc comments suggest that language changes and translation writes are the consumers of `translatableCacheTags`, and `translatableTarget` is probably used by the translation services, but this is not confirmed here.
 
 ## Notes
-
-- The registry is **write-once by design** in production. Calling `setTranslatables` after boot replaces the entire map; there is no per-entry `add`/`remove` API.
-- `translatables` starts as an empty object. Any read before `setTranslatables` is called (e.g. in a unit test that forgets to seed) silently returns `undefined` / `[]` rather than throwing.
-- The `Object.hasOwn` check in `translatableTarget` is intentional security hardening — `entityType` is sourced from URLs and would otherwise hit inherited properties like `constructor`.
+- The registry starts empty (`{}`), so every lookup returns `undefined` until `setTranslatables` is called.
+- `translatableTarget` uses `Object.hasOwn` because `entityType` comes from the URL. Without it, inherited names such as `constructor` would resolve to a value.
+- The registry is mutable module-level state, so the last call to `setTranslatables` wins.
+- Registry values may be `undefined`. `translatableCacheTags` skips them.

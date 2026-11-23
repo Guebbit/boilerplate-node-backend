@@ -1,29 +1,39 @@
 ---
 source: src/modules/inventory/tests/unit/hold-lines.test.ts
-sha256: 3ddf2a0269c927bf67f96dbec46cf05df4c7ff2de58543601cac2b7968306ddc
-generated_at: 2026-11-08T06:08:15.466418+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 757cac50680064ef8432d24e70fe37dad788db8324712e9621348667d5a0ef95
+context_sha256: f5f1762d03ab4348bd7f790a29ce2f9120ad8634189147ac011fb7cbeda8e797
+generated_at: 2026-11-22T05:28:27.598317+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/tests/unit/hold-lines.test.ts
 
 ## Purpose
-
-Unit tests for the pure hold-line arithmetic (`takeFromHold`, `withAdded`) in the inventory domain. Covers partial extraction, over-asking, product deduplication, purity, and the two-kind (shelf vs. backorder/preorder claim) interaction rules.
+Unit tests for the pure hold-line arithmetic in the inventory domain: `takeFromHold` (removing lines from a hold, as in a partial shipment or a canceled remainder) and `withAdded` (adding lines to a hold). No I/O or mocks are involved; every test is plain input/output.
 
 ## Key elements
-
-- **`describe('takeFromHold')`** — verifies basic extraction: partial take per product, full drain, over-ask clamps to available, unknown product is a no-op, duplicate product lines are summed in both hold and request, and the input array is never mutated.
-- **`describe('takeFromHold, with preorder claims')`** — verifies kind-aware extraction: a request scoped to `backorder` only touches backorder lines; a line with no `kind` is always shelf and never a claim; a backorder request may fall back onto shelf units that replaced its claim; claim units are consumed before shelf units; and a shelf request can never touch a claim line.
-- **`describe('withAdded')`** — verifies merging: same-product/same-kind lines are summed; same-product/different-kind lines stay separate; an empty hold simply returns the added lines.
+- **`describe('takeFromHold')`**: covers the base behavior for lines without a `kind`:
+  - Takes the requested quantity per product and returns `{ remaining, taken }`.
+  - Empties the hold when everything is taken.
+  - Caps the take at what the hold carries, so `taken` reflects what was actually set aside.
+  - Takes nothing for a product the hold does not carry.
+  - Sums a product named twice in the request, and a product held on two lines.
+  - Does not mutate the input hold.
+- **`describe('takeFromHold, with preorder claims')`**: covers lines with `kind: 'backorder'`:
+  - A request takes from the kind it names and leaves the other kind alone.
+  - A request line with no `kind` means shelf units and never takes a claim.
+  - A backorder request falls back on shelf units when no claim exists. The case is stock allocated before the fulfillment order learns of it.
+  - A backorder request takes the claim first, then shelf units only for the shortfall.
+- **`describe('withAdded')`**:
+  - Increases quantity for the same product and kind.
+  - Keeps `backorder` and shelf lines of one product as separate lines.
+  - Returns just the added lines when the hold is empty.
 
 ## Relationships
-
-- **`src/modules/inventory/domain/hold-lines.ts`** — defines the two functions under test (`takeFromHold`, `withAdded`). This file is the sole spec for that module.
-- **`src/modules/inventory/domain/index.ts`** — barrel re-export through which the test imports those functions (`import { takeFromHold, withAdded } from '../../domain'`).
+- Imports `takeFromHold` and `withAdded` from `../../domain`, the domain barrel `src/modules/inventory/domain/index.ts`.
+- The functions under test live in `src/modules/inventory/domain/hold-lines.ts`, which the barrel re-exports. The tests exercise them only through that barrel.
 
 ## Notes
-
-- The `kind` field (e.g. `'backorder'`) is the discriminator between shelf stock and a preorder claim. Its absence means "shelf," and shelf lines can never satisfy a claim request.
-- The "fall back" rule (backorder request consuming shelf units that replaced the claim) is an intentional asymmetry: shelf → claim is forbidden, claim → shelf is allowed.
-- All tested functions are expected to be pure; the purity test deep-copies the hold before and asserts equality after.
+- Line shape is `{ productId, quantity, kind? }`. An absent `kind` is shelf units, and `'backorder'` is a preorder claim.
+- Fallback is one-directional. A backorder request can consume shelf units, but a shelf request never consumes a claim.
+- In the claim-first case, `taken` lists the claim line before the shelf line.

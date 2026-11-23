@@ -1,34 +1,46 @@
 ---
 source: src/modules/payments/tests/unit/providers.test.ts
-sha256: 85eccb869b8613e88ddb572a1f121cba7f3d3d78c477ec27e8a82a415faef271
-generated_at: 2026-11-14T21:21:42.985554+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 85eccb869b8613e88ddb572a1f121cba7f3d3d78c477ec27e8a82a415faef271
+context_sha256: 21a63acbf727768759ebd0418328e422934b30f322495e76a4f2fdf61716cc8b
+generated_at: 2026-11-22T07:05:42.894525+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/unit/providers.test.ts
 
 ## Purpose
-
-Unit tests for the payment-provider port layer: the webhook signature sign/verify contract and the `resolvePaymentProvider` selector. It exists to pin down the security invariants (replay tolerance, secret-ring rotation, malformed-input rejection) and the "no silent fallback" rule for provider selection, without touching a database or any provider SDK.
+Unit tests for the payment provider port: how a provider is selected via `NODE_PAYMENT_PROVIDER`, and the webhook signature discipline all providers share. It uses no mocks and no database. The persistence-dependent `service.test.ts` lives in `tests/integration/`, and the `fake` provider's outcome logic is tested separately in `tests/unit/scenarios/`.
 
 ## Key elements
-
-- **`signedWith(secret, payload, timestamp?)`** – sets `NODE_PAYMENT_WEBHOOK_SECRET` and delegates to `signWebhookPayload`, producing a ready-to-verify header string.
-- **`v1Of(header)`** – regex-extracts the first `v1=<hex>` token from a header for use in composite-header assertions.
-- **`loadResolver()`** – resets the Jest module registry then re-imports `providers/index` to obtain a fresh `resolvePaymentProvider` closure that reflects the current env vars.
-- **`describe('webhook signatures')`** – covers round-trip acceptance, tampered-body rejection, wrong-secret rejection, replay (outside 1-hour tolerance), malformed/undefined/short/over-long headers, the four-`v1` scan cap, and case-insensitive hex.
-- **`describe('a ring of secrets…')`** – covers comma-separated secret rings: first-entry signing, per-entry verification, two-`v1` headers, position-independence of the matching `v1`, trim behaviour, and empty-`v1` rejection.
-- **`describe('resolvePaymentProvider')`** – verifies that an unset env yields `undefined`, a registered name resolves, and an unregistered name **throws** rather than defaulting.
+- `signedWith(secret, payload, timestamp?)` — helper that sets `NODE_PAYMENT_WEBHOOK_SECRET` to `secret`, then returns `signWebhookPayload(payload, timestamp)`.
+- `v1Of(header)` — helper that extracts the `v1=<hex>` part of a signature header.
+- `describe('webhook signatures')` — covers `verifyWebhookSignature` and `signWebhookPayload`:
+  - Accepts its own signature.
+  - Rejects a tampered body, a different secret, a stale timestamp (a replay from an hour ago), a malformed or missing header, and a wrong-length signature. All of these throw `WebhookRejected`.
+  - Rejects headers over 200 characters as `Malformed signature header`, before any hashing.
+  - Reads only the first four `v1` values. A genuine one placed after four forged ones fails with `Signature does not match`.
+  - Accepts uppercase-hex digests.
+- Nested `describe('a ring of secrets…')` — covers key rotation, where the secret variable holds a comma-separated list:
+  - Signing uses the first entry.
+  - Verification accepts a signature from any entry.
+  - A header with two `v1` values passes if either matching secret is in the ring.
+  - The matching `v1` is accepted wherever it sits among forged ones.
+  - A header where nothing matches is refused.
+  - Entries are trimmed, so a space after a comma is not part of the secret.
+  - An empty `v1=` is rejected as malformed.
+- `loadResolver()` — calls `jest.resetModules()` and dynamically imports `providers/index`, so each test gets a fresh registry.
+- `describe('resolvePaymentProvider')`:
+  - Returns `undefined` when no provider is configured (card payments off).
+  - Returns the provider named `fake` when `NODE_PAYMENT_PROVIDER=fake`.
+  - Throws an error mentioning the name for an unregistered one such as `stripe`, instead of falling back.
 
 ## Relationships
-
-- **`src/modules/payments/providers/webhook-signature.ts`** – the module under test; exports `signWebhookPayload`, `verifyWebhookSignature`, and the `WebhookRejected` error class.
-- **`src/modules/payments/providers/index.ts`** – exports `resolvePaymentProvider`; this file re-imports it per test (after clearing the module registry) so each call observes the latest environment variable.
-- **`tests/support/environment.ts`** – provides `setEnvironment` / `resetEnvironment` to mutate `NODE_PAYMENT_WEBHOOK_SECRET` and `NODE_PAYMENT_PROVIDER` between assertions.
+- `src/modules/payments/providers/webhook-signature.ts` — supplies `signWebhookPayload`, `verifyWebhookSignature` and `WebhookRejected`, which the signature tests exercise.
+- `src/modules/payments/providers/index.ts` — supplies `resolvePaymentProvider`, imported dynamically in each resolver test.
+- `tests/support/environment.ts` — imported as `@tests/environment`. `setEnvironment` and `resetEnvironment` set and clear `NODE_PAYMENT_WEBHOOK_SECRET` and `NODE_PAYMENT_PROVIDER`.
 
 ## Notes
-
-- Tests that depend on a specific secret value call `setEnvironment` **before** signing and `resetEnvironment()` (or the next `setEnvironment`) afterwards; the `afterEach` in the `resolvePaymentProvider` block only resets the module registry, not the env — the secret block relies on sequential ordering.
-- The over-length and four-`v1`-cap tests use a deliberately short secret (`'cap-test-secret'`) so the genuine header fits within the 200-char contract before padding is added.
-- The "position-independence" test documents a past regression: an earlier `Map`-based implementation kept only the **last** `v1`, which a trailing forged token would have overridden.
-- `resolvePaymentProvider` tests require a module-registry reset before re-import because the function reads env at import time; calling it twice without a reset would observe stale values.
+- The tests depend on environment variables being set per test. `resetEnvironment()` is called explicitly only in the "another secret" test, so the other tests rely on whatever reset the shared setup does.
+- Resolver tests reset the module registry (`jest.resetModules()` in `afterEach` and in `loadResolver`), because the provider is read from the environment when the module is loaded.
+- An unknown provider name is expected to throw. A comment explains why: a typo in the variable must not silently disable card payments or switch to another provider.
+- A comment notes that a `Map` keeping only the last `v1` used to make a forged value placed after the genuine one cause a refusal. The tests now require acceptance in either order.

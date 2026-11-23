@@ -1,32 +1,38 @@
 ---
 source: scripts/scaffold/templates-contract.ts
-sha256: 0b06602280208547900d6f851ea9dc7db7d59a5459354045538c7d5c8e24b5b9
-generated_at: 2026-11-08T03:01:20.994322+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1f75303fde189c2fff16c0b203b92631bb315d0adf04230f9a41c36064a1fc37
+context_sha256: bf07c50c61a7baedd4b602ff6db3686ac2fed8143d8982cae3fe16a4eade3334
+generated_at: 2026-11-22T02:17:20.617209+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/scaffold/templates-contract.ts
 
 ## Purpose
-
-Generates the per-module `openapi.yaml` fragment that the scaffold produces for a new API resource. It emits a self-contained OpenAPI 3.1.0 document (paths, tags, schemas) whose shared components (`$ref`s to pagination, errors, auth, etc.) are resolved by the root assembler at build time. The template bakes in the project's REST conventions so every scaffolded module ships with a consistent contract without hand-authoring YAML.
+Generates the text of a scaffolded module's own `openapi.yaml` contract fragment. The fragment is shaped so the root assembler can complete it: paths and tags reach the root bundle on their own, and shared components are referenced from the root contract file.
 
 ## Key elements
-
-- **`openapiFragment(names: ModuleNames, group: string): string`** — the sole export. Takes the module's naming set and its group (for the tag family) and returns the full `openapi.yaml` text. Covers six operations: `GET` list, `POST` create, `GET`/`PUT`/`PATCH`/`DELETE` by id.
-- **`ROOT`** (const) — the relative path (`../../../shared/contracts/openapi.root.yaml`) every cross-module `$ref` uses; module YAML is placed three levels below the shared contracts folder.
-- **`errorResponse(status, component)`** — one-line helper that formats a single error-response entry indented for a `responses` map.
-- **`KEYED_ERRORS` / `KEYED_ERRORS_WITH_NOT_FOUND` / `PATH_ONLY_ERRORS`** — pre-joined blocks of the three or four error lines each route variant needs (401, 403, 404, 422), chosen per route shape.
-- **Inline schemas** (emitted into `components/schemas`): `…Response` (paginated list), `…Sort` (JSON:API sort array), the entity object (with server-driven `actions` booleans), `Create…Request`, `Replace…Request` (PUT, name required), `Update…Request` (PATCH, all fields optional, `null` clears `notes`).
+- `openapiFragment(names, group)` (exported): returns the full OpenAPI 3.1.0 YAML string for a module. It covers:
+  - **Tag:** one tag named after the entity, with an `x-family` taken from `TAG_FAMILY_OF_GROUP[group]` (falls back to `'Other'`).
+  - **Collection path** (`names.basePath`): list (paginated, with a `sort` query param) and create (returns `201` with a `Location` header).
+  - **Item path** (`names.basePath/{id}`): read, replace (`PUT`), update (`PATCH`, merge-patch, accepts `application/json` and `application/merge-patch+json`) and delete (`204`).
+  - **Local schemas:** `<Plural>Response`, `<Entity>Sort`, `<Entity>`, `<Entity>Actions`, `Create<Entity>Request`, `Replace<Entity>Request` and `Update<Entity>Request`.
+- `ROOT`: relative path to the shared root contract (`openapi.root.yaml` under `shared/contracts`), used in `$ref`s to shared parameters, headers, responses and schemas (`PageParam`, `PageSizeParam`, `IdPathParam`, `Location`, `NoContent`, `PaginationMeta`, `Id`).
+- `errorResponse(status, component)`: builds one indented YAML line pointing at a shared response component.
+- `KEYED_ERRORS`, `KEYED_ERRORS_WITH_NOT_FOUND` and `PATH_ONLY_ERRORS`: pre-joined error-response blocks spliced into each operation.
 
 ## Relationships
-
-- **`scripts/contracts/fragments.ts`** — provides `TAG_FAMILY_OF_GROUP`, which maps a module's group string to the `x-family` value placed on the tag. This is the only import from that file.
-- **`scripts/scaffold/names.ts`** — provides the `ModuleNames` type (the naming/wording bundle: `kebab`, `entity`, `entityCamel`, `plural`, `words`, `basePath`). This file consumes it as the sole input to `openapiFragment`.
+- `scripts/contracts/fragments.ts`: provides `TAG_FAMILY_OF_GROUP`, which maps the module's group to the tag's API-docs family.
+- `scripts/scaffold/names.ts`: provides the `ModuleNames` type. Its fields (`kebab`, `entity`, `entityCamel`, `plural`, `words`, `basePath`) fill the template.
+- `scripts/scaffold/plan.ts`: a graph neighbor. This file doesn't import it, so the link is presumably that the scaffold plan uses this generator to produce the module's contract fragment.
 
 ## Notes
-
-- The sort schema hardcodes the sortable fields to `createdAt` and `name` (with negated variants). A scaffolded module with different sortable fields must edit the generated YAML after scaffolding.
-- `PATCH` declares both `application/json` and `application/merge-patch+json` as request content types, both pointing to the same `Update…Request` schema.
-- The `actions` object on the entity is a server-computed permission hint (`update`, `delete` booleans); it is not an input the client sends.
-- All shared-component references (pagination params, error responses, `Location` header, `NoContent`, `Id`, `PaginationMeta`) use `$ref` into the root file; this file never inlines their definitions.
+- Every operation uses `bearerAuth` or `apiKeyAuth`.
+- Error sets differ by route:
+  - List and create: 401, 403, 422.
+  - Read and delete, which take only a path id: 401, 403, 404, with no 422.
+  - Replace and update: 401, 403, 404, 422.
+- `PUT` requires `name`, and `notes` can be `null` or a string. `PATCH` makes every field optional (omitted means unchanged, `null` clears `notes`).
+- Each entity includes a server-decided `actions` object (`update`, `delete` booleans) that clients use to render controls.
+- The `sort` grammar is a JSON:API-style array (1–3 entries) limited to `createdAt`, `-createdAt`, `name` and `-name`. A template comment says it is the one sort grammar shared with every list.
+- The YAML is hand-built with template literals and 4-space indentation. The error-response lines are hard-coded to 16 spaces, so they must stay aligned with the `responses:` blocks if the template is edited.

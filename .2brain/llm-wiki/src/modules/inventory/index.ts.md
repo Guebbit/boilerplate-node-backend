@@ -1,31 +1,27 @@
 ---
 source: src/modules/inventory/index.ts
-sha256: e3c945026950c06963ed0e868284f24c726051ab0cd5c403a87bb876d260a767
-generated_at: 2026-11-08T05:59:15.247626+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 444cc45b8cbcf1455e15d349e4485559cc5343aad2237b6e9e1c5d6adaec4520
+context_sha256: 6af418fccc7d87c1db54fce65c451556d17e70a9633e8cf1c8983deffe8c608c
+generated_at: 2026-11-22T05:18:59.328149+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/index.ts
 
 ## Purpose
-
-Public barrel (entry point) for the inventory module. It is the **only** surface a sibling module is permitted to import from, enforcing a narrow contract: sibling code requests a named transition and receives a boolean, with no visibility into the repositories, concrete models, or counter primitives that live inside the module. This encapsulation is intentional per `docs/theory/strategic-ddd.md` §5.
+Public barrel for the Inventory module. Per its header comment, it is the only surface sibling modules may import. It deliberately leaves out repositories, models, and counter primitives, so siblings can request a named transition and get a boolean back without touching stock counters directly.
 
 ## Key elements
-
-- `export * from './services'` — re-exports the inventory service layer (the transition-by-name API siblings call).
-- `export * from './domain'` — re-exports domain logic (e.g., transition definitions, validation rules).
-- `export * from './events'` — re-exports domain-event types/emitters.
-- `export type * from './model'` — re-exports **type-only** members of the model layer; no runtime values from the model are leaked.
+- `export * from './services'`: re-exports the service layer, the named transitions siblings call.
+- `export * from './domain'`: re-exports domain exports.
+- `export * from './events'`: re-exports event exports.
+- `export type * from './model'`: re-exports model **types only**. The models themselves are not exposed as values.
 
 ## Relationships
-
-- **Cart services** (`src/modules/cart/services/checkout.ts`, `shelf.ts`, `view.ts`) — sibling modules that import from this barrel to query or mutate stock state during cart operations.
-- **Cart integration tests** (`stock.test.ts`, `stock-flag.test.ts`, `backorder.test.ts`, `preorder.test.ts`, `merge.test.ts`, `checkout-expected-total.test.ts`) — exercise inventory transitions indirectly through the cart, asserting on the boolean outcomes exposed via this file.
-- **Delivery module & tests** (`src/modules/delivery/module.ts`, `factories.ts`, `backorder.test.ts`, `lost-parcel.test.ts`, `override-sync.test.ts`, `preorder-board.test.ts`) — consume inventory types/events and trigger inventory transitions as part of parcel/delivery workflows.
+The neighbor files are the module's consumers. They are listed as graph neighbors, and the barrel's own contents are not visible beyond its four re-exports.
+- **Cart** (`src/modules/cart/services/checkout.ts`, `shelf.ts`, `view.ts`) and **Delivery** (`src/modules/delivery/module.ts`) are sibling modules, which the header says must import through this barrel.
+- The cart integration tests (backorder, checkout-expected-total, merge, preorder, stock-flag, stock) and the delivery tests (`factories.ts` and the backorder, lost-parcel, override-sync, and preorder-board integration tests) are also neighbors. They cover stock-related behavior across the module boundary.
 
 ## Notes
-
-- The model layer is exported **type-only** (`export type *`). Importing a runtime value from `./model` through this barrel will fail at build time; that is the intended guardrail.
-- No repositories, counter primitives, or mutable model instances are re-exported. If a sibling needs lower-level access, the architecture says it should not exist — route the need through a new named transition in `./services` instead.
-- The module-level doc comment is normative: it documents *what must not be added* to this file, not just what is present.
+- Do not add exports for repositories, models, or counter primitives. The header says publishing them would remove the guarantee the module exists to provide.
+- The header carries `@see` references to documentation on the module's neighbourhood and on the "published language — the barrel" rule in the strategic DDD docs.

@@ -1,36 +1,47 @@
 ---
 source: src/modules/orders/tests/unit/tax.test.ts
-sha256: 85bd9881f430c04021d3c66fcedc04d446a591021e09a0a5ba81e8b039858bba
-generated_at: 2026-11-08T07:14:49.579926+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 999f09b9bb011779545df5b375b2afffb663473d82dd3d822ea67fb586851947
+context_sha256: f55a121754e31a091fbc7a6f3962daf2e8504400a1d558df7cd3732187f91378
+generated_at: 2026-11-22T06:38:46.009237+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/tax.test.ts
 
 ## Purpose
-
-Unit tests for the `orderTaxBreakdown` pure function (and its `TaxableLineItem` input shape) from the orders domain. The suite verifies VAT extraction from gross line totals, per-line rounding semantics, shipping apportionment rules (physical-vs-digital, pro-rata by gross value), order-level aggregation, and currency-specific minor-unit exponents. It exists to pin the exact cent-level arithmetic that downstream invoice rendering and reconciliation depend on.
+Unit tests for `orderTaxBreakdown` in `src/modules/orders/domain/tax.ts`, the pure arithmetic behind an order's VAT figures. Frozen `price` and `taxRate` go in, and per-line and order-level amounts come out. Cases price in EUR (2 decimals) unless a case is about a currency's own minor-unit exponent. A describe block at the end covers JPY (0 decimals) and KWD (3 decimals) against the same basket.
 
 ## Key elements
-
-- **`line(price, quantity, taxRate)`** — factory returning a `TaxableLineItem` shaped as raw aggregate output (physical line).
-- **`digitalLine(price, quantity, taxRate)`** — same shape but with `requiresShipping: false`; used to verify shipping is never apportioned onto digital goods.
-- **`describe('orderTaxBreakdown — an order with no lines')`** — zero-order baseline.
-- **`describe('orderTaxBreakdown — a fully-VAT order')`** — core VAT extraction, line-total (not unit) taxation, zero-rate, cross-line summation, net+tax=gross invariant, non-negativity.
-- **`describe('orderTaxBreakdown — shipping, apportioned pro-rata by line value')`** — shipping tax folding, per-line rate application to shipping shares, digital-line exclusion, digital-only orders.
-- **`describe('orderTaxBreakdown — shippingNetAmount/shippingTaxAmount')`** — shipping sub-totals, `shippingByRate` row splitting, per-rate gross reconstruction.
-- **`describe('orderTaxBreakdown — taxSummary, one row per distinct rate')`** — rate-grouped summary rows, merge behavior.
-- **Final describe block (truncated)** — minor-unit exponent edge cases: JPY (0 dp) and KWD (3 dp) against the same basket.
+- `line(price, quantity, taxRate)`: helper that builds a `TaxableLineItem` shaped like raw aggregate output (`{ quantity, product: { price, taxRate } }`).
+- `digitalLine(...)`: same, but with `requiresShipping: false`, so the line gets no shipping apportionment.
+- `describe` blocks, each calling `orderTaxBreakdown({ items, currency, shippingCost? })`:
+  - **No lines**: returns zero strings (`'0.00'`) on every amount axis and empty `lines`, `taxSummary` and `shippingByRate`.
+  - **Fully-VAT order**:
+    - Tax is extracted from the gross line total (price × quantity), not from the unit price alone.
+    - A zero rate charges nothing.
+    - Order totals sum the lines.
+    - Each line's net plus tax reconstructs its gross to the cent.
+    - Amounts are never negative.
+    - Expected values are hand-checked, e.g. a 19.90 unit price at 22% gives tax `3.59` and net `16.31`.
+  - **Shipping, apportioned pro-rata by line value**:
+    - Shipping's tax is added to `taxTotal` only. Each line's own `taxAmount` and `netAmount` stay unchanged.
+    - Each line's share is taxed at that line's own rate.
+    - A missing `shippingCost` gives the same result as `'0.00'`.
+    - Shipping is spread over physical lines only, never onto digital ones.
+    - A digital-only order apportions nothing.
+  - **`shippingNetAmount` / `shippingTaxAmount`**:
+    - Both are zero when there is no delivery method.
+    - `shippingByRate` is empty when there is no shipping cost.
+    - `shippingByRate` has one row per rate that received a share.
+    - Rows sum to the order-level shipping net and tax.
+    - Net plus tax reconstructs the shipping gross to the cent.
+  - **`taxSummary`**: one row per distinct rate (`{ rate, netAmount, taxAmount, grossAmount }`). The visible tests include a single zero-rate line producing one row with the line's full amount as net.
 
 ## Relationships
-
-- **`src/modules/orders/domain/tax.ts`** — the sole production dependency. The test file imports `orderTaxBreakdown`, `lineTaxFromRateTotals`, and the `TaxableLineItem` type from this module. Every assertion in this file validates the contract of those exports; a change in `tax.ts` arithmetic or return shape will surface here as a failing expectation.
+- Imports `orderTaxBreakdown`, `lineTaxFromRateTotals` and the `TaxableLineItem` type from `src/modules/orders/domain/tax.ts`, the only module under test. Everything here exercises that file's public API.
 
 ## Notes
-
-- All monetary assertions use **exact string equality** (e.g. `'3.59'`) for line-level values and **`toBeCloseTo(..., 6)`** for cross-line sums — the distinction matters when debugging rounding drift.
-- Expected cent values are **hand-computed in comments** (e.g. `round(1990 × 0.22/1.22) = 359`) rather than derived by a helper; when updating arithmetic in `tax.ts`, the comments must be re-verified independently.
-- Per-line rounding is **not linear in quantity**: a 2-unit line at 20% does not equal 2 × the 1-unit tax. This is intentional and tested explicitly.
-- Shipping is apportioned **only across physical lines**; a digital line on the same order receives zero shipping share, and a digital-only order absorbs no shipping at all.
-- The test file assumes EUR (2 dp) throughout except the final describe block, which exercises the currency's own minor-unit exponent (JPY 0 dp, KWD 3 dp).
-- Comments reference `money.ts` for the float-precision rounding strategy; changes there can silently shift the "known float-imprecise" values locked in here.
+- Expected outputs are money amounts as fixed-decimal strings (`'3.59'`). Many assertions convert with `Number(...)` and compare to the cent via `Math.round(x * 100)` or `toBeCloseTo`.
+- Tax is rounded once per line, not per unit, so line tax is not exactly linear in quantity. For example, 10 × 2 at 20% gives `3.33`.
+- Tests use the globals `describe`, `it` and `expect` with no import, so the test runner provides them.
+- The `shippingByRate` rows are asserted in ascending rate order (`[0.1, 0.22]`).

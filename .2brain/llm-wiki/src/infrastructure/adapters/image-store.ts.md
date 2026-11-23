@@ -1,49 +1,49 @@
 ---
 source: src/infrastructure/adapters/image-store.ts
-sha256: 723f3008fd88c32e370146ff16f033fc592ceff466421910e830da11b53ff990
-generated_at: 2026-11-08T03:19:41.822600+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2687ac860f89aa295f9aada8efb6de12b8e342156f0c99bfbee7a8c111ebfa87
+context_sha256: 387ab3c601fc27d30a25fa8eecc822829e6ff987a6d84efa1a6e1050b0e8d35d
+generated_at: 2026-11-22T02:37:09.807337+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/image-store.ts
 
 ## Purpose
-
-Defines the `ImageStore` port and its sole implementation (`filesystemImageStore`, local disk under `NODE_PUBLIC_PATH/images/`). It is the single place that translates between an opaque `imageUrl` handle and a real filesystem path, so that swapping the backend (e.g., to a bucket) touches one file instead of every service and controller that persists or deletes an image.
+The storage port for images. It is the only place allowed to turn an `imageUrl` into a filesystem path, so callers treat `imageUrl` as an opaque handle and a future move to a bucket touches one file. One backend exists today: local files under `NODE_PUBLIC_PATH/images/`.
 
 ## Key elements
-
-- **`ImageStore`** (interface) — the port. Methods:
-  - `quarantine(stagedPath)` — moves a staged upload into a durable quarantine dir *outside* the public root; returns an opaque key. Throws on failure.
-  - `readQuarantined(key)` / `removeQuarantined(key)` — read or discard a quarantined file before the digest job promotes it.
-  - `promote(stem, digested, mime)` — writes the re-encoded original under a content-derived name; returns the server-relative URL. Throws on failure.
-  - `putDerivative(stem, thumbnail)` — writes the WebP thumbnail under the *same* stem into `thumbs/v<version>/`. Throws on failure.
-  - `remove(imageUrl)` — deletes the main image and its thumbnail. **Never rejects**; no-op for remote URLs or paths outside the public root.
-- **`filesystemImageStore`** — the local-disk implementation of `ImageStore`.
-- **`IMAGES_SEGMENT`** — `'images'`; must match the `express.static` mount and the URL segment.
-- **`publicRoot()`** — resolves `NODE_PUBLIC_PATH` to an absolute directory.
-- **`quarantineRoot()`** — resolves `NODE_QUARANTINE_PATH` (durable, outside public root).
-- **`thumbnailsDirectory(root)`** — builds `<root>/images/thumbs/v<version>`.
-- **`resolveUnderPublicRoot(imageUrl, root)`** — security guard: resolves a client-supplied `imageUrl` under the public root, rejecting path traversal.
-- **`isRemoteUrl(value)`** — detects `scheme://` or `//` URLs so `remove` can skip them.
-- **`writeAtomically(target, bytes)`** — wraps `writeFileAtomically` (write-to-temp + rename) to avoid serving half-written files under a 1-year immutable cache header.
-- **`EXTENSION_OF`** — mime → file-extension map built from `imageRuleData.formats`.
+- **`ImageStore` (interface)**: the seam between an upload and wherever its bytes live.
+  - `quarantine(stagedPath)`: moves a staged upload into durable storage outside `NODE_PUBLIC_PATH` and returns an opaque key. Throws on failure.
+  - `readQuarantined(key)`: returns the raw bytes for the digest step. Throws if nothing is stored under the key.
+  - `removeQuarantined(key)`: deletes a quarantined file without promoting it. Never rejects; returns a boolean.
+  - `promote(stem, digested, mime)`: writes the re-encoded original under a name derived from its own bytes and returns the `imageUrl` to persist. Throws on failure.
+  - `putDerivative(stem, thumbnail)`: writes a thumbnail under the same `stem` at `thumbs/<version>/<stem>.webp` and returns its url. Throws on failure.
+  - `remove(imageUrl)`: deletes an image and its thumbnail. Never rejects. Anything the store does not own (absolute URL, path outside its root, nothing at all) is a no-op.
+- **`filesystemImageStore`**: the local implementation of `ImageStore`.
+- **`IMAGES_SEGMENT`** (`'images'`): the directory name, key prefix and URL segment. These must agree because `express.static` serves `NODE_PUBLIC_PATH` at the site root.
+- **`publicRoot()`**: resolves `NODE_PUBLIC_PATH`.
+- **`quarantineRoot()`**: resolves `NODE_QUARANTINE_PATH`.
+- **`thumbnailsDirectory(root)`**: returns `<root>/images/thumbs/<THUMBNAIL_VERSION>`.
+- Internal helpers:
+  - `resolveUnderPublicRoot`: maps an `imageUrl` to a path and returns `undefined` if it would escape the root.
+  - `isRemoteUrl`: detects absolute (`scheme://`) and protocol-relative (`//`) URLs.
+  - `writeAtomically`: wraps `writeFileAtomically`.
+  - `thumbnailFilename`: builds the `.webp` filename from a stem.
+  - `EXTENSION_OF`: maps mime type to file extension, built from `imageRuleData.formats`.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/filesystem.ts`** — source of `deleteFile`, `moveFile`, `toPosixPath`, `writeFileAtomically`; all disk I/O primitives used here.
-- **`src/infrastructure/adapters/image.ts`** — provides the `ReencodableImageMime` type; its `digestImage` / `thumbnailImage` produce the bytes this store writes.
-- **`src/infrastructure/adapters/config.ts`** — provides `imageConfig()` (`NODE_PUBLIC_PATH`, `NODE_QUARANTINE_PATH`).
-- **`src/infrastructure/adapters/images.generated.ts`** — provides `imageRuleData` (thumbnail version, accepted formats).
-- **`src/infrastructure/http/middlewares/upload.ts`** — stages uploads to a temp path; this store's `quarantine` is the next step. Comments in both files reference each other's conventions.
-- **`src/infrastructure/adapters/image.worker.ts`** — the digest job that calls `readQuarantined` → `digestImage` → `promote` / `putDerivative` → `removeQuarantined`. Derives the `stem` once and passes it to both promote calls.
-- **Service-layer callers** (e.g. `modules/products/services/crud.ts`, `modules/example/services/cover.ts`) — depend on the `ImageStore` interface for persisting `imageUrl` values and calling `remove` on record deletion; they never construct filesystem paths themselves.
+- **`src/infrastructure/adapters/filesystem.ts`**: supplies `deleteFile`, `moveFile`, `toPosixPath` and `writeFileAtomically`, which do the actual file operations.
+- **`src/infrastructure/adapters/config.ts`**: `imageConfig()` provides `NODE_PUBLIC_PATH` and `NODE_QUARANTINE_PATH`.
+- **`src/infrastructure/adapters/image.ts`**: provides the `ReencodableImageMime` type. `digestImage` and `thumbnailImage` produce the bytes passed to `promote` and `putDerivative`.
+- **`src/infrastructure/adapters/image.worker.ts`**: derives the `stem` once from the digested bytes and passes it to both `promote` and `putDerivative`. Its ack policy depends on those methods throwing.
+- **`src/infrastructure/http/middlewares/upload.ts`**: handles ephemeral upload staging. The quarantine location is documented as separate from its staging path, and `quarantine` mirrors its on-demand directory creation.
+- The remaining neighbors are `src/app/jobs.ts`, `src/infrastructure/adapters/orphaned-images.ts`, `src/infrastructure/adapters/remote-image.ts`, `src/infrastructure/http/uploads.ts`, and the oauth, cover, crud and personal-data services. They are likely consumers of the store. The visible portion of the file does not show how they use it.
 
 ## Notes
-
-- **Error contract is asymmetric on purpose:** `quarantine`, `promote`, `putDerivative` **throw** (the job must retry); `remove`, `removeQuarantined` **never reject** (they run on paths already answering an error to the client).
-- **URL construction uses `'/'` literals**, not `path.join`, to avoid Windows backslashes leaking into `express.static` paths.
-- **The `stem` is content-derived** (hash of digested bytes), so two runs of the same input converge on the same file (idempotent overwrite) while different inputs can never collide. This is what makes a stale digest run's cleanup safe.
-- **Quarantine is outside `NODE_PUBLIC_PATH`** so nothing unvalidated is fetchable, and the file survives a restart (durability guarantee comes from the mounted volume in production, not the local-dev `tmp/quarantine` default).
-- **`isRemoteUrl` deliberately avoids `URL.canParse`** because that function accepts `mailto:` and rejects protocol-relative `//` URLs; the regex here answers "is this a URL pointing somewhere else?" specifically.
-- **Thumbnail version segment** (`THUMBNAIL_VERSION`) exists so quality-setting changes can bump the URL without overwriting existing immutable-cached files.
+- **Security**: `imageUrl` is client-supplied and `uri-reference` permits `/../..`. `resolveUnderPublicRoot` therefore compares the resolved destination and rejects anything outside the root, including the root itself.
+- **Content-derived names**: `promote` names files from their own bytes. Duplicate digest runs of the same input write identical files. Different inputs cannot collide, so a stale run's cleanup can never delete a newer run's file. The name also acts as a cache-buster.
+- **Atomic writes**: URLs are served `immutable, 1y`, so writes go through a temp file and rename. This avoids caching a half-written image.
+- **Thumbnails**: they live under a versioned path. Bump `THUMBNAIL_VERSION` instead of overwriting files in place.
+- **Returned URLs**: they are built from string literals, not `path.join`, to avoid backslashes on Windows.
+- **Quarantine**: `quarantine`, `readQuarantined` and `removeQuarantined` apply `path.basename` to keys and stems. The `tmp/quarantine` default is for local development only. Production must mount a durable volume via `NODE_QUARANTINE_PATH`.
+- **Error contract**: the write-side methods throw so requests and jobs fail or retry. The remove-side methods never reject, so cleanup on an error path cannot add a second failure.

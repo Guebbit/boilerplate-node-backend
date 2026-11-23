@@ -1,34 +1,31 @@
 ---
 source: src/modules/account/two-factor/backup-codes.ts
-sha256: eed49a58edb845b81fa559e7a1c66f705a01823ec3d3f1ef54dcf367df50faf5
-generated_at: 2026-11-08T04:51:23.509464+00:00
-model: ollama:qwen3.8:27b
+source_sha256: eed49a58edb845b81fa559e7a1c66f705a01823ec3d3f1ef54dcf367df50faf5
+context_sha256: a601c7ea7d4ad3227c7dda8aea8abafa6931b923035d2892b4bcdcf70277c8cd
+generated_at: 2026-11-22T04:10:25.054586+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/two-factor/backup-codes.ts
 
 ## Purpose
-
-Pure utility module that mints, salts, and hashes one-time backup codes for account recovery. Backup codes recover the **account** itself (not a single factor), are generated once when a method is first armed, shown to the user exactly once, and then only their scrypt digests persist. The module intentionally has no project-internal imports — it depends solely on `node:crypto`.
+Backup codes are the account-level recovery path shared by every two-factor method. They are minted once, by whichever method an account arms first, and are never shown again. This file generates the codes, generates the per-user salt, and hashes codes for storage.
 
 ## Key elements
-
-- **`BACKUP_CODE_COUNT`** (10) — number of one-time codes per account.
-- **`generateBackupCodeSalt()`** — returns a fresh 128-bit (16-byte) hex salt. One per *user*, shared across all 10 codes, to avoid 10 sequential scrypt calls per login attempt.
-- **`hashBackupCode(code, salt)`** — scrypt-digests a single code (40-bit / 5-byte hex) under the user's salt; 64-byte output, hex-encoded. The stored form in `twoFactorBackupCodes`.
-- **`generateBackupCodes()`** — produces 10 random 40-bit hex codes. These are the plaintext values shown to the user and **never** stored as-is.
-- **`hashBackupCodes(codes, salt)`** — maps `hashBackupCode` over a full set; the result is what gets persisted.
+- `BACKUP_CODE_COUNT` (10): number of one-time codes per account.
+- `generateBackupCodeSalt()`: returns a 128-bit salt (16 random bytes, hex). It is minted once per set of codes and reused for every code in that set.
+- `generateBackupCodes()`: returns `BACKUP_CODE_COUNT` plaintext codes. Each is 5 random bytes (40 bits) hex-encoded. They are shown to the caller once and never stored in this form.
+- `hashBackupCode(code, salt)`: computes scrypt (64-byte output) of the code under the salt and returns the hex digest. The digest is stored in `twoFactorBackupCodes`, and the salt is the account's `twoFactorBackupCodeSalt`.
+- `hashBackupCodes(codes, salt)`: maps `hashBackupCode` over a freshly minted set using the same salt.
 
 ## Relationships
-
-- **`src/modules/account/two-factor/index.ts`** — barrel file that re-exports this module's public API to the rest of the two-factor feature.
-- **`src/modules/account/services/two-factor-enrollment.ts`** — consumer; calls `generateBackupCodes` / `generateBackupCodeSalt` / `hashBackupCodes` when an account first arms a method and stores the digests.
-- **`src/modules/account/services/two-factor-lockout.ts`** — consumer; verifies a submitted code by calling `hashBackupCode` against the stored salt during lockout recovery.
-- **`src/modules/account/tests/unit/two-factor.test.ts`**, **`src/modules/account/tests/integration/two-factor-concurrency.test.ts`**, **`scenarios/users.ts`**, **`tests/integration/scenarios/shop.test.ts`** — test and scenario files that exercise the generate/hash/verify round-trip.
+The neighbor files are listed in the dependency graph, but this file's content shows no imports from them or exports consumed by them. The only visible links are in comments and docs:
+- The doc comments refer to the account fields `twoFactorBackupCodes` and `twoFactorBackupCodeSalt`.
+- The "minted by whichever method an account arms first" wording suggests the enrollment service (`src/modules/account/services/two-factor-enrollment.ts`) as the likely caller, but this file does not confirm that.
+- `src/modules/account/two-factor/index.ts` is the likely re-export point, but this is also not visible here.
 
 ## Notes
-
-- **One salt per user, not per code.** The code comments explicitly warn that a per-code salt would force up to `BACKUP_CODE_COUNT` (10) scrypt calls on a single login, turning recovery into a CPU-burn DoS vector.
-- **scrypt, not plain sha256.** At 40 bits of entropy the codes fall below NIST 800-63B's 112-bit threshold for a "look-up secret" that may use a plain hash. Scrypt compensates so a database dump can't be cracked on a single GPU.
-- **Codes are `randomBytes(5).toString('hex')`** — i.e. 10 hex characters. They are not base32/base64 or digit strings despite the doc mentioning "digits, as typed"; the actual format is lowercase hex.
-- The module is deliberately side-effect-free and stateless; all persistence decisions live in the consuming services.
+- The salt is per user, not per code. A per-code salt would require up to `BACKUP_CODE_COUNT` scrypt calls on a single login attempt, which would make the recovery path a cheap CPU-burner.
+- Codes are only 40 bits, below NIST 800-63B's 112-bit threshold for plainly hashed look-up secrets. For that reason storage uses scrypt rather than a bare sha256, so a database dump cannot be cracked cheaply.
+- `scryptSync` is synchronous and blocks the event loop. Verification cost grows with the number of hashes computed per attempt.
+- Nothing here verifies a code. Callers must hash the typed code with the account's salt and compare it against the stored digests themselves.

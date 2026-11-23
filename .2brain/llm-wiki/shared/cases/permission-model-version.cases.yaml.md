@@ -1,35 +1,31 @@
 ---
 source: shared/cases/permission-model-version.cases.yaml
-sha256: cf3a911e437ae52203c5770a6760d93fcf6aed9d612bfa1c7524b2dde25273f2
-generated_at: 2026-11-08T03:05:54.085808+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cf3a911e437ae52203c5770a6760d93fcf6aed9d612bfa1c7524b2dde25273f2
+context_sha256: ef1bf1698bf4a1ea79816a060f34fead9b1e78ea57bd5c822f7c218473544425
+generated_at: 2026-11-22T02:21:59.490070+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/cases/permission-model-version.cases.yaml
 
 ## Purpose
-
-Golden test cases that pin down the exact algorithm clients use to compute a **permission-model version** from a set of rule IDs. The version is the first 4 bytes of `sha256(sorted_ids_joined_by_newline)` read as a big-endian unsigned 32-bit integer, allowing clients to cache and validate their rule set without re-fetching.
+Shared test-case fixtures for computing a "permission-model version": the number a client uses to key its cached permission rules. The version is the first 4 bytes of `sha256(sorted rule ids joined by "\n")`, read as a big-endian unsigned integer. Because the cases are language-neutral data, multiple implementations ("twins") can be checked against the same expected values.
 
 ## Key elements
-
-- **`cases`** — list of named test vectors, each with:
-  - `name` — human-readable description of the scenario.
-  - `ids` — the input rule-ID list (order intentionally varies across cases).
-  - `version` — the expected 32-bit unsigned integer output.
-- **Algorithm contract (stated in the top comment):**
-  1. Sort IDs by UTF-16 code-unit order (JavaScript default; all IDs are BMP).
-  2. Join with `"\n"`.
-  3. SHA-256 the resulting UTF-8 string.
-  4. Take bytes 0–3 as a big-endian unsigned integer.
+- `cases` — a list of entries, each with:
+  - `name` — description of what the case checks.
+  - `ids` — list of rule id strings (for example `'read:Product'`).
+  - `version` — the expected unsigned 32-bit result.
+- Covered scenarios:
+  - Three ids producing `4161510200`.
+  - The same set in a different order producing the same `4161510200` (order independence).
+  - An empty set producing `3820012610` (hash of the empty string).
+  - A single id `['a']` producing `3398926610` (no separator is added).
+  - A non-ASCII id set `['ä', 'z', 'a']` producing `4167311475` (sorts after ASCII, hashed as UTF-8).
 
 ## Relationships
-
-- **`shared/authorization-keys.yaml`** — defines the authorization key strings (e.g. `read:Product`, `update:User`) that appear as `ids` in these cases. The key file is the vocabulary; this file is the hashing contract applied to any subset of that vocabulary.
+- `shared/authorization-keys.generated.yaml` is the only graph neighbor. Rule ids such as `read:Product` and `update:Product` look like the kind of keys it would hold, but the file content here does not show any direct reference or import between the two.
 
 ## Notes
-
-- **Order-independence is the point:** cases 1 and 2 use the same set in different orders and must yield the same `version`. If a client's sort diverges from UTF-16 code-unit order, it will produce a mismatch.
-- **Empty-set case** (`ids: []`) hashes the *empty string*, not the string `"\n"`. A single ID also has no separator.
-- **Non-ASCII IDs** (case 5, `ä`) are sorted *after* ASCII and hashed as UTF-8. The comment flags that a "twin" implementation (e.g. a Rust or Python service) may sort by byte order instead of code units; for pure-BMP strings the two agree, but this case guards the boundary.
-- The file is **declarative data only** — no executable code lives here. Any implementation that computes the version must reproduce every `version` value from the corresponding `ids`.
+- Sorting is by UTF-16 code unit (JavaScript's default). All ids in these cases are BMP text, where that order equals byte order. A twin may therefore sort by either, and the cases won't tell the two apart.
+- The `ä` case is the only one that exercises non-ASCII handling. Implementations must hash the joined string as UTF-8.

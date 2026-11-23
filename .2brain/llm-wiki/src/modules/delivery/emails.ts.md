@@ -1,44 +1,46 @@
 ---
 source: src/modules/delivery/emails.ts
-sha256: 38b56c44a163c1f2f8966e206557bda92045151e842518e515c7a2d2c240965e
-generated_at: 2026-11-08T05:30:05.377914+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d96785dc16f002bb23c2ae41c882d29a309052b2376a87fd28cdac754be24ed0
+context_sha256: 7d3e4b78921df889d7f29102224089da80639b3e192ec5fb7a00751713e65108
+generated_at: 2026-11-22T04:49:32.244407+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/emails.ts
 
 ## Purpose
-Builds the finished, fully-resolved email copy for all delivery lifecycle notifications (shipped, delivered, lost, hold-notice, fulfillment-delayed). The language is an input argument; the output is final text that the mailer adapter renders without further resolution — the same contract as `@modules/account/emails`.
+Builds the finished, localized content of the emails the delivery module sends. Each function takes a locale as an argument and returns an `EmailContent` whose strings are already translated, so whatever renders the template later resolves no translations. It follows the same rule as `@modules/account/emails`.
 
 ## Key elements
-
-- **`EmailLine`** — `{ title, quantity }`; one line of a shipment as the email lists it.
-- **`TrackingVariant`** — `'added' | 'corrected'`; selects a distinct subject/body when a tracking code arrives after the shipment already left.
-- **`ShippedEmailInput` / `DeliveredEmailInput` / `LostEmailInput` / `HoldNoticeEmailInput` / `FulfillmentDelayedEmailInput`** — input shapes each email function expects.
-- **`longDate(locale, date)`** (private) — formats a date long-style in the **shop's timezone** via `Intl.DateTimeFormat`.
-- **`lineTexts(t, lines)`** (private) — maps each `EmailLine` to a translated `"2 × Title"` string.
-- **`shipmentShippedEmail(locale, name, input)`** — "on its way" email; tracking line is `undefined` when absent (the template guards with `typeof`), `more` line only when `remainingUnits > 0`.
-- **`shipmentDeliveredEmail(locale, name, input)`** — "arrived" email; `withdraw` deadline rendered in **UTC** (CRD Art. 9(2)(b)(i) calendar day) rather than shop timezone.
-- **`shipmentLostEmail(locale, name, input)`** — lost/damaged email; reason-specific subject & body; `message` coalesced to `''` to survive JSON queue serialization.
-- **`holdNoticeEmail(locale, name, input)`** — hold-notice email (`check_address` or `delayed`); buyer-facing only, never leaks staff rationale.
-- **`fulfillmentDelayedEmail(locale, name, input)`** — late-fulfillment email; internally maps `reason` + `expectedAt` to one of three template variants: `moved`, `passed`, `cleared`.
+- **`shipmentShippedEmail(locale, name, input)`**: the "on its way" email, template `delivery.shipment-shipped`.
+  - It lists the shipment's lines.
+  - It adds a tracking line only when `trackingCode` is set.
+  - It adds a "more to follow" line only when `remainingUnits > 0`.
+  - An optional `variant` (`'added'` | `'corrected'`) selects a different subject and body for a resend after a tracking-code change.
+- **`shipmentDeliveredEmail(locale, name, input)`**: the "arrived" email, template `delivery.shipment-delivered`. When `withdrawUntil` is present, it adds a withdrawal deadline. That date is formatted in UTC because the deadline is a UTC calendar day.
+- **`shipmentLostEmail(locale, name, input)`**: the lost or damaged parcel email, template `delivery.shipment-lost`.
+  - Subject and body are chosen by `reason`.
+  - It lists the parcel's lines, any `owed` lines with the `expectedAt` date, and staff's optional message.
+  - It includes an order-page link.
+  - Staff's internal notes are never included.
+- **`holdNoticeEmail(locale, name, input)`**: template `delivery.hold-notice`. The text is chosen by `notice` (`check_address` or `delayed`). It also carries staff's optional message and an order link. It does not say why staff held the order.
+- **`fulfillmentDelayedEmail(locale, name, input)`**: template `delivery.fulfillment-delayed`, for a waiting fulfillment order.
+  - The wording variant is `passed` when `reason` is `'due'`, otherwise `moved` if `expectedAt` is set, otherwise `cleared`.
+  - The rest of this function is cut off in the provided source.
+- **Input types**: `EmailLine`, `TrackingVariant`, `ShippedEmailInput`, `DeliveredEmailInput`, `LostEmailInput`, `FulfillmentDelayedEmailInput` and `HoldNoticeEmailInput`.
+- **Private helpers**:
+  - `longDate` formats a long date in the buyer's locale on the shop's timezone.
+  - `lineTexts` renders lines as text via the `delivery.email-line` key.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/mailer.ts`** — imports the `EmailContent` type that every function returns.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — imports `translator` to produce per-locale `t()` calls.
-- **`src/modules/shop/index.ts`** — imports `shopTimezone()` for `longDate`.
-- **`src/types/index.ts`** — imports `FulfillmentHeldParamsNotice` and `ShipmentLostReason` enums.
-- **`src/modules/delivery/services/notify.ts`** — the caller that constructs the input objects and passes them to these functions.
-- **`src/modules/delivery/index.ts`** — re-exports the public email functions for external consumers.
-- **`src/modules/delivery/tests/unit/emails.test.ts`** — unit tests for the shipped/delivered/lost/hold-notice builders.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — tests the fulfillment-delayed email.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — verifies the templates that consume the `data` payloads produced here.
+- `@infrastructure/adapters/mailer` (`src/infrastructure/adapters/mailer.ts`): supplies the `EmailContent` type that every function returns. The `template` names and `data` keys must match the mailer's templates. `tests/unit/infrastructure/adapters/mailer-templates.test.ts` is related.
+- `@infrastructure/i18n` (`src/infrastructure/i18n/index.ts`): supplies `translator(locale)`, used for all copy.
+- `@modules/shop` (`src/modules/shop/index.ts`): supplies `shopTimezone()`, used by `longDate`.
+- `@types` (`src/types/index.ts`): supplies `FulfillmentHeldParamsNotice` and `ShipmentLostReason`.
+- `src/modules/delivery/tests/unit/emails.test.ts` tests this file.
 
 ## Notes
-
-- **JSON-queue gotcha:** Any `undefined` value in the `data` object is silently dropped when the job crosses a JSON queue. Fields the template reads unconditionally (e.g. `message`) are coalesced to `''` rather than left `undefined`.
-- **Two timezone conventions coexist:** general dates use the shop's timezone; the withdrawal deadline (`withdrawUntil`) is intentionally formatted in UTC because it represents a calendar-day boundary defined by CRD, and a local render could shift it to the previous evening.
-- **Tracking `undefined` is intentional:** the template uses a `typeof tracking !== "undefined"` guard (not a truthiness check), so omitting the key and passing `undefined` behave identically — same convention as `payments`' optional fields.
-- **Fulfillment-delayed variant mapping is non-obvious:** `reason === 'due'` always maps to template variant `passed`; `reason === 'moved'` maps to `moved` *or* `cleared` depending on whether `expectedAt` is present.
-- **Staff messages are buyer-facing only:** `shipmentLostEmail` and `holdNoticeEmail` explicitly exclude internal staff notes; only the `message` field (written for the buyer) is included.
+- `message` is always a string (`''` when absent) in the lost and hold-notice emails. The job crosses a queue as JSON, which drops `undefined` keys, and the template reads `message` unconditionally. A missing key would cause a ReferenceError.
+- `tracking` and `more` in the shipped email are left `undefined` when they do not apply. The template guards them with `typeof ... !== "undefined"`.
+- Dates use two timezone conventions. Shop-calendar dates (`longDate`) use the shop's timezone. The withdrawal deadline uses UTC.
+- Translation keys for the shipped, lost, hold-notice and delayed emails are built dynamically from the variant, reason or notice (for example `delivery.email-lost.${reason}.subject`). A new reason or notice therefore needs matching locale keys.

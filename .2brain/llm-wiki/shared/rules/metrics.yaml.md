@@ -1,35 +1,33 @@
 ---
 source: shared/rules/metrics.yaml
-sha256: 682d2d4412a03aa78c317aa7a52defa52b4f0c12983873ac478b7f22c058925a
-generated_at: 2026-11-14T17:46:17.192822+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:26:32.600466+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/metrics.yaml
 
 ## Purpose
-
-Single source of truth for every **infrastructure-level** metric name, kind, help text, labels, and (for histograms) buckets. It is data, not code: `npm run regenerate` compiles it into `src/infrastructure/observability/metrics.generated.ts`, and dashboards/alerts are written against the names declared here. Module-specific metrics deliberately stay in their own `metrics.ts`.
+Declarative catalogue of every infrastructure Prometheus-style metric: name, kind, help text, label names and (for histograms) buckets. Dashboards and alert rules are written against these names, so they live as data that a twin can copy. Recording, `collect()` hooks and the registry remain code, and a module's own metrics stay in its `metrics.ts`.
 
 ## Key elements
-
-- **`metrics` map** — one entry per metric, keyed by the camelCase constant the TypeScript code uses.
-- **Entry fields**
-  - `name` — Prometheus metric name (snake_case; counters end in `_total`).
-  - `kind` — `counter`, `gauge`, or `histogram`.
-  - `help` — human-readable description used in the generated registry.
-  - `labelNames` — (optional) label dimensions.
-  - `buckets` — (histogram only) upper-bound boundaries in the unit stated in the name (ms for `http_request_duration_milliseconds`, s for `db_client_operation_duration_seconds`).
-- **Coverage** — HTTP (requests, duration, errors, in-flight), database (duration, timeouts), cache (requests, invalidation failures), outbox (published, retried, dead, pending), security (events, stale credentials), rate-limiting (fallback, refusals), queue (dead-lettered), process (uptime, heap limit, unhandled rejections), and crontab jobs (last success, last run).
+- Top-level `metrics:` map, keyed by the camelCase name of the constant the code uses. Each entry has `name`, `kind`, `help`, and optionally `labelNames` and `buckets`.
+- **HTTP**: `httpRequestsTotal`, `httpRequestDuration` (histogram, ms buckets 5–5000), `httpRequestErrorsTotal`, `httpInflightRequests` (gauge).
+- **Database**: `queryTimeoutsTotal` (MaxTimeMSExpired, answered 503), `databaseOperationDuration` (histogram in seconds, labelled by collection/operation/outcome).
+- **Cache**: `cacheInvalidationFailuresTotal` (label `tag`), `cacheRequestsTotal` (label `result`: hit, miss, stale, refresh).
+- **Outbox**: `outboxEventsPublishedTotal`, `outboxEventsRetriedTotal`, `outboxEventsDeadTotal`, `outboxPendingEvents` (gauge).
+- **Auth/security**: `securityEventsTotal` (label `event`), `staleCredentialsTotal` (labels `kind`, `reason`).
+- **Queues**: `queueJobsDeadLetteredTotal` (label `queue`), `queueHeldJobs` and `queueHeldJobsOldestAgeSeconds` (gauges, label `channel`).
+- **Rate limits**: `rateLimitStoreFallbackTotal` (label `namespace`), `rateLimitRefusalsTotal` (label `budget`, 429s).
+- **Process/runtime**: `processUnhandledRejectionsTotal`, `processUptimeSeconds`, `nodejsHeapSizeLimitBytes`.
+- **Cron jobs**: `jobLastSuccessTimestampSeconds`, `jobLastRunTimestampSeconds` (gauges, label `task`).
 
 ## Relationships
-
-- **`shared/rules/jobs.yaml`** — defines the crontab jobs whose identity appears as the `task` label on `jobLastSuccessTimestampSeconds` / `jobLastRunTimestampSeconds`. Changing a job name in `jobs.yaml` requires the matching label value to remain consistent here.
-- **`shared/rules/outbox.yaml`** — configures the outbox pipeline that drives the four `outbox_*` metrics (published, retried, dead, pending). The metric names and labels are stable references used by dashboards regardless of outbox tuning.
+- `shared/rules/outbox.yaml`: the `outbox_*` metrics here (published, retried, dead, pending) describe the outbox's dispatch lifecycle: published, rescheduled with backoff, parked as dead after exhausting attempts.
+- `shared/rules/rate-limits.yaml`: `rate_limit_refusals_total` is labelled by `budget` and `rate_limit_store_fallback_total` covers operations served without the limits Redis. These correspond to the rate-limit budgets and store defined there.
 
 ## Notes
-
-- **Not read at boot.** The file is a build-time input; the generated TS is what ships. Editing this file has no effect until `npm run regenerate` is run.
-- **Label-name collision guard.** `jobLastSuccessTimestampSeconds` and `jobLastRunTimestampSeconds` use `task` (not `job`) as their label because Prometheus scraping adds its own `job="api"` label; a clash would be silently renamed to `exported_job`, breaking any rule that filters on `job`.
-- **Counter naming convention.** Every counter's Prometheus name ends in `_total`; the camelCase key does not (e.g. key `httpRequestsTotal` → name `http_requests_total`).
-- **Buckets belong only to histograms.** Counters and gauges have no `buckets` field.
+- This file is not read at boot. `npm run regenerate` writes `src/infrastructure/observability/metrics.generated.ts` from it, so edit this file and regenerate rather than editing the generated TypeScript.
+- Counter names end in `_total`. Only histograms have `buckets`, in the unit the metric name states (ms vs seconds).
+- Cron job metrics use the label `task` rather than `job`. The scrape adds its own `job="api"`, and a clashing label would be renamed `exported_job`, which no rule would match.
+- `queueHeldJobsOldestAgeSeconds` is absent when no job is held.
+- Renaming a `name:` breaks dashboards and alert rules written against it.

@@ -1,33 +1,29 @@
 ---
 source: src/modules/addresses/presenter.ts
-sha256: 65cf3d82d6e1f0c6104ffdf13037ae082352c3758839061f9e361257a953886b
-generated_at: 2026-11-08T04:55:50.276071+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 65cf3d82d6e1f0c6104ffdf13037ae082352c3758839061f9e361257a953886b
+context_sha256: 4db1fab498ebbbbb3d9c072763060b0131f665f055950d38a1becc7ce4d71780
+generated_at: 2026-11-22T04:14:49.471810+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/presenter.ts
 
 ## Purpose
-
-Single mapping layer that converts the internal `AddressBookDocument` shape into the wire shape declared in `openapi.yaml`. Every endpoint in `./service.ts` serialises its response through one of the functions exported here, keeping the "stored → wire" translation in exactly one place.
+Converts address-book documents (the stored Mongo-style shape) into the wire shape declared by `openapi.yaml`. It is the single place where this mapping happens, so every endpoint that answers with an address book uses the same view.
 
 ## Key elements
-
-- **`AddressesView`** (interface) — the top-level response object (`{ addresses: Address[] }`) that matches the `AddressesResponse` schema in `openapi.yaml`.
-- **`presentAddress(item: AddressItem): Address`** — maps a single stored entry to the contract's `Address` type; renames `_id` → `id` and omits `label`/`phone` when undefined (conditional spread) so the JSON payload contains no `null`/`undefined` fields.
-- **`presentAddressOf(book, addressId): Address | undefined`** — looks up one entry by id in a (possibly null) book and returns its wire form, or `undefined` when no entry matches. Used for write-endpoint responses that reference a single address.
-- **`presentAddresses(book): AddressesView`** — maps an entire book (or `null`) to `{ addresses: [] }` when the book is absent or empty, otherwise to the full list. Used by list/read endpoints.
+- `AddressesView` — interface matching the contract's `AddressesResponse`: `{ addresses: Address[] }`.
+- `presentAddress(item)` — maps one stored `AddressItem` to the contract's `Address`. `_id` becomes a string `id`. Optional fields `label` and `phone` are omitted entirely when `undefined`, not emitted as `undefined`.
+- `presentAddressOf(book, addressId)` — finds one entry in a book by string id and presents it. Returns `undefined` if the book is `null` or has no matching entry. Meant for answering about the address just written.
+- `presentAddresses(book)` — maps a whole book to an `AddressesView`. A `null` book and an empty book both yield `{ addresses: [] }`.
 
 ## Relationships
-
-- **`./model.ts`** — supplies the internal types `AddressBookDocument` and `AddressItem` that the presenters consume.
-- **`../types/index.ts`** — supplies the wire type `Address` that `presentAddress` produces.
-- **`./service.ts`** — imports the three `present*` functions to build every HTTP response in the addresses module.
-- **`./index.ts`** — barrel file; re-exports this module's public API for the rest of the codebase.
+- `src/modules/addresses/model.ts` — supplies the `AddressBookDocument` and `AddressItem` types (type-only import) that the presenter reads from.
+- `src/types/index.ts` (`@types`) — supplies the `Address` type, which is the presenter's output shape.
+- `src/modules/addresses/service.ts` — the module header names it as the consumer: its endpoints answer with this same view (the whole book, never one entry).
+- `src/modules/addresses/index.ts` — no direct interaction is visible in this file.
 
 ## Notes
-
-- Optional fields (`label`, `phone`) are **omitted** from the object when `undefined`, not set to `undefined`/`null`. This is deliberate so the JSON matches the OpenAPI schema's optional-property semantics.
-- `_id` is a Mongo `ObjectId`; it is always cast via `String()` before assignment to the wire `id` field.
-- `presentAddresses` treats a `null` book and an empty book identically (`{ addresses: [] }`). `presentAddressOf`, by contrast, returns `undefined` for a missing entry — the caller (service layer) is responsible for turning that into a 404.
-- The header comment stresses that the whole book, never a single entry, is the default response shape for read endpoints; single-entry responses are an exception used after writes.
+- Functions accept `AddressBookDocument | null`, so callers can pass a missing book without a separate check.
+- Ids are compared as strings (`String(entry._id) === addressId`).
+- `presentAddressOf` returns a single entry, while the module header says service endpoints answer with the whole book.

@@ -1,39 +1,36 @@
 ---
 source: src/infrastructure/config/store.ts
-sha256: 3c271da4dea2de2b654d4450e9a69e67679952f1b89d66937095fb2337ecd8b0
-generated_at: 2026-11-08T03:28:12.928420+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d62104e72ebf6a06005afc8195f012b2dedc360a28b938e4ab03f5f0e4bfc973
+context_sha256: e596008eb4e729b18b473b064224d054072b09d45b2b6fcd27d560dda04d076d
+generated_at: 2026-11-22T02:46:59.756219+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/config/store.ts
 
 ## Purpose
-
-Single choke-point for reading and overriding the process environment. On first access it freezes a snapshot of `process.env`, then layers caller-supplied overrides on top (and resolves `NODE_X_FILE` secret files). A version counter lets config slices cache their parsed values and know when to re-derive. State is pinned to `globalThis` via `Symbol.for` so a `jest.resetModules()` re-import still finds the same object.
+The single place the process environment is read and the single place it can be overridden. It freezes a snapshot of `process.env` on first read, layers overrides on top, resolves `NODE_X_FILE` secret-file variables, and caches the merged result. Config slices read from here rather than touching `process.env` directly.
 
 ## Key elements
-
-- **`Environment` / `EnvironmentOverrides`** – readonly record types; `undefined` value in overrides means "unset this variable."
-- **`currentEnvironment()`** – returns the effective env (snapshot → overrides → `resolveSecretFiles`). Memoized until the version changes.
-- **`environmentVersion()`** – the monotonically-increasing counter; slices compare it to detect staleness.
-- **`refreshEnvironment()`** – discards the snapshot so the next `currentEnvironment()` re-reads `process.env` (used after `.env` loading).
-- **`overrideEnvironment(entries)`** – applies a temporary override layer; returns an undo closure that restores the prior per-name state (distinguishing "no override" from "overridden to unset").
-- **`installEnvironment(entries)`** – alias for `overrideEnvironment` with no undo; the `createApp({ env })` entry point.
-- **`markEnvironmentOverrides()` / `resetEnvironmentOverrides()`** – save/restore pair for test harnesses; reset refills the existing `Map` in place so previously-issued undo closures remain valid.
+- `Environment` / `EnvironmentOverrides` — readonly name→value record types; in overrides, `undefined` means "unset this variable".
+- `currentEnvironment()` — returns the effective environment (snapshot + overrides, then `resolveSecretFiles`), frozen. The same object is returned until the version changes.
+- `environmentVersion()` — a counter that changes whenever the environment's values could differ; slices use it to know their parsed copy is stale.
+- `refreshEnvironment()` — discards the snapshot so the next read re-copies `process.env`, and bumps the version. Meant for loading `.env` after startup.
+- `overrideEnvironment(entries)` — sets overrides and returns an undo function that restores each named variable's prior override state.
+- `installEnvironment(entries)` — same as `overrideEnvironment` but discards the undo; used for `createApp({ env })`.
+- `markEnvironmentOverrides()` — records the current overrides as the reset target.
+- `resetEnvironmentOverrides()` — restores overrides to the last mark (or empty if none was set) and bumps the version.
 
 ## Relationships
-
-- **`./secret-files.ts`** – imported directly; `resolveSecretFiles` is called inside `currentEnvironment()` after the override merge.
-- **`src/infrastructure/config/define.ts`** – config slices created here call `currentEnvironment()` / `environmentVersion()` to obtain and cache values.
-- **`src/infrastructure/config/dotenv.ts`** – after loading a `.env` file, calls `refreshEnvironment()` to force a new snapshot.
-- **`src/app.ts`** – calls `installEnvironment()` with the `env` option passed to `createApp`.
-- **`scenarios/support/development-doubles.ts`**, **`doubles/webhook-sink.ts`**, **`no-human-challenge.ts`** – test/development doubles that use `overrideEnvironment` / `markEnvironmentOverrides` / `resetEnvironmentOverrides` to inject fake credentials or disable features per scenario.
-- **`src/modules/account/session/config.ts`**, **`post-oauth-link-start.ts`** – downstream consumers that read their settings through a slice, which in turn reads from this store.
+- Imports `resolveSecretFiles` from `secret-files.ts`, which turns `NODE_X_FILE` into `NODE_X` when the merged environment is built.
+- The header names `defineConfig` slices (`define.ts`) as consumers: slices call `currentEnvironment()` and use `environmentVersion()` to invalidate parsed copies.
+- Per the header, `createApp({ env })` (`src/app.ts`) installs overrides via `installEnvironment`, and test helpers use the override/mark/reset functions.
+- `dotenv.ts` is the `.env` loading path that `refreshEnvironment` exists for.
 
 ## Notes
-
-- **Immutability:** both `snapshot` and the returned `merged` are `Object.freeze`-d. Mutating the returned object throws in strict mode.
-- **`undefined` semantics:** in `EnvironmentOverrides`, a key mapped to `undefined` *removes* the variable from the effective env; a key simply absent means "leave the snapshot value alone." The undo closure preserves this distinction.
-- **In-place reset:** `resetEnvironmentOverrides` clears and refills the *same* `Map` instance rather than replacing it, so any undo function handed out by an earlier `overrideEnvironment` call still mutates the live map.
-- **No write-back:** resolved secret-file values never touch `process.env`; they exist only in the in-memory `merged` object.
-- **Snapshot is truly one-shot:** once taken, later changes to `process.env` are invisible until an explicit `refreshEnvironment()` call.
+- State lives on `globalThis` under `Symbol.for('boilerplate-node-backend.config.store')`, so a `jest.resetModules()` re-import still sees the same store.
+- The snapshot is taken at the first read. Later changes to `process.env` are not seen unless `refreshEnvironment()` is called.
+- Resolved secret-file values are never written back to `process.env`. They are resolved after overrides, so an override can name a secret file.
+- Overrides are tracked per name, so "no override" and "overridden to `undefined`" are different states. Undo functions restore that distinction.
+- `resetEnvironmentOverrides` refills the existing `overrides` Map in place, because undo functions handed out earlier hold that Map.
+- `installEnvironment` has no way back.

@@ -1,40 +1,34 @@
 ---
 source: src/infrastructure/adapters/remote-image.ts
-sha256: e1cf1ce1e906a88106947c2e746b4fe531fa93b70205c1864362dbf59adb6720
-generated_at: 2026-11-08T03:23:25.526467+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4f093991d476c77a6b544fadc08d74797c92bd06fbb22ebef0543274be92852d
+context_sha256: baa38ab9cc0090fcfeea77be1c77eef353f6adbc38eb3cc2b77775fcdee785f5
+generated_at: 2026-11-22T02:42:08.820380+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/remote-image.ts
 
 ## Purpose
-
-Downloads a remote avatar URL, pushes the bytes through the same quarantine-and-digest pipeline an inline upload uses, and returns the two local image/thumbnail URLs for persistence. This exists so a viewer's IP is never sent to a third-party host on every page render — the image is fetched once at signup and served from local storage thereafter.
+Re-hosts a remote picture (e.g. a provider-supplied avatar): downloads it once, runs it through the same quarantine and digest pipeline an upload uses, and returns the two local URLs to persist. No third-party URL is stored, so viewers' IPs are never sent to another host. It is best-effort: any failure resolves to `undefined` so a missing avatar never fails the signup that requested it.
 
 ## Key elements
-
-- **`rehostRemoteImage(remoteUrl)`** *(exported)* — The public entry point. Accepts a URL or `undefined`; resolves to `DigestedImageUrls` on success or `undefined` on any failure. Never rejects.
-- **`download(rawUrl)`** *(internal)* — Performs a single GET via `pinnedHttpsRequest` with a 5-second `AbortSignal.timeout`. Rejects on non-200 or on body exceeding 5 MiB.
-- **`digestBytes(bytes)`** *(internal)* — Writes the buffer to a UUID-named file under the upload staging dir, calls `imageStore.quarantine`, then `digestQuarantinedImage`. Cleans up the staged file on error; always removes the quarantine entry in a `.finally`.
-- **`DOWNLOAD_TIMEOUT_MS`** — 5 000 ms budget covering DNS, TLS, and body read.
-- **`MAX_DOWNLOAD_BYTES`** — 5 MiB, matching the inline-upload default.
+- `rehostRemoteImage(remoteUrl)` — the only export. Returns `Promise<DigestedImageUrls | undefined>`. Resolves `undefined` immediately for an empty or undefined URL. Otherwise it downloads, digests, and on any error logs a warning via `logger.warn` and resolves `undefined`.
+- `download(rawUrl)` (internal) — GETs through `pinnedHttpsRequest` with a single 5 s `AbortSignal.timeout` covering resolve, connect and download. Any status other than 200 throws, and the response is drained with `response.resume()`. The body is read with `readCappedBytes`, capped at 5 MiB.
+- `digestBytes(bytes)` (internal) — writes the bytes to a UUID-named `.img` file under `uploadStagingPath()` (creating the directory if needed) and quarantines it with `imageStore.quarantine`. It then calls `digestQuarantinedImage(key, ownerSalt)`, where the salt is the quarantine key's basename without its extension. The quarantined file is always removed afterwards with `imageStore.removeQuarantined`. If any step fails, the staged file is deleted with `deleteFile` and the error is rethrown.
+- `DOWNLOAD_TIMEOUT_MS`, `MAX_DOWNLOAD_BYTES` — module constants (5000 ms, 5 MiB). The size cap matches an upload's default.
 
 ## Relationships
-
-- **`pinned-https.ts`** — `download` delegates the actual HTTP GET to `pinnedHttpsRequest` (HTTPS-only, DNS-pinned, no redirect follow).
-- **`read-capped-body.ts`** — `download` streams the response through `readCappedBytes` to enforce the size cap.
-- **`upload.ts`** — `digestBytes` calls `uploadStagingPath()` to reuse the same staging directory the upload middleware uses.
-- **`image-store.ts`** — `digestBytes` calls `imageStore.quarantine` / `imageStore.removeQuarantined` for the same isolation flow as user uploads.
-- **`image.worker.ts`** — `digestBytes` invokes `digestQuarantinedImage` to produce the final `DigestedImageUrls`.
-- **`filesystem.ts`** — `digestBytes` calls `deleteFile` to remove the staged file if the pipeline throws.
-- **`logger.ts`** — `rehostRemoteImage` logs a `warn` (with the error) before returning `undefined`.
-- **`modules/account/services/oauth.ts`** — Primary caller; passes the provider-supplied avatar URL during account linking.
-- **`modules/account/tests/integration/oauth-link.test.ts`** — Exercises the full rehost path in an integration test.
-- **`tests/unit/infrastructure/adapters/remote-image.test.ts`** — Unit tests for the download, digest, and error-resolution behavior.
+- `src/infrastructure/adapters/pinned-https.ts` — supplies `pinnedHttpsRequest`: https only, DNS pinned to the validated address, no redirects followed.
+- `src/infrastructure/http/read-capped-body.ts` — supplies `readCappedBytes` to enforce the byte cap.
+- `src/infrastructure/http/middlewares/upload.ts` — supplies `uploadStagingPath()`, so downloads are staged in the same directory as uploads.
+- `src/infrastructure/adapters/image-store.ts` — supplies `imageStore`, whose `quarantine` and `removeQuarantined` methods handle the quarantine lifecycle.
+- `src/infrastructure/adapters/image.worker.ts` — supplies `digestQuarantinedImage` and the `DigestedImageUrls` type, which is the return shape.
+- `src/infrastructure/adapters/filesystem.ts` — `deleteFile` cleans up the staged file on failure.
+- `src/infrastructure/adapters/logger.ts` — warns on a failed re-host.
+- `src/modules/account/services/oauth.ts` and `src/modules/account/tests/integration/oauth-link.test.ts` — the signup/OAuth flow and its integration test are graph neighbors; the file's docs describe the caller as a signup that asks for an avatar.
+- `tests/unit/infrastructure/adapters/remote-image.test.ts` — the unit test for this module.
 
 ## Notes
-
-- **Best-effort contract:** The function never throws. Every error path (network, non-200, oversized body, digest failure) resolves to `undefined`, so a missing avatar can never break signup.
-- **No redirects:** A 3xx response is treated as a hard failure. The code does not follow `Location` headers, preventing an untrusted URL from redirecting to an arbitrary host.
-- **Salt derivation:** The owner salt passed to `digestQuarantinedImage` is `path.basename(key, path.extname(key))` — the quarantine key with its extension stripped — matching the convention used by the inline upload path.
-- **Staging cleanup is best-effort:** On a pipeline error the staged file is deleted, but if the process crashes between `writeFile` and the `.catch`, an orphan file may remain in the staging dir.
+- Failures are swallowed on purpose. Callers cannot tell "no URL" from "fetch failed" and only see a warning in the logs.
+- A 3xx response is treated as a failure, not followed.
+- The staged file is only deleted in the error path. On success, cleanup is done by `removeQuarantined`.

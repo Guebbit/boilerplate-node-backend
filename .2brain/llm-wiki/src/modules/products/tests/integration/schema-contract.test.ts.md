@@ -1,31 +1,27 @@
 ---
 source: src/modules/products/tests/integration/schema-contract.test.ts
-sha256: 4e7bc9de37f845a58acac7750a0a5e7d948bdc68ec459c93416c1d0da7f48878
-generated_at: 2026-11-08T07:52:38.426241+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6445bf4853022896a0b5153ce646b15a4bf4baa4a8ca94b4460ee63351cdba16
+context_sha256: 0f6167f61d5fc83bb2853235ddd84cd224c7ac8a5f10f3d817310c7ed2496fca
+generated_at: 2026-11-22T07:17:46.853727+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/integration/schema-contract.test.ts
 
 ## Purpose
-
-Verifies Mongoose schema-level declarations (defaults, `required`, `select: false`, serialization shape) for the Product model by running against a real MongoDB instance. It exists separately from the sibling transform tests because a mocked model would assert the mock's interpretation of `default`/`required` rather than Mongoose's actual behaviour.
+Integration test that checks the product Mongoose schema's declarations (defaults, `required`, `select: false`) against a real MongoDB. It deliberately avoids mocks: these are Mongoose behaviours, and a mocked model would only assert the mock's own interpretation. It is distinct from the sibling specs in the folder, which cover transforms.
 
 ## Key elements
-
-- **`setupTestDb()`** — Spins up a real in-memory or temporary Mongo instance for the test run.
-- **`describe('product schema')`** — Top-level suite; two assertions:
-  - *accepts a price of zero* — Confirms `required` on a `Number` field rejects `undefined` but permits `0`. Creates a product via `productRepository.create` with `price: '0.00'` and asserts the round-tripped value.
-  - *serialises to `id`, never `_id` or `__v`* — Creates a product via the factory, calls `product.toJSON()`, and asserts the serialised object exposes `id` while omitting `_id` and `__v`.
+- `setupTestDb()`: called at module level to prepare the test database for the suite.
+- `describe('product schema')`, with two tests:
+  - **accepts a price of zero**: creates a product through `productRepository.create({ title: 'Free', price: '0.00' })` and expects `price` to be `'0.00'`. It guards against a truthiness-based check wrongly rejecting a free product, since `required` on a Number rejects `undefined` and not `0`.
+  - **serialises to id, never _id or __v**: builds a product with `createProduct({ title: 'Serialised' })` and calls `toJSON()`. It expects `id` to equal `String(product._id)` and expects `_id` and `__v` to be absent.
 
 ## Relationships
-
-- **`src/modules/products/repository.ts`** — Imports `productRepository`; the zero-price test calls `productRepository.create` directly to exercise the schema through the repository layer.
-- **`src/modules/products/tests/factories.ts`** — Imports `createProduct`; used by the serialization test to obtain a fully-populated product document.
-- **`tests/support/setup-test-db.ts`** — Imports `setupTestDb`; provides the real MongoDB connection the suite depends on.
+- `src/modules/products/repository.ts`: supplies `productRepository`, whose `create` is exercised directly in the price-zero test.
+- `src/modules/products/tests/factories.ts`: supplies `createProduct`, which builds the persisted product for the serialisation test.
+- `tests/support/setup-test-db.ts`: supplies `setupTestDb`, imported via the `@tests/setup-test-db` alias.
 
 ## Notes
-
-- This file tests **Mongoose's own semantics**, not application logic. That is why it requires a real database and cannot be unit-tested with a mock model.
-- Price is stored as a **string** (`'0.00'`), not a numeric type. The zero-price test exists specifically to guard against a future truthiness-based guard (`if (!price)`) that would incorrectly reject free products.
-- Serialization shape (`id` present, `_id`/`__v` absent) is asserted on the `toJSON()` output — the shape clients actually receive — not on the raw Mongoose document.
+- Imports mix styles: a relative path for the repository (`../../repository`) and `@modules/...` and `@tests/...` aliases for the factory and DB setup.
+- The price is passed as the string `'0.00'` and read back as the string `'0.00'`.

@@ -1,37 +1,31 @@
 ---
 source: src/modules/inventory/services/top-up.ts
-sha256: a59750fe4e629fddaebb6fa9fc30e331dd4a07d0f420e6fde84ae84e1197f2f9
-generated_at: 2026-11-08T06:03:53.601847+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3c5e6994c08031f28066b44f0e1ea5b515f70cfe664668412c545f20acadfeef
+context_sha256: d01dff566a037bbddd261bc307f4ffbba8caa69ff8da0b05fc2f4803dba21737
+generated_at: 2026-11-22T05:23:58.551468+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/services/top-up.ts
 
 ## Purpose
-
-Re-reserves inventory for an order whose parcel was reported lost. Because the original units already left the shelf at shipment, this module splits each line into a **shelf** portion (drawn from currently available stock) and an **owed** portion (claimed as a backorder outside the new-sale cap), then records both on the order's hold. It exists to honour a promise the shop already made without double-counting units held for other orders.
+Sets units aside again for an order whose parcel was lost. Units already left the shelf when the parcel shipped, so this reserves whatever the shelf currently has free and records the remainder as "owed", a claim on the restock that sits outside the preorder/backorder cap. It never touches units held for other orders.
 
 ## Key elements
-
-- **`reserveMoreForOrder`** *(exported)* — Main entry point. Iterates the lost-parcel lines in `productId` order, calls `takeOne` for each, converts the results to hold lines via `linesOf`, and persists them with `reservationRepository.topUpItems`. Throws if any counter or the hold refuses a write.
-- **`takeOne`** *(module-private)* — For a single `StockLine`, reads the stock level, computes `shelf = min(available, quantity)` and `owed = quantity − shelf`, then calls `applyTransition` with `StockMovementReason.reserve` and `StockMovementReason.owed` respectively. Returns `{ productId, shelf, owed }`.
-- **`linesOf`** *(module-private)* — Maps `TopUp[]` results into `HoldLine[]`: shelf units become plain stock holds; owed units become `kind: 'backorder'` holds.
-- **`NOTES`** *(module-private const)* — Ledger note strings stamped onto the two transition types for audit.
+- `reserveMoreForOrder(orderId, lines, session)` — the only export. Runs in the caller's transaction, processes lines sorted by `productId`, and returns a `TopUp[]` (per product, `shelf` and `owed` quantities). It then adds the resulting hold lines to the order's reservation. A hold that had already ended is reopened as `committed`, keeping the original payment's preorder queue position.
+- `takeOne` (internal) — for one line, looks up the stock level. A missing level (deleted product) claims nothing and returns `{shelf: 0, owed: 0}`. Otherwise `shelf = min(max(available, 0), quantity)` and `owed = quantity - shelf`. It applies a `StockMovementReason.reserve` transition for the shelf part and a `StockMovementReason.owed` transition for the owed part, each with the order id as reference and a ledger note.
+- `linesOf` (internal) — turns top-ups into `HoldLine[]`. Shelf units become plain stock lines and owed units become `kind: 'backorder'` lines.
+- `NOTES` (internal) — the ledger note texts for the shelf part and the owed part.
 
 ## Relationships
-
-- **`src/modules/inventory/services/transition.ts`** — calls `applyTransition` to perform the actual stock-counter writes for both shelf and owed movements.
-- **`src/modules/inventory/repository.ts`** — reads stock levels (`stockLevelRepository.findByProductId`) and persists the updated hold (`reservationRepository.topUpItems`).
-- **`src/modules/inventory/domain/index.ts`** — uses the `HoldLine` type to shape the lines written to the reservation.
-- **`src/modules/inventory/services/types.ts`** — consumes the `StockLine` (input) and `TopUp` (output) shapes.
-- **`src/types/index.ts`** — imports `StockMovementReason` enum values (`reserve`, `owed`).
-- **`src/modules/inventory/services/index.ts`** — barrel re-exports this module alongside sibling services.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — unit-tests the lost-parcel flow that exercises this function.
+- `./transition` (`src/modules/inventory/services/transition.ts`) — `applyTransition` performs each counter/ledger write. A falsy result is treated as a refused write and throws.
+- `../repository` (`src/modules/inventory/repository.ts`) — read for the product's stock level (availability) and used to add the new lines to the order's hold.
+- `../domain` (`src/modules/inventory/domain/index.ts`, `hold-lines.ts`) — supplies the `HoldLine` type.
+- `./types` (`src/modules/inventory/services/types.ts`) — supplies the `StockLine` input and `TopUp` result types.
+- `@types` (`src/types/index.ts`) — supplies the `StockMovementReason` enum (`reserve`, `owed`).
+- `src/modules/delivery/tests/unit/fulfillment.test.ts` — related to the delivery side of lost-parcel handling; the file content shows no direct use.
 
 ## Notes
-
-- Lines are processed in **`productId` locale-sorted order** (`toSorted`, non-mutating) so that concurrent losses on the same products always acquire locks in the same sequence, preventing deadlock.
-- The **owed** portion deliberately bypasses the backorder/preorder cap; that cap governs *new* sales, not a commitment already made to the customer.
-- A product with **no stock level** (e.g. deleted) short-circuits to `{ shelf: 0, owed: 0 }` — nothing is claimed and no transitions are written.
-- The **caller** owns the Mongoose transaction (`session`) and is responsible for refreshing the catalogue's stock cache after committing; this module does not manage the session lifecycle.
-- `reservationRepository.topUpItems` reopens a hold that has already ended, restoring it to `committed` status while preserving its original position in the preorder queue.
+- Throws an `Error` if a counter refuses a write, or if the hold update returns falsy because the hold "moved while it was being topped up". Because everything runs in the caller's session, the caller's transaction is expected to roll these writes back.
+- Products are processed in `productId` order (`localeCompare`, `'en'`) so two concurrent losses never take locks in opposite orders.
+- The caller must refresh the availability entry itself after commit.

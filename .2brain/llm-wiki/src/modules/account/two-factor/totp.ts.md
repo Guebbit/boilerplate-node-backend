@@ -1,42 +1,34 @@
 ---
 source: src/modules/account/two-factor/totp.ts
-sha256: 7acc1a835597f0e8dd9cb55f5e2b905acb309455907af74bfd4f09e8c4592f4a
-generated_at: 2026-11-08T04:53:21.202870+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T04:12:10.060292+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/two-factor/totp.ts
 
 ## Purpose
-
-Pure crypto layer for TOTP: encrypts/decrypts the base32 secret at rest (versioned, bound to a specific method entry) and verifies a 6-digit code against that secret with constant-time comparison, clock-skew tolerance, and replay protection. Deliberately has no database or user-document access so it can be unit-tested against fixed clocks; the persistence adapter lives in `methods/totp.ts`.
+Pure crypto layer for TOTP two-factor: encrypting/decrypting the stored TOTP secret and verifying user-entered codes, with no database access. It is kept side-effect-free so it can be unit-tested with fixed clocks and known secrets; the adapter that reads and writes the user document is the sibling `methods/totp.ts` (under `src/modules/account/two-factor/methods/`).
 
 ## Key elements
-
-- **`totpBinding(methodId)`** — Builds the `SecretBinding` (purpose `'totp'`, AAD `users:twoFactorMethods.secret:<methodId>`) that ties ciphertext to a single method entry. Also the binding a re-encryption job rewraps under.
-- **`encryptTotpSecret(plaintext, methodId)`** — Encrypts a base32 TOTP secret via `encryptVersionedSecret` using the key ring from session config.
-- **`decryptTotpSecret(stored, methodId)`** — Reverse of the above; throws on malformed format, wrong key, or auth-tag mismatch.
-- **`buildOtpauthUri(secret, label)`** — Produces the `otpauth://` URI for QR-code enrollment. Issuer is derived from `NODE_SMTP_SENDER`'s display name (falls back to `'Account'`).
-- **`verifyTotpCode(secret, code, afterTimeStep?)`** — Returns `Promise<TotpVerification>`. Checks the code via otplib `verify` with ±30 s epoch tolerance; `afterTimeStep` rejects any step ≤ the given value (replay protection). Catches otplib's throw-on-malformed-token path and converts it to `{ valid: false }`.
-- **`TotpVerification`** — `{ valid: boolean; timeStep?: number }`. `timeStep` is only present on success and is stored as the entry's `lastUsedStep`.
-- **`TOTP_STEP_SECONDS` / `TOTP_EPOCH_TOLERANCE_SECONDS`** — 30 s step; tolerance is exactly one step either side.
+- `totpBinding(methodId)` — returns the `SecretBinding` (`purpose: 'totp'`, AAD `users:twoFactorMethods.secret:<methodId>`). Also what a re-encryption job rewraps under.
+- `encryptTotpSecret(plaintext, methodId)` — encrypts a base32 secret with the TOTP key ring from `getTotpEncryptionKeyRing()`, returning versioned ciphertext for the method entry's `secret`.
+- `decryptTotpSecret(stored, methodId)` — reverses the above; throws on malformed format, wrong key, or auth-tag mismatch (tampering or wrong key version).
+- `buildOtpauthUri(secret, label)` — builds the `otpauth://` enrollment URI via otplib's `generateURI`. The frontend renders the QR code; the backend generates no image.
+- `TotpVerification` — `{ valid, timeStep? }`; `timeStep` is present only when valid and is meant to be stored as the entry's `lastUsedStep`.
+- `verifyTotpCode(secret, code, afterTimeStep?)` — async verification via otplib `verify` with ±1 step (30 s) tolerance. `afterTimeStep` rejects codes at or before that step (replay protection); leave it `undefined` for the first verification (enrollment confirm).
 
 ## Relationships
-
-- **`methods/totp.ts`** (adapter) — Reads/writes the user document and calls into this module for the actual encrypt/decrypt/verify work.
-- **`@infrastructure/security/versioned-secret`** — Supplies `encryptVersionedSecret`, `decryptVersionedSecret`, and the `SecretBinding` type used by every encrypt/decrypt call here.
-- **`src/modules/account/session/config.ts`** — Provides `getTotpEncryptionKeyRing()`, the key material passed to the versioned-secret layer.
-- **`src/infrastructure/adapters/config.ts`** — `mailConfig()` is the sole source of the `otpauth://` issuer string.
-- **`src/modules/account/services/reencrypt.ts`** — Re-encryption job that rewraps stored TOTP ciphertext under `totpBinding`; depends on this file's exported binding shape.
-- **`src/modules/account/two-factor/index.ts`** — Barrel file that re-exports this module's public surface.
-- **`tests/unit/two-factor.test.ts`** — Unit-tests `verifyTotpCode` against fixed clocks and known secrets.
-- **`tests/integration/reencrypt.test.ts`** — Integration-tests the re-encryption flow that rewraps TOTP secrets.
-- **`tests/support/authenticator.ts`** — Test helper that generates/enrolls TOTP secrets consistent with this module's format.
+- `src/infrastructure/security/versioned-secret.ts` — supplies `encryptVersionedSecret`, `decryptVersionedSecret` and the `SecretBinding` type; the wire format lives there.
+- `src/modules/account/session/config.ts` — supplies `getTotpEncryptionKeyRing()`.
+- `src/infrastructure/adapters/config.ts` — `mailConfig().NODE_SMTP_SENDER` provides the issuer name in the otpauth URI.
+- `src/modules/account/two-factor/methods/totp.ts` — the adapter that uses these functions and persists results on the user document.
+- `src/modules/account/services/reencrypt.ts` — the re-encryption service; the `totpBinding` doc comment names re-encryption jobs as a consumer of the binding.
+- `src/modules/account/two-factor/index.ts` — neighboring module entry point in the same directory.
+- `src/modules/account/tests/unit/two-factor.test.ts`, `src/modules/account/tests/integration/reencrypt.test.ts`, `tests/support/authenticator.ts`, `scenarios/users.ts` — test and scenario code that exercises or supports TOTP flows.
 
 ## Notes
-
-- **AAD is the method entry's `_id`.** A ciphertext written for one entry will *not* decrypt against another entry's ID — this is by design, not a bug.
-- **`verifyTotpCode` swallows throws.** otplib's `verify` *throws* on a malformed token (wrong length, non-digits) rather than resolving `{ valid: false }`. The `.catch` here normalises that to `{ valid: false }` so the multi-factor chain can move on to the next factor (e.g., a ten-character backup code that hits this guardrail).
-- **Issuer is not independently configurable.** It is parsed from `NODE_SMTP_SENDER`'s display-name portion (text before `<`). There is no dedicated branding variable.
-- **`afterTimeStep` is optional and replay-only.** Pass `undefined` for the first-ever verification (enrollment confirmation); pass the stored `lastUsedStep` on subsequent verifications.
-- **Pure / no I/O.** No database, no network, no filesystem. If you need to read or persist the secret, go to `methods/totp.ts`.
+- The tolerance equals one step on each side. The code comments say widening it weakens the six-digit code's guessing resistance.
+- The AAD is bound to the method entry's `_id`, so a ciphertext only decrypts on the entry it was written for.
+- The issuer is the display-name part of `NODE_SMTP_SENDER` (text before `<`, trimmed), falling back to `'Account'`.
+- otplib `verify` throws on malformed tokens (wrong length, non-digits). `verifyTotpCode` catches this and returns `{ valid: false }`, so a non-TOTP input such as a ten-character backup code fails quietly and the verification chain can try other factors.
+- `timeStep` is read with an `'in'` check because `verify`'s return type is a TOTP/HOTP union. The strategy is never passed, so it defaults to TOTP.

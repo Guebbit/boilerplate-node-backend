@@ -1,40 +1,42 @@
 ---
 source: src/modules/returns/domain/lifecycle.ts
-sha256: cd4aa4c4d961ccd35c5fa37dd77187ae537d7571def012e6937124dd51c128be
-generated_at: 2026-11-14T21:33:19.761989+00:00
-model: ollama:qwen3.8:27b
+source_sha256: dc8178287ed7789b7ca58deb1d950d5f490f5ff6531c063c73e1f030935a6782
+context_sha256: 97f3e2d89f9913a5dad7209276017e32294b55cb46abd8f122865e4aea51fc6b
+generated_at: 2026-11-22T07:23:10.705902+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/domain/lifecycle.ts
 
 ## Purpose
-
-Defines the return-state machine: which status each move may start from and where it lands. The table doubles as the guard for the conditional writes in `repository.ts` (`claimStatus`), making concurrent approvals/declines a database-level race where exactly one wins.
+Defines the return lifecycle: which status each move (`approve`, `decline`, `receive`, `cancel`, `close`) may start from and where it ends up. Each move backs a conditional write (`claimStatus` in `repository.ts`), so the table is the actual concurrency guard. If two staff members approve and decline the same request at once, exactly one wins in the database. The file also holds the status groupings and predicates used for returnable-quantity accounting.
 
 ## Key elements
-
-- **`ReturnEvent`** — union of the five moves: `approve`, `decline`, `receive`, `cancel`, `close`.
-- **`RETURN_EVENTS`** — const table mapping each event to `{ from, to }` statuses. Satisfies `Record<ReturnEvent, LifecycleEvent<ReturnStatus>>`.
-- **`returnLifecycle`** — the lifecycle instance built via `defineLifecycle`, checked once at load. Exposes the validated state machine for runtime queries.
-- **`initialStatusFor(reason, byStaff?)`** — determines the *birth* status (not a move): `approved` for withdrawals or staff-opened returns; `requested` otherwise.
-- **`QUANTITY_HOLDING_RETURN_STATUSES`** — readonly array of statuses where goods have not yet come back and still count against an order line's returnable quantity.
-- **`BACK_RETURN_STATUSES`** — readonly array (`received`, `closed`) marking statuses where goods count as returned.
-- **`handsUnitsBack(returned)`** — predicate: true when the remedy is `replace` or `repair`, meaning the unit goes back to the buyer and stays returnable.
-- **`holdsReturnedGoods(returned)`** — predicate: true when a `return`-kind record is in a quantity-holding status and did not hand the unit back to the buyer.
-- **Re-exports** — `ReturnStatus`, `ReturnReason`, `ReturnKind`, `ReturnRemedy` (pass-through from `@types`).
+- `ReturnStatus`, `ReturnReason`, `ReturnKind`, `ReturnRemedy`: type re-exports from `@types`. The sets are closed and come from the contract. This file adds only the transition rules.
+- `ReturnEvent`: the union `'approve' | 'decline' | 'receive' | 'cancel' | 'close'`.
+- `RETURN_EVENTS`: the transition table, one `{ from, to }` entry per event, checked with `satisfies Record<ReturnEvent, LifecycleEvent<ReturnStatus>>`:
+  - `approve`: requested → approved
+  - `decline`: requested → declined
+  - `receive`: approved → received
+  - `cancel`: approved → canceled
+  - `close`: received → closed
+- `returnLifecycle`: the table passed to `defineLifecycle(...)`, with `initial: requested`. The table is checked once at load.
+- `initialStatusFor(reason, byStaff = false)`: the birth status of a goods return. It returns `approved` for a `withdrawal` or when staff opened it, and `requested` otherwise.
+- `QUANTITY_HOLDING_RETURN_STATUSES`: `requested`, `approved`, `received`, `closed`. These count against an order line's returnable quantity. `declined` and `canceled` do not.
+- `BACK_RETURN_STATUSES`: `received`, `closed`. These are the statuses at which goods count as back.
+- `handsUnitsBack(returned)`: true when the remedy is `replace` or `repair`, because the buyer has a unit again.
+- `holdsReturnedGoods(returned)`: true when `kind` is `return`, the status is quantity-holding, and the return did not hand units back.
 
 ## Relationships
-
-- **`src/domain-primitives/lifecycle.ts`** — provides `defineLifecycle` and the `LifecycleEvent` type that shape `RETURN_EVENTS`.
-- **`src/modules/returns/repository.ts`** — `claimStatus` performs the conditional writes that this table guards; the `from` arrays are the WHERE-clause status sets.
-- **`src/modules/returns/services/*.ts`** (`cancel`, `close`, `create`, `decide`, `options`, `proof`, `read`, `receive`) — each service corresponds to one lifecycle event (or the birth step) and reads the table / `returnLifecycle` to validate transitions before calling the repository.
-- **`src/modules/returns/domain/accounting.ts`** — consumes `QUANTITY_HOLDING_RETURN_STATUSES` and `holdsReturnedGoods` to compute returnable-quantity deductions.
-- **`src/modules/returns/domain/refund-amount.ts`** — uses `BACK_RETURN_STATUSES` to decide whether delivery-refund logic applies.
-- **`src/modules/returns/domain/index.ts`** — barrel file re-exporting this module's public surface.
+- `src/domain-primitives/lifecycle.ts`: supplies `defineLifecycle` and the `LifecycleEvent` type.
+- `src/modules/returns/repository.ts`: its `claimStatus` conditional write uses the sets derived from the table.
+- `src/modules/returns/services/create.ts`: calls `initialStatusFor` to set the birth status.
+- The other services (`decide.ts`, `receive.ts`, `cancel.ts`, `close.ts`) are named after the events in the table, so each move maps to a door.
+- Within `domain/`, the accounting, refund-amount, statement and status-projection files are neighbors. This file's status groups and predicates are what the quantity and accounting rules build on.
 
 ## Notes
-
-- The transition table is the authoritative guard, not documentation. If a status pair is missing from `from`, the write simply fails at the database level.
-- Birth status is deliberately *not* modeled as an event — it is set at insertion time by `initialStatusFor`, called from `create.ts` (and the withdrawal/cancel-remainder paths).
-- `canceled` is excluded from both `QUANTITY_HOLDING_RETURN_STATUSES` and `BACK_RETURN_STATUSES` on purpose: a canceled return is treated as if it never happened, so its units are neither held nor counted as returned.
-- A withdrawal is born `approved` (EU consumer right, no staff decision needed); every other reason starts `requested` unless staff opened it, in which case opening it is the approval.
+- Birth is not a move. `initialStatusFor` is separate from the event table, and the lifecycle's `initial` is only the status of a request.
+- A pre-dispatch withdrawal never reaches `initialStatusFor`. `withdraw.ts` writes it directly as `closed`.
+- `cancel` is only valid from `approved`. A `requested` return is declined with a reason code instead, and a `received` return is closed.
+- `canceled` is deliberately excluded from `BACK_RETURN_STATUSES`: a canceled return never happened. Cancellations have their own accounting, because their units never shipped.
+- Replace and repair remedies keep a unit returnable under the guarantee, so `holdsReturnedGoods` excludes them.

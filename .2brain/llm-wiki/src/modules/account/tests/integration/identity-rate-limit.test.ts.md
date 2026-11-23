@@ -1,45 +1,43 @@
 ---
 source: src/modules/account/tests/integration/identity-rate-limit.test.ts
-sha256: 573d13d581b9e12a8a531253074d369e02f9b8e234430b20951845a54291c33c
-generated_at: 2026-11-14T19:04:17.074875+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 49a0e69f76918dd67195154d728a293783f49f4541d944122b194b2b339c2a38
+context_sha256: ab4eaec88bd6ce969e18c487df89c32b59d8bf660f829719c2f37493f867d206
+generated_at: 2026-11-22T03:55:35.739627+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/identity-rate-limit.test.ts
 
 ## Purpose
-
-Integration tests for the account module's rate limiters, verifying the "identity and block-keyed budgets" design (Anti-automation Rung 1). Each limiter is tested against trivial Express handlers (fixed 401/200/201/302 responses) to isolate the keying logic—identity (email), address-block (/24, /48), and account dimensions—without coupling the assertions to `postSignup`, `postResetRequest`, or any other real route handler.
+Integration tests for the anti-automation "Rung 1" limiters in `@modules/account/rate-limits`. They check that `signupLimiters` and `resetRequestLimiters` enforce three keys (per-address, identity by submitted email, and address block: IPv4 /24 or IPv6 /48), and that `credentialLimiters` and `signedInCredentialLimiters` key on the account. The limiters run against trivial stub handlers, not the real `postSignup`/`postResetRequest`, because the behavior under test belongs to the limiter itself.
 
 ## Key elements
-
-- **`withAccountRateLimits`** — Thin wrapper around `withReloadedRateLimits` that pins the module-under-test to `@modules/account/rate-limits`, so every test case shares the same import path.
-- **`asAccount`** — A `RequestHandler` stub that reads an `x-test-account` header and attaches a minimal `AuthContext` to the request, standing in for real token-based auth.
-- **`redirectingApp(failed, limiters)`** — Builds an Express app whose route responds 302 and sets `request.credentialAttemptFailed`; used to test that redirect-based failures (OAuth-callback pattern) spend or refund budget correctly.
-- **`smallAddressLimiters()`** — Returns `credentialLimiters` with `NODE_AUTH_RATE_LIMIT_ADDRESS_MAX` set to 2, isolating the address dimension.
-- **`describe` blocks** cover:
-  - `signedInCredentialLimiters` — per-account budget shared across address blocks; separate accounts untouched.
-  - `credentialLimiters` on public routes — budget keyed to the *named* victim email, not the attacker's session; blank/absent email does not create an identity key; unauthenticated attempts still key on the submitted email.
-  - `credentialLimiters` + 302 redirects — budget spent only when `credentialAttemptFailed` is true; unflagged redirects are refunded.
-  - `signupLimiters` — identity budget consumed on *successful* (201) signups; address budget bounds distinct emails from the same caller.
-  - `resetRequestLimiters` — identity budget consumed on the uniform 200 response (indistinguishable-by-design).
-  - `address-block keying` — shared budget across IPs within the same /24.
+- `withAccountRateLimits(overrides, pick)`: wraps `withReloadedRateLimits`. It re-imports `@modules/account/rate-limits` with env overrides (e.g. `NODE_AUTH_RATE_LIMIT_MAX`, `NODE_SIGNUP_RATE_LIMIT_BLOCK_MAX`) and returns the picked export.
+- `asAccount`: a stand-in for `isAuth`. It sets `request.authContext` from the `x-test-account` header.
+- `redirectingApp(failed, limiters)`: an Express app whose GET `/route` sets `request.credentialAttemptFailed` and answers 302. It models an OAuth callback.
+- `smallAddressLimiters()`: `credentialLimiters` with the address budget at 2 and the other budgets raised out of the way.
+- Test suites:
+  - `signedInCredentialLimiters` on an authenticated route: one budget per account, even across different /24 blocks. Another account from an already-refused address is unaffected.
+  - `credentialLimiters` on a public route:
+    - A signed-in caller spends the budget of the account they name (the email in the body), not their own.
+    - Requests with no email, or a blank one, are not counted.
+    - An unauthenticated attempt is keyed on the email it names.
+  - `credentialLimiters` and a redirecting failure: a 302 spends the address budget only when the handler flags `credentialAttemptFailed`. An unflagged redirect is refunded.
+  - `signupLimiters`:
+    - The identity budget is spent even on successful (201) signups, unlike `credentialLimiters`.
+    - The address budget is spent across different emails from the same caller.
+  - `resetRequestLimiters`: the identity budget counts the 200 that `postResetRequest` always returns, because the response is indistinguishable by design.
+  - `address-block keying`: different IPv4 addresses in the same /24 share one block budget. The rest of this suite is not shown.
 
 ## Relationships
-
-- **`src/modules/account/rate-limits.ts`** — The module under test. Tests dynamically import `signedInCredentialLimiters`, `credentialLimiters`, `signupLimiters`, and `resetRequestLimiters` from it.
-- **`tests/support/rate-limit-harness.ts`** — Provides `appAnswering`, `statusOf`, and `withReloadedRateLimits`, the core test scaffolding for building limiter-equipped Express apps and asserting on response status.
-- **`tests/support/stub.ts`** — Provides `asStub`, used by the `asAccount` middleware to create a minimal `AuthContext` object.
-- **`src/types/auth-context.ts` / `src/types/index.ts`** — Supply the `AuthContext` type used by the auth stub.
-- **`tests/support/setup-test-db.ts`** — Imported for database lifecycle (called at the integration level); not visibly invoked in the shown cases but present for the integration context.
-- **`src/modules/users/tests/factories.ts`** — Imported (`createUser`, `PLAIN_PASSWORD`); available for tests that need a real user record in the DB.
-- **`tests/support/http.ts`** — Imported (`api`); available for HTTP-level setup in the integration harness.
+- `src/modules/account/rate-limits.ts`: the module under test. Its `credentialLimiters`, `signedInCredentialLimiters`, `signupLimiters` and `resetRequestLimiters` are loaded fresh for each case.
+- `tests/support/rate-limit-harness.ts`: provides `appAnswering`, `statusOf` and `withReloadedRateLimits`, which build the stub apps, read status codes and reload the module with env overrides.
+- `tests/support/stub.ts`: `asStub` casts a partial object to `AuthContext`.
+- `src/types/auth-context.ts` and `src/types/index.ts`: supply the `AuthContext` type, imported via `@types`.
+- `tests/support/http.ts`, `tests/support/setup-test-db.ts` and `src/modules/users/tests/factories.ts`: imported (`api`, `setupTestDb`, `createUser`, `PLAIN_PASSWORD`), but the visible part of the file doesn't use them.
 
 ## Notes
-
-- Every `afterEach` calls `jest.resetModules()` so the next test gets a fresh in-memory limiter state—there is no cross-test leakage.
-- Tests deliberately use **trivial handlers** (fixed status codes) rather than real routes. The file header explicitly states the property under test belongs to the limiter, not to `postSignup`/`postResetRequest`.
-- `appAnswering` takes a boolean flag (always `true` here) that tells the harness whether to count the request as a "failure" for budget-spending purposes.
-- The `credentialLimiters` tests distinguish three keying dimensions: **account** (the authenticated caller), **identity** (the email in the body), and **address-block** (IPv4 /24 or IPv6 /48). A request may spend one, two, or all three budgets depending on which fields are present.
-- The 302-redirect tests (`redirectingApp`) verify that the limiter reads `request.credentialAttemptFailed` to decide whether a redirect is a real failure—critical for OAuth callbacks where a 302 can mean success *or* failure.
-- A sibling test, `src/modules/tasks/tests/integration/contact-identity-rate-limit.test.ts`, covers the analogous `contactLimiters` budget for the tasks module.
+- Each `describe` calls `jest.resetModules()` in `afterEach`. Limiter state lives in module-level stores, so reloading with new env values is how counters are isolated between cases.
+- Tests simulate client addresses with the `X-Forwarded-For` header and rely on the harness apps honoring it.
+- The `401` responses used in these tests stand in for any refusal. Every status >= 400 spends a `skipSuccessfulRequests` budget.
+- `appAnswering` is passed `true` as its second argument. The meaning isn't visible in this file.

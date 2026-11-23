@@ -1,52 +1,44 @@
 ---
 source: src/modules/account/services/export-job.ts
-sha256: d84ec7d8cdd2130aa50902eb83e20e47983226aaaea7a3d1af902c772707cf92
-generated_at: 2026-11-14T18:44:10.879972+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 933ebca3ee95efb678107d422e606e613c71d5056b493d2008632d898bc7437e
+context_sha256: bdea2093ee473dc72b026428ca96d5c5bbd0e63cf69456d0323ace63794f9f57
+generated_at: 2026-11-22T03:36:54.242626+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/export-job.ts
 
 ## Purpose
-
-Implements the account data-export worker: it streams each registered `PersonalDataSection` into a single JSON file one at a time (capping peak memory at the largest section rather than the whole export), writes the file to the private export store, atomically settles the row and publishes the readiness/failure event, then mails the download link or a failure notice to the requester. Exposes a single entry point, `runExportJob`, consumed by the `worker.account.export` queue or inline from `./export.ts` when no broker is present.
+The export worker for the account module. It builds one account's personal-data export, streams it into the private export store, marks the export row `ready`, and mails the requester a download link. It runs from the `worker.account.export` queue, or inline after the response when there is no broker. Failure is recorded as a `failed` row, not hidden.
 
 ## Key elements
-
-- **`appendSections`** (private) — Iterates registered sections in declaration order, awaiting each `collect` call and appending the result to the open JSON object via the `AppendExport` callback. Omits sections that resolve `undefined`; throws if any section rejects or if no `profile` section answered. Closes the object with an `exportedAt` timestamp.
-- **`mailRequester`** (private) — Resolves the user by `job.userId` and, if the account still exists, sends mail via `sendAccountMail`. Skips silently for erased accounts.
-- **`mailLink`** (private) — Builds the "export ready" email (with retention days) and delegates to `mailRequester`.
-- **`settleAnnouncing`** (private) — Wraps `accountExportRepository.settleBuilding` + `announceInTransaction` so the row status change and the outbox event (`ACCOUNT_EXPORT_READY` / `ACCOUNT_EXPORT_FAILED`) commit atomically. Returns the settled row or `null` if the row was no longer `building`.
-- **`buildAndSettle`** (private) — Calls `writeExport` with `appendSections`, then `settleAnnouncing(row, 'ready')`.
-- **`removeFileIfRowGone`** (private) — Deletes the half-built file only when the row no longer exists (replaced or erased mid-build).
-- **`afterBuild`** (private) — If this run settled the row, mails the link; otherwise cleans up the orphaned file. Mail errors are logged, not thrown.
-- **`mailFailure`** (private) — Sends the "export failed" notice; swallows mail errors with a log entry.
-- **`fail`** (private) — Logs the error, settles the row to `failed`, increments `accountExportFailedTotal`, removes the partial file, and mails the requester.
-- **`runExportJob`** (exported) — The queue entry point. Guards on `row.status === 'building'`, resolves the subject from the live user record, then runs `buildAndSettle` → `afterBuild` on success or `fail` on error. Always resolves `true` (ack) for business failures; only unhandled database rejections propagate to requeue the job.
+- `runExportJob(job)` — the only export. It loads the export row by `job.exportId` and returns `true` immediately unless the row is still `building`. It then loads the account (a missing account fails the job) and calls `buildAndSettle(personalDataSubjectOf(user), row)`. Success goes to `afterBuild` and a thrown error goes to `fail`. It resolves `true` (ack) once the job is settled either way. A thrown database error is left to reject, so the queue requeues it.
+- `appendSections` — collects each registered `PersonalDataSection` one at a time and appends it to the file as a `"name": value` JSON member. This keeps peak memory at the largest single section. A section that resolves `undefined` is omitted. A section that rejects fails the build. A missing `profile` section also fails the build. It closes the object with `exportedAt`.
+- `buildAndSettle` — calls `writeExport` with `appendSections`, then `settleAnnouncing(row, 'ready')`.
+- `settleAnnouncing` — moves a `building` row to `ready` or `failed` through `accountExportRepository.settleBuilding`, with a new expiry of now plus `exportRetentionMs()`. The move and the `ACCOUNT_EXPORT_READY` or `ACCOUNT_EXPORT_FAILED` outbox event happen in one transaction (`announceInTransaction`). It returns `null` if the row was no longer `building`.
+- `afterBuild` — if this run settled the row, it mails the link. Otherwise it calls `removeFileIfRowGone`. A mail that cannot be queued is logged, not escalated.
+- `fail` — logs the error, settles the row as `failed`, increments `accountExportFailedTotal`, removes the half-built file and mails a failure notice. If another run already settled the row, it only tidies up.
+- `removeFileIfRowGone` — deletes the run's file only if its row no longer exists.
+- `mailRequester`, `mailLink`, `mailFailure` — mail helpers. `mailRequester` re-reads the account to get its own address and skips the mail if the account is gone. `mailLink` computes the retention in days and sends on the urgent queue. `mailFailure` sends a notice with no link, which is not urgent.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** — Provides the `PersonalDataSection` and `PersonalDataSubject` types that define the streaming collection contract.
-- **`src/modules/account/services/personal-data-registry.ts`** — Supplies `personalDataSections()`, the ordered list of sections to collect.
-- **`src/infrastructure/adapters/export-store.ts`** — Provides `writeExport` / `removeExport` / `AppendExport` for the streaming file I/O behind `appendSections` and cleanup.
-- **`src/kernel/outbox.ts`** — `announceInTransaction` is the mechanism that pairs the row settlement with the domain-event publish in one unit of work.
-- **`src/modules/account/repository.ts`** — `accountExportRepository` performs `findById` and `settleBuilding`; the `AccountExportRow` type is the row shape threaded through every function.
-- **`src/modules/account/emails.ts`** — `exportReadyEmail`, `exportFailedEmail`, and `greetableName` produce the mail bodies and the account-appropriate greeting.
-- **`src/modules/account/services/mail.ts`** — `sendAccountMail` is the transport for both success and failure notifications.
-- **`src/modules/account/config.ts`** — `exportRetentionMs` determines the retention window shown in the ready email and the row's expiry.
-- **`src/modules/account/events.ts`** — `ACCOUNT_EXPORT_READY` / `ACCOUNT_EXPORT_FAILED` event names published via the outbox.
-- **`src/modules/account/metrics.ts`** — `accountExportFailedTotal` counter incremented on each failure.
-- **`src/infrastructure/adapters/logger.ts`** — Structured error logging for build failures and un-queued mail.
-- **`src/domain-primitives/time.ts`** — `DAY_MS` converts the retention millisecond value to a human-readable day count.
-- **`src/modules/account/services/export.ts`** — The inline (no-broker) path that calls `runExportJob` directly.
-- **`src/modules/account/tests/integration/export.test.ts`** — Integration tests exercising the full build → settle → mail cycle.
+- `src/modules/account/services/export.ts` — the module doc names it as the place where the job runs inline when there is no broker.
+- `src/modules/account/repository.ts` — provides `accountExportRepository` (`findById`, `settleBuilding`) and the `AccountExportRow` type.
+- `src/infrastructure/adapters/export-store.ts` — provides `writeExport`, `removeExport` and the `AppendExport` type.
+- `src/modules/account/services/personal-data-registry.ts` — `personalDataSections()` supplies the sections to collect.
+- `src/kernel/registry.ts` — defines the `PersonalDataSection` and `PersonalDataSubject` types.
+- `src/kernel/outbox.ts` — `announceInTransaction` publishes the ready and failed events defined in `src/modules/account/events.ts`.
+- `src/modules/account/services/mail.ts` — `sendAccountMail` sends the mail.
+- `src/modules/account/emails.ts` — `exportReadyEmail`, `exportFailedEmail` and `greetableName` build its copy.
+- `src/modules/account/config.ts` — `exportRetentionMs`, used for the row expiry and the "days" figure in the mail.
+- `src/modules/account/metrics.ts` — `accountExportFailedTotal`.
+- `src/infrastructure/adapters/logger.ts` — error logging.
+- `src/domain-primitives/time.ts` — `DAY_MS`.
+- `src/modules/account/tests/integration/export.test.ts` — integration tests for this flow.
+- `src/modules/account/module.ts` — not referenced in the file content, so no interaction is documented here.
 
 ## Notes
-
-- **Streaming invariant.** Sections are collected strictly one-at-a-time and appended immediately. Peak memory is the largest single section, never the full export. Do not refactor `appendSections` to buffer all values before writing.
-- **`undefined` vs. rejection.** A section resolving `undefined` is silently omitted (the `tasks` opt-out pattern). A section that *rejects* fails the entire build — an incomplete Art. 15 response must never be presented as complete.
-- **Profile is mandatory.** If no section named `'profile'` answered, `appendSections` throws. An export without a profile is considered invalid.
-- **Two-argument `then`, not `.catch()`.** In `runExportJob`, success and failure are separated via `then(onFulfilled, onRejected)` so that a post-settle mail failure in `afterBuild` does not cascade into `fail` (which would delete a good file and mark the row `failed`).
-- **Idempotency / at-most-once mail.** Only a row still in `building` status is processed, and only the run that successfully settles it mails the link. A second delivery of the same queue message is a no-op.
-- **Mail failure is non-fatal.** If `sendAccountMail` cannot queue the message, the error is logged and the row remains in its correct state (`ready` or `failed`). The file is still downloadable; the user can re-request to get a fresh link.
-- **Subject is read from the live user, not the queue payload.** The `PersonalDataSubject` is derived from `accountUserService.getById` at run time, ensuring the `tasks` section matches against the account's current verified address.
+- The subject comes from the stored account, not the queue message. The `tasks` section matches by that address, so it must be the account's own. The mail address is likewise re-read from the account.
+- `buildAndSettle(...).then(onOk, onErr)` deliberately uses a two-argument `then`. A failure after the row is `ready` (the mail) must not reach `fail`, which would delete a good file.
+- Running the job twice is safe. Only a row still `building` is built, and only the run that settles it mails the link. A run that loses the race deletes its file only if the row is gone.
+- A failed build is not retried by the queue. The user must ask again, which replaces the failed export.

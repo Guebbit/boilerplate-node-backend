@@ -1,43 +1,51 @@
 ---
 source: src/modules/cart/tests/integration/merge.test.ts
-sha256: bb389ca9d29a16084a1c40897c2174ff21a527bbd30cd97a5e6e59ae20e328be
-generated_at: 2026-11-14T19:34:37.581923+00:00
-model: ollama:qwen3.8:27b
+source_sha256: bb389ca9d29a16084a1c40897c2174ff21a527bbd30cd97a5e6e59ae20e328be
+context_sha256: 77d892ac09e70ad672a51291a3d08e7641ec238503c35018cd1ec367736b27b5
+generated_at: 2026-11-22T04:40:48.063561+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/integration/merge.test.ts
 
 ## Purpose
-
-Integration test suite for the guest-cart-into-signed-in-cart merge operation. It verifies the per-line contract (quantities sum, ceiling caps, stock flags without mutation, one bad line never strands the rest) and the `CART_MERGE_REFUSED` event announcement, using a real database and live cross-module services.
+Integration tests for `cartService.merge`, which folds a guest cart into a signed-in user's cart. The tests pin down the rule that mirrors `POST /cart` applied line by line. Quantities add up, and lines that can't be added as asked are answered with a reason instead of failing. One bad line never blocks the others. Stock only flags a line and never changes its quantity. The file also covers what is announced for lines that could not be added at all, which is the contract with `notifications`. Every case reads the cart back to check what it actually holds.
 
 ## Key elements
-
-- **`quantities(userId)`** – Reads the persisted cart back via `cartService.get` and returns a `productId → quantity` map. Used in every assertion to confirm actual state rather than trusting the response shape.
-- **`lineOf(product, quantity)`** – Builds a single guest line object (`{ productId, quantity }`) from a product document.
-- **`announced`** (jest.fn) – Spy registered on the `CART_MERGE_REFUSED` domain event; verifies the notification contract for lines that could not be added at all.
-- **`describe('answers one result per submitted line')`** – Covers: new line, summed line, capped line (999), order preservation, duplicate-product-in-one-request, and the returned `cart` snapshot alongside `lines`.
-- **`describe('stock flags a line and never changes it')`** – Covers: insufficient stock (flag only), exact-fit (no flag), summed-vs-stock, never-lowering an existing over-stock line, sold-out product (`out_of_stock`), cap-plus-short (keeps `capped` reason), and another shopper's checkout hold reducing available stock.
+- `setupTestDb()`: sets up the test database.
+- `beforeEach` / `afterEach` (top level): override `NODE_CART_LINE_MAX_QUANTITY` to `'999'` so lines can reach the contract's ceiling, then reset the overrides.
+- `quantities(userId)`: reads the cart through `cartService.get` and returns `productId → quantity`.
+- `lineOf(product, quantity)`: builds a guest line `{ productId, quantity }` from a product document.
+- `announced`: a `jest.fn()` subscribed to `CART_MERGE_REFUSED` through `onDomainEvent`. Domain events are reset before each case in `describe('merge')`.
+- `describe('answers one result per submitted line')`: checks the per-line result shape `{ productId, requested, resulting, reason?, availability }`.
+  - A new product has no reason.
+  - A product in both carts is `summed`.
+  - A line stopped at 999 is `capped`.
+  - Results keep request order, and a removed product gets reason and availability `removed`.
+  - A product listed twice gives two results, the second seeing the first.
+  - The merged `cart` is also returned.
+- `describe('stock flags a line and never changes it')`: covers these cases.
+  - A short line is added in full with availability `insufficient_stock` and no reason.
+  - A line that exactly fits stays `in_stock`.
+  - A summed quantity is counted against stock, and the sum is kept.
+  - A line already above stock is never lowered.
+  - A sold-out product is added and flagged `out_of_stock`, not `removed`.
+  - A capped line that is also short keeps the `capped` reason and is flagged `insufficient_stock`.
+  - A hold from another shopper's checkout is counted. This case is cut off in the visible content.
 
 ## Relationships
-
-- **`cartService`** (`src/modules/cart/services/index.ts`) – Primary subject under test (`merge`, `get`, `addItemById`).
-- **`cartRepository`** (`src/modules/cart/repository.ts`) – Used to set shipping method on another buyer's cart, simulating a checkout hold.
-- **`CART_MERGE_REFUSED`** (`src/modules/cart/events.ts`) – Domain event spied on to verify the notification contract.
-- **`onDomainEvent` / `resetDomainEvents`** (`src/kernel/events.ts`) – Register and reset the event spy between tests.
-- **`overrideEnvironment` / `resetEnvironmentOverrides`** (`src/infrastructure/config/store.ts`) – Force `NODE_CART_LINE_MAX_QUANTITY=999` so ceiling tests are isolated from shop defaults.
-- **`inventoryService`** (`src/modules/inventory/index.ts` / `src/modules/inventory/services/index.ts`) – Calls `adjust` to simulate a stocktake reducing on-hand quantity mid-test.
-- **`productService`** (`src/modules/products/index.ts` / `src/modules/products/services/index.ts`) – Calls `removeById` to create a "removed" product scenario.
-- **`createProduct`** (`src/modules/products/tests/factories.ts`) – Factory for products with controlled `onHand` values.
-- **`createUser`** (`src/modules/users/tests/factories.ts`) – Factory for test users.
-- **`giveAddress`** (`src/modules/addresses/tests/factories.ts`) – Attaches a shipping address to a buyer so a checkout hold can be simulated.
-- **`paymentsModule`** (`src/modules/payments/module.ts`) – Registered via `registerCheckoutModules` for the checkout-hold scenarios.
-- **`testCallerContext`** (`tests/support/callers.ts`) – Provides the authenticated caller context passed to service calls.
+- `src/modules/cart/services/index.ts`: supplies `cartService`, the unit under test (`merge`, `get`, `addItemById`).
+- `src/modules/cart/repository.ts`: `cartRepository`, used to set up state directly (for example `setShippingMethod` in the checkout-hold case).
+- `src/modules/cart/events.ts`: exports `CART_MERGE_REFUSED`, the event the tests listen for.
+- `src/kernel/events.ts`: provides `onDomainEvent` and `resetDomainEvents` for capturing and isolating events.
+- `src/infrastructure/config/store.ts`: provides `overrideEnvironment` and `resetEnvironmentOverrides` for the line-quantity cap.
+- `src/modules/products/tests/factories.ts`, `src/modules/users/tests/factories.ts`, `src/modules/addresses/tests/factories.ts`: provide `createProduct` (with an `onHand` option), `createUser` and `giveAddress` as fixtures.
+- `src/modules/products/index.ts`: the products service is used to make a product removed.
+- `src/modules/inventory/index.ts`: the inventory service is used to change stock through the ledger the merge reads.
+- `src/modules/payments/module.ts`: imported as `paymentsModule`, together with `registerCheckoutModules` from `@tests/checkout-modules`. They are most likely for the checkout-hold case, but their use is not visible in the shown portion.
+- `tests/support/callers.ts`: provides `testCallerContext`, passed to `merge`.
 
 ## Notes
-
-- `beforeEach` sets `NODE_CART_LINE_MAX_QUANTITY` to **999**; without this the shop's lower default would mask the cap behaviour. `afterEach` resets all overrides.
-- Every assertion about final state calls `quantities(userId)` (a fresh `cartService.get`) rather than inspecting the merge response's `resulting` field—deliberate "never trust the answer to describe itself" convention stated in the file header.
-- `lineOf` always stringifies `product._id`; forgetting this mismatch is a common source of test failures.
-- The file is **truncated** in the provided content; additional `describe` blocks (likely covering refused lines and the `notifications` contract in more depth) exist beyond what is shown here.
-- `setupTestDb()` is called at module scope—this is a true integration test against a real database, not a unit test with mocked repositories.
+- Stock never alters a merged quantity. It only sets `availability` (`in_stock`, `insufficient_stock`, `out_of_stock`, `removed`).
+- `reason` is set only for `summed`, `capped` or `removed`. It is absent for plain adds and for stock-only flags.
+- The 999 ceiling is above the shop's default, so tests that depend on it rely on the environment override in the top-level hooks.

@@ -1,27 +1,27 @@
 ---
 source: scripts/security/corpus-digest.ts
-sha256: 3cdda19e3c43db5331c3ef5211bfcdf0a433264c857479b1a37822dab133db03
-generated_at: 2026-11-08T03:01:39.836430+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3cdda19e3c43db5331c3ef5211bfcdf0a433264c857479b1a37822dab133db03
+context_sha256: 004009f8048fa09bd7b01b35e75d562679588a04735af32d39c1abc2da1243cc
+generated_at: 2026-11-22T02:17:35.503272+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/security/corpus-digest.ts
 
 ## Purpose
-
-Provides a SHA-256 integrity gate for a downloaded corpus. Before the corpus bytes are fed into the breached-password refresh pipeline, this function verifies the digest matches a pinned value; any mismatch aborts processing. It is extracted into its own module so it can be imported (and unit-tested) without triggering the side-effectful import of `refresh-breached-passwords.ts`.
+Integrity check for a downloaded corpus. It refuses any bytes whose SHA-256 does not match a pinned digest. It lives in its own module because `refresh-breached-passwords.ts` runs on import, and a test must be able to load this code without a network or a database.
 
 ## Key elements
-
-- **`assertCorpusDigest(bytes, expected, label): void`** — Computes the SHA-256 hex digest of `bytes` via `node:crypto` and throws an `Error` if it does not equal the `expected` lowercase-hex string. The `label` parameter is interpolated into the error message for context (e.g. what URL or file was downloaded).
+- `assertCorpusDigest(bytes, expected, label): void`
+  - Hashes `bytes` (a `Uint8Array`, the body exactly as received) with SHA-256 via `node:crypto` and compares the lowercase hex digest to `expected`.
+  - Returns nothing on a match.
+  - On a mismatch it throws an `Error` of the form `<label>: SHA-256 is <actual>, expected <expected>. Refusing the corpus.`
+  - `label` names what was downloaded in the error message.
 
 ## Relationships
-
-- **`scripts/security/refresh-breached-passwords.ts`** — The intended caller. That module runs network/database work on import; this file is kept separate so the digest check can be exercised in isolation.
-- **`tests/unit/scripts/security/corpus-digest.test.ts`** — Unit tests that import `assertCorpusDigest` directly (no network, no DB) and assert the throw/no-throw behavior for matching and mismatching digests.
+- `scripts/security/refresh-breached-passwords.ts`: the downloader this check was split out of. The doc comment says a moved, truncated or tampered corpus must never be filtered into the committed list. The comment states this purpose, but the provided content doesn't show the call site.
+- `tests/unit/scripts/security/corpus-digest.test.ts`: the unit test. It can import this module directly because the module has no side effects, network access or database access.
 
 ## Notes
-
-- The comparison is a plain `!==` on hex strings, not a timing-safe compare. This is acceptable here because the check runs locally on trusted bytes against a pinned constant; it is not a public authentication boundary.
-- The function is deliberately a *throw* (not a boolean return) so a caller cannot accidentally ignore the result and proceed with an unverified corpus.
-- `bytes` must be the exact downloaded body; passing a decoded or re-serialized representation will produce a different digest and cause a spurious rejection.
+- `expected` must be lowercase hex. The comparison is a plain string `!==` with no case normalization, so an uppercase digest fails even if the hash is correct.
+- Any mismatch throws, so callers should let the error stop the pipeline instead of falling back.

@@ -1,43 +1,34 @@
 ---
 source: src/modules/delivery/services/notify.ts
-sha256: 275b86155f6b603075cdd06cce781f5ca0dafa6bfc0d0ba1691324b1ef7fb905
-generated_at: 2026-11-08T05:37:08.349125+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T04:56:22.074445+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/notify.ts
 
 ## Purpose
-
-Buyer-facing email notifications for delivery events. Each exported function is a fire-and-forget listener that reacts to one domain event (`shipment.shipped`, `shipment.delivered`, `shipment.lost`, `fulfillment_order.delayed`, `fulfillment_order.hold_noticed`), loads the needed context, and enqueues an email. A failure to send never propagates or undoes the underlying business act.
+Holds the buyer-facing emails that the delivery module sends. Each email is sent by a listener on its own domain event (`shipment.shipped`, `shipment.delivered`, `shipment.lost`, `fulfillment_order.delayed`, `fulfillment_order.hold_noticed`). A listener covers every path that announces the event, whether staff, the status override's follow-up or the daily sweep, and a crash after the commit still sends. A failed mail never undoes the act that triggered it.
 
 ## Key elements
-
-- **`emailLines(shipment)`** – internal helper; maps `ShipmentDocument.lines` to `{ title, quantity }[]` for email templates.
-- **`mailShipped(payload)`** – listener for `shipment.shipped`. Loads the shipment, composes the "on its way" email with tracking code and remaining units. Short-circuits (no mail) when `remainingUnits` is `undefined` (digital fulfillment).
-- **`mailTrackingChanged(shipment, variant)`** – re-sends the shipped email with a new or corrected tracking code. `variant` is `TrackingVariant` (`added` | `corrected`). Uses `remainingUnits: 0` as a placeholder.
-- **`mailDelivered(payload)`** – listener for `shipment.delivered`. Includes the order's `withdrawUntil` deadline only when the order status is `OrderStatus.delivered`.
-- **`mailLost(payload)`** – listener for `shipment.lost`. Always sends (no feature toggle). Carries reason, owed units, optional `expectedAt`, optional staff `message`, and the order frontend link.
-- **`mailDelayed(delayed)`** – listener for `fulfillment_order.delayed`. Informs the buyer their preorder is late or the date passed with no stock.
-- **`mailHoldNoticed(held)`** – listener for `fulfillment_order.hold_noticed`. Notifies the buyer that a hold needs their attention (address check or staff message).
+- `mailShipped(payload)` – Handles `shipment.shipped`. It skips shipments with no `remainingUnits` (digital fulfillments, which are born delivered). Otherwise it loads the shipment, builds `shipmentShippedEmail` and logs an operator info line. Errors are logged and swallowed.
+- `mailTrackingChanged(shipment, variant)` – Sends the "shipped" mail again with its own subject when a tracking code is `added` or `corrected`. It uses `remainingUnits: 0`. It is best effort, and failures are logged at `warn`.
+- `mailDelivered(payload)` – Handles `shipment.delivered`. It includes `withdrawUntil` only when the order status is `OrderStatus.delivered`. The deadline is read fresh from the order because the listener runs after the transaction wrote it.
+- `mailLost(lost)` – Handles `shipment.lost`. It reports the reason, the lines, the units owed, an optional `expectedAt`, staff's message and an order link. It is always sent, with no switch.
+- `mailDelayed(delayed)` – Handles `fulfillment_order.delayed`. It reports the late preorder titles, `agreedAt`, an optional `expectedAt`, the reason and an order link.
+- `mailHoldNoticed(held)` – Handles `fulfillment_order.hold_noticed`. It sends the hold notice (an address to check, or a staff message) with an order link.
+- `emailLines` (private) – Maps a shipment's lines to `{ title, quantity }`.
 
 ## Relationships
-
-- **`@infrastructure/adapters/mailer`** – every mail function calls `enqueueEmail` to actually dispatch; this is the only outbound side-effect.
-- **`@infrastructure/adapters/logger`** – each function logs an `error`/`warn` line in its `.catch` path and an `info` line on success (shipped).
-- **`@modules/orders`** – `orderService.mailBuyerOfOrder` resolves the order, buyer name, and locale before the template is built; `orderFrontendLink` constructs the order-page URL embedded in the lost/delayed/hold emails.
-- **`../emails`** – provides the template builders (`shipmentShippedEmail`, `shipmentDeliveredEmail`, `shipmentLostEmail`, `fulfillmentDelayedEmail`, `holdNoticeEmail`) and the `TrackingVariant` type.
-- **`../repository`** – `shipmentRepository.findById` loads the `ShipmentDocument` needed for shipped, delivered, and lost emails.
-- **`../events`** – imports the `FulfillmentOrderDelayed` and `FulfillmentOrderHoldNoticed` payload types.
-- **`../model`** – imports `ShipmentDocument` for typing.
-- **`@kernel/events`** – `DomainEventMap` supplies the payload types for shipment events.
-- **`../services/tracking.ts`** – sibling service that calls `mailTrackingChanged` after persisting a new/corrected tracking code.
-- **`../services/index.ts`** – barrel that re-exports these notification functions for registration as event listeners.
+- **`src/modules/orders/index.ts`** – Every mail goes through `orderService.mailBuyerOfOrder(orderId, cb)`, which supplies the order, locale and name. `orderFrontendLink` builds the order-page URLs.
+- **`src/modules/delivery/emails.ts`** – Provides the email builders (`shipmentShippedEmail`, `shipmentDeliveredEmail`, `shipmentLostEmail`, `fulfillmentDelayedEmail`, `holdNoticeEmail`) and the `TrackingVariant` type.
+- **`src/infrastructure/adapters/mailer.ts`** – `enqueueEmail` queues each built mail.
+- **`src/infrastructure/adapters/logger.ts`** – Logs the shipped line and the failures.
+- **`src/modules/delivery/repository.ts`** – Its `shipmentRepository.findById` loads the shipment in `mailShipped`, `mailDelivered` and `mailLost`.
+- **`src/kernel/events.ts`, `src/modules/delivery/events.ts`, `src/modules/delivery/model.ts`** – Supply the event payload types (`DomainEventMap`, `FulfillmentOrderDelayed`, `FulfillmentOrderHoldNoticed`) and `ShipmentDocument`.
+- **Other neighbors** – `src/modules/delivery/services/index.ts`, `src/modules/delivery/services/tracking.ts` and the unit tests are not imported here. The file exports the handlers, so those neighbors presumably wire or call them.
 
 ## Notes
-
-- All exported functions return `Promise<void>` and **never reject**. The `.catch` blocks log and swallow. This is intentional: a mail failure must not roll back the shipped/delivered/lost act.
-- `enqueueEmail` itself never rejects (it logs internally), so the `void` + eslint-disable pattern is safe but necessary to satisfy the linter.
-- `mailShipped` uses `Promise.resolve()` for digital fulfillments rather than `undefined` to keep the return type uniform.
-- Stryker mutation-testing disable markers surround the `logger` calls (they are pure side-effects that mutation testing cannot meaningfully mutate).
-- The file uses `.then`/`.catch` promise chains rather than `async`/`await`, consistent with the codebase's promise-chain style in this layer.
+- `enqueueEmail` is called with `void` (eslint floating-promise disabled) because it never rejects and logs its own failure.
+- Error handling differs by function. `mailShipped`, `mailDelivered` and `mailLost` catch and log at `error`. `mailTrackingChanged` catches and logs at `warn`. `mailDelayed` and `mailHoldNoticed` have no local `.catch`, and the file says `mailBuyerOfOrder` itself logs and swallows.
+- If a shipment is not found by id, `mailShipped`, `mailDelivered` and `mailLost` send nothing and do not error.
+- Some log blocks are wrapped in `Stryker disable` comments for mutation testing.

@@ -1,45 +1,33 @@
 ---
 source: src/modules/payments/tests/factories.ts
-sha256: fe23ffb48e6159cd85c42e3d86b1ae5c3ef36b5b36fb1afd5f14970ad55fc7e5
-generated_at: 2026-11-14T21:11:42.845410+00:00
-model: ollama:qwen3.8:27b
+source_sha256: eb33364b5269e26362fb8fc5f5adda0d1db59f51193d308b7b592fa68ae7299e
+context_sha256: 4f625a51aa439bc49390a01609dc5f5583e99d8f48af823bb41981f28d630acc
+generated_at: 2026-11-22T06:55:16.027830+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/factories.ts
 
 ## Purpose
-Test factories that produce fully-formed payment states (a card-paid order, a pending bank-transfer order, an operator refund, a return refund) by driving the production service layer directly, so integration and contract tests can assert against the same persisted rows a real request would leave behind.
+Test factories for the payments module. They cover paying an order by card and building a bank-transfer order the way checkout leaves it. The transfer payment is opened by calling the module's own `order.created` listener path once, so tests get a real reference, deadline and `requires_action` row. The file writes nothing outside that path.
 
 ## Key elements
-
-- **`refundForOrder`** (re-export) — Delegates to `services/refunds.ts`; the refund a cancel-listener would produce. Exposed here so sibling tests (e.g. invoicing credit-note tests) can import it without reaching into the services barrel.
-- **`refundForReturn`** — Two-step return refund: opens the refund record inside a DB transaction (`withTransaction` → `paymentService.openReturnRefund`), then sends it after commit (`paymentService.sendOpenedRefund`). Returns `'settled' | 'open' | null`.
-- **`TransferOrderOptions`** — Optional overrides for `transferOrder`: buyer, unit price, stock-hold hours.
-- **`transferOrder`** — Creates a user, product, and a `bank_transfer` order with a fixed `payBy` deadline, then calls `paymentService.openTransferPayment` (the same entry point the `order.created` listener uses). Returns `{ order, payment, reference }`.
-- **`payByCard`** — Opens a payment intent and confirms it with the fake provider's test Visa card. Does **not** settle the outbox.
-- **`refundOrderPayment`** — Operator-initiated refund addressed by order ID; looks up the payment then calls `paymentService.refundPayment`. Accepts an optional `{ amount, currency }` body.
-- **`providerRefOf`** — Returns the provider-side intent ID for an order's payment (not exposed over the wire). Throws if absent.
-- **`storedRefundStamps`** — Reads an order's stored refund array and projects `{ reason, returnId, dueBy, dueRule }` for assertion.
+- `refundForOrder`: re-exported from `../services/refunds`. It is the cancel listener's refund, exposed for sibling tests that need a refunded order. It is not on `paymentService`.
+- `refundForReturn(orderId, input, context)`: mimics what `returns` does. It calls `paymentService.openReturnRefund` inside `withTransaction` (currency defaults to `EUR`), then `sendOpenedRefund` after the commit. It resolves to `'settled'`, `'open'` or `null` (nothing owed).
+- `TransferOrderOptions`: optional `user` (a fresh customer by default), `price` (`'20.00'` by default) and `holdHours` (168 by default).
+- `transferOrder(options)`: creates a user, a product and a pending `bank_transfer` order with one line and a `payBy` deadline. It then calls `paymentService.openTransferPayment` and loads the payment. It returns `{ order, payment, reference }`, where the reference comes from `buildReference(orderId)`. It throws if the payment did not open.
+- `payByCard(order, user)`: creates an intent as the customer, then confirms it with `pm_card_visa` through the fake provider. It throws if the intent is refused.
+- `refundOrderPayment(orderId, authContext, context, body?)`: the operator refund addressed by order id. It finds the payment and calls `paymentService.refundPayment`. If there is no payment, it passes the order id through and returns the service's refusal.
+- `providerRefOf(orderId)`: returns the provider's intent id for the order's payment. It throws if there is none.
+- `storedRefundStamps(orderId)`: returns each stored refund's `reason`, `returnId`, `dueBy` and `dueRule`, or an empty array if there is no payment.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/infrastructure/runtime/database.ts` | Imports `withTransaction` to wrap `refundForReturn`'s open step. |
-| `src/domain-primitives/time.ts` | Imports `HOUR_MS` to compute the `payBy` deadline in `transferOrder`. |
-| `src/modules/orders/tests/factories.ts` | Imports `createOrder`, `toOrderItem` to build the order fixture. |
-| `src/modules/payments/domain/index.ts` | Imports `buildReference` to derive the transfer reference returned by `transferOrder`. |
-| `src/modules/payments/domain/transfer-reference.ts` | Source of `buildReference` (re-exported through `domain/index.ts`); used to construct the RF reference string. |
-| `src/modules/payments/services/index.ts` | Imports `paymentService` — every card, transfer, and refund call goes through it. |
-| `src/modules/payments/repository.ts` | Imports `paymentRepository` to look up persisted payments. |
-| `src/modules/payments/services/refunds.ts` | Re-exports `refundForOrder` so external test files have a single import path. |
-| `src/modules/payments/tests/contract/api.contract.test.ts` | Consumer; exercises `payByCard`, `refundOrderPayment`, `providerRefOf`, `storedRefundStamps`. |
-| `src/modules/invoicing/tests/integration/issue-credit-note.test.ts` / `credit-note-catch-up.test.ts` | Consumers; rely on `refundForOrder` / `refundForReturn` to set up refunded-order fixtures. |
-| `src/modules/account/tests/contract/shop.contract.test.ts` | Consumer; uses `transferOrder` / `payByCard` for shop-flow assertions. |
+- Uses `paymentService` (`../services`), `paymentRepository` (`../repository`) and `buildReference` (`../domain`). `PaymentDocument` comes from `../model`. `refundForOrder` is re-exported from `../services/refunds`.
+- Builds orders with `createOrder` and `toOrderItem` from `src/modules/orders/tests/factories.ts`. It takes the `OrderDocument` type from the orders module.
+- Uses `withTransaction` from `src/infrastructure/runtime/database.ts` and `HOUR_MS` from `src/domain-primitives/time.ts`.
+- Pulls users, products and caller helpers from other modules' test factories and from `@tests/callers`.
+- The neighbor tests listed in the graph consume these helpers: `src/modules/payments/tests/contract/api.contract.test.ts`, the two invoicing integration tests (`src/modules/invoicing/tests/integration/issue-credit-note.test.ts` and `src/modules/invoicing/tests/integration/credit-note-catch-up.test.ts`) and `src/modules/account/tests/contract/shop.contract.test.ts`.
 
 ## Notes
-
-- `transferOrder` calls `paymentService.openTransferPayment` directly rather than emitting an `order.created` event. The module docstring frames this as "the helper is the listener, called once" — no event bus is involved in tests.
-- `payByCard` intentionally does **not** drain the outbox. Tests that advance the order past the paid state must settle the outbox themselves.
-- In `refundOrderPayment`, when no payment row is found the code passes the raw `orderId` string as the payment ID to `paymentService.refundPayment` (via `payment?._id ?? orderId`). The service is expected to reject this; the fallback exists so the call shape stays uniform.
-- `storedRefundStamps` returns an empty array (not `null`) when the payment document or its `refunds` array is absent.
+- `payByCard` does not deliver the settlement's events, because delivery happens after the response. A test that moves the order on must settle the outbox itself.
+- `providerRefOf` and `storedRefundStamps` expose data the wire never publishes: the provider id and the staff-only deadline stamp.

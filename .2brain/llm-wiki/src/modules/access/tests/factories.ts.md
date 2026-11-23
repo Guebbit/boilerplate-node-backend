@@ -1,36 +1,29 @@
 ---
 source: src/modules/access/tests/factories.ts
-sha256: 0a05ddac4af5785cb957b8896b1088cb14ca877a3b46206db8b95f8d346fed62
-generated_at: 2026-11-08T03:58:32.028313+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 272e60ec6cdbd7f574a52285a06e6bc7eef706bed6387e2937b6e1b7edbc280f
+context_sha256: effc4e3a987d9b4c1f2d1ee261634188cddc5c2c61b3928d537267cf118a930d
+generated_at: 2026-11-22T03:18:16.565435+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/access/tests/factories.ts
 
 ## Purpose
-
-Test-side entry point into the `access` module's storage and audit surfaces. Sibling modules' tests (users, account, payments, returns, api-keys) cannot import `../model` or `../audit` directly due to import-boundary rules; this file re-exports those internals and provides a granter-less `seedMembership` helper so those tests can seed roles and assert on real audit action names without reaching across the boundary.
+The test-side entry point into the `access` module's storage, meant for other modules' tests. Sibling modules have an import boundary that forbids reaching `../model` or `../audit` directly, so this file re-exports what they need and provides a helper to seed memberships.
 
 ## Key elements
-
-- **`membershipModel`** (re-export from `../model`) — The membership Mongoose model. Sibling tests spy on its write methods to force a role-grant failure mid-flow.
-- **`accessAuditActions`** (re-export from `../audit`) — The audit action name constants. Sibling tests assert the *real* recorded action string rather than hard-coding a literal.
-- **`seedMembership(userId, tenantId, scope, role)`** — Places a user in a role with no granter context (for seeders, migrations, fixtures). Validates the role against the model via `validateGrant(scope, role, [ASSIGN_RULE])`, then persists through `membershipRepository.upsertRole`. A typo'd role fails at validation rather than silently seeding a useless membership. `tenantId` may be `null` for platform-scope roles.
+- `membershipModel` (re-export from `../model`): the membership rows. A sibling test can spy on a write here to force a role grant to fail.
+- `accessAuditActions` (re-export from `../audit`): the audit action names `access` records, so tests can assert on the real names.
+- `seedMembership(userId, tenantId, scope, role)`: places a user in a tenant, or on the platform when `tenantId` is `null`, with a role. It returns a `Promise<MembershipDocument>`. It validates the role with `validateGrant(scope, role, [ASSIGN_RULE])` and then calls `membershipRepository.upsertRole` with the validated role.
 
 ## Relationships
-
-- **`src/modules/access/model.ts`** — Source of the re-exported `membershipModel` and the `MembershipDocument` return type.
-- **`src/modules/access/audit.ts`** — Source of the re-exported `accessAuditActions`.
-- **`src/modules/access/services/grants.ts`** — Provides `ASSIGN_RULE` and `validateGrant` used inside `seedMembership`.
-- **`src/modules/access/repository.ts`** — `seedMembership` delegates persistence to `membershipRepository.upsertRole`.
-- **`src/modules/users/tests/factories.ts`** — Sibling factory in the same pattern (test-side bridge into the `users` module).
-- **`src/modules/users/tests/integration/admin-user-grant-atomicity.test.ts`** — Spies on `membershipModel` (this re-export) to force a grant write to fail.
-- **`src/modules/users/tests/integration/hierarchy.test.ts`** — Consumes `seedMembership` to set up parent/child role hierarchies.
-- **`scenarios/accounts.ts`** — Seeder that calls `seedMembership` to establish initial platform/tenant roles.
-- **Other sibling integration tests** (`account/idle-timeout`, `api-keys`, `payments/service`, `returns/*`) — Import `accessAuditActions` to assert the correct audit action name is recorded.
+- `src/modules/access/model.ts`: source of the `membershipModel` re-export and the `MembershipDocument` type.
+- `src/modules/access/audit.ts`: source of the `accessAuditActions` re-export.
+- `src/modules/access/repository.ts`: exports `membershipRepository`, whose `upsertRole` does the write in `seedMembership`.
+- `src/modules/access/services/grants.ts`: supplies `validateGrant` and `ASSIGN_RULE`.
+- The listed integration tests (access, account idle-timeout, api-keys, payments, returns, users) and `src/modules/users/tests/factories.ts` are neighbors in the dependency graph. They are the sibling-module test consumers this file is written for.
 
 ## Notes
-
-- This file exists *because* of the import boundary documented in `docs/reference/tests.md`; it is not a general-purpose fixture factory. It is only meaningful inside test files of sibling modules.
-- `seedMembership` deliberately has **no** granter parameter. `assignRole` in the service layer requires a granter because an optional one previously made "no granter" mean "skip authorization checks." This helper sidesteps that by using the lower-level `upsertRole` directly, after validating the role name.
-- The `Promise.resolve().then(…)` chain is not async/await; it mirrors the style of the rest of the module and keeps the call chain flat.
+- `seedMembership` takes no granter, unlike `assignRole`, which requires one. The source comment says an optional granter would have made "no granter" mean "no check". It is intended for seeders, migrations and fixtures, which have nobody to escalate from.
+- The role is still validated against the model, so a typo in a fixture throws instead of seeding a member with no permissions.
+- Validation runs inside a `Promise.resolve().then(...)` chain, so a validation failure shows up as a rejected promise, not a synchronous throw.

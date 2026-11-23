@@ -1,38 +1,30 @@
 ---
 source: src/modules/account/presenter.ts
-sha256: aed5417035b52743ab23f78c883e086484f56aaf275da6cc3e25843e379a3434
-generated_at: 2026-11-08T04:14:07.893371+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8554ff18001ac3c3d975151a92e0c1254706613b9575564fb12b57607e44b9e5
+context_sha256: 9ae2546aedf171ebfdaaf288372239187da4463c414dbd48eee830d91ad299c3
+generated_at: 2026-11-22T03:33:41.963693+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/presenter.ts
 
 ## Purpose
-
-Pure mapping layer that converts internal row types (sessions, exports, OAuth links) into the wire shapes returned by the account API. It performs no business logic—rules like expiry caps and ownership decisions are made upstream in `session/` and `services/`—and only reshapes already-resolved values into the JSON the controllers send.
+Single place where stored session rows, export rows, and OAuth link lists are turned into their wire (API response) shapes. It is pure: it only maps values that callers have already decided (which sessions are the caller's own, when the staff lifetime cap ends a session), so the rules stay in `session/` and `services/`. A session's credential never reaches the wire; the family id is the handle a client revokes by.
 
 ## Key elements
-
-- **`sessionFields`** (module-private) — Maps a `SessionRow` + resolved `expiresAt` to an `ExportSession` object. Conditionally includes `lastUsedAt` and `device` only when present.
-- **`presentSession`** — Returns a `Session` (extends `ExportSession`) with a `current: boolean` flag for `GET /account/sessions`.
-- **`presentExportSession`** — Returns a bare `ExportSession` using the row's own `expiresAt`; no `current` field (used in data exports).
-- **`presentExport`** — Returns an `AccountExport` with a `status`, `actions` object (`download`/`request` booleans), and `expiresAt` only when status is `'ready'`. Accepts an externally supplied `status` that may differ from the stored one.
-- **`presentOAuthLinks`** — Maps an array of `{ provider, connectedAt }` entries to the `OAuthLinks` wire shape.
+- `sessionFields` (internal) – shared fields for a session: `id` (stringified `familyId`), `createdAt` (from `startedAt`), `expiration`, and optionally `lastUsedAt` and `device`. `lastUsedAt` is omitted until the session has been used, so an unused session reads as unused.
+- `presentSession(row, expiresAt, current)` – session as listed by `GET /account/sessions`: the shared fields plus `current`. `expiresAt` is passed in with the staff cap already applied.
+- `presentExportSession(row)` – session as carried in a data export: metadata only, no `current`, and uses the row's own `expiresAt`.
+- `presentExport(row, status)` – export as returned by `POST` and `GET /account/export`. It sets `actions.download` to `status === 'ready'` and `actions.request` to `status !== 'building'`. `expiresAt` is included only when `status` is `ready`.
+- `presentOAuthLinks(links)` – maps `{provider, connectedAt}[]` to `{ links: [...] }` with ISO date strings. It backs `GET /account/oauth/links` and `DELETE /account/oauth/links/{provider}`.
 
 ## Relationships
-
-- **`src/types/index.ts`** — Source of all output wire types: `Session`, `ExportSession`, `AccountExport`, `AccountExportStatus`, `OAuthLinks`.
-- **`src/modules/account/repository.ts`** — Source of input row types: `SessionRow`, `AccountExportRow`.
-- **`src/modules/account/services/sessions.ts`** — Upstream caller that resolves `expiresAt` and `current` before invoking `presentSession` / `presentExportSession`.
-- **`src/modules/account/session/listing.ts`** — Upstream caller for session listing paths.
-- **`src/modules/account/services/export.ts`** — Upstream caller for `presentExport`; determines the effective status passed in.
-- **`src/modules/account/controllers/get-oauth-links.ts`** / **`delete-oauth-link.ts`** — Call `presentOAuthLinks` to shape the OAuth link responses.
-- **`src/modules/account/tests/unit/presenter.test.ts`** — Unit tests exercising each presenter function.
+- Imports `SessionRow` and `AccountExportRow` types from `src/modules/account/repository.ts`, and the wire types (`AccountExport`, `AccountExportStatus`, `ExportSession`, `OAuthLinks`, `Session`) from `src/types/index.ts` via `@types`.
+- `src/modules/account/controllers/get-oauth-links.ts` and `src/modules/account/controllers/delete-oauth-link.ts` are the OAuth-link endpoints that `presentOAuthLinks` documents as its consumers.
+- `src/modules/account/services/sessions.ts`, `src/modules/account/session/listing.ts`, and `src/modules/account/services/export.ts` supply the already-decided inputs: session ownership and expiry, and export status.
+- `src/modules/account/tests/unit/presenter.test.ts` covers this module.
 
 ## Notes
-
-- The module is side-effect-free and has no runtime imports—only `import type`. It is safe to call from any context.
-- `lastUsedAt` and `device` are conditionally spread, so they are **absent** (not `null`) in the JSON when the row field is falsy. Consumers should check for key presence, not `null`.
-- `presentExport` intentionally decouples the *stored* status from the *presented* status; the caller (see `readOwnExport` in `services/export.ts`) may pass a different status than what is persisted.
-- IDs (`familyId`, `_id`) are coerced to `String` at the boundary—the wire never exposes numeric or ObjectId types directly.
-- The session's credential token is never included in any presenter output; clients interact via `familyId` as a revocation handle.
+- The status passed to `presentExport` is not always the stored one (the doc comment points to `readOwnExport`), so the caller decides what to display.
+- `expiresAt` on an export is deliberately hidden unless the export is `ready`; otherwise it is only a bookkeeping date, not a promise about a file.
+- All dates are serialized with `toISOString()`.

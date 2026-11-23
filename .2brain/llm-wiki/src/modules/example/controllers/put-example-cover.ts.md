@@ -1,38 +1,35 @@
 ---
 source: src/modules/example/controllers/put-example-cover.ts
-sha256: fe094b5646770003c52b6a2c782f1793416229ce9cdd54c87ee751dca90762b9
-generated_at: 2026-11-14T19:57:51.509538+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:08:02.829216+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/controllers/put-example-cover.ts
 
 ## Purpose
-
-Express handler for `PUT /examples/:id/cover`. Reads the uploaded image (left on the request by the upload middleware) and delegates the cover replacement to the module's service. Exists as the thin controller layer between the HTTP contract and the business logic.
+Express controller for `PUT /examples/:id/cover`. It reads the image that the upload middleware left on the request and passes it to the example service to replace the example's cover. It serves as the module's upload-controller template, and the header says it can be deleted if the module has no upload (along with its cover service, the route and the contract path).
 
 ## Key elements
-
-- **`putExampleCover`** (exported) — the only export. Wrapped in `namedHandler('putExampleCover', …)` for structured logging. Steps:
-  1. `requireId` validates the `:id` path param (404 on failure).
-  2. `readUploadedImage(request)` extracts `imageUrl`, `thumbnailUrl`, `pendingImageKey` from the middleware's request attachment.
-  3. Rejects with **422** (`example.cover-missing`) if no actual image file was uploaded.
-  4. Calls `exampleService.setCover(id, {…}, callerContextOf(request))`.
-  5. On success: `claimUpload(request)` then `successResponse` (200). On refusal/error: `refused` / `catchAs` short-circuit.
+- `putExampleCover`: the exported handler, built with `namedHandler('putExampleCover', ...)`. It does the following:
+  1. Validates the `:id` param with `requireId`, using the `example.not-found` message. If that fails, it returns without doing anything else.
+  2. Reads `{ imageUrl, thumbnailUrl, pendingImageKey }` from `readUploadedImage(request)`.
+  3. Responds `422` with `t('example.cover-missing')` if `imageUrl` is not a string.
+  4. Calls `exampleService.setCover(id, { imageUrl, thumbnailUrl, pendingImageKey }, callerContextOf(request))`.
+  5. If the result was refused, returns, because `refused(response, result)` has already handled the response. Otherwise it calls `claimUpload(request)` and sends `successResponse(response, result.data, 200)`.
+  6. Passes any rejection to `catchAs(response, 'putExampleCover')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — supplies `namedHandler`, `refused`, `catchAs` (error/short-circuit plumbing).
-- **`src/infrastructure/http/ids.ts`** — `requireId` validates the route param against the Express request.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf` extracts auth/caller metadata for the service call.
-- **`src/infrastructure/http/response.ts`** — `successResponse` / `rejectResponse` shape the JSON reply.
-- **`src/infrastructure/http/uploads.ts`** — `readUploadedImage` reads the file metadata the upload middleware stored on `req`; `claimUpload` marks the upload as consumed so the close-hook won't delete it.
-- **`src/infrastructure/i18n/index.ts`** — `t()` localises the 422 error message.
-- **`src/infrastructure/i18n/context.ts`** — provides the i18n request context that `t` reads from.
+- `src/infrastructure/http/controller.ts`: provides `namedHandler`, `catchAs` and `refused`, which wrap the handler and handle service refusals and errors.
+- `src/infrastructure/http/ids.ts`: `requireId` parses and validates the route id.
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `successResponse` and `rejectResponse` write the HTTP responses.
+- `src/infrastructure/http/uploads.ts`: `readUploadedImage` reads the upload result from the request, and `claimUpload` marks the upload as kept.
+- `src/infrastructure/i18n/index.ts` (`t`): localizes the `example.cover-missing` message. `src/infrastructure/i18n/context.ts` is listed as a neighbor, but the file does not use it directly.
+- `src/modules/example/services/index.ts` (`exampleService`): `setCover` performs the actual cover update.
+- `src/modules/example/routes.ts`: the route that wires this handler to `PUT /examples/:id/cover` (the header describes the route; the registration is not in this file).
 
 ## Notes
-
-- **No `If-Match` / ETag.** The route is a whole-file replace; there is no prior GET on this URL to establish a baseline, so optimistic concurrency is intentionally absent.
-- **Upload cleanup is middleware-driven.** The upload middleware's `close` hook deletes the temp file whenever the response is 4xx/5xx. The controller only calls `claimUpload` on the success path; every error/refuse branch relies on the hook. Forgetting to call `claimUpload` on success would orphan-delete a valid upload.
-- **`imageUrl: null` does not clear a cover.** Only a real uploaded file passes validation; a body-only null is rejected with 422.
-- The file is explicitly a template: the doc comment says to delete it (along with `services/cover.ts`, the route, and the contract path) if the module has no cover upload.
+- Upload cleanup: the upload stays unclaimed unless the write succeeds. The upload middleware's close hook deletes uploads from requests that ended 4xx/5xx, so the controller does not need to delete them itself. `claimUpload` is called only after a non-refused result.
+- There is no `If-Match` check, because the URL has no GET and an upload replaces the file whole.
+- A body-only `imageUrl: null` cannot clear a cover. A missing file always gives a 422.
+- The handler returns `Promise.resolve()` on its early exits so every path returns a Promise.

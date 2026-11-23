@@ -1,47 +1,42 @@
 ---
 source: src/kernel/permissions.ts
-sha256: 0d3b6ca26cd92d385a42b3efc8c0aef8583afa8b9c74bb90bcd7c8cd991e4e1a
-generated_at: 2026-11-14T18:23:42.923651+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 73943760b07ab07719718ae629b77bbd51ac04d87a5e85e8027145cc2ce96e92
+context_sha256: c47ca270d9c5ffcad9b36bfb8cf45cf4c13df3357569b96703abb524aaf9ce1a
+generated_at: 2026-11-22T03:14:10.416563+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/kernel/permissions.ts
 
 ## Purpose
+Loads and validates the two shared authorization artefacts, `shared/authorization-keys.generated.yaml` and `shared/rules/authorization-roles.yaml`. These are the same files the PHP twin reads. It exposes the declared permission rules, named sets of rules, preset roles and audience roles. The model is CanCan/Solidus-style: a rule is one action on one subject, a set bundles rules, and a role lists sets. Roles are data and permissions are code. A deployment cannot invent a rule, and the module header names `assertDeclared` as where that is enforced.
 
-Declares the static permission vocabulary—rules, sets, and preset/audience roles—by reading two shared YAML artefacts (`authorization-keys.generated.yaml`, `rules/authorization-roles.yaml`) exactly once at module import. It enforces the CanCan three-layer model (rule → set → role) and guarantees that no deployment can invent a rule not present in those files. Validation failures throw at boot, not on the first authorization decision.
+The files are read once at import, not per request. A malformed file therefore throws at boot rather than on the first request that needs it.
 
 ## Key elements
-
-- **`ruleId(action, subject)`** — canonical `<action>:<subject>` string builder used everywhere a rule is referenced.
-- **`PermissionRule`** — one action-on-subject entry with optional `stepUp`, `conditions` (ABAC filter), `deniedCode`, and `credential` flag.
-- **`PermissionSet`** — named bundle of rule ids (Solidus "ability set").
-- **`PresetRole`** — a seeder-created role listing sets and their fully expanded `permissions` id list; `assignable: false` marks non-assignable roles.
-- **`AUDIENCE_NAMES` / `AudienceRole`** — the three audience tiers (`guest`, `unverified`, `customer`) as named set-bundles; never stored, resolved per-request by `audienceOf`.
-- **`keysDocumentSchema` / `rolesDocumentSchema`** — full Zod schemas for the two YAML files; exported so unit tests can validate malformed fixtures without touching the filesystem.
-- **`readShared<T>(file, schema)`** (private) — reads a file under `shared/`, parses YAML, safe-parses against the schema, and throws a `z.prettifyError`-formatted message on mismatch.
-- **Re-exported types** — `PermissionAction`, `PermissionRuleId`, `PermissionSetName`, `PermissionSubject`, `StepUpTier`, `ActionOn` all come from `@api/permission-vocabulary`.
+- `ruleId(action, subject)`: builds the `<action>:<subject>` id (e.g. `display:Order`) used everywhere rules are listed.
+- `PermissionRule`: a declared rule with `module`, `subject`, `action`, `scope` and `description`. Optional fields:
+  - `stepUp`: a recent-session tier.
+  - `conditions`: ABAC filter fragment, with `$caller.<field>` substitution.
+  - `deniedCode`: a custom `errors[].code` for refusals.
+  - `credential`: `false` means it cannot be minted onto a credential.
+- `PermissionSet`: a named bundle of rule ids, owned by a module.
+- `PresetRole`: a seeded role with `name`, `scope`, `title`, `description`, `sets`, expanded `permissions`, and an optional `assignable` flag. `assignable: false` marks roles like `system`.
+- `AUDIENCE_NAMES` / `AudienceName`: `guest`, `unverified` and `customer`. These are never stored or granted. `audienceOf` picks one per request from the session and the account's `verifiedAt`.
+- `AudienceRole`: an audience declared as a list of sets plus its expanded permissions.
+- `keysDocumentSchema` / `rolesDocumentSchema`: exported Zod schemas for the two YAML files. Unit tests can use them on malformed fixtures. The roles schema's `audience` block is strict, so an unknown audience is refused.
+- Re-exported types from `@api/permission-vocabulary`: `PermissionAction`, `PermissionRuleId`, `PermissionSetName`, `PermissionSubject`, `StepUpTier` and `ActionOn`.
+- Private `readShared(file, schema)`: parses a YAML file under the repo-root `shared/` directory, which it resolves relative to `__dirname`. On a shape error it throws an error naming the file and every Zod issue. The two parsed documents are `keysDocument` and `rolesDocument`.
 
 ## Relationships
-
-- **`src/kernel/access/tenant.ts`** — imports `DEPLOYMENT_TENANT_ID` for scoping platform-level rules.
-- **`src/kernel/ability.ts`** — consumes the expanded rule/set/role data to build the per-request CASL ability.
-- **`src/kernel/access/query.ts`** — spreads the per-rule condition fragments (declared in the YAML) into repository queries.
-- **`src/kernel/middlewares/authorizations.ts`** — the enforcement middleware that calls `requirePermission` against the rules declared here.
-- **`src/kernel/staff-read.ts`** — applies the staff-read rule and its conditions when resolving row-level visibility.
-- **`src/modules/access/services/grants.ts`** — reads role and permission names when creating or validating a grant.
-- **`src/modules/access/services/memberships.ts`** — assigns the preset role to an account; respects the `assignable` flag.
-- **`src/modules/account/roles.ts`** — maps account role fields to the `PresetRole` definitions declared here.
-- **`scripts/contracts/generate-shared-rule-schemas.ts`** — generates the YAML and vocabulary files this module reads; the module is its primary consumer.
-- **`scripts/contracts/permission-security.ts`** — cross-checks declared rules for security invariants (no wildcard `manage`, step-up coverage).
-- **`scripts/docs/generate-role-matrix.ts`** — renders the role→set→rule matrix from `PresetRole` and `AudienceRole` data.
-- **`src/modules/access/tests/**`** — integration and unit tests exercise the expanded `permissions` lists, grantable-role logic, and protection rules declared in this module.
+- Imports `DEPLOYMENT_TENANT_ID` from `@kernel/access/tenant`.
+- Imports the generated vocabulary lists (actions, subjects, set names, scopes, step-up tiers) from `@api/permission-vocabulary`. The Zod schemas are built from these.
+- Imports caller and authorization types (`AuthContext`, `Caller`, `AuthorizationScope` and others) from `@types`.
+- The other listed neighbors are not shown in the visible part of the file, so this page does not describe how they use it. They include `ability.ts`, `src/kernel/middlewares/authorizations.ts`, the access services, `roles.ts` and the scripts under `scripts/contracts` and `scripts/docs`.
 
 ## Notes
-
-- **Boot-time, not per-request.** The YAML is parsed once at `import`; a malformed file crashes the process at startup. Do not call `readShared` lazily.
-- **`deniedCode` is a plain `string`, not an enum.** This avoids a circular dependency: this module loads before `@api/error-codes` is generated by `contracts:bundle`. Validation against the generated error-code catalogue is deferred to `tests/cross-cutting/authorization-keys.test.ts`.
-- **Circular enums at runtime.** Schemas like `z.enum(DECLARED_SUBJECTS)` and `z.enum(PERMISSION_SET_NAMES)` are circular: the generated list *is* the YAML's own key set. They only narrow the type; they cannot reject a value the YAML declares.
-- **No wildcard exists.** `manage` is deliberately absent from `PERMISSION_ACTIONS`; there is no "all actions" rule.
-- **`credential: false` + `stepUp` interaction.** A rule with either flag cannot be satisfied by an API key, even if the key's `permissions` array includes its id.
-- **`conditions` is not an expression language.** It is a flat record of `$caller.<field>` substitutions spread directly into the query; do not add computed fields.
+- `manage` is deliberately not an action, because there is no wildcard.
+- The `deniedCode` value is typed as a plain `string`. It is checked against the error-code catalogue in `tests/cross-cutting/authorization-keys.test.ts`, not here. Importing `@api/error-codes` here would create an ordering cycle with `npm run regenerate`, whose `contracts:bundle` step loads this module before that catalogue exists.
+- Several Zod enums are circular at runtime, because the generated lists are the YAML's own keys. They only narrow the types and cannot reject a value the YAML declares.
+- A rule's `stepUp` tier is a property of the rule, not of a route. A credential can never satisfy `stepUp` rules or platform rules.
+- No two declared rules share an id, and this is checked when the file is read.

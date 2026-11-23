@@ -1,32 +1,28 @@
 ---
 source: src/modules/locales/config.ts
-sha256: 998649025a1ee0f35613b57b8f54ff85f9893fa29f641dd0d4de25fc6dc65ec0
-generated_at: 2026-11-08T06:20:22.284562+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 998649025a1ee0f35613b57b8f54ff85f9893fa29f641dd0d4de25fc6dc65ec0
+context_sha256: 7dffd5d3d41cd2264f6be98567e456641fa919cbb90c3b3459e188ff8603aed5
+generated_at: 2026-11-22T05:41:41.784760+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/config.ts
 
 ## Purpose
-
-Declares the locales module's configuration schema — specifically, which app IDs this deployment holds translation strings for. It is a pure definition file; consumers read the resolved values via `./apps.ts` rather than importing this file directly.
+Defines the locales module's configuration slice: which translation apps this deployment holds words for. The values are not read directly from this file; they are read through `./apps.ts`.
 
 ## Key elements
-
-- **`localesConfig`** (exported const) — A `defineConfig` instance named `'locales-apps'` with three fields:
-  - `NODE_LOCALE_APP_BACKEND` — `text` field, default `'demo-be'`.
-  - `NODE_LOCALE_APP_FRONTEND` — `text` field, default `'demo-fe'`.
-  - `NODE_LOCALE_APPS_EXTRA` — `csv` field (comma-separated list), no default.
+- `localesConfig` — the exported config object, created with `defineConfig` under the name `locales-apps`. Its shape has three fields:
+  - `NODE_LOCALE_APP_BACKEND` — `text` field, defaults to `'demo-be'`.
+  - `NODE_LOCALE_APP_FRONTEND` — `text` field, defaults to `'demo-fe'`.
+  - `NODE_LOCALE_APPS_EXTRA` — `csv` field with no default, for additional app ids.
 
 ## Relationships
-
-- **`src/infrastructure/config/define.ts`** — Provides the `defineConfig` factory used to build `localesConfig`.
-- **`src/infrastructure/config/fields.ts`** — Provides the `text` and `csv` field-type constructors that shape each config entry.
-- **`src/modules/locales/apps.ts`** — The designated reader of `localesConfig`; it resolves the field values and exposes them to the rest of the locales module.
-- **`src/modules/locales/module.ts`** — Module entry point that wires the locales module together; this config file is its configuration source.
+- `src/infrastructure/config/define.ts` — supplies `defineConfig`, which builds the config slice.
+- `src/infrastructure/config/fields.ts` — supplies the `text` and `csv` field builders used in the shape.
+- `src/modules/locales/apps.ts` — the intended reader of `localesConfig`, per the module doc comment.
+- `src/modules/locales/module.ts` — a graph neighbor. The file content shows no direct interaction with it.
 
 ## Notes
-
-- Do not import `localesConfig` directly elsewhere; go through `apps.ts` as indicated by the file's doc comment.
-- The two `text` fields carry `'demo-*'` defaults, suggesting a non-production fallback. Production deployments are expected to override them via environment or config files.
-- `NODE_LOCALE_APPS_EXTRA` has no default (no `default` option passed to `csv()`), so it resolves to an empty/undefined value unless explicitly set.
+- Because of the defaults, a deployment with no env vars set uses the demo app ids `demo-be` and `demo-fe`.
+- Go through `./apps.ts` for app ids rather than reading `localesConfig` directly.

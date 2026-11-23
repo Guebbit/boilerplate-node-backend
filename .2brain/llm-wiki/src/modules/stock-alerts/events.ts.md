@@ -1,30 +1,24 @@
 ---
 source: src/modules/stock-alerts/events.ts
-sha256: 729d71193788ec32f19548434155fc99358c8089ebc8dfff4b303663637ec67c
-generated_at: 2026-11-08T08:28:03.163442+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 41310d34d7c39e827d1591e86b73f70ab6b8411087749eda6f0167f273eb54e0
+context_sha256: 0dc3dc200768300490f98993e379f60e137acde699c46895acddfcd5e3261ee4
+generated_at: 2026-11-22T07:54:08.648992+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stock-alerts/events.ts
 
 ## Purpose
-
-Declares the stock-alerts module's domain event (`stock_alert.sent`) by augmenting the kernel's `DomainEventMap` rather than editing the central map directly, and exports a single spelling constant so emitters and listeners agree on the event name.
+Declares the domain event names emitted by the stock alerts module. Per its header comment, the events are declared in `./asyncapi.domain-events.yaml`. The file exists so emitters and listeners share a single spelling of each event name.
 
 ## Key elements
-
-- **`declare module '@kernel/events'`** — Adds the `stock_alert.sent` entry to `DomainEventMap` with a payload of `userId`, `productId`, and `titles: Record<string, string>` (product name keyed by locale, captured at send-time so it survives product deletion).
-- **`STOCK_ALERT_SENT`** — Exports the literal string `'stock_alert.sent'` as a shared constant for emitters and listeners.
+- `STOCK_ALERT_SENT`: constant equal to `'stock_alert.sent'`. It uses `satisfies DomainEventName`, so the compiler checks it against the kernel's event-name type while keeping the literal type.
 
 ## Relationships
-
-- **`service.ts`** — Emits `STOCK_ALERT_SENT` (via the outbox) in the same transaction that deletes the user's stock-alert request.
-- **`index.ts`** — Re-exports `STOCK_ALERT_SENT` so consumers of the module get the event name without reaching into this file.
-- **`tests/integration/stock-alerts.test.ts`** — Asserts the outbox row shape (including the `titles` map) after a request is fulfilled.
-- **`tests/integration/draft-language-never-leaks.test.ts`** — Verifies that the `titles` payload contains only published locale strings, not draft content.
+- `src/kernel/events.ts`: provides the `DomainEventName` type, which is imported as a type only.
+- `src/modules/stock-alerts/index.ts`, `src/modules/stock-alerts/service.ts`: neighbors in the dependency graph. The constant is documented as being shared between emitter and listeners. This file's content does not show which neighbor uses it.
+- `src/modules/stock-alerts/tests/integration/stock-alerts.test.ts`, `tests/integration/draft-language-never-leaks.test.ts`: integration tests that are neighbors in the graph. The file content does not show how they use it.
 
 ## Notes
-
-- The `titles` field is intentionally denormalized: it snapshots the product's localized name so the inbox row remains meaningful even if the product row is later removed.
-- The event is written to an outbox within the same DB transaction that deletes the alert request — the inbox row exists *exactly* when the request no longer does.
-- The module augmentation pattern means adding a new stock-alert event here does not require touching the kernel's source file.
+- Adding an event name here that is not a valid `DomainEventName` fails type-checking. The kernel's `DomainEventName` is the source of that constraint.
+- The YAML file named in the header comment (`asyncapi.domain-events.yaml`) is the declared source of the event definitions. This file only holds the name constant.

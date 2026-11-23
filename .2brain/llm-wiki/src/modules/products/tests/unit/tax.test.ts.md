@@ -1,32 +1,27 @@
 ---
 source: src/modules/products/tests/unit/tax.test.ts
-sha256: c42109de0385aae28993b8c953a434f936cd2dd6ee50f98db33ded18fb14bc62
-generated_at: 2026-11-08T07:55:02.073405+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c42109de0385aae28993b8c953a434f936cd2dd6ee50f98db33ded18fb14bc62
+context_sha256: 5a14dfb97f5af9ed2cd9058363f8c853e72ed59b9effd0dd0514b748bccdd4af
+generated_at: 2026-11-22T07:20:08.839933+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/unit/tax.test.ts
 
 ## Purpose
-
-Unit tests for `resolveTaxRate`, the single decision point that maps a product's tax class (or the absence of one) to a concrete numeric VAT rate. The suite guarantees that every product resolves to *some* rate and isolates the two relevant environment variables per case so the suite-wide fallback from `tests/support/setup-environment.ts` cannot leak between cases.
+Unit tests for `resolveTaxRate`, the single place that decides which tax rate a product gets. The suite checks that an absent or known tax class always resolves to a real numeric rate, driven by environment-variable configuration.
 
 ## Key elements
-
-- **`describe('resolveTaxRate')`** – top-level suite; four cases:
-  - *absent tax class → shop default*: sets only `NODE_VAT_RATE_DEFAULT`, asserts `resolveTaxRate(undefined) === 0.22`.
-  - *`"reduced"` → reduced rate*: sets both `NODE_VAT_RATE_DEFAULT` and `NODE_VAT_RATE_REDUCED`, asserts the reduced value is returned, not the default.
-  - *`"zero"` → `0`*: asserts a hard-coded zero regardless of env configuration.
-  - *never returns `undefined`*: iterates all three tax-class inputs and asserts the result is always of type `number`.
-- **`setEnvironment`** (imported from `@tests/environment`) – per-test helper that sets process-level env vars for the duration of a case.
+- `describe('resolveTaxRate')` contains four cases:
+  - An `undefined` tax class resolves to the shop default (`NODE_VAT_RATE_DEFAULT`, set to `'0.22'`, giving `0.22`).
+  - `'reduced'` resolves to the reduced rate (`NODE_VAT_RATE_REDUCED`, `'0.1'`, giving `0.1`) and not the default.
+  - `'zero'` resolves to `0` even when the default and reduced rates are configured.
+  - Across `undefined`, `'reduced'` and `'zero'`, the result is always `typeof 'number'`. This case sets no env vars, so it relies on the suite-wide fallback.
 
 ## Relationships
-
-- **`src/modules/products/tax.ts`** — the module under test; provides the `resolveTaxRate` function whose behavior these cases pin down.
-- **`tests/support/environment.ts`** — supplies the `setEnvironment` helper used to scope `NODE_VAT_RATE_DEFAULT` / `NODE_VAT_RATE_REDUCED` to individual test cases, preventing cross-case contamination from the global setup.
+- `src/modules/products/tax.ts`: provides `resolveTaxRate`, the function under test.
+- `tests/support/environment.ts`: provides `setEnvironment`, imported via the `@tests/environment` alias. The tests use it to set `NODE_VAT_RATE_DEFAULT` and `NODE_VAT_RATE_REDUCED` per case.
 
 ## Notes
-
-- The module docblock positions `resolveTaxRate` as *the* single place where a product's rate is decided; any new tax-class handling should go there, and these tests act as the contract.
-- Env vars are set **inside each test** (not in `beforeEach`) so that cases that only care about one rate don't accidentally inherit the other from a shared hook.
-- The `"zero"` case is deliberately config-independent — the rate must be `0` no matter what the environment holds.
+- The header comment says the two rate env vars are restored after each case so the suite-wide fallback does not leak between cases. No restore hook appears in this file, so that behavior presumably lives in the environment support code.
+- The header comment attributes the suite-wide fallback rates to a separate setup file. The "never returns undefined" case depends on that fallback, because it does not call `setEnvironment`.

@@ -1,37 +1,35 @@
 ---
 source: src/modules/orders/tests/integration/schema-contract.test.ts
-sha256: 3c7fd48b0f7d64fc7bb0cce595d686743b9fff3a49fd35508b63d9c41c897de6
-generated_at: 2026-11-08T07:09:10.693487+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 29f32af184b17e4acc30779184d55aa1de910f444e047d737cfd69aa59d415d4
+context_sha256: 1226e7f6f1cb7a092097c97f59aadc0aca36a08070d3fa58d282d07bccfda0e3
+generated_at: 2026-11-22T06:32:41.830726+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/schema-contract.test.ts
 
 ## Purpose
-
-Schema-contract tests for the orders Mongoose schema. Unlike sibling specs that verify transform/behaviour logic, this file asserts what the schema *declares*: serialization shape (`id` vs `_id`/`__v`), field presence/absence in embedded product snapshots, and (per the file's stated intent) defaults, `required` guards, and `select: false` on credentials. It runs against a real MongoDB instance because the behaviours under test belong to Mongoose itself, not application code.
+Integration spec covering the declarations of the order schema (serialisation shape, which paths exist on the embedded product snapshot) rather than behaviour handled by sibling specs. It runs against a real Mongo, since these are Mongoose behaviours and a mock would only assert its own idea of them. The module doc also mentions defaults, per-field `required`, and `select: false` on credentials, and a closing comment introduces cart `userId` uniqueness. Only the order-schema tests are visible in the content provided.
 
 ## Key elements
-
-- **`makeOrderPayload`** — Builds a valid order document: creates a real user and product via factories, embeds the product as a snapshot (`orderLineProductSchema`), and replaces `taxClass` with the resolved `taxRate`. Returns a plain object matching the order schema's top-level shape.
-- **`describe('order schema')`** — Two test cases:
-  - *serialises to id, never `_id` or `__v`* — Verifies `toJSON()` exposes a string `id` and omits Mongoose internals.
-  - *drops `onHand`/`reserved`…* — Confirms the embedded `orderLineProductSchema` has no path for inventory fields, even when the source product document carries them.
+- `setupTestDb()` — called at module level to set up the test database.
+- `makeOrderPayload` — async helper that builds a valid order payload:
+  - Creates a user (`buyer@example.com`) and a product (title `Bought`, price `12.50`).
+  - Embeds the product as a snapshot: `taxClass` is removed and replaced by `taxRate` from `resolveTaxRate(taxClass)`.
+  - Uses `orderNumber` `2026-000001`, currency `EUR`, and one item with quantity 2 and locale `en`.
+- `describe('order schema')` tests:
+  - **Serialises to id** — `toJSON()` exposes `id` (equal to `String(_id)`) and omits `_id` and `__v`.
+  - **Drops onHand/reserved** — the live product's `onHand`/`reserved` pass through `toObject()` but are absent after persistence, as is `available`. This shows the embedded `orderLineProductSchema` declares no path for them.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/orders/repository.ts` | `orderRepository.create()` is the write path under test; the repository owns the schema. |
-| `src/modules/products/index.ts` | Re-exports `resolveTaxRate`, used to map a product's `taxClass` to a concrete `taxRate` for the snapshot. |
-| `src/modules/products/tax.ts` | Source of `resolveTaxRate` (pulled in via the products barrel). |
-| `src/modules/products/tests/factories.ts` | `createProduct` supplies a real product document with `onHand`/`reserved` to prove the embedded schema strips them. |
-| `src/modules/users/tests/factories.ts` | `createUser` supplies the buyer identity for the order payload. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` provisions a real (in-memory or containerised) MongoDB so Mongoose's own default/serialization logic is exercised, not a mock's. |
+- `src/modules/orders/repository.ts` — imported as `orderRepository`, used to create the orders under test.
+- `src/modules/products/tests/factories.ts` — `createProduct` supplies the live product that is snapshotted.
+- `src/modules/users/tests/factories.ts` — `createUser` supplies the buyer.
+- `src/modules/products/index.ts` — `resolveTaxRate` converts the product's `taxClass` to a `taxRate`. The file's comments say `freezeOrderLines` does the same, but that function is not imported here.
+- `tests/support/setup-test-db.ts` — `setupTestDb` (imported via the `@tests` alias) provides the DB lifecycle.
+- `src/modules/products/tax.ts` — a graph neighbor, but not imported directly in the visible content; `resolveTaxRate` comes via the products index.
 
 ## Notes
-
-- **Real Mongo is intentional.** Mocks would assert their own interpretation of Mongoose `default` and `select: false`; the file explicitly avoids that.
-- **Product is embedded, not referenced.** A bare `ObjectId` in `items[].product` would fail validation because the embedded schema requires `title`, `price`, and `taxRate` on the inlined copy.
-- **`taxClass` → `taxRate` substitution** mirrors what `freezeOrderLines` does at write time; the test payload pre-resolves it to match the schema's expected shape.
-- **The file is truncated** in the provided content (ends mid-comment about a `userId`-addressed cart collection). Additional test blocks for defaults, `required`, and credential `select: false` are expected below the visible portion.
+- An order's `items[].product` is an embedded snapshot, not a reference. A bare ObjectId fails validation because title, price and `taxRate` are required on the embedded copy.
+- The snapshot omits the live product's `taxClass` and stores the resolved `taxRate`.
+- The trailing comment about carts and a unique `userId` has no test beneath it in the visible content.

@@ -1,39 +1,37 @@
 ---
 source: src/modules/notifications/services/stream.ts
-sha256: 7650159783c5f42341c7a7c27fa9bd5c3420b3be7a7f16f114997332abc072d4
-generated_at: 2026-11-14T20:26:02.736919+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 399ae13604084515f94c3f39e4c0cd45137bcfe8f8f8d349b585571c36e24b12
+context_sha256: 09e764fc79128ef023e795b2a2c1fa89818e34acf6277d536038c50a39916e15
+generated_at: 2026-11-22T05:56:18.815977+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/services/stream.ts
 
 ## Purpose
-
-Live delivery of notifications over Server-Sent Events, one stream per open tab, routed by user so a frame reaches only that user's connections. Uses the same plain-HTTP, per-process pattern as the observability stream: no broker fan-out, single-host assumption.
+Live delivery of notifications over Server-Sent Events, one stream per open browser tab, routed by user so a frame reaches only the connections of the user it concerns. It follows the same pattern as the observability stream (`src/modules/observability/services/stream.ts`), but keeps a `Map` keyed by user instead of a flat `Set`. Across processes (copies, the cron container) frames travel over Redis pub/sub.
 
 ## Key elements
-
-- **`connections`** (module-private `Map<string, Set<Response>>`) — tracks open SSE responses per user. A `Set` makes disconnect O(1) and prevents duplicate registration.
-- **`HEARTBEAT_INTERVAL_MS`** — 15 000 ms; idle proxies typically drop connections after 30–60 s of silence.
-- **`writeFrame`** (private) — writes one SSE frame (`event:` + single-line `data:` JSON + trailing blank line) to a response.
-- **`publishToUser`** (exported) — pushes a typed frame to every open stream for a given user. Swallows write errors on dropped sockets; the `close` handler handles cleanup.
-- **`openStreamCount`** (exported) — total open streams across all users; intended for tests and gauges.
-- **`streamNotifications`** (exported) — opens an SSE stream for a user via `openSseStream`, registers the response in `connections`, starts a 15 s heartbeat interval (written as an SSE comment so `EventSource` ignores it), and wires `onClose` to clear the interval, remove the response, and delete the Map key when the last stream for that user closes.
+- `publishToUser(userId, event, payload)` — the public push entry point. Delivers to this process's streams first, then publishes `{origin, userId, event, payload}` on the channel. It is fire-and-forget: a Redis outage costs other processes the frame but never fails the caller. The payload type is tied to the event by `SseEventPayloadMap`.
+- `streamNotifications(response, userId, reverify)` — opens a stream through `openSseStream`, registers it in the `connections` map, starts the pub/sub subscription, starts a 15s `: keep-alive` comment heartbeat, and cleans up on close. `reverify` is a callback that re-checks whether the caller still holds the key that opened the stream. `openSseStream` polls it, and the controller wires it to the refresh cookie.
+- `openStreamCount()` — total open streams across all users, for tests and gauges.
+- `connections` — `Map<userId, Set<OpenStream>>`. `OpenStream` holds the `response` and an `end()` function.
+- `deliverLocally` — writes a frame (`event:` / `data:` JSON / blank line) to each of a user's local streams. Write errors are swallowed because the `close` handler will remove the dead socket.
+- `onFanoutMessage` — handles an incoming channel message. It parses and validates it with `fanoutMessageSchema` (zod), drops malformed messages, and skips messages whose `origin` is this process's `originId`.
+- `endEveryStream` — called when the pub/sub link is lost. It ends all local streams so clients reconnect (after `retry:`) and re-read their inbox.
+- Constants: `FANOUT_CHANNEL = 'notifications'`, `originId` (a random UUID per process), `HEARTBEAT_INTERVAL_MS = 15_000`.
 
 ## Relationships
-
-- **`src/infrastructure/http/sse.ts`** — imports `openSseStream`, which sets SSE headers, enforces a concurrent-stream cap, and polls the `reverify` callback for permission rechecks.
-- **`src/types/index.ts`** — imports `NotificationsChannel` and `SseEventPayloadMap` to type channel names and payloads.
-- **`src/modules/notifications/services/inbox.ts`** — consumes `publishToUser` to fan a newly written notification out to the user's live streams.
-- **`src/modules/notifications/services/index.ts`** — barrel re-export of this module's public API.
-- **`src/modules/notifications/tests/unit/stream.test.ts`** — unit tests for frame writing, publish, and stream lifecycle.
-- **`src/modules/notifications/tests/integration/stream-cap.test.ts`** — integration tests verifying the concurrent-stream cap behavior.
-- **`src/modules/notifications/tests/integration/service.test.ts`** — end-to-end notification service tests that exercise live delivery.
+- `src/infrastructure/adapters/pubsub.ts` — `publishMessage` sends frames to other processes. `subscribeToChannel(channel, onMessage, onLost)` receives them and reports a lost link.
+- `src/infrastructure/http/sse.ts` — `openSseStream` writes the headers and applies the stream cap. It returns nothing when a cap refuses the open, and otherwise returns an object with `end` and `onClose`.
+- `src/types/index.ts` — supplies `NOTIFICATIONS_CHANNELS`, `NotificationsChannel` and `SseEventPayloadMap`.
+- `src/modules/notifications/services/inbox.ts` and `src/modules/notifications/services/index.ts` — graph neighbors, but this file shows no direct interaction with them. The "re-read their inbox" behavior refers to `GET /notifications`.
+- Tests: `src/modules/notifications/tests/unit/stream.test.ts`, `src/modules/notifications/tests/integration/service.test.ts` and `src/modules/notifications/tests/integration/stream-cap.test.ts` exercise this file.
 
 ## Notes
-
-- **Per-process only.** A message written in another worker arrives at the next `GET /notifications`, not over the stream. The app is designed to run as a single host; there is no cross-process fan-out.
-- **Heartbeat is an SSE comment** (`: keep-alive\n\n`), not a named event, so the client's `EventSource` silently discards it and no application-level handler fires.
-- **`reverify` is a plain `() => Promise<boolean>` callback** so this file stays agnostic of the authentication mechanism; the controller wires it to the refresh cookie.
-- **Cleanup is two-part:** the interval must be cleared *and* the Map entry removed. A leaked interval writes to a dead socket forever; a leaked Map entry pins the response in memory.
-- **Write-error swallowing in `publishToUser` is intentional** (eslint suppression included). A dropped socket will have its `close` handler remove it; throwing here would fail the very write that triggered the broadcast.
+- Without Redis, delivery is local only. Clients on other processes see the missed frames at their next `GET /notifications`.
+- Local delivery happens before publishing, and the publishing process skips its own message via `originId`, so a frame is not delivered twice.
+- `subscribeToChannel` is called on every stream open. The comment says listening starts with the first stream and is retried by each later one. Its rejection is caught (`.catch(() => false)`).
+- Heartbeats are SSE comment lines, so clients receive no heartbeat event.
+- The close handler must clear the interval and remove the map entry. Otherwise the timer keeps writing to a dead socket and the entry keeps the response in memory.
+- The module's doc comment refers to a "more-than-one-process" section of the notifications docs for the multi-process design.

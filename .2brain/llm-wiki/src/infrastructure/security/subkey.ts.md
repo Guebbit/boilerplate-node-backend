@@ -1,31 +1,32 @@
 ---
 source: src/infrastructure/security/subkey.ts
-sha256: 16449650c05e8ccddea05e4c8a4abc0e0e4860fee009ab94d9f07b0ab6c756f4
-generated_at: 2026-11-08T03:50:02.986861+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0fcab05f434ba02a950aa7f274d0b5fd1477dcc12ab2daaeb77bc14378728e67
+context_sha256: c86f1d2c304e0ff525ae2b56c13601c9263c41aeed8474804f2c1190b007f4e2
+generated_at: 2026-11-22T03:09:43.885788+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/security/subkey.ts
 
 ## Purpose
-
-Single entry point for deriving purpose-bound subkeys from a root secret via HKDF-SHA256 (RFC 5869). Enforces the "one root, one purpose" rule (NIST SP 800-57 §5.2) so that a single high-entropy root never directly serves two unrelated cryptographic roles. Results are cached in-process to keep the request path cheap.
+Single entry point for HKDF key derivation. It derives a purpose-bound 32-byte subkey from a root secret and caches the result. This keeps one root secret from serving two purposes (NIST SP 800-57 §5.2), with the `info` label providing the separation.
 
 ## Key elements
-
-- **`deriveSubkey(root: string, info: string): KeyObject`** — the sole export. Derives a 32-byte subkey using `hkdfSync('sha256', root, '', info, 32)` (empty salt, `info` as the purpose label) and wraps the result in an immutable `KeyObject` via `createSecretKey`. Returns the same instance on repeated calls with identical inputs.
-- **`derived: Map<string, Map<string, KeyObject>>`** — module-level two-level cache (root → info → KeyObject). Prevents redundant HKDF work within a single process lifetime.
+- `deriveSubkey(root: string, info: string): KeyObject` is the only export.
+  - It uses HKDF-SHA256 (RFC 5869) with an empty salt, `info` as the purpose label, and 32 bytes of output.
+  - It wraps the output with `createSecretKey`, so the result is an immutable `KeyObject` that `createHmac` and `createCipheriv` accept directly.
+  - It returns the same instance for the same `(root, info)` pair.
+- `derived` is a module-private `Map<root, Map<info, KeyObject>>` cache.
 
 ## Relationships
-
-- **`pseudonymise.ts`** — imports and calls `deriveSubkey`; this file is a direct dependency of it.
-- **`subkey.test.ts`** — unit tests for `deriveSubkey` (derivation correctness, cache hit/miss, immutability).
-- **`crypto-conformance.test.ts`** — cross-cutting test that exercises this module alongside other crypto primitives on the jest `globalSetup` chain.
-- **`versioned-secret.ts`** / **`delivered-codes.ts`** — listed as graph neighbors (same infrastructure/security or account/2FA domain) but no import of this file is visible in its source; interaction, if any, is indirect through shared consumers.
+- `pseudonymise.ts` imports this module, per the header comment.
+- The header says the file sits on jest `globalSetup`'s chain. For that reason it uses relative imports only.
+- `versioned-secret.ts` and `delivered-codes.ts` are graph neighbors. The file content doesn't show how they use it.
+- `tests/unit/infrastructure/security/subkey.test.ts` and `tests/cross-cutting/crypto-conformance.test.ts` test it.
 
 ## Notes
-
-- The cache is **never invalidated** during a process lifetime. Tests that swap environment values rely on using distinct `root` strings; if a test reuses the same root with different expectations, it will receive the stale cached key.
-- `info` is the only separation mechanism—choosing a distinct `info` string is the caller's responsibility for domain separation and scheme versioning.
-- The function returns a `KeyObject`, not a `Buffer`; pass it directly to `createHmac` / `createCipheriv` rather than re-encoding.
-- The module deliberately uses **relative imports only** (per the file's doc comment) because `pseudonymise.ts` sits on jest `globalSetup`'s resolution chain where absolute/alias imports would break.
+- The cache is keyed on `root` first because tests change the environment between cases. A different root therefore never returns a stale key.
+- The cache is unbounded and never evicts. Raw root secret strings are held as Map keys for the life of the process.
+- `info` can carry a scheme version where wanted, so a new version derives a different key.
+- The salt is deliberately empty because the roots are already high-entropy.
+- Keep imports in this file relative. Path aliases are avoided because of the jest `globalSetup` chain.

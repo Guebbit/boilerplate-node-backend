@@ -1,43 +1,38 @@
 ---
 source: src/modules/account/audit.ts
-sha256: 5bc7988f3c1b7e3c1b6d5a4ae9090d2dac71af537897cff2f1475dfb20c86b5e
-generated_at: 2026-11-14T18:29:47.407242+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 56009348132b895b6b429d71555f7c662288b77f67118dc95d60a9a79fb826ff
+context_sha256: 76eb75c47238aab36530cf6b8215d416a325edef6fad7adaef77c5541cf475a0
+generated_at: 2026-11-22T03:19:44.914363+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/audit.ts
 
 ## Purpose
-
-Declares the full set of audit action strings the account/auth domain emits and registers them into infrastructure's `AuditActionMap` via type-only declaration merging. This lets log tooling, alert rules, and downstream code reference the vocabulary by name while keeping the strings owned by the domain module rather than the infrastructure layer.
+Declares the audit action strings the account module emits and registers them with infrastructure's audit action map via TypeScript module augmentation. This lets infrastructure gain the union type without importing upward, and lets the vocabulary grow with the module that owns it. Action strings use an `auth.` prefix, not `account.`, because log tooling and alert rules that predate the module layout query these strings. The folder name can follow the domain while the wire format stays unchanged.
 
 ## Key elements
-
-- **`accountAuditActions`** (exported `const` object) — The single source of truth for every audit action string in this domain (e.g. `'auth.login'`, `'auth.refresh_token.reuse_detected'`). Keys are descriptive (`AUTH_TOKEN_REFRESHED`); values are the wire-format identifiers queried by log/alert tooling.
-- **`declare module '@infrastructure/observability/audit'`** — Augments the `AuditActionMap` interface so infrastructure's union type includes this module's values, without any runtime import in either direction.
+- `accountAuditActions`: a `as const` object mapping event keys (e.g. `AUTH_LOGIN`) to wire strings (e.g. `'auth.login'`). Groups covered:
+  - Sign-up, login, logout, logout-all and session revocation.
+  - Profile updates and password reset/change.
+  - Account deletion: scheduled, canceled, completed, and `AUTH_ERASURES_REAPPLIED` (the restoration log written by `ops:reapply-erasures`).
+  - Email verification and the email-change lifecycle: requested, completed, canceled, undone, resent.
+  - Refresh-token rotation and reuse detection (`AUTH_REFRESH_TOKEN_REUSE_DETECTED`).
+  - Reauthentication and step-up code sending.
+  - One-time token rejection (`AUTH_ONE_TIME_TOKEN_REJECTED`).
+  - Data export: requested and downloaded.
+  - Two-factor: enrolled, disabled, code sent, challenge failed, backup codes regenerated.
+  - OAuth: linked, unlinked, failed.
+- `declare module '@infrastructure/observability/audit'`: augments `AuditActionMap` with an `account` key whose type is the union of all `accountAuditActions` values.
 
 ## Relationships
+The neighbors listed are the account services that fire these actions, covering account deletion, email change, the erasure ledger, export, logout, OAuth, password reset (request and completion), password, profile, purge deletions, reauth, refresh, signup and tokens. The file itself imports nothing. The augmentation targets `@infrastructure/observability/audit`.
 
-All listed neighbors **consume** `accountAuditActions`; none are imported by this file.
-
-- **src/modules/account/services/signup.ts** – fires `AUTH_SIGNED_UP`.
-- **src/modules/account/services/profile.ts** – fires `AUTH_PROFILE_UPDATED`.
-- **src/modules/account/services/password.ts** – fires `AUTH_PASSWORD_CHANGED`.
-- **src/modules/account/services/password-reset-request.ts** – fires `AUTH_PASSWORD_RESET_REQUESTED`.
-- **src/modules/account/services/password-reset.ts** – fires `AUTH_PASSWORD_RESET_COMPLETED`, `AUTH_ONE_TIME_TOKEN_REJECTED`.
-- **src/modules/account/services/account-deletion.ts** – fires `AUTH_ACCOUNT_DELETE_SCHEDULED`, `AUTH_ACCOUNT_DELETE_CANCELED`.
-- **src/modules/account/services/erasure-ledger.ts** – fires `AUTH_ERASURES_REAPPLIED`.
-- **src/modules/account/services/purge-deletions.ts** – fires `AUTH_ACCOUNT_DELETE_COMPLETED`.
-- **src/modules/account/services/email-change.ts** – fires `AUTH_EMAIL_CHANGE_*` (requested, completed, canceled, undone, resent), `AUTH_EMAIL_VERIFY_*`.
-- **src/modules/account/services/tokens.ts / src/modules/account/services/refresh.ts** – fire `AUTH_TOKEN_REFRESHED`, `AUTH_REFRESH_TOKEN_REUSE_DETECTED`.
-- **src/modules/account/services/reauth.ts** – fires `AUTH_REAUTHENTICATED`, `AUTH_REAUTH_CODE_SENT`, `AUTH_ONE_TIME_TOKEN_REJECTED`.
-- **src/modules/account/services/logout.ts** – fires `AUTH_LOGGED_OUT`, `AUTH_LOGGED_OUT_EVERYWHERE`, `AUTH_SESSION_REVOKED`.
-- **src/modules/account/services/oauth.ts** – fires `AUTH_OAUTH_LINKED`, `AUTH_OAUTH_UNLINKED`, `AUTH_OAUTH_FAILED`.
-- **src/modules/account/services/export.ts** – fires `AUTH_DATA_EXPORT_REQUESTED`, `AUTH_DATA_EXPORT_DOWNLOADED`.
+Some doc comments name the code behind an action: `rotateRefreshToken` fires the reuse-detected action, the purge job fires delete-completed, and `ops:reapply-erasures` fires erasures-reapplied.
 
 ## Notes
-
-- **`auth.` prefix, not `account.`** – Intentional. The strings are matched by log pipelines and alert rules written before the module was moved into the `account/` folder. Renaming the folder does not change the wire format.
-- **`AUTH_ONE_TIME_TOKEN_REJECTED` is deliberately ambiguous** – Unknown, expired, and already-used one-time links all emit the same action so an attacker cannot enumerate valid tokens by timing/response differences. The `metadata.flow` field distinguishes which flow (reset, verify, email-change, restore) was involved.
-- **`AUTH_2FA_CODE_SENT` is the unauthenticated outbound-signal** – It is the only 2FA action a caller without a valid session can trigger, making its failure-rate series the primary indicator of mail-bombing.
-- **Metadata conventions vary by action** – `metadata.via` (deletion cancel), `metadata.method` (reauth, 2FA, export), `metadata.flow` (one-time token), `metadata.reused` (export). Check the inline JSDoc on each key for the exact contract.
+- The augmentation is type-only. Adding a new action to `accountAuditActions` automatically extends the `AuditActionMap` union.
+- Several actions carry documented `metadata` fields. Examples are `via` (`link`, `sign-in` or `staff`) on delete-canceled, `method` on reauth and 2FA enroll/disable, `flow` on one-time-token rejection, and `reused` on export-requested.
+- Unknown and expired one-time tokens deliberately produce the same rejection action.
+- `AUTH_2FA_CODE_SENT` is called out as the 2FA action an unauthenticated caller can trigger an outbound message with, so its failure series is where mail-bombing attempts would show up.
+- Existing wire strings should not be renamed. External log queries and alert rules depend on them.

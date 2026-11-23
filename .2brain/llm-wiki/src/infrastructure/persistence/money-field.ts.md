@@ -1,41 +1,36 @@
 ---
 source: src/infrastructure/persistence/money-field.ts
-sha256: 278b2aabcd9836b856aad736c98ade5413eef70ea6d397982d6c3892b4d10099
-generated_at: 2026-11-08T03:43:29.721899+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ad1883159c110879c04af4de42b1842522b0488671ea4e0fd5218c7b8f9733b0
+context_sha256: 5953fe209f939bf2efc86aefe9dc42e6330f2279c1cd023cd3a7e04cfc0e1a15
+generated_at: 2026-11-22T03:03:08.575013+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/money-field.ts
 
 ## Purpose
-
-Bridges the gap between MongoDB's `Decimal128` storage type and the decimal-text representation (`"19.90"`) that every layer above persistence expects. Provides the Mongoose schema path definition, a lean-query plugin, and a serialization-time padding helper so that money amounts are exact at rest, unambiguous in code, and correctly formatted on the wire.
+Defines how money is stored and read in Mongoose models. Amounts are persisted as BSON `Decimal128` (exact, usable with a database `$sum`), while everything above the persistence layer sees them as decimal text such as `"19.9"`, never a float. The file supplies the schema definition, read-side conversions for hydrated, lean and JSON output, and the helpers that pad amounts to the currency's places for the wire.
 
 ## Key elements
-
-- **`moneyPath(options?)`** — Returns a Mongoose schema-path definition typed as `Decimal128` with a getter that yields decimal text. Accepts `required`, `nonNegative`, and `default`. Tags the path with a custom `money: true` flag used later for discovery.
-- **`moneyPlugin(schema)`** — Mongoose plugin that registers a `post('find'|'findOne'|…)` hook. When the query was run `.lean()`, it calls `stringifyDecimals` on the result so lean rows return text, not `Decimal128` objects.
-- **`moneyPathsOf(schema, prefix?)`** — Walks a schema (including nested/embedded schemas) and returns the dotted path of every field marked with `money: true`.
-- **`padMoneyPaths(serialized, paths, currency)`** — After serialization, pads each amount at the given paths to the currency's decimal places using `padDecimal` from the domain layer. Handles nested objects and arrays.
-- **`stringifyDecimals(value)`** — Recursively replaces every `Decimal128` in a plain object/array with its `.toString()` text. Mutates in place.
-- **`decimalToString(value)`** — Single-value converter: `Decimal128` → text, `string` → pass-through, `number` → `String(n)`, anything else → `undefined`.
-- **`MoneyPathOptions`** — `{ required?, nonNegative?, default? }` shape accepted by `moneyPath`.
-- **`MoneyWalkableSchema`** — Structural interface (`eachPath`) that `moneyPathsOf` needs; avoids importing Mongoose's `Schema` type.
+- `moneyPath(options?)`: schema definition for one money field. It uses `Decimal128` as the type, sets a custom `money: true` option, and adds the `decimalToString` getter and a validator. The validator requires a finite amount, and non-negative when `nonNegative` is set. It also accepts `required` and a text `default`.
+- `MoneyPathOptions`: the options interface (`required`, `nonNegative`, `default`).
+- `moneyPlugin(schema)`: Mongoose plugin with a post hook on `find`, `findOne`, `findOneAndUpdate`, `findOneAndDelete` and `findOneAndReplace`. When the query is `.lean()`, it converts the returned rows' `Decimal128` values to text. Aggregations are deliberately not hooked.
+- `decimalToString(value)`: converts a `Decimal128` to its text. A string or number becomes plain text, and anything else (an absent field) becomes `undefined`. It keeps the stored scale and does not pad.
+- `stringifyDecimals(value)`: recursively replaces every `Decimal128` in a document with its text, in place. It walks plain objects and arrays only.
+- `moneyPathsOf(schema, prefix?)`: returns the dotted paths of all `moneyPath` fields, including those in embedded schemas (e.g. `refunds.amount`), outermost first. It finds them through the `money` option.
+- `MoneyWalkableSchema`: structural type exposing only `eachPath`.
+- `padMoneyPaths(serialized, paths, currency)`: pads every amount at the given paths to the currency's places, in place, walking through objects and arrays. Values past the currency's places are rounded.
 
 ## Relationships
-
-- **`src/domain-primitives/money.ts`** — Imports `padDecimal`, the single source of truth for currency-aware decimal padding.
-- **`src/infrastructure/persistence/serialize.ts`** — Consumes `moneyPathsOf` and `padMoneyPaths` to produce the final wire payload with correctly scaled amounts.
-- **`src/modules/invoicing/model.ts`, `src/modules/orders/model.ts`, `src/modules/payments/model.ts`, `src/modules/products/model.ts`, `src/modules/returns/model.ts`** — Each declares one or more money fields via `moneyPath` in its Mongoose schema.
-- **`src/modules/payments/repository.ts`** — Applies `moneyPlugin` to its model so `.lean()` reads return text.
-- **`tests/unit/infrastructure/persistence/money-field.test.ts`** — Unit tests for `decimalToString`, `stringifyDecimals`, `moneyPath` validation, `moneyPathsOf`, and `padMoneyPaths`.
-- **`tests/integration/persistence/money-field.test.ts`** — Integration tests exercising the full read/write cycle (hydrated, lean, `toJSON`) against a real Mongoose connection.
+- `@domain-primitives/money` (`src/domain-primitives/money.ts`): supplies `padDecimal`, used for the padding. Arithmetic stays in integer minor units there.
+- `src/infrastructure/persistence/serialize.ts`: the module header names the serializer's transform as the `toJSON` path (`stringifyDecimals`). It is also where wire padding takes place, using `moneyPathsOf` and `padMoneyPaths`.
+- Model files under `src/modules/` (invoicing, orders, payments, products, returns): the related models that declare their amount fields with `moneyPath` and apply `moneyPlugin`.
+- `src/modules/payments/repository.ts`: a graph neighbor and consumer of these money models.
+- `tests/unit/...` and `tests/integration/persistence/money-field.test.ts`: cover this file.
 
 ## Notes
-
-- **No setter is defined.** Mongoose's built-in casting handles `number`/`string` → `Decimal128` on write; the only custom logic is the getter.
-- **`isDecimal128` checks `_bsontype`**, not `instanceof`, to avoid breakage from duplicate BSON library copies in the dependency tree.
-- **Padding happens exactly once**, in `padMoneyPaths` at serialization time. The getter (`decimalToString`) intentionally does *not* pad; it preserves whatever scale the DB holds. This matters because `$inc`/`$sum` can drop trailing zeros.
-- **Aggregation results are not hooked** by `moneyPlugin`. A pipeline's `$sum` output is expected to be read as minor units by the caller, not through the text getter.
-- **The `DECIMAL128_FOR_TEXT_FIELD` cast** exists because Mongoose's type system only accepts `String` for a field whose TS interface is `string`, even though the actual BSON type is `Decimal128`. The cast is localized here so the rest of the codebase stays clean.
-- **`nonNegative` validation** converts the stored value back to a number via `Number(text)` for the check; this is safe because `Decimal128.toString()` always yields a finite decimal string for valid amounts.
+- `isDecimal128` checks the `_bsontype` tag rather than `instanceof`, so it works with any copy of the BSON library.
+- `DECIMAL128_FOR_TEXT_FIELD` is a single cast that lets Mongoose accept `Decimal128` for fields typed `string` in the document interfaces.
+- No setter is needed because Mongoose casts text and numbers to `Decimal128` on write.
+- Stored values lose trailing zeros (`$inc` and `$sum` also lose scale), so only the serialization step pads. The readers never do.
+- Mongoose passes a function-form validator message `{ path }`, since the `{PATH}` token only works in a string message.

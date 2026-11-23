@@ -1,34 +1,27 @@
 ---
 source: src/kernel/cookies.ts
-sha256: 216ac1506e690d6bc3ecff05f174aa63b3695d70ad2858e5fee0174d78684d81
-generated_at: 2026-11-08T03:53:08.680397+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 216ac1506e690d6bc3ecff05f174aa63b3695d70ad2858e5fee0174d78684d81
+context_sha256: 43f74179240b9cdac52ae7634fbfafa6e00682d1f8b13bce12112df66b72f5a7
+generated_at: 2026-11-22T03:12:36.242559+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/kernel/cookies.ts
 
 ## Purpose
-
-Thin kernel-level helpers for the two credential channels a request can carry: the **session cookie** (name + reader) and the **`Authorization: Bearer` header** (token parser). It sits above the generic infrastructure cookie utilities and below every consumer that needs to *read* a session credential, providing one shared name and one shared parser so that authentication, logout, and session strategies all agree on the same source of truth.
+Defines the session cookie used by the account module and the SSE-only auth path in `src/kernel/middlewares/authorizations.ts`. It holds the cookie's name, the `Authorization: Bearer` header parser, and a reader for the session cookie on a request. Reading an arbitrary cookie is left to `@infrastructure/http/cookies`.
 
 ## Key elements
-
-- **`SESSION_COOKIE`** — the cookie name (imported from `cookieData.session.name` in `@infrastructure/http/cookies.generated`). Used by both `jwt` mode (carries the refresh token) and `cookie` mode (carries the session id). The `__Host-` prefix enforces `Secure`, `Path=/`, and no `Domain`.
-- **`bearerOf(authorization)`** — parses a `Bearer <token>` value from an `Authorization` header string (case-insensitive scheme, per RFC 9110/6750). Returns the token or `undefined` if the header is absent or uses another scheme. The single parser shared by the auth guard and the logout flow.
-- **`readSessionCookie(request)`** — reads the session cookie off an Express request via the infrastructure `cookieOf` helper. Accepts any object with a `.cookies` property.
+- `SESSION_COOKIE`: the session cookie's name, taken from `cookieData.session.name` in the generated cookie data. It is one neutral name for both session modes. In `jwt` mode the cookie carries the refresh token, and in `cookie` mode it carries the session id.
+- `bearerOf(authorization)`: returns the token from an `Authorization` header that uses the `Bearer` scheme. It returns `undefined` if the header is absent or uses another scheme. The scheme match is case-insensitive (`/^bearer +(\S+)$/i`).
+- `readSessionCookie(request)`: returns the session cookie from an incoming request. It calls `cookieOf(request, SESSION_COOKIE)` and only needs `request.cookies`.
 
 ## Relationships
-
-- **`src/infrastructure/http/cookies.ts`** — provides the generic `cookieOf` utility that `readSessionCookie` delegates to. This file is the *named/session* layer; that file handles arbitrary cookie access.
-- **`src/kernel/middlewares/authorizations.ts`** — the SSE-only auth path that consumes `bearerOf` (and/or `readSessionCookie`) to authenticate a request.
-- **`src/modules/account/session/cookie-strategy.ts` / `jwt-strategy.ts`** — the two session modes that define what the cookie *contains*; both rely on the `SESSION_COOKIE` name this file exports.
-- **`src/modules/account/session/cookies.ts`** — account-module-specific cookie helpers built on top of the kernel constant.
-- **`src/modules/account/controllers/get-oauth-callback.ts` / `get-refresh-token.ts`** — read the session cookie via `readSessionCookie` during OAuth / refresh-token flows.
-- **`tests/unit/kernel/bearer.test.ts`** — unit tests for `bearerOf`.
-- **`src/modules/account/tests/factories.ts`** — test factories that reference `SESSION_COOKIE` when building mock requests.
+- `src/infrastructure/http/cookies.ts`: provides `cookieOf`, the generic cookie reader that `readSessionCookie` wraps.
+- `src/kernel/middlewares/authorizations.ts`: the SSE-only auth path named in the module doc. It is a session-cookie consumer, and it is also where the guard that authenticates a request lives.
+- `src/modules/account/session/*` (`cookies.ts`, `cookie-strategy.ts`, `jwt-strategy.ts`) and the `get-oauth-callback.ts` and `get-refresh-token.ts` controllers: account-module code that deals with the session credential. The docs describe `SESSION_COOKIE` as the name every session-cookie read site consumes.
+- `src/modules/account/tests/factories.ts` and `tests/unit/kernel/bearer.test.ts`: test code in the neighbor list. The bearer test most likely covers `bearerOf`.
 
 ## Notes
-
-- Do **not** import `cookieOf` directly from `@infrastructure/http/cookies` when you specifically need the *session* cookie; use `readSessionCookie` here so the name stays in one place.
-- `bearerOf` is a pure regex match — it does not validate the token, only extracts it. Validation belongs to the caller (auth guard, strategy).
-- The `__Host-` prefix on the cookie name is load-bearing: it forces browser-side security guarantees. Renaming the constant to drop the prefix would silently weaken cookie isolation.
+- The `__Host-` prefix on the cookie name makes browsers refuse the cookie unless it is `Secure`, has `Path=/` and carries no `Domain`. A sibling subdomain therefore can't set or overwrite it.
+- `bearerOf` is meant to be the only Bearer parser. The authenticating guard and the logout that retires a credential must read the same one.

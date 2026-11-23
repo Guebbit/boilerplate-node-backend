@@ -1,36 +1,37 @@
 ---
 source: scripts/docs/generate-audit-actions.ts
-sha256: a40a6596d2de2166d690abed0669d2d6dc29d2dfa81522f218ec7f42ca121fe4
-generated_at: 2026-11-14T17:31:52.599817+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:02:35.690673+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/docs/generate-audit-actions.ts
 
 ## Purpose
-Generates (or `--check`s) the audit-action reference table inside a committed docs page. It imports every module's `audit.ts` plus infrastructure's `coreAuditActions`, scans all of `src/` for the literal target type each action is fired against, and writes the resulting Markdown table between HTML-comment markers. The committed page doubles as a regression guard: a renamed or added action surfaces as a doc diff rather than requiring a per-module test to restate the vocabulary.
+A `tsx` script that generates the audit action reference table inside the audit logs documentation page (`docs/modules/audit-logs.md` in the script's `PAGE` constant). It rewrites only the content between the `<!-- audit-actions:start -->` and `<!-- audit-actions:end -->` markers and leaves the surrounding prose untouched. The committed page acts as the regression guard for the audit vocabulary: a renamed or added action shows up as a diff in review. With `--check`, it reports drift instead of writing, and `complete` runs it that way.
 
 ## Key elements
-- **`main()`** — entry point; collects actions, reads every `.ts` under `src/`, resolves target types, and delegates to `applyMarkerBlocks`.
-- **`collectDeclaredActions()`** — merges infrastructure's three `coreAuditActions` with each module's own action map into a flat `DeclaredAction[]`.
-- **`readModuleActions(file)`** — dynamically imports a module's `audit.ts` and locates the action map by shape (object of strings) rather than by export name, so a load failure throws instead of silently contributing nothing.
-- **`targetTypesOf(identifier, sources)`** — regex-matches `owner.KEY` across all source text, then looks within a ±300-char window for a `targetType:` or `entity:` literal; returns the set of distinct targets found.
-- **`targetTypeCell(types)`** — renders the cell: `—` (no literal target), a single backticked value, or `(varies: …)` for multiple.
-- **`actionTable(rows)`** — sorts by owner then key and emits the four-column Markdown table.
-- **`walk(directory)`** — recursive `.ts` file collector that skips `tests/` subdirectories.
-- **`TARGET_WINDOW` / `TARGET_FIELD`** — the 300-char search radius and the regex (`targetType|entity`) used to extract the literal target.
-- **`checkOnly`** — set from `--check` (via `hasFlag`); when true the script reports drift and exits non-zero instead of rewriting.
+- `checkOnly`: set from `hasFlag('check')`. It switches the script between rewriting the page and only reporting drift.
+- `DeclaredAction` / `AuditActionRow`: an action's `owner`, `varName` (the exported map's name), `key` and wire `value`. The row type adds `targetType`.
+- `walk(directory)`: recursively lists `.ts` files, skipping `tests/` directories.
+- `readModuleActions(file)`: dynamically imports a module's `audit.ts`. It finds the export by shape, an object whose values are all strings, and returns its name and the action map. A module that fails to load fails the script.
+- `collectDeclaredActions()`: combines `coreAuditActions` (owner `infrastructure`) with the actions of every module that has an `audit.ts`, found via `modulesWith(MODULES_ROOT, 'audit.ts')`.
+- `TARGET_WINDOW` (300 chars) and `TARGET_FIELD`: the window around each `varName.KEY` reference in which the script looks for `targetType: '…'` or `entity: '…'`.
+- `targetTypesOf(identifier, sources)`: scans all `src/` sources for every occurrence of an `owner.KEY` identifier and collects the literal target types found nearby.
+- `targetTypeCell(types)`: renders `—` for none found, `` `type` `` for one, and `(varies: …)` with sorted types for several.
+- `actionTable(rows)`: builds the Markdown table (Module, Action, Value, Target type), sorted by owner and then key.
+- `main()`: collects the declared actions, reads the `src/` sources, builds the rows, and passes the table to `applyMarkerBlocks` with label `audit-actions`. It sets `process.exitCode` from the result.
 
 ## Relationships
-- **`scripts/cli.ts`** — imports `hasFlag` to read the `--check` flag.
-- **`scripts/docs/marker-block.ts`** — imports `applyMarkerBlocks` to insert or verify the table between the `<!-- audit-actions:start/end -->` markers.
-- **`scripts/fail-script.ts`** — imports `failScript` as the top-level `.catch` handler.
-- **`scripts/modules-on-disk.ts`** — imports `REPO_ROOT` (repo base path) and `modulesWith` (filter `src/modules/*` to those containing `audit.ts`).
-- **`src/infrastructure/observability/audit.ts`** — imports `coreAuditActions`, the three app-level `security.*` actions included in the table.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — lists this script in a CI mutation wave, confirming it is exercised by the test harness's wave-scheduling logic.
+- `src/infrastructure/observability/audit.ts`: provides `coreAuditActions`, the app-level `security.*` actions.
+- `scripts/docs/marker-block.ts`: `applyMarkerBlocks` does the marker-delimited rewrite or drift check and returns the exit code.
+- `scripts/modules-on-disk.ts`: provides `REPO_ROOT` and `modulesWith` for finding modules that have `audit.ts`.
+- `scripts/cli.ts`: provides `hasFlag` for `--check`.
+- `scripts/fail-script.ts`: `failScript` handles any rejection from `main()`.
+- `tests/unit/scripts/mutation/ci/waves.test.ts`: it is a graph neighbor, but this file does not reference it directly.
 
 ## Notes
-- `targetType` is **not** declared next to the action constant; it is a free string at each `recordAudit`/`emitAuditEvent` call site. The script infers it via a 300-char window scan, so actions whose target is only a runtime parameter (e.g. `updateEntityTranslations`) will show `—`.
-- The `entity:` alternative in `TARGET_FIELD` covers the `createDeleteController` spec shape where the target field precedes the action identifier rather than following it.
-- `readModuleActions` finds the action map by shape (object whose values are all strings), not by export name, so modules are free to name the export whatever they like.
-- The table is sorted deterministically (owner → key) so that a rename is the *only* diff a change can produce in the committed page.
+- `targetType` is not declared next to the actions. It is scraped as text from call sites, so it is heuristic. If an action is chosen by a helper and read further away than the 300-character window, the target is left as `—` rather than risk a wrong attribution.
+- `—` also covers actions that have no object, such as the `security.*` ones, and generic helpers that take the target at runtime.
+- The `varName` found by shape must match how call sites refer to the map, because lookups use `varName.KEY`.
+- `tests/cross-cutting/audit-actions.test.ts` checks the structure (uniqueness, the dotted convention, every module accounted for). This page covers the vocabulary itself.
+- Output is sorted so that only real changes, such as renames, produce diffs.

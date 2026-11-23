@@ -1,42 +1,33 @@
 ---
 source: src/kernel/registry.ts
-sha256: f03d7ba0707cee275358bfbd90e43ce805d2c603b99be10dcecc5346b772bf1f
-generated_at: 2026-11-14T18:24:01.753145+00:00
-model: ollama:qwen3.8:27b
+source_sha256: dc562aad816b1a271ebc917a7b76c38944630df17e9fa60145845c69860978b6
+context_sha256: be5a6738cb74d6bd7a733682411e0326a84cbc1330a76717c56c217a22548521
+generated_at: 2026-11-22T03:14:28.577150+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/kernel/registry.ts
 
 ## Purpose
-
-Defines a set of typed contract interfaces (the "module manifest" slots) that let application-tier modules declare capabilities to infrastructure code without the infrastructure importing the modules. This is the dependency-inversion seam behind the project's module boundary: infrastructure adapters (image worker, queue, webhooks, analytics, translation) cannot import `src/modules/*`, so each module registers a small interface instead, keyed under a named slot on its manifest. The file is a pure type-level registry — it exports no runtime logic beyond re-exporting a couple of helper imports.
+The module registry: turns the explicit module list in `src/modules.ts` into a running application. A module is a typed manifest object declaring everything it needs the app to do for it. This file defines the target/consumer interfaces a manifest can carry, so that infrastructure and foundation code (image worker, translation resolver, webhooks, analytics) can use module-provided behavior without importing `src/modules/*`.
 
 ## Key elements
-
-- **`ImageTarget`** — A single `writeback` callback that persists a finished image digest (`imageUrl`/`thumbnailUrl`) onto a module-owned document, guarded by a `pendingImageKey` match so stale/duplicate jobs are no-ops.
-- **`ModuleConsumer`** — Queue-consumer declaration (`queue`, `handler`, `schema`, `prefetch?`). The `handler` is a method (bivariant) so each module keeps its own generated payload type. Returning `true` acks; `false` parks (permanent rejection); throwing nacks for retry.
-- **`TranslatableTarget`** — Five callbacks (`collection`, `revisionOf`, `cacheTag`, `writeDerived`, `markEdited`, `fieldRules`) that let the generic translation resolver read, validate, write, and invalidate a module's translatable content without importing the owning module's Mongoose model.
-- **`PublicEventProjection`** — Shape of a public webhook event (`eventType`, `data`).
-- **`PublicEventTarget`** — A `toPublicEvent(payload: never)` projection that maps one domain event into zero or one public event. The `never` parameter follows the same variance trick as `kernel/events.ts` handler maps.
-- **`BrowserEventReport`** — `Pick<AnalyticsEventInput, 'event' | 'properties'>`, the payload handed to the analytics provider.
-- **`BrowserEventTarget`** — A `toReport(body)` method (bivariant, so it accepts only its own event's shape) that builds a `BrowserEventReport` from a validated browser-analytics request.
-- **`PersonalDataSubject`** — `{ userId, email, verifiedEmail }` identity for GDPR export/erasure operations; `email` is present because some modules (e.g. `tasks`) match rows by address rather than id. *(Content truncated in source; additional fields may follow.)*
+- `ImageTarget` — `writeback(documentId, key, urls)` persists digested `imageUrl`/`thumbnailUrl` on a module's collection. It only writes if the document's `pendingImageKey` still equals `key`, making stale/duplicate deliveries a no-op. Returns whether a document matched. Registered under `imageTargets`.
+- `ModuleConsumer` — a module's own queue consumer declaration (registered under `consumers`): `queue` (one of `WORKER_CHANNELS`), `handler` (method syntax so each module keeps its own payload type; `true` = ack, `false` = park permanently, throw = nack/retry), required `schema` (zod; handler gets parsed output), optional `prefetch` (default 1), optional `fallbackSweep` (for work with its own durable row, run while the broker is down).
+- `TranslatableTarget` — declares a collection whose user content translation writes validate and invalidate caches for (registered under `translatables`, keyed by `entityType`). Members: `collection`, `revisionOf`, `cacheTag`, `writeDerived`, `markEdited`, and required `fieldRules` (zod object for one locale's fields).
+- `PublicEventProjection` — `{ eventType, data }`, the public webhook-visible event produced from a domain event.
+- `PublicEventTarget` — `toPublicEvent(payload: never)` returns a projection or `undefined`. Registered under `publicEvents` by domain event name; resolved via `resolvePublicEvents`.
+- `BrowserEventReport` — `Pick<AnalyticsEventInput, 'event' | 'properties'>`.
+- `BrowserEventTarget` — `toReport(body)` for browser-reported events the server cannot see. Resolved via `resolveBrowserEvents`, and used to assemble the `POST /analytics/events` contract from the module's `openapi.browser-events.yaml`.
+- The file also imports `assertModuleConfig`, `markDomainEventsWired`, `ConfigSlice`, and `ReencryptReport`, and begins a data-subject export/erasure type; the rest of the manifest and its resolver functions are not shown here.
 
 ## Relationships
-
-- **`src/kernel/events.ts`** — Imports `markDomainEventsWired` at the top of this file; the `PublicEventTarget` / `never`-payload pattern mirrors the handler-map convention already established there.
-- **`src/infrastructure/config/define.ts`** — Imports the `ConfigSlice` type, used by module manifests to declare their config slice.
-- **`src/infrastructure/observability/analytics/index.ts`** — Imports `AnalyticsEventInput` (and the `AnalyticsEventRequest` type from `@types`) to type `BrowserEventReport` and `BrowserEventTarget`.
-- **`src/infrastructure/security/reencrypt.ts`** — Imports `ReencryptReport` (presumably used by a further registry slot below the truncation point).
-- **`src/app/workers.ts`** — The runtime consumer that collects `ModuleConsumer` entries from all module manifests and calls `consumeFromQueue` for each; this file only supplies the shape.
-- **`src/app/jobs.ts`** / **`src/app.ts`** — Application entry points that assemble the manifest list and wire the registry slots into running services.
-- **`scripts/ops/run-job.ts`**, **`scripts/ops/prepare-job.ts`**, **`scripts/ops/reapply-erasures.ts`** — Operational scripts that exercise the job/erasure paths whose contracts are declared through these registry types.
-- **`scripts/docs/generate-jobs.ts`**, **`scripts/docs/generate-rate-limit-budgets.ts`**, **`scripts/docs/jobs-render.ts`** — Documentation generators that read the same manifest/registry declarations to render job and rate-limit docs.
-- **`scenarios/support/demo.ts`** — Test/demo scenario that exercises the module wiring these interfaces describe.
+- Imports `ConfigSlice` from `src/infrastructure/config/define.ts`, `AnalyticsEventInput` from `src/infrastructure/observability/analytics/index.ts`, and `ReencryptReport` from `src/infrastructure/security/reencrypt.ts`.
+- Per its comments, `src/app/workers.ts` collects `consumers` and calls `consumeFromQueue` for each one.
+- Other neighbors (`src/app.ts`, `src/app/config.ts`, `src/app/jobs.ts`, `src/app/worker-process.ts`, the `scripts/docs/*` and `scripts/ops/*` scripts, `scenarios/support/demo.ts`) are in the dependency graph, but the visible portion doesn't show how they interact with this file.
 
 ## Notes
-
-- **Pure type file at runtime.** Every export here is an interface or type alias; the only value import is `markDomainEventsWired` (a function call, not a re-export). The file exists so that both sides of the boundary can `import type { … }` without creating a runtime edge.
-- **`never` and method-bivariance are deliberate.** `PublicEventTarget.toPublicEvent` and `BrowserEventTarget.toReport` use `never` parameters and method syntax (not property-arrow types) specifically so a concrete-typed implementation is assignable into the registry slot. Switching to property syntax would collapse the parameter to `unknown` and break per-module type safety.
-- **One slot per concern, one key per module.** Each interface maps to exactly one manifest key (`imageTargets`, `consumers`, `translatables`, `publicEvents`, browser-events key, personal-data key). Adding a new cross-boundary capability means adding a new interface here and a new key in `src/modules.ts` — not reaching into another module's barrel.
-- **File is truncated in the reviewed snapshot.** The `PersonalDataSubject` definition and any subsequent exports (e.g. a re-encryption or rate-limit budget slot implied by the `ReencryptReport` import) are cut off; treat the export list above as partial.
+- Design rule: infrastructure and foundation code may not import `src/modules/*` (enforced via `boundaries/dependencies` in `eslint.config.ts`). Modules register targets on their manifest and the app tier wires them.
+- Modules are listed explicitly in `src/modules.ts`, not discovered from the filesystem, so the list stays statically typed.
+- `payload: never` in `PublicEventTarget` lets the registry store entries for different event payloads. The owning module still gets full type safety when writing its own `toPublicEvent`.
+- `BrowserEventTarget.toReport` and `ModuleConsumer.handler` use method syntax deliberately, for bivariant parameter checking.

@@ -1,28 +1,25 @@
 ---
 source: src/modules/example/tests/unit/analytics.test.ts
-sha256: eb43a738ecb59af16608e96221b2798c3b127278ceef3843e41d71a831f06346
-generated_at: 2026-11-08T05:55:43.277929+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b60ced2efb555a616d95b31dc3c90e9f1016876f00e2229b6d4e45d813c835af
+context_sha256: 9d6c46e37aa9ddf7ad07da1a3ca0b778d06fe2bcb3e43617b7c6ccbf70f0dd49
+generated_at: 2026-11-22T05:14:34.614070+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/tests/unit/analytics.test.ts
 
 ## Purpose
-
-Unit test that pins the analytics event strings emitted by the example module. It exists to catch accidental renames of the string values (e.g. `example_published` → `example.published`) that would silently break Umami dashboards, since TypeScript alone cannot detect a changed string literal once the constant name is refactored.
+Unit test that pins the example module's analytics event vocabulary string by string. The constant's name can be refactored freely, but the emitted string values are what Umami keys its series on, so they must not change silently.
 
 ## Key elements
-
-- **`describe('the example analytics vocabulary')`** — top-level suite grouping the two assertions.
-- **Test: "spells every event exactly as the dashboards expect"** — asserts `exampleAnalyticsEvents` deep-equals `{ EXAMPLE_PUBLISHED: 'example_published' }`, guarding the literal string values.
-- **Test: "registers its events in the app-wide union"** — assigns `exampleAnalyticsEvents.EXAMPLE_PUBLISHED` to a variable typed as `AnalyticsEventMap['example']`, verifying the `declare module` augmentation is present at type-check time (a runtime `expect` on the value is the fallback).
+- **`the example analytics vocabulary` suite**: the single `describe` block containing both tests.
+- **Spelling test**: asserts `exampleAnalyticsEvents` equals exactly `{ EXAMPLE_PUBLISHED: 'example_published' }`. Adding, removing, or renaming an event string fails it.
+- **Union registration test**: assigns `exampleAnalyticsEvents.EXAMPLE_PUBLISHED` to a variable typed `AnalyticsEventMap['example']`, then checks it equals `'example_published'`. The real check happens at type-check time. The runtime `expect` is secondary.
 
 ## Relationships
-
-- **`src/modules/example/analytics.ts`** — the SUT; exports the `exampleAnalyticsEvents` constant whose keys/values this test locks down.
-- **`src/infrastructure/observability/analytics/index.ts`** — provides the `AnalyticsEventMap` type used in the second test to confirm the module-level augmentation lands in the shared union.
+- **`src/modules/example/analytics.ts`**: provides `exampleAnalyticsEvents`, the object under test. It is imported via the relative path `../../analytics`.
+- **`src/infrastructure/observability/analytics/index.ts`**: provides the `AnalyticsEventMap` type (imported with `import type`, via the `@infrastructure/observability/analytics` alias). The module's `declare module` augmentation adds the `example` key to it, which is what the second test verifies.
 
 ## Notes
-
-- The second test's type assertion (`AnalyticsEventMap['example']`) is only meaningful at **compile time**; if the `declare module` augmentation is removed, the project still compiles in isolation but fails when the full app type-checks. The runtime `expect(event).toBe(...)` is a safety net, not the primary guard.
-- The convention (stated in the file's module docblock) is: **constant names are free to refactor, string values are fixed**. Any rename of the literal must be coordinated with the Umami dashboard configuration.
+- The second test only fails at type-check, not at runtime. If the `declare module` augmentation is dropped, `analytics.ts` still compiles on its own, so only this assignment catches the omission. The test run must include type checking for that to be caught.
+- Changing an event string here means dashboards keyed on the old string will stop matching.

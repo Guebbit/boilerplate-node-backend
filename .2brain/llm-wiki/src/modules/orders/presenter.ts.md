@@ -1,35 +1,33 @@
 ---
 source: src/modules/orders/presenter.ts
-sha256: e260142a6053cfd445bf152f45445108d0f60a44a68928878aa757391c2fe433
-generated_at: 2026-11-14T20:40:12.923224+00:00
-model: ollama:qwen3.8:27b
+source_sha256: eec5293c801f2ad53b623f3ffed27492f5fdd1a28d0d9e8e95fdefa36079b592
+context_sha256: c1b520abef8ed56e65e93fd857ef62f56ae9e3359bd37da14bc74bb50a955995
+generated_at: 2026-11-22T06:16:59.770410+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/presenter.ts
 
 ## Purpose
-
-The single translation point that converts order storage documents into the `Order` wire contracts consumed by API responses. Every order read path funnels through this module so that formatting, PII handling, and audience-based field stripping live in exactly one place.
+Converts stored order data into the wire contracts the API returns: the full `Order`, the slimmer list row, and timeline entries (decrypting staff notes and hiding staff-only fields from buyers). It is described as the single place where an order document becomes the `Order` contract. `src/modules/orders/services/scope.ts`'s `withActions` builds on it.
 
 ## Key elements
-
-- **`presentOrder(document: OrderDocument): Order`** — Calls `document.toJSON()` and casts to the `Order` contract. The cast exists because Mongoose's `.toJSON()` overloads resolve to the schema type, not the domain type.
-- **`presentOrderListItem(order: ExportOrder, actions: OrderActions): OrderListItem`** — Projects a full `ExportOrder` down to the minimal fields a list row needs (id, number, statuses, price, timestamps). Conditionally includes `paidAt`, `createdAt`, `deletedAt` only when present. Attaches the caller's `actions`.
-- **`presentTimelineEntry(event: OrderEventDocument, reader: 'buyer' | 'staff'): OrderTimelineEntry`** — Maps one stored timeline row to the wire shape. Includes `actor` only for staff readers. Decrypted text is included conditionally. Derives `audience` from `TIMELINE_AUDIENCE[event.type]`.
-- **`presentTimeline(events: readonly OrderEventDocument[], reader): OrderTimelineEntry[]`** — Maps a page of already-filtered events through `presentTimelineEntry`.
-- **`textOf(event)`** *(private)* — Returns `event.text` as-is, except for `note_added` rows where it decrypts PII using the order-ID-bound AAD.
+- `presentOrder(document)` – returns `document.toJSON() as Order`. The single cast narrows the schema's `toJSON` return type. The file notes that `toJSON` leaves no date or id objects (`serialize.ts`).
+- `presentOrderListItem(order, actions)` – builds an `OrderListItem` from an `ExportOrder` plus the caller's `OrderActions`. It copies only table fields (id, orderNumber, statuses, totalPrice, currency) and includes `paidAt`, `createdAt` and `deletedAt` only when defined. It leaks no address, email, lines or notes. The full record comes from the audited `GET /orders/{id}`.
+- `textOf(event)` (private) – for `note_added` events with text, decrypts it via `decryptPii`. The AAD comes from `timelineNoteAad(String(event.orderId))` and the label is `'order timeline note'`. Every other event type's text is returned as stored.
+- `presentTimelineEntry(event, reader)` – maps one `OrderEventDocument` to an `OrderTimelineEntry` with `id`, ISO `at`, `type`, `audience` (from `TIMELINE_AUDIENCE[type]`) and `data`. `actor` is included only when the reader is `'staff'` and the event has one. `text` is included only when non-empty. It ends with the timeline's one read-side `as` cast.
+- `presentTimeline(events, reader)` – maps a page of rows through `presentTimelineEntry`.
 
 ## Relationships
-
-- **`src/types/index.ts`** — Source of every wire-contract type this file imports: `Order`, `ExportOrder`, `OrderActions`, `OrderListItem`, `OrderTimelineEntry`.
-- **`src/modules/orders/model.ts`** — Provides the storage-side types `OrderDocument` and `OrderEventDocument` that serve as input parameters.
-- **`src/modules/orders/domain/index.ts`** — Supplies `TIMELINE_AUDIENCE`, the static map from event type to its intended audience, used to populate each entry's `audience` field.
-- **`src/infrastructure/security/pii-encryption.ts`** — Provides `decryptPii`, the only decryption call in this file.
-- **`src/modules/orders/pii.ts`** — Provides `timelineNoteAad`, which builds the authenticated-encryption AAD string from the order ID, ensuring notes are bound to their order.
+- `src/modules/orders/model.ts` – supplies the `OrderDocument` and `OrderEventDocument` types.
+- `src/modules/orders/domain/index.ts` – provides `TIMELINE_AUDIENCE`, which sets each entry's `audience`.
+- `src/modules/orders/pii.ts` – provides `timelineNoteAad`, which binds a note's ciphertext to its order.
+- `src/infrastructure/security/pii-encryption.ts` – provides `decryptPii`.
+- `src/types/index.ts` – provides the `Order`, `ExportOrder`, `OrderListItem`, `OrderActions` and `OrderTimelineEntry` contracts.
+- The file's comments say the export builds on `presentTimelineEntry` and reference `appendTimeline` as the typed writer of timeline rows. This file does not import `src/modules/orders/services/actions.ts`, `src/modules/orders/services/timeline.ts` or `src/modules/orders/domain/timeline.ts`.
 
 ## Notes
-
-- The file explicitly does **not** filter timeline rows by audience — that is the query's job (`BUYER_VISIBLE_TYPES` in `services/timeline.ts`). `presentTimeline` assumes the input array is already narrowed.
-- `presentOrder` is the only export that performs a type assertion (`as Order`). The doc comment flags this as the same pattern used in `products/presenter.ts` and the one place the compiler can't narrow on its own.
-- PII decryption is scoped to `note_added` events only; all other timeline text is stored and served verbatim.
-- `presentOrderListItem` omits address, email, line-item, and note fields by construction — a list row never leaks full-record data.
+- The audience filter for buyers is done in the query (`BUYER_VISIBLE_TYPES`), not here. This keeps a buyer's page and its count consistent, and `presentTimeline` assumes the rows are already narrowed.
+- An entry's `audience` is a property of its event type and does not change with the reader. Only `actor` varies by reader.
+- The timeline cast is safe only because `type` and `data` are paired on write through `appendTimeline`, the one trusted writer.
+- `presentOrder` relies on the contract tests to check the shape beyond the cast.

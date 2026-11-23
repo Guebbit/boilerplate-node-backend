@@ -1,55 +1,49 @@
 ---
 source: src/modules/shop-tasks/services/tasks.ts
-sha256: 3302faf07ceae565ccfd3037096c19296866406398d049b7a35a1cb13ccfdedf
-generated_at: 2026-11-14T21:54:09.588606+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f169343fb8771bbef101ce277e1888b3677ec4ce179295e6f4056d79a10adb63
+context_sha256: 5076bf2dd59e2db71392f523935448d2909c68598385400ac8bfc1f14c635cc4
+generated_at: 2026-11-22T07:43:36.103511+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/services/tasks.ts
 
 ## Purpose
-
-Maps domain events (payment, inventory, shipment, fulfillment) to concrete shop tasks. It decides *which* event opens or clears *which* task and *which* staff screen the task links to. The actual persistence and dedup live in the tasks engine (`taskService`); this file is purely the event-to-situation translation layer.
+Maps payment, stock and delivery domain events to staff to-dos for the shop. Each event opens (or touches) one task per situation, and the event that ends the situation clears it. The tasks engine (`taskService.openSystemTask` / `clearSystemTasks`) does the writing and dedup. This file only decides which event is which situation and which staff screen does the work.
 
 ## Key elements
-
-- **`shopTasks`** (exported object) — the handler collection that `module.ts` subscribes to. Each method is `(payload, meta) => Promise<void>`:
-  - `onRefundOwedByHand` — opens a manual-refund task on the payments-attention screen.
-  - `onRefundFailed` — opens a refund-refused task only for final, non-disputed failures; skips `disputed` (bank already handled it).
-  - `onRefundReversed` — re-opens the refund-owed task when the bank returns money; skips disputed reversals.
-  - `onRefundClosed` — clears all three refund-related task kinds by `refundId`.
-  - `onAmountMismatch` — opens a mismatch task linked to the order page.
-  - `onDispute` — single handler for `dispute_opened`/`dispute_updated`; transitions between `dispute` → `dispute_awaiting_bank` → closed based on `payload.status`.
-  - `onHoldOrphaned` — opens a paid-without-hold task on the order page.
-  - `onOrderCanceled` — clears the paid-without-hold task.
-  - `onShipped` — clears both paid-without-hold (by order) and consent-due (by fulfillment order).
-  - `onFulfillmentOrderCanceled` — clears the consent-due task.
-  - `onDelayed` — opens a consent-due task only when `consentDueOpening` returns a non-null opening.
-- **`open(opening, work, meta)`** — thin wrapper around `taskService.openSystemTask` that merges the opening with its staff-screen link.
-- **`guarded(name, work)`** — catches handler errors, logs via `logger.error`, then re-throws so the outbox redelivers (a missed open = lost task).
-- **`attentionDueAt(now)`** — computes a due date from `paymentAttentionMinutes()` for situations with no legal clock.
-- **`legalDeadlineOf(due)`** — projects a `RefundDue` into a `LegalDeadline` (`rule` + day in shop timezone).
-- **`orderWork(orderId)`** / **`PAYMENTS_ATTENTION_WORK`** — build the staff-screen URLs passed as the task's `work` field.
+- `shopTasks`: exported object of event handlers, which `module.ts` subscribes.
+  - `onRefundOwedByHand`: opens a `refundOwedOpening` task for `payment.refund_owed_by_hand`, linked to the payments attention tab.
+  - `onRefundFailed`: for `payment.refund_failed`, acts only when `payload.final` is true. It skips opening a task if an open dispute's to-do already carries the refund (`disputeTaskCarries`). Otherwise it opens `refundRefusedOpening`, due at the legal deadline or the attention window.
+  - `onRefundReversed`: for `payment.refund_reversed`, uses the same dispute check and due-date logic as `onRefundFailed`, and opens `refundReversedOpening`.
+  - `onRefundClosed`: clears the `manual_refund_owed`, `refund_refused` and `refund_reversed` tasks linked to the refund id. It serves `payment.refunded` and `payment.refund_canceled`.
+  - `onAmountMismatch`: opens `amountMismatchOpening`, linked to the plain sales-payments page.
+  - `onRefundUnrecorded`: opens `refundUnrecordedOpening`, linked to the payments attention tab.
+  - `onReturnRefundShort`: opens `returnRefundShortOpening`, linked to the return's staff page.
+  - `onReturnClosedByHand`: clears `return_refund_short` tasks for the return.
+  - `onDispute`: handles `payment.dispute_opened` and `payment.dispute_updated`, with one to-do per stage. A `needs_response` status opens `disputeOpening`. The rest of the handler is beyond what is visible here.
+- `open`: private helper that adds the `work` link to an opening and calls `taskService.openSystemTask`.
+- `guarded`: logs a handler's failure with `logger.error`, then rethrows so the outbox redelivers.
+- `attentionDueAt`: now plus `paymentAttentionMinutes()`, the due date for situations without a legal clock.
+- `afterDisputeDueAt`: due date for a refund the dispute held back. It is never already past: the legal deadline is used only if it is still ahead and sooner than the attention window.
+- `disputeTaskCarries`: true only when the failure reason is `disputed` and `paymentService.disputeStanding` reports an open dispute.
+- `disputeEndedNote`: builds the closing note for a dispute's task. It adds a warning when `paymentService.keptInOtherCurrencyOn` reports money kept in a different currency than the payment's.
+- `legalDeadlineOf`: converts a refund's `RefundDue` into `{ rule, day }`, with the day taken in the shop's timezone.
+- `orderWork`, `PAYMENTS_ATTENTION_WORK`: build the staff-screen links.
 
 ## Relationships
-
-- **`src/modules/tasks/index.ts` / `src/modules/tasks/services/index.ts`** — sole write path; this file calls `openSystemTask` and `clearSystemTasks` and nothing else.
-- **`src/modules/shop-tasks/domain/openings.ts`** — provides the `ShopOpening` constructors (`refundOwedOpening`, `disputeOpening`, etc.) and the `LegalDeadline` / `ShopOpening` types. This file chooses *which* constructor to call; the constructors encode the domain shape.
-- **`src/modules/payments/index.ts` / `src/modules/payments/services/index.ts`** — reads `paymentService` (to fetch stamped legal deadlines for refunds) and `paymentAttentionMinutes` (threshold for non-legal due dates).
-- **`src/modules/payments/config.ts`** — source of `paymentAttentionMinutes`.
-- **`src/modules/payments/domain/lifecycle.ts`** — defines `RefundDue` type consumed by `legalDeadlineOf`.
-- **`src/modules/shop/index.ts` / `src/modules/shop/service.ts`** — reads `shopTimezone` and `shopCountry` for calendar/day calculations.
-- **`src/infrastructure/http/frontend-link.ts`** — `FRONTEND_LINK_RULES` + `fillPath` produce the staff URLs.
-- **`src/infrastructure/adapters/logger.ts`** — used only inside `guarded` for error logging.
-- **`src/domain-primitives/time.ts`** — `MINUTE_MS` (unit conversion) and `dayInZone` (timezone-aware day extraction).
-- **`src/kernel/events.ts`** — `DomainEventMap` / `DomainEventMeta` types shape every handler's parameters.
-- **`src/modules/shop-tasks/services/index.ts`** — barrel re-export for the shop-tasks services module.
-- **`src/modules/shop-tasks/services/delayed.ts`** — sibling service; `onDelayed` here is described as "the task half of `fulfillment_order.delayed`", implying `delayed.ts` handles the non-task half.
+- **`../domain/openings`**: supplies the pure `*Opening` builders (`refundOwedOpening`, `disputeOpening`, and others) and the `ShopOpening` and `LegalDeadline` types. This file feeds them payloads and due dates.
+- **`@modules/tasks`**: `taskService` does the actual open and clear operations.
+- **`@modules/payments`**: `paymentService` (`disputeStanding`, `refundLegalDue`, `keptInOtherCurrencyOn`), `paymentAttentionMinutes` and the `RefundDue` type.
+- **`@modules/shop`**: `shopTimezone()` and `shopCountry` (imported; the visible part only uses the timezone).
+- **`@infrastructure/http/frontend-link`**: `FRONTEND_LINK_RULES` and `fillPath` build the staff-screen links.
+- **`@infrastructure/adapters/logger`**: error logging in `guarded`.
+- **`@kernel/events`**: `DomainEventMap` and `DomainEventMeta` type the payloads and delivery metadata.
+- **`@domain-primitives/time`**: `MINUTE_MS` and `dayInZone`.
 
 ## Notes
-
-- `onRefundFailed` and `onRefundReversed` both **skip** `disputed` failures silently (return `Promise.resolve()`) because the dispute task already covers that case. Do not "fix" this by also opening a refund task.
-- `onDispute` is a single handler for two events (`dispute_opened` + `dispute_updated`). The `under_review` branch first *clears* the `dispute` task, then *opens* `dispute_awaiting_bank` — the ordering matters for dedup keys.
-- `onShipped` clears tasks across **two different entity types** (order and fulfillment order) in sequence; if the first clear fails, the second never runs.
-- `onDelayed` may resolve with no-op if `consentDueOpening` returns `null` (delay doesn't trigger a consent obligation in that case).
-- All handlers that open a task pass `meta` (event delivery facts) so the tasks engine can deduplicate redeliveries by `eventId`.
+- Handlers pass `meta` through to the tasks engine. Its `eventId` makes a redelivered event a no-op.
+- `guarded` rethrows after logging, because a missed open is a lost task and the outbox must redeliver.
+- A `disputed` refund failure or reversal is left to the dispute to-do while a dispute is open. With none open, the refund opens its own task.
+- `onRefundUnrecorded` and `onAmountMismatch` are closed by staff. No event clears them.
+- `onReturnRefundShort` keeps its original figures, since there is one open to-do per return.

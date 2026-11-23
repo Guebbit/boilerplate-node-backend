@@ -1,40 +1,37 @@
 ---
 source: src/modules/stats/services/sales.ts
-sha256: 5828939d702a63e469d28717f3ef1158f8ea34be04d6f8c35a7b17d0f00c5b65
-generated_at: 2026-11-14T22:02:23.075219+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8bbeeed4edbc31b181975c93d5c8036f03cc934a25b973c5b18490ba2142fd3f
+context_sha256: 3f712ff14ba882dd5c90cbce75d966530aa8a29cfb8c25bfc412a252bfc7cc3c
+generated_at: 2026-11-22T07:52:16.937075+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stats/services/sales.ts
 
 ## Purpose
-
-Merges time-bucketed sales data from invoicing (money), orders (paid orders/units), and returns (reversed units) into a single per-currency, per-bucket `SalesStats` response for a given period and its preceding period. Each source arrives pre-aggregated (a few hundred rows at most), so the work here is a key-based merge, not a large join.
+Builds the sales-over-time statistics for a period. It pulls already-grouped rows from three owning modules (money from `invoicing`, paid orders and units from `orders`, returned units from `returns`) and merges them by currency and bucket. Each owner returns at most a few hundred rows, so this file only merges by key and does no large in-memory join.
 
 ## Key elements
-
-- **`getSalesStats(period: Period)`** *(exported)* — Fetches current- and previous-period raw figures in parallel, then assembles the `WithoutLimits<SalesStats>` object: sorted currency list, per-currency totals, previous-period totals, and the full bucket series.
-- **`rawFiguresFor(window)`** *(internal)* — Calls `invoicingService.moneyBuckets`, `orderService.paidBuckets`, and `returnService.returnedBuckets` concurrently; merges their rows into a `ByCurrency` table keyed by ISO instant.
-- **`cellOf(table, currency, bucket)`** *(internal)* — Get-or-create a `RawFigures` cell inside the nested `Map<string, Map<string, RawFigures>>`.
-- **`totalOf(row)`** *(internal)* — Sums every bucket in one currency's row into a single `RawFigures` via `addRawFigures`.
-- **`ByCurrency`** *(internal type)* — `Map<currency, Map<bucketISO, RawFigures>>`; the working table shape used during the merge.
+- `getSalesStats(period)` (exported): returns `Promise<WithoutLimits<SalesStats>>` containing the period echo and one entry per currency. Each entry has `totals`, `previous` (the previous period's totals), and `buckets`, which has one entry per `period.bucketStarts` with `start` as an ISO string and `figures`.
+- `rawFiguresFor(window)`: runs `invoicingService.moneyBuckets`, `orderService.paidBuckets` and `returnService.returnedBuckets` in parallel. It writes their fields into a `ByCurrency` table:
+  - invoiced goods, shipping, tax and gross
+  - credited goods, shipping, tax and gross
+  - `orders` and `unitsOrdered`
+  - `unitsReversed`
+- `cellOf(table, currency, bucket)`: returns the `RawFigures` cell for a currency and bucket, creating an empty one on first touch. Buckets are keyed by their ISO instant.
+- `totalOf(row)`: sums all buckets of one currency with `addRawFigures`. An undefined row gives empty figures.
+- `ByCurrency`: type alias for `Map<currency, Map<bucketISO, RawFigures>>`.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/invoicing/index.ts` | Imports `invoicingService`; calls `moneyBuckets(window)` for invoiced/credited amounts. |
-| `src/modules/orders/index.ts` | Imports `orderService`; calls `paidBuckets(window)` for order and unit counts. |
-| `src/modules/returns/index.ts` | Imports `returnService`; calls `returnedBuckets(window)` for reversed-unit counts. |
-| `src/modules/shop/index.ts` | Imports `shopCurrency()` to guarantee the shop's own currency always appears in the result. |
-| `src/modules/stats/domain/figures.ts` | Imports `addRawFigures`, `emptyRawFigures`, `figuresOf`, and the `RawFigures` type. |
-| `src/modules/stats/services/range.ts` | Imports `Period` and `WithoutLimits` types that define the function signatures. |
-| `src/types/index.ts` | Imports the `SalesStats` return shape. |
-| `src/modules/stats/services/index.ts` | Re-exports this file's public API as part of the stats service barrel. |
+- `@modules/invoicing`, `@modules/orders` and `@modules/returns` supply the grouped data through `invoicingService`, `orderService` and `returnService`.
+- `@modules/shop` supplies `shopCurrency()`.
+- `../domain/figures` supplies `RawFigures`, `emptyRawFigures`, `addRawFigures` and `figuresOf`. `figuresOf` converts raw figures into the output figures for a currency.
+- `./range` supplies the `Period` and `WithoutLimits` types. The period provides `window`, `previous`, `echo` and `bucketStarts`.
+- `@types` supplies the `SalesStats` type.
 
 ## Notes
-
-- The merge uses `Object.assign` per source: invoicing fills money fields, orders fill `orders`/`unitsOrdered`, returns fill `unitsReversed`. Because the fields are disjoint, order of assignment does not matter, but adding a new source that writes the same key will silently overwrite.
-- The shop's own currency is **always** included in the output (even with zero activity), so an empty period yields zeros rather than an empty array. All other currencies appear only if at least one period had activity in them.
-- Currencies in the response are sorted alphabetically via `toSorted()`.
-- Bucket keys throughout are `Date#toISOString()` strings; callers that receive the result should treat `start` as an ISO-8601 instant, not a timestamp number.
+- The shop's own currency is always included, so an empty period shows zeros. Other currencies appear only if they have data in the current or previous period.
+- Currencies are sorted alphabetically.
+- Output buckets follow `period.bucketStarts`. Buckets with no data get empty figures. Rows returned by owners whose bucket is not in `bucketStarts` contribute to the totals but are not emitted as buckets.
+- The previous period is fetched with the same logic, and only its totals are returned, not its buckets.
+- `Object.assign` writes each source's fields onto the cell, so the three sources must write disjoint fields to avoid overwriting one another.

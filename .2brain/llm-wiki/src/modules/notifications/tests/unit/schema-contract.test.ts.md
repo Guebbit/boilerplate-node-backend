@@ -1,36 +1,32 @@
 ---
 source: src/modules/notifications/tests/unit/schema-contract.test.ts
-sha256: ba1b26a7a19ec8e91eec527d91e5d6206009b2ad55299bd7d6d765f1b96fde5b
-generated_at: 2026-11-08T06:37:07.440399+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7a2ec0b4561a9572e6447f2129ce22be1a390181421825416e50f2f3d2a2f962
+context_sha256: 4cab8a8f3faf720ed405b08f48201ce2c431cdb6db81ac3cb2e256d24add1793
+generated_at: 2026-11-22T05:59:25.712140+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/tests/unit/schema-contract.test.ts
 
 ## Purpose
-
-Unit test that pins the **schema contract** (field declarations, constraints, and indexes) of `notificationSchema` without exercising document-level behavior. It guards against silent drift in required fields, enum membership, defaults, index shape, and timestamp options — changes that would break the inbox read, the cap trim, or deduplication even though no single fixture goes invalid.
+Unit test pinning the declarative contract of `notificationSchema`: required paths, defaults, enums, refs, indexes and timestamp options. It checks the schema declarations rather than document validation, so a dropped enum or flipped index direction fails here even though no valid fixture would change.
 
 ## Key elements
-
-- **`describe('notificationSchema')`** — single suite covering seven contract assertions:
-  - **Required paths** — asserts exactly `audience`, `code`, `severity`, `userId` are required.
-  - **`readAt` absence** — verifies it is neither required nor defaulted (a default would silently mark every row as read).
-  - **Enum openness** — `severity` must equal `Object.values(NotificationSeverity)`; `code` must have **no** enum (open set owned by the writing module).
-  - **`params` default** — must be `{}` since its shape is code-dependent.
-  - **`userId` ref** — must point to the `User` collection.
-  - **Index specs** — asserts three compound indexes: `expiresAt+1` (TTL), `userId+1, createdAt-1` (inbox read / cap trim), `userId+1, dedupeKey+1` (redelivery dedupe).
-  - **`audience`** — defaults to `'own'`; enum is `['own', 'staff']`.
-  - **Timestamps** — `createdAt: true`, `updatedAt: false` (rows are write-once, immutable).
+- `describe('notificationSchema')` with eight tests:
+  - **Required paths**: exactly `audience`, `code`, `severity`, `userId`.
+  - **`readAt`**: not required and has no default, since a default would mark new notifications as already read.
+  - **Enums**: `severity` equals `Object.values(NotificationSeverity)`. `code` has no enum, so each writing module owns its own codes.
+  - **`params`**: defaults to `{}`.
+  - **`userId`**: refs `'User'`.
+  - **Indexes**: exactly `expiresAt_1`, `userId_1_createdAt_-1` (inbox read, and the cap's trim from the far end) and `userId_1_dedupeKey_1` (one row per recipient for a redelivered event). `expiresAt` is a TTL index so work notices age out.
+  - **`audience`**: defaults to `'own'`, enum `['own', 'staff']`.
+  - **Timestamps**: `{ createdAt: true, updatedAt: false }`, because a row is written once.
 
 ## Relationships
-
-- **`src/modules/notifications/model.ts`** — source of `notificationSchema`, the sole subject under test.
-- **`src/types/index.ts`** — provides `NotificationSeverity`, used as the expected closed set for the `severity` field.
-- **`tests/support/schema.ts`** — supplies the introspection helpers (`requiredPaths`, `enumOf`, `defaultOf`, `refOf`, `indexSpecs`, `optionsOf`) that extract schema metadata for assertions.
+- `src/modules/notifications/model.ts`: provides `notificationSchema`, the sole subject under test.
+- `src/types/index.ts`: provides `NotificationSeverity` (imported via `@types`), the expected value for the `severity` enum.
+- `tests/support/schema.ts`: provides the introspection helpers `defaultOf`, `enumOf`, `indexSpecs`, `optionsOf`, `refOf` and `requiredPaths` (imported via `@tests/schema`).
 
 ## Notes
-
-- The `code` field is deliberately **not** constrained by an enum in the schema; the test asserts `enumOf(...) ?? []` equals `[]`. Adding an enum here would be a contract violation.
-- The `userId + createdAt` index is direction-flipped (`createdAt_-1`) so the same index serves both the newest-first inbox query and the oldest-first cap trim; changing the sort direction in either consumer breaks the shared index contract.
-- The timestamp assertion (`updatedAt: false`) encodes the invariant that a notification row is **written once and never mutated** — adding `updatedAt` would signal a write-path change.
+- The `code` test asserts `enumOf(...) ?? []` equals `[]`, so adding an enum to `code` will fail the test deliberately.
+- The index list is compared as a sorted, exact array of formatted strings (`name: field±1, ...`). Any added, removed or reordered index fails it.

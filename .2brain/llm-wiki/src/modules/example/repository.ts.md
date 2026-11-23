@@ -1,40 +1,39 @@
 ---
 source: src/modules/example/repository.ts
-sha256: 7179e4fcb9c27501cc2126aa0732a3a6d3c8d114f53f12cd1779c96be33c25d8
-generated_at: 2026-11-08T05:52:14.712715+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 79cba2bd4e7b2adc139c8e81a462f1fccd70edd500b11fb9596487c50b291d22
+context_sha256: 6909b149c1c46b7666cbf509bac8bda93c93e42b54fe3bb2082f42237b851108
+generated_at: 2026-11-22T05:10:51.099721+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/repository.ts
 
 ## Purpose
-
-The sole data-access layer for the "example" collection within the module. It composes the shared CRUD/search factory with the concerns this collection uniquely needs—scoped authorization reads, conditional status moves, bulk erasure with image cleanup, translation metadata, and image-writeback. The service layer is the public door; nothing outside the module imports this file directly.
+The single access point to the example collection. It builds a repository from the shared `createRepository` factory (CRUD and search) and adds the operations only this collection needs: scoped reads, user-wide deletion, conditional status moves, translatable-column metadata and image writeback. Per the file's own doc comment, nothing outside the module imports it; the service layer is the only caller.
 
 ## Key elements
-
-- **`exampleRepository`** (export) — the repository object, typed as `Repository<ExampleDocument, ExampleRow>` plus four extra members. The type is written out explicitly (not inferred) because Mongoose's generics are too large for TypeScript to serialize at an export boundary (TS7056).
-- **Base CRUD/search** (spread from `createRepository`) — standard `create`/`read`/`update`/`delete`/`search` with a row transform (`applyExampleTransform`) and a `searchable` map (objectIds, text, sortable). `status` is deliberately absent from free filters; it is a closed enum supplied as a scope by the service.
-- **`findScoped(id, scope)`** — `findOne` by id *and* an authorization scope fragment in the same query, so an unauthorized row returns `null` rather than being read-then-rejected. `async` because `toObjectId` throws on malformed input.
-- **`deleteAllOf(userId, session)`** — collects `imageUrl` values, deletes all rows for the user inside the caller's transaction, then returns the image URLs for the caller to remove post-commit.
-- **`moveFrom(id, before, fields, session?)`** — optimistic-concurrency status transition: the write matches only rows still in `before`, so competing requests to the same document cannot both announce.
-- **`translatable`** — the column map for i18n read/write, produced by `translatableColumnsOf`.
-- **`writebackImage`** — the image-pipeline callback; idempotent because it matches on the pending key.
+- `exampleRepository` — the sole export. It is explicitly typed as `Repository<ExampleDocument, ExampleRow>` plus extras, because an inferred type is too large for TypeScript to serialize at an export boundary (TS7056).
+- Factory base — `createRepository(exampleModel, …)` with `transform: applyExampleTransform`. Its `searchable` config defines:
+  - `objectIds`: `id` maps to `_id`.
+  - `text`: `title` and `body`.
+  - `sortable`: `createdAt`, `title` and `status`.
+  - `status` is deliberately not a free filter. It is a closed enum, so the service passes it as a scope.
+- `findScoped(id, scope)` — a `findOne` on `_id` merged with the authorization scope in the same query, so visibility is never checked after the read. It is `async` because `toObjectId` throws on a malformed id.
+- `deleteAllOf(userId, session)` — inside the caller's transaction, it finds the user's rows that have an `imageUrl`, then `deleteMany`s all of the user's rows. It returns the cover image URLs so the caller can remove them after commit.
+- `moveFrom(id, before, fields, session?)` — a status change via `updateStatusIfIn`, applied only while the document still has the `before` status. It sets `status` and `publishedAt`, and returns the saved document, or `null` if a peer moved it first.
+- `translatable` — from `translatableColumnsOf(exampleModel)`.
+- `writebackImage` — from `imageWritebackFor(exampleModel)`. It is the image pipeline's writeback and matches on the pending key, so stale or repeated jobs change nothing.
 
 ## Relationships
-
-- **`src/modules/example/model.ts`** — provides `exampleModel`, `applyExampleTransform`, and the `ExampleDocument`/`ExampleRow` types used throughout.
-- **`src/infrastructure/persistence/create-repository.ts`** — supplies the `createRepository` factory, `toObjectId` helper, and the base `Repository` type.
-- **`src/infrastructure/persistence/conditional-status.ts`** — supplies `conditionalStatus`, the query-builder behind `moveFrom`.
-- **`src/infrastructure/persistence/image-writeback.ts`** — supplies `imageWritebackFor`, wired into `writebackImage`.
-- **`src/infrastructure/persistence/translatable-columns.ts`** — supplies `translatableColumnsOf` and the `TranslatableColumns` type.
-- **`src/infrastructure/adapters/image.worker.ts`** — provides the `ImageWriteback` type for the writeback contract.
-- **`src/modules/example/services/*`** (crud, transition, cover, personal-data) — the consuming service layer; the module's public API sits here, and this file is its internal implementation detail.
-- **`src/modules/example/tests/integration/*`** and **`tests/factories.ts`** — integration tests exercise the repository through the services and test factories build documents against the same model.
+- `src/modules/example/model.ts` supplies `exampleModel`, `applyExampleTransform` and the `ExampleDocument`/`ExampleRow` types.
+- `src/infrastructure/persistence/create-repository.ts` supplies the base CRUD/search, `toObjectId` and the `Repository` type.
+- `src/infrastructure/persistence/conditional-status.ts` backs `moveFrom`.
+- `src/infrastructure/persistence/image-writeback.ts` backs `writebackImage`, whose `ImageWriteback` type comes from `src/infrastructure/adapters/image.worker.ts`.
+- `src/infrastructure/persistence/translatable-columns.ts` backs `translatable`.
+- The service files (`src/modules/example/services/cover.ts`, `crud.ts`, `personal-data.ts`, `transition.ts`) and `module.ts` sit in the same module and are the intended consumers. The file does not show which service calls which method.
+- The factories and integration tests (`capabilities.test.ts`, `service.test.ts`) are neighbors in the graph. The file itself shows no interaction with them.
 
 ## Notes
-
-- **Explicit type annotation is load-bearing.** Removing the `Repository<…> & {…}` annotation and relying on inference triggers TS7056 at the export boundary; do not "simplify" it away.
-- **`status` is a scope, not a filter.** The service passes it as part of the `scope` argument to `findScoped` or as the `before` parameter to `moveFrom`. Adding it to `searchable.text` or `searchable.objectIds` would break that contract.
-- **Two-phase deletion.** `deleteAllOf` returns image URLs *after* the row delete succeeds but *before* the caller commits. The caller (e.g. `personal-data` service) is responsible for removing the images only after the transaction commits; doing it inside the repository would create a rollback gap.
-- **All mutation methods accept `ClientSession`.** Callers are expected to pass their transaction session; omitting it silently breaks atomicity guarantees.
+- Every write in `deleteAllOf` must take the passed `session`. The caller removes the returned image files only after the transaction commits.
+- `moveFrom` is a compare-and-set on status. It prevents two concurrent requests from both announcing the same transition.
+- The doc comment above `translatable` describes the image writeback, so the comments sit slightly out of step with the members they precede.

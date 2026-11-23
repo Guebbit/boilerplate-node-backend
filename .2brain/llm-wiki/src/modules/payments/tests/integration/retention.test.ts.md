@@ -1,48 +1,38 @@
 ---
 source: src/modules/payments/tests/integration/retention.test.ts
-sha256: 6a99f6230cf5c5c128cd597cd2001470a127eac4f49a6a9a39e2d4eea6ed6ef2
-generated_at: 2026-11-08T07:36:47.973998+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fd6421f7053fbd7d553ee4ad8810350fc1038209558cd154fce83472bbe76d6d
+context_sha256: 509a8ea6c53525d6b4e3750021222960bc8c3ea0b4255c902d85b8031693b693
+generated_at: 2026-11-22T07:01:56.647335+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/retention.test.ts
 
 ## Purpose
-
-Integration tests for payment retention semantics: verifying that account erasure *detaches* (unsets `userId`) rather than deletes a payment, and that the `reapAbandonedPayments` sweep only reclaims unsettled attempts past a configurable window. Runs against a real test database with full module wiring.
+Integration tests for the payments module's data-retention behaviour. They cover two things. First, erasing a user account detaches the payment from the user (unsets `userId`) rather than deleting it. Second, the `reapAbandonedPayments` sweep deletes payment attempts that never settled once they are past a configurable retention window.
 
 ## Key elements
-
-- **`describe('payments — detach on account erasure')`** — four tests:
-  - *unsets userId on the payment when the account is hard-deleted* — confirms the `personalData.erase → detachUserId` cascade reaches the payment document.
-  - *the payment itself survives* — asserts `paymentRepository.findById` still returns a record after erasure.
-  - *offline payment against a detached order records no payer* — calls `paymentService.recordOfflinePayment` with an admin caller and asserts `userId` is `undefined`, not `"undefined"`.
-  - *no customer can open an intent on a detached order* — a second user calling `createIntent` on the orphaned order must fail.
-- **`describe('payments — reapAbandonedPayments')`** — three tests:
-  - *deletes an attempt past the window* — backdates `updatedAt` 8 days, sets retention to 7 days, expects `reapAbandonedPayments()` to return `1`.
-  - *leaves an attempt within the window* — 6 days old, 7-day window, expects `0` and the record to persist.
-  - *never deletes a confirmed payment* — confirms the payment, backdates 365 days, expects `0`.
-- **`touch(paymentId, updatedAt)`** (local helper) — Mongoose `updateOne` with `{ timestamps: false }` to backdate `updatedAt` without the schema middleware rewriting it.
+- **`describe('payments — detach on account erasure')`**: four tests.
+  - `userId` is unset after `eraseAsScheduled(user)` runs.
+  - The payment document still exists after erasure ("the receipt, not the account").
+  - `recordOfflinePayment` by an admin against an already-detached order leaves `userId` `undefined`, not the string `"undefined"`.
+  - A different customer cannot `createIntent` on an order whose account is gone (`success` is `false`).
+- **`touch(paymentId, updatedAt)`**: local helper that backdates a payment's `updatedAt` via `paymentModel.updateOne(..., { timestamps: false })`. Without `timestamps: false`, Mongoose would overwrite the value with the current time.
+- **`describe('payments — reapAbandonedPayments (reap-payments sweep)')`**: three tests, all with `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` set to `'7'`.
+  - An unsettled attempt last updated 8 days ago is deleted, and the sweep returns `1`.
+  - An attempt last updated 6 days ago is kept, and the sweep returns `0`.
+  - A payment confirmed via `confirmPayment` is never deleted, even when backdated by 365 days, and the sweep returns `0`.
+- Both suites call `setupTestDb()` at module level. In `beforeEach` they call `registerCheckoutModules([paymentsModule])`, and in `afterEach` they call `resetDomainEvents()`.
 
 ## Relationships
-
-- **`@modules/payments/services`** — exercises `paymentService.createIntent`, `recordOfflinePayment`, `confirmPayment`, and `reapAbandonedPayments`.
-- **`@modules/payments/repository`** — reads back payment documents to assert state.
-- **`@modules/payments/model`** — `paymentModel` used directly by the `touch` helper.
-- **`@modules/payments/module`** — registered in `beforeEach` via `registerCheckoutModules` to wire the module graph.
-- **`@kernel/events`** — `resetDomainEvents` called in `afterEach` to prevent event leakage between tests.
-- **`@modules/users/tests/factories`** — `createUser` and `eraseAsScheduled` drive the erasure scenario.
-- **`@modules/orders/tests/factories`** — `createOrder`, `toOrderItem` build the order; `detachOrderUserId` simulates the detached-order precondition.
-- **`@modules/products/tests/factories`** — `createProduct` supplies the order line item.
-- **`@tests/callers`** — `asCustomer`, `callerContextAs`, `testCallerContext` construct caller identities for service calls.
-- **`@tests/checkout-modules`** — `registerCheckoutModules` installs the module dependency graph for each test.
-- **`@tests/environment`** — `setEnvironment` sets `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` for the sweep tests.
-- **`@tests/setup-test-db`** — `setupTestDb` initialises the shared in-memory/ephemeral database.
-- **`@infrastructure/http/response`** / **`@types`** — `ResponseSuccess<Payment>` and `PaymentDocument` used to type-assert service return values.
+- **`@modules/payments/services`** (`paymentService`): `createIntent`, `confirmPayment`, `recordOfflinePayment` and `reapAbandonedPayments` are the code under test.
+- **`@modules/payments/repository`** (`paymentRepository`) and **`@modules/payments/model`** (`paymentModel`, `PaymentDocument`): the repository is used to check persisted state, and the model is used to backdate `updatedAt`.
+- **`@modules/payments/module`**: registered through `registerCheckoutModules` in `tests/support/checkout-modules.ts`. This gives the erasure cascade real module wiring.
+- **Factories** (`users`, `products`, `orders` under `tests/factories`): `createUser`, `eraseAsScheduled`, `createProduct`, `createOrder`, `toOrderItem` and `detachOrderUserId` build the fixtures and trigger erasure or detachment.
+- **`@kernel/events`**: `resetDomainEvents` clears handlers between tests.
+- **`tests/support/*`**: `setupTestDb` sets up the database, `asCustomer`, `callerContextAs` and `testCallerContext` build caller contexts, and `setEnvironment` overrides env vars.
+- **`@infrastructure/http/response`** (`ResponseSuccess`) and **`@types`** (`Payment`): used only for type assertions on service results.
 
 ## Notes
-
-- The module-level doc comment makes the design intent explicit: erasure is a *detach*, not a delete, and the offline-payment path is the only live route that can still touch a detached order.
-- The `touch` helper relies on `timestamps: false` specifically to bypass Mongoose's `pre('save')` / `post('save')` auto-stamping; omitting it would reset `updatedAt` to the current time and break the window assertions.
-- The sweep tests set `NODE_PAYMENT_ABANDONED_RETENTION_DAYS` via `setEnvironment` rather than an env file, so the retention window is per-test and the file doesn't depend on `.env` state.
-- `detachOrderUserId` is imported from the *orders* factories (not users), reflecting that the order document is where the user reference lives on the order side of the relationship.
+- `eraseAsScheduled(user)` goes through the real cascade. `detachOrderUserId(...)` (given a future date, `Date.now() + 100_000`) puts the order into the detached state directly.
+- The header comment says the offline-payment path is the only live route to a detached order. A customer's intent cannot reach one, because no account owns it.

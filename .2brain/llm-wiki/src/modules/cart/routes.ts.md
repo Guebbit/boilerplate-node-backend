@@ -1,51 +1,50 @@
 ---
 source: src/modules/cart/routes.ts
-sha256: e72e348eedadde4ad045b6b442ee6309cadba19856e967aaa1158fbef944e70a
-generated_at: 2026-11-14T19:30:05.079947+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 35da6522e5a7d5c28cccf76b96e64aeae41f1a917482555726dee5b4d0d6f383
+context_sha256: aa70eb236475937f5b4ee739bd7c2e72870145559abcadd3e6739029e8dfcdb0
+generated_at: 2026-11-22T04:35:06.167175+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/routes.ts
 
 ## Purpose
-
-Defines the Express route table for the cart domain. It wires each cart HTTP endpoint to its controller, applies the shared auth middleware, and layers per-route middleware (permissions, rate limits, idempotency, cache invalidation) in a specific order that matters for safety.
+Defines the Express router for the cart module. Every route requires a signed-in account, since a cart always belongs to the caller. It maps each cart endpoint to its controller and applies the per-route guards: rate limiting, idempotency and, for checkout, permission and fresh-session checks.
 
 ## Key elements
-
-- **`router`** (exported) — The Express `Router` instance. All routes are registered on it.
-- **`router.use(getAuth, isAuth)`** — Applies to every cart route: the caller must be a signed-in account. No further authorization rule gates the router itself.
-- **`POST /checkout`** — The highest-trust route. Middleware chain: `requirePermission('checkout', 'Cart')` → `requireFreshAuth('critical')` → `checkoutLimiter` → `idempotencyKey` → `invalidateCache(['products'])` → `postCheckout`.
-- **`POST /merge`** — Folds a guest cart into the caller's. Uses `mergeLimiter` then `idempotencyKey`.
-- **`POST /reorder`** — Copies a prior order back into the cart. Uses `idempotencyKey`.
-- **`POST /items`** — Adds or grows a cart line. Uses `idempotencyKey`.
-- **`DELETE /items`** (no param) — Clears every line (`clearCart`).
-- **`PATCH /items/:productId`** — Sets quantity of an existing line; never creates one.
-- **`DELETE /items/:productId`** — Removes one line.
-- **`PUT /shipping-method`** — Chooses or clears the shipping method.
-- **`GET /`** and **`GET /summary`** — Read the full cart or a lightweight summary.
+- `router`: the exported Express `Router`. It starts with `router.use(getAuth, isAuth)`. No role rule gates the router, and staff shop too.
+- `GET /summary`: `getCartSummary`.
+- `GET /`: `getCart`.
+- `POST /items`: `idempotencyKey`, then `postCartItems`. It adds a line or grows an existing one.
+- `PATCH /items/:productId`: `patchCartItem`. It sets the quantity of an existing line and never creates one.
+- `DELETE /items/:productId`: `deleteCartItem`. It removes one line.
+- `DELETE /items`: `clearCart`. It clears every line.
+- `PUT /shipping-method`: `putCartShippingMethod`. It chooses or clears the shipping method.
+- `POST /merge`: `mergeLimiter`, `idempotencyKey`, then `postCartMerge`. It folds a guest cart in.
+- `POST /reorder`: `idempotencyKey`, then `postReorder`. It copies one of the caller's own orders back into the cart.
+- `POST /checkout`, with middleware in this order:
+  1. `requirePermission('checkout', 'Cart')`
+  2. `requireFreshAuth('critical')`
+  3. `checkoutLimiter`
+  4. `idempotencyKey`
+  5. `postCheckout`
 
 ## Relationships
-
-- **`src/modules/cart/controllers/post-checkout.ts`** — `postCheckout` handles `POST /checkout`.
-- **`src/modules/cart/controllers/post-cart-merge.ts`** — `postCartMerge` handles `POST /merge`.
-- **`src/modules/cart/controllers/post-reorder.ts`** — `postReorder` handles `POST /reorder`.
-- **`src/modules/cart/controllers/post-cart-items.ts`** — `postCartItems` handles `POST /items`.
-- **`src/modules/cart/controllers/delete-cart-items.ts`** — `clearCart` handles `DELETE /items`.
-- **`src/modules/cart/controllers/patch-cart-item.ts`** — `patchCartItem` handles `PATCH /items/:productId`.
-- **`src/modules/cart/controllers/delete-cart-item.ts`** — `deleteCartItem` handles `DELETE /items/:productId`.
-- **`src/modules/cart/controllers/put-cart-shipping-method.ts`** — `putCartShippingMethod` handles `PUT /shipping-method`.
-- **`src/modules/cart/controllers/get-cart.ts`** — `getCart` handles `GET /`.
-- **`src/modules/cart/controllers/get-cart-summary.ts`** — `getCartSummary` handles `GET /summary`.
-- **`src/kernel/middlewares/authorizations.ts`** — Supplies `getAuth`, `isAuth`, `requireFreshAuth`, and `requirePermission` used to gate access.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — `idempotencyKey` is applied to all write routes that mutate quantities (`/checkout`, `/merge`, `/reorder`, `/items`) so a retried request replays rather than double-applies.
-- **`src/infrastructure/http/middlewares/cache.ts`** — `invalidateCache(['products'])` runs after checkout so downstream product reads reflect the now-spent stock.
-- **`src/modules/cart/rate-limits.ts`** — `checkoutLimiter` and `mergeLimiter` bound request frequency on the two most expensive write routes.
+- `@kernel/middlewares/authorizations` (`src/kernel/middlewares/authorizations.ts`) provides `getAuth`, `isAuth`, `requireFreshAuth` and `requirePermission`.
+- `@infrastructure/http/middlewares/idempotency` (`src/infrastructure/http/middlewares/idempotency.ts`) provides `idempotencyKey`. It is applied to checkout, merge, reorder and add-items.
+- `./rate-limits` provides `checkoutLimiter` and `mergeLimiter`.
+- `./controllers/*` hold the handlers: `get-cart`, `get-cart-summary`, `post-cart-items`, `patch-cart-item`, `delete-cart-items` (exports `clearCart`), `delete-cart-item`, `post-checkout`, `post-reorder`, `post-cart-merge` and `put-cart-shipping-method`.
+- `src/modules/cart/module.ts` is the module that owns this router. The file doesn't show how it is mounted.
+- `src/modules/cart/tests/unit/routes.test.ts` is the unit test for this route table.
 
 ## Notes
-
-- Middleware ordering on `POST /checkout` is deliberate: permission check comes before the rate limiter (a refused caller never spends a token), and the rate limiter comes before `idempotencyKey` (a retry storm still counts against the limiter even if it replays).
-- `requireFreshAuth('critical')` enforces a FRESH session at checkout — not just a valid token — to prevent a stolen long-lived token from spending money.
-- The `checkout:Cart` permission key is the only authorization key this module declares (see `shared/authorization-keys.generated.yaml`).
-- Line-level writes (`POST /items`, `PATCH /items/:productId`) follow the convention that a line is written through the parent `/items` collection: responses return `200` + the whole cart, no `Location` header, no sub-resource read.
-- `PATCH /items/:productId` explicitly never *creates* a line; use `POST /items` for that.
+- **Route order matters.** `/summary`, `/checkout`, `/merge` and `/reorder` are registered before the other routes. `/items/:productId` is registered last.
+- **Checkout middleware order is deliberate.**
+  - The permission check comes before the fresh-session check, so a caller who can never pass is refused rather than challenged.
+  - `checkoutLimiter` comes after the permission check, so a refused caller never spends it.
+  - `checkoutLimiter` comes before the idempotency ledger, so replayed retries still count.
+- **Merge limiter order.** `mergeLimiter` comes first on `/merge` because one call carries many lines, each costing a product read and a cart write.
+- **Checkout cache invalidation.** The header says checkout is the only route that also invalidates the `products` response cache. No such middleware appears in this file, so it is presumably handled elsewhere.
+- **`checkout:Cart` is the only permission key this module declares.** It exists so an address nobody has confirmed can't place an order.
+- **Idempotency on add.** A retry with the same key doesn't grow a line twice. A deliberate second click uses a new key and still adds.
+- **Write responses.** A line is written through the parent's `/items` collection. The response is 200 with the whole cart, with no `Location` header and no read of a single line.

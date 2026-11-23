@@ -1,30 +1,25 @@
 ---
 source: src/infrastructure/persistence/config.ts
-sha256: 0a6b09d6d69b2bb27367bf351eb77ab9257ebbbdf18195f41b947ff15635e880
-generated_at: 2026-11-08T03:42:13.022749+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b693b211edd37ba24a64f63bf95763ed984043d291e8100c38ecf9594a14ddb7
+context_sha256: 610f664892d70d57486f5c20f7e4c9fea403ee24d5d3d156b4164de128df3f27
+generated_at: 2026-11-22T03:01:51.268545+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/config.ts
 
 ## Purpose
-
-Defines the persistence-layer configuration schema, currently a single field for the default pagination page size. It exists so that pagination defaults are declared once, validated, and referenced consistently across persistence concerns (e.g. search).
+Declares the persistence module's configuration: currently a single setting, the default page size used for paging. It builds a typed config object via the shared config framework, with the default value drawn from generated shared defaults.
 
 ## Key elements
-
-- **`persistenceConfig`** (exported const) — A config object created via `defineConfig` with name `'persistence'`. Contains one shape field:
-  - `NODE_SETTINGS_PAGINATION_PAGE_SIZE` — An `int` field whose default comes from `sharedDefaults.pagination.pageSize` and whose minimum value is `1`.
+- `persistenceConfig` — the exported result of `defineConfig({ name: 'persistence', shape: {...} })`.
+  - `NODE_SETTINGS_PAGINATION_PAGE_SIZE` — an `int` field with a minimum of `1` and a default of `sharedDefaults.pagination.pageSize`.
 
 ## Relationships
-
-- **`@infrastructure/config/define`** → provides `defineConfig`, the factory used to build the typed config object.
-- **`@infrastructure/config/fields`** → provides the `int` field descriptor (type, validation constraints) applied to the page-size field.
-- **`@infrastructure/config/defaults.generated`** (imported, not in listed neighbors) → supplies the generated default value for the page size.
-- **`src/infrastructure/persistence/search.ts`** → downstream consumer; search pagination reads the value of `NODE_SETTINGS_PAGINATION_PAGE_SIZE` from this config.
-- **`src/app/config.ts`** → app-level entry point where `persistenceConfig` is likely registered or merged into the global configuration bundle.
+- Uses `defineConfig` from `src/infrastructure/config/define.ts` to create the config section, and the `int` field builder from `src/infrastructure/config/fields.ts` to declare and validate the value.
+- `src/app/config.ts` and `src/infrastructure/persistence/search.ts` are graph neighbors. Their exact interaction isn't visible in this file, but the config is presumably consumed by them (for example, the app config aggregating it and search using the page size).
 
 ## Notes
-
-- The default is sourced from a **generated** file (`defaults.generated`), so the actual numeric default is not hard-coded here. Regenerate that file if the baseline page size changes.
-- Only one field is currently defined; adding new persistence settings (e.g. timeout, batch size) would follow the same `int` / field-descriptor pattern within the existing `shape`.
+- The env var name is `NODE_SETTINGS_PAGINATION_PAGE_SIZE`. The default is not hardcoded here and comes from `sharedDefaults` (imported from a generated defaults module), so change it at that source rather than in this file.
+- Values below `1` are rejected by the `min: 1` constraint.
+- The module doc comment references a configuration ownership section ("who-owns-what") in the project's configuration docs.

@@ -1,31 +1,33 @@
 ---
 source: scripts/hooks/check-generated-fresh.ts
-sha256: 1ef776f2c99883380df3c89bd2330a1bd12c9c18ef57f6c402daaa340e17390e
-generated_at: 2026-11-14T17:35:49.456216+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 916f5de80f1dba227523847bfd9e8ebbbf9633c75b2bc366336c90e294c8359a
+context_sha256: f97a7b15ef260807422ca3cbce872a2de8c13dd19958dcdd2f7accae98489ffa
+generated_at: 2026-11-22T02:06:59.112549+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/hooks/check-generated-fresh.ts
 
 ## Purpose
-
-A pre-commit gate (invoked via `.husky/pre-commit` → `npm run check:generated`) that refuses a commit if any committed generated files are stale. It only *checks* — it never stages files or mutates the working tree.
+A pre-commit check (`npm run check:generated`, run by `.husky/pre-commit`) that refuses a commit when committed generated files are stale. It only checks. It never stages files and never writes into the working tree. The files in scope are whatever `regenerate` writes that is not gitignored. Examples are the shared-rules schemas, `shared/authorization-keys.generated.yaml`, `docker/crontab`, and the tables inside `docs/`.
 
 ## Key elements
-
-- **`regenerateIn(tree: string): void`** — Runs `npx tsx scripts/regenerate-artifacts.ts --no-sync` inside the provided scratch copy of the index. Symlinks the repo's `node_modules` into the scratch dir so dependency resolution works as if it were a real directory. Stdio is piped (output suppressed on success).
-- **`stale`** — The top-level call to `staleGeneratedFiles({ repo: REPO_ROOT, regenerate: regenerateIn })`; yields the list of generated files that a regeneration would change relative to what is staged.
-- **Exit logic** — If `stale.length > 0`, prints the offending paths to stderr and exits `1`; otherwise prints a success line to stdout.
+- `regenerateIn(tree)`: callback that regenerates inside a scratch copy of the index.
+  - It symlinks this checkout's `node_modules` into `tree`.
+  - It then runs `npx tsx scripts/regenerate-artifacts.ts --no-sync` with `cwd: tree` and `env: gitEnvironment()`.
+  - It uses `stdio: 'pipe'`, so output is held back and shown only if the run fails. A non-zero exit throws.
+- `stale`: the result of `staleGeneratedFiles({ repo: REPO_ROOT, regenerate: regenerateIn })`. It lists the files a regeneration would change in what is being committed.
+- Top-level flow:
+  - If `stale` is non-empty, the script prints each stale file to stderr, tells the user to run `npm run regenerate` and stage the results, and exits with code 1.
+  - Otherwise it logs `[generated] every committed generated file is current.`
 
 ## Relationships
-
-- **`scripts/git-base.ts`** — Imports `gitEnvironment()`, which is passed as the `env` argument to the child `regenerate` process.
-- **`scripts/hooks/stale-generated-files.ts`** — Provides `staleGeneratedFiles`, the core comparison logic that decides *which* files are generated and whether they are up-to-date.
-- **`scripts/modules-on-disk.ts`** — Exports `REPO_ROOT`, used both as the `repo` argument to `staleGeneratedFiles` and as the source of the `node_modules` symlink.
+- `scripts/hooks/stale-generated-files.ts`: provides `staleGeneratedFiles`, the core logic. This file supplies the repo root and the regeneration callback, and consumes the list of stale files.
+- `scripts/git-base.ts`: provides `gitEnvironment()`, used as the environment for the regeneration subprocess.
+- `scripts/modules-on-disk.ts`: provides `REPO_ROOT`. It is used as the repo to check and as the source of the `node_modules` directory that is symlinked into the scratch tree.
 
 ## Notes
-
-- The scratch tree is a *copy of the index* (staged content), not the working tree — that's why the check can reject a commit without touching unsaved changes.
-- The `node_modules` symlink is created with `'dir'` type; the regenerate script resolves it identically to a real directory, so no special path handling is needed.
-- `stdio: 'pipe'` means regenerate output is buffered and discarded on success; it surfaces only when the process throws (i.e., the run itself fails, not just "files differ").
-- The set of checked files is implicitly defined by what `regenerate-artifacts.ts` writes and is *not* gitignored (shared-rules schemas, `shared/authorization-keys.generated.yaml`, `docker/crontab`, `docker/Dockerfile.dockerignore`, `docs/` tables, etc.).
+- Regeneration uses `--no-sync`, so the frontend is not synced.
+- The check runs against a scratch copy of the index, so it reflects what is being committed, not the working tree.
+- It has no output or error handling beyond the `stale` report. A regeneration failure surfaces as a thrown `execFileSync` error that carries the piped output.
+- The fix is manual: run `npm run regenerate` and stage the results.

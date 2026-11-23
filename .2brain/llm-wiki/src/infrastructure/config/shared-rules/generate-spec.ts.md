@@ -1,35 +1,29 @@
 ---
 source: src/infrastructure/config/shared-rules/generate-spec.ts
-sha256: c488887dc71ad8ba20e3607231d219e7bf082ee625a81ec2d51e25aa51756d77
-generated_at: 2026-11-08T03:26:20.412057+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 72fcd6a4b19f4727e39024a579d86b32e140e6b0cb04fe1297c767d68b3a229f
+context_sha256: 71c404c5b0a7512ff230fd46fd7b8c03b786972cd6e1239122ffda0d33afa23b
+generated_at: 2026-11-22T02:45:02.710339+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/config/shared-rules/generate-spec.ts
 
 ## Purpose
-
-Defines the type-level contract for how a rules file is turned into a committed `as const` TypeScript file. It declares the shape of generation output (`GenerateSpec`, `GeneratedExport`) and provides the one Zod schema helper (`keyedListSchema`) needed to validate a `keyed-list` field. This module is consumed by the code-generation pipeline at build time, never at runtime.
+Defines the types a shared-rules file uses to declare how it becomes a committed `as const` TypeScript file, plus a Zod schema helper for the one list shape that needs extra validation. It is read by the `regenerate` step only, never at runtime. It uses relative imports only, for the reason documented in `load.ts`.
 
 ## Key elements
-
-- **`GenerateShape`** — Union type (`'verbatim' | 'keyed-list'`) describing how a single top-level rules field is written into the generated file.
-- **`GeneratedExport`** — Interface describing one exported constant in the output: its name, shape, source field, and docblock.
-- **`GenerateSpec`** — Top-level interface: the output path (`out`) and the ordered list of `GeneratedExport`s.
-- **`KeyedEntry`** — Single entry shape for a `keyed-list` field (`value` + `description`).
-- **`keyedListSchema(pattern: RegExp)`** — Returns a Zod schema validating an array of `KeyedEntry` objects: non-empty, each `value` matches `pattern`, `description` is non-empty, and `value`s are unique.
+- `GenerateShape` — `'verbatim' | 'keyed-list'`.
+  - `verbatim` dumps the parsed data as an `as const` literal.
+  - `keyed-list` turns a list of `{ value, description }` into `{ KEY: 'value' }`, with one JSDoc per key.
+- `GeneratedExport` — one exported constant in a generated file. Its fields are `exportName`, `shape`, an optional `field` (the top-level YAML field it comes from; the whole document when absent), and `description` (the constant's docblock).
+- `GenerateSpec` — what a rules file generates. `out` is the repo-relative path of the committed generated TypeScript file. `exports` is the ordered, readonly list of `GeneratedExport`.
+- `KeyedEntry` — one `keyed-list` entry. `value` is the wire string from which the key is derived. `description` is the key's docblock.
+- `keyedListSchema(pattern)` — returns `z.ZodType<KeyedEntry[]>`. It requires a non-empty array of strict objects. Each `value` must match `pattern`, and each `description` must be non-empty. Duplicate `value`s are rejected with the message "a value is listed twice".
 
 ## Relationships
-
-- **`scripts/contracts/shared-rules-render.ts`** — Consumes `GenerateSpec` / `GeneratedExport` to render the actual `.generated.ts` output.
-- **`scripts/contracts/generate-shared-rule-schemas.ts`** — Drives the regeneration pipeline; imports these types to validate specs before invoking the renderer.
-- **`src/infrastructure/config/shared-rules/registry.ts`** — Registers rules whose `GenerateSpec` is defined against these types.
-- **`src/infrastructure/config/shared-rules/audit-actions.ts`** — A concrete rules file whose generation is described by a `GenerateSpec` conforming to this module's interfaces.
-- **`src/modules/account/rules.schema.ts`**, **`src/modules/example/rules.schema.ts`**, **`src/modules/webhooks/rules.schema.ts`** — The committed generated outputs whose structure is dictated by `GenerateSpec` / `GeneratedExport` instances declared for their respective rules.
-- **`tests/unit/scripts/contracts/shared-rules-render.test.ts`** — Unit-tests the renderer against these type contracts.
+- The generator scripts `scripts/contracts/generate-shared-rule-schemas.ts` and `scripts/contracts/shared-rules-render.ts` are the likely consumers of `GenerateSpec`. Rendering is covered by `tests/unit/scripts/contracts/shared-rules-render.test.ts`.
+- `registry.ts` and `audit-actions.ts` in the same folder, along with the module schemas `src/modules/account/rules.schema.ts`, `src/modules/example/rules.schema.ts` and `src/modules/webhooks/rules.schema.ts`, sit alongside this file in the dependency graph. These are the places where a rule declares its spec or uses `keyedListSchema`.
 
 ## Notes
-
-- The module header mandates **relative imports only**, citing `src/infrastructure/config/shared-rules/load.ts` as the canonical example. Do not use package/bare imports in files that depend on this convention.
-- `keyedListSchema` is the *only* runtime-exported value (a function); everything else is type-level. Importers that only need the types can use `import type`.
-- The design is intentionally minimal: only the `keyed-list` shape required a validation helper. `verbatim` fields are passed through as-is and need no schema here.
+- `strictObject` means unknown keys in a list entry are rejected.
+- Key derivation from `value` is not implemented here. This file only validates and describes the shape.

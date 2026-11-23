@@ -1,44 +1,43 @@
 ---
 source: src/modules/payments/tests/integration/settlement-reports.test.ts
-sha256: ff3fd81558661ee6520260440a53ddede2313b76abbd33cddebae220eb2c0430
-generated_at: 2026-11-08T07:38:03.622542+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ff3fd81558661ee6520260440a53ddede2313b76abbd33cddebae220eb2c0430
+context_sha256: a5d7a507739d8151a721e55cb16a44c6a16df8ba458afcb1aa8bb9049b5c61d3
+generated_at: 2026-11-22T07:02:51.082306+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/settlement-reports.test.ts
 
 ## Purpose
-
-Integration test verifying that settlement "reports"—a `payment.failed` outbox event, an audit row, and an analytics event—fire exactly once per real payment transition, regardless of how many times the same transition is observed (webhook replay, repeated polling, sync of an already-final payment). Uses a real MongoDB instance.
+Integration test (real Mongo) asserting that what a payment settlement *reports* — the `payment.failed` outbox event, the audit row and the analytics event — is emitted once per real state transition. Repeated confirms, webhooks and syncs of the same outcome must not re-announce it, while genuinely distinct attempts still count separately.
 
 ## Key elements
-
-- **`openIntent()`** — Helper that creates a user, product, order, and an unconfirmed payment intent; returns `{ user, orderId, paymentId }` for use across tests.
-- **`confirmWith(paymentId, user, method)`** — Thin wrapper around `paymentService.confirmPayment` with the caller context already bound.
-- **`failedRows()`** — Settles outbox nudges, then counts outbox documents named `PAYMENT_FAILED`; the primary assertion target for "announced once" guarantees.
-- **`describe('a declined payment')`** — Three cases: confirm + webhook for the same attempt → 1 row; two distinct card declines → 2 rows; confirm + repeated `syncPayment` polls → 1 audit + 1 analytics call.
-- **`describe('a payment that already succeeded')`** — Confirms with a good card, then syncs twice; asserts exactly one `PAYMENT_CONFIRMED` audit action and one `PAYMENT_SUCCEEDED` analytics event.
-- **`describe('a confirm that loses the race')`** — Spies on `fakePaymentProvider.confirm` with `mockImplementationOnce` to simulate the webhook updating status to `succeeded` before the provider's confirm resolves; asserts the confirm response reflects the new state, not the stale pre-read.
+- `jest.mock` of `@infrastructure/observability/audit` and `.../analytics`: the audit port is replaced with `auditPortMock()` from `@tests/ports`; analytics keeps the real module but swaps `emitAnalyticsEvent` for `jest.fn()`.
+- `setupTestDb()` and a `beforeEach` that calls `registerCheckoutModules([paymentsModule])`. `afterEach` calls `resetDomainEvents()` and `jest.restoreAllMocks()`.
+- `openIntent()`: creates a user and a product (`onHand: 10`), places an order of quantity 2 as admin, then creates a card payment intent as the customer. Returns `{ user, orderId, paymentId }`.
+- `confirmWith(paymentId, user, method)`: runs `paymentService.confirmPayment` as the owning customer.
+- `failedRows()`: awaits `settleOutboxNudges()`, then counts `outboxEventModel` documents named `PAYMENT_FAILED`.
+- Test groups:
+  - **A declined payment**:
+    - A confirm followed by `applyWebhookSettlement` and `syncPayment` yields one `payment.failed` row.
+    - Two declined confirms (card A, then card B) yield two rows.
+    - Repeated polling yields one `PAYMENT_FAILED` audit event and one `PAYMENT_DECLINED` analytics event.
+  - **A payment that already succeeded**: repeated syncs after a `pm_card_visa` confirm yield one `PAYMENT_CONFIRMED` audit event and one `PAYMENT_SUCCEEDED` analytics event.
+  - **A confirm that loses the race**: the confirm returns the payment's current status (`succeeded`), not the stale pre-read.
 
 ## Relationships
-
-- **`src/modules/payments/services/index.ts`** — Primary subject under test (`createIntent`, `confirmPayment`, `applyWebhookSettlement`, `syncPayment`).
-- **`src/modules/payments/repository.ts`** — Used to look up the payment (for `providerRef`) and to simulate the webhook-wins-race transition.
-- **`src/modules/payments/events.ts`** — `PAYMENT_FAILED` constant identifies the outbox row to count.
-- **`src/modules/payments/audit.ts`** — `paymentsAuditActions` enum values used to filter captured audit calls.
-- **`src/modules/payments/analytics.ts`** — `paymentsAnalyticsEvents` enum values used to filter captured analytics calls.
-- **`src/modules/payments/module.ts`** — Registered via `registerCheckoutModules` in `beforeEach`.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges()` + `outboxEventModel` drive the "how many failure events persisted" assertions.
-- **`src/kernel/events.ts`** — `resetDomainEvents()` clears the domain-event bus between tests.
-- **`src/modules/orders/index.ts`** — `orderService.create` builds the order that the payment intent attaches to.
-- **`src/modules/users/tests/factories.ts`** / **`src/modules/products/tests/factories.ts`** — Seed data factories for each test.
-- **`scenarios/support/doubles/payments/fake.ts`** — `fakePaymentProvider` acts as the external payment gateway; spied on in the race-condition test.
-- **`src/infrastructure/observability/audit.ts`** — Mocked at module level; `emitAuditEvent` observed via `observePort`.
-- **`src/infrastructure/observability/analytics/index.ts`** — Mocked at module level; `emitAnalyticsEvent` replaced with a `jest.fn()`.
+- `@modules/payments/services` (`paymentService`): the system under test (`createIntent`, `confirmPayment`, `syncPayment`, `applyWebhookSettlement`).
+- `@modules/payments/repository`: `findByOrderId` reads the stored `providerRef`; `updateStatusIfIn` simulates the webhook winning the race.
+- `@modules/payments/events`, `audit` and `analytics`: provide the `PAYMENT_FAILED` event name, `paymentsAuditActions` and `paymentsAnalyticsEvents` used in assertions.
+- `@modules/payments/module`: registered via `registerCheckoutModules`.
+- `@modules/orders` (`orderService`): creates the order the payment belongs to.
+- `@kernel/events` and `@kernel/outbox`: `resetDomainEvents`, plus `outboxEventModel` and `settleOutboxNudges` for counting emitted events.
+- `@infrastructure/observability/audit` and `.../analytics`: mocked ports whose calls are inspected via `observePort`.
+- `fakePaymentProvider` (`@scenarios/support/doubles/payments/fake`): the provider double. In the race test its `confirm` is spied on.
+- `@modules/users/tests/factories` and `@modules/products/tests/factories`: `createUser` and `createProduct` fixtures.
 
 ## Notes
-
-- Ports are **replaced**, not spied on: `jest.mock` re-points the module to a factory in `@tests/ports` so that the real transport is never exercised. See `tests/support/ports.ts` for the rationale.
-- The file relies on real MongoDB (`setupTestDb`); it is not a unit test and cannot run without a reachable Mongo instance.
-- The race-condition test mutates `fakePaymentProvider.confirm` via `mockImplementationOnce` and then restores it with `jest.restoreAllMocks()` in `afterEach`; if new tests are added to that block, ensure the spy is scoped to the single call you intend.
-- `failedRows()` always calls `settleOutboxNudges()` first; forgetting this step will under-count rows because the relay hasn't flushed.
+- The race test wraps the fake provider's `confirm` with `mockImplementationOnce`. The wrapper marks the payment `succeeded` through `updateStatusIfIn(orderId, ['requires_confirmation'], 'succeeded')` before returning the provider's state.
+- Audit and analytics are replaced rather than spied on; the comment points to `tests/support/ports.ts` for the reason.
+- Card behaviour is driven by the method string: `pm_card_declined` and `pm_card_visa`.
+- Order creation uses an admin caller context, while payment actions use `asCustomer(user.id)`.

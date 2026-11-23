@@ -1,42 +1,36 @@
 ---
 source: src/modules/orders/services/fulfillment.ts
-sha256: dbf597971c695d97e4e809ab7eed6c00f14a62e70de62feb75c0128818696450
-generated_at: 2026-11-14T20:43:15.776146+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 41ef7a06eaf957e4cdcf87a6e94b856a2e4727e78aac23ae58baedf0c719f9c8
+context_sha256: 43ce7a5f303a7d8053ee2479555fd06eab4645902d123733ffe4b9ad54d5fdfa
+generated_at: 2026-11-22T06:20:34.508794+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/fulfillment.ts
 
 ## Purpose
-
-The transactional write path that the `delivery` module calls when a fulfillment act changes where an order's goods stand. Because `orders` is the sole writer of its own fields, this file receives the report (summary, step history, units moved) and decides whether each write still applies. Every door accepts the act's Mongoose session so the shipment, summary, status move, and events commit atomically or not at all.
+The set of "doors" the `delivery` module calls, inside its own transaction, when a fulfillment act changes where an order's goods stand. `orders` is the only writer of its own fields, so `delivery` reports (summary, forced-step history row, units leaving the shelf) and this file decides whether each still applies. Every transactional door takes the act's `ClientSession`, so the shipment, summary, status move and events commit or roll back together. The module doc points to the "the-fulfilment-summary" section of the orders module documentation.
 
 ## Key elements
-
-- **`recordFulfillmentProgress`** — Writes the recomputed `FulfillmentSummary` onto the order. The write is conditional on the order still being in a fulfillable status (`paid`/`processing`/`shipped`/`delivered`), which is what makes a racing shipment-vs-cancel resolve to exactly one winner. Returns the updated order or `null`.
-- **`readOrder`** — Reads the order inside the act's transaction so downstream refusals see the same snapshot the act's writes will land in.
-- **`shipStock`** — Drops shelf units for a shipment (per-shipment accounting so a later return restocks units that were actually taken).
-- **`topUpStock`** — Re-reserves units for a shipment reported lost: shelf units first, remainder as a claim on the restock (outside the backorder cap). Mirror of `shipStock` for the lost-parcel case.
-- **`releaseTopUp`** — Returns what `topUpStock` set aside when the lost parcel eventually arrives. Hold ends `shipped`, not `released`, because the goods left the shelf for good.
-- **`releaseStock`** — Returns held units for a canceled remainder that was never shipped. Hold ends `released`.
-- **`extendHold`** — Pushes an open hold's expiry `hours` into the future (e.g. slow bank-debit windows). No-op if the hold is already claimed or missing.
-- **`isPayableNow`** — Pre-charge gate: order is awaiting payment **and** its hold has not been released. Post-charge doors do not call this.
-- **`refreshShelf`** — Invalidates/refreshes the catalogue stock cache. Must be called **after** the transaction commits because the cache write cannot roll back.
+- `recordFulfillmentProgress(orderId, summary, session)` — replaces the last fulfillment summary via `orderRepository.writeFulfillment`. The write is conditional on the order still being fulfillable (`paid`, `processing`, `shipped`, `delivered`), so a racing shipment and cancel resolve to one winner. Returns the updated order or `null`.
+- `readOrder(orderId, session)` — reads the order within the act's transaction (`orderRepository.findInSession`), so refusals are decided from the same snapshot the writes land in. Returns `null` if missing.
+- `shipStock(orderId, lines, session)` — takes a shipment's units off the shelf via `inventoryService.shipLinesForOrder`. Stock drops per shipment when goods leave, so later returns restock units that were really taken out.
+- `topUpStock(orderId, lines, session)` — for a shipment reported lost: sets aside shelf units again, with the remainder as a claim on the restock (outside the backorder cap). Uses `inventoryService.reserveMoreForOrder` and returns `TopUp[]` per product.
+- `releaseTopUp(orderId, lines, session)` — undoes `topUpStock` when the lost parcel turns up. The hold ends `shipped`, not `released`. Uses `releaseTopUpForOrder`; returns whether an open hold existed.
+- `releaseStock(orderId, lines, session)` — gives held units back for a canceled, never-shipped remainder (`releaseLinesForOrder`). `returns` calls this rather than reaching into `inventory`. Returns whether an open hold existed.
+- `extendHold(orderId, hours)` — extends a still-open hold by `hours` from now (for slow payments like bank debits) via `extendHoldForOrder`. No session; does nothing if the hold is claimed or missing.
+- `isPayableNow(orderId)` — resolves to a positive answer only if the order exists, its status passes `isPayable`, and its hold has not been released. Asked before charging a card; not asked by doors that record money already taken.
+- `refreshShelf(productIds)` — deletes availability entries via `inventoryService.forgetAvailability`, to be called after the transaction that moved the counters commits.
 
 ## Relationships
-
-- **`src/modules/orders/repository.ts`** — `orderRepository` is the only data-access path used here (`writeFulfillment`, `findInSession`, `findByIdScoped`).
-- **`src/modules/orders/domain/` (index, `fulfillment.ts`, `lifecycle.ts`)** — Provides the `FulfillmentSummary` type and the `isPayable` status predicate consumed by `recordFulfillmentProgress` and `isPayableNow`.
-- **`src/modules/inventory/index.ts` / `services/index.ts`** — `inventoryService` is the delegate for every stock-mutating call (`shipLinesForOrder`, `reserveMoreForOrder`, `releaseTopUpForOrder`, `releaseLinesForOrder`, `extendHoldForOrder`, `isHoldReleased`, `refreshStockCacheForProducts`).
-- **`src/modules/inventory/services/types.ts`** — Source of the `StockLine` and `TopUp` types that appear in function signatures.
-- **`src/modules/orders/model.ts`** — `OrderDocument` is the return type of `recordFulfillmentProgress` and `readOrder`.
-- **`src/modules/orders/tests/integration/ship-stock.test.ts`** — Exercises the `shipStock` / `releaseStock` / `topUpStock` / `releaseTopUp` flow.
-- **`src/modules/orders/tests/integration/hold-doors.test.ts`** — Exercises `extendHold` and the hold-related invariants.
+- **`inventory`** (`@modules/inventory`): all stock behavior is delegated to `inventoryService`; `StockLine` and `TopUp` types are imported from it. This file is `orders`' single gateway to inventory holds.
+- **`../repository`**: `orderRepository` supplies `writeFulfillment`, `findInSession` and `findByIdScoped`.
+- **`../model`**: `OrderDocument` is the return type for order reads and writes.
+- **`../domain`**: provides `isPayable` and the `FulfillmentSummary` type.
+- **`delivery`** (per the module doc): calls these doors within its transactions. **`returns`** calls `releaseStock`.
+- **Tests**: `hold-doors.test.ts` and `ship-stock.test.ts` in `orders/tests/integration` exercise these doors.
 
 ## Notes
-
-- **`shipStock` vs `topUpStock`** are easy to confuse: `shipStock` permanently drops shelf count (goods are going out); `topUpStock` re-reserves because the goods are expected to come back. Their release counterparts mirror this — `releaseStock` ends the hold as `released`, `releaseTopUp` ends it as `shipped`.
-- **`isPayableNow` is a pre-charge check only.** Doors that record money already taken intentionally skip it; refusing there would not un-pay anything.
-- **`refreshShelf` has no session parameter** by design — it runs after commit. Passing a session to it would be a bug.
-- **`extendHold` is the only function with no session and no return value.** It is best-effort and safe to call on a missing/claimed hold (it silently no-ops).
-- The conditional write in `recordFulfillmentProgress` is the race-resolution mechanism: it is the single point where "still fulfillable?" is evaluated, so a concurrent cancel and shipment cannot both succeed.
+- A missing hold is not a closed hold: `isPayableNow` refuses only when the hold has been released.
+- `refreshShelf` must run after commit, because the delete cannot roll back.
+- `extendHold`, `isPayableNow` and `refreshShelf` take no session and run outside any act transaction.

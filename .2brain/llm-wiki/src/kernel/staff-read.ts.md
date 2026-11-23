@@ -1,34 +1,37 @@
 ---
 source: src/kernel/staff-read.ts
-sha256: e7e31d64bd71b6cdbf5a0a5799c0a419f80cece460cf1332e510bce900c4e7e8
-generated_at: 2026-11-14T18:24:25.684110+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 98663a443c3010d34a95ad321a888d753bd078695efe54833458a6d137523db5
+context_sha256: ddfb8c195ac838b4b732799d4b02e51d4597e20dbb63cbf6eb5675bd15a20f36
+generated_at: 2026-11-22T03:14:35.711686+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/kernel/staff-read.ts
 
 ## Purpose
-
-Records an audit entry (`admin.<resource>.viewed`) when a staff member opens another person's record in a detail view. It enforces two filters before writing: the caller must hold the resource's wide-read rule, and a session caller reading their own record is skipped. It is the single point at which "who looked at my data" events are captured, feeding the GDPR Art. 15 export.
+Defines the audit entry for staff reading someone else's record (`admin.<resource>.viewed`). Customers reading their own data are not events; only callers holding the resource's wide-read staff rule are recorded, and not when the record is their own. It covers detail reads only, since a list would write one entry per page.
 
 ## Key elements
-
-- **`StaffReadTarget`** (interface) — describes one staff read: the permission key identifying "staff", the `AuditAction` to log, the resource kind/id, and an optional `subjectId` (the person whose data the record holds).
-- **`STAFF_READ_PURPOSES`** (const) — maps each `admin.*.viewed` action to a human-readable purpose string (e.g. `"handling your order"`). Serves double duty as the registry of actions that count as a data-subject consultation; a new action not listed here never reaches the audit-logs export.
-- **`recordStaffRead(request, target)`** (function) — the entry point called by detail-view controllers. Returns early if the caller lacks `target.key` in their held rules, or if a session caller is reading their own record (`credentialId === undefined` && `subjectId === caller.id`). Otherwise delegates to `recordAudit` with outcome `'success'`.
+- **`StaffReadTarget`** (interface): describes one staff read.
+  - `key`: the wide-read permission (`display:<Subject>` or `read:<Subject>`) that marks the caller as staff.
+  - `action`: the `AuditAction` to record.
+  - `targetType` and `targetId`: the resource kind and the record's id.
+  - `subjectId` (optional): the person whose data the record holds. It is stored on the audit row so "who looked at my data" is a single query. It is absent for guest orders and other records that are not a person's.
+- **`STAFF_READ_PURPOSES`** (const): maps each consultation action to a data-subject-readable purpose (e.g. `'admin.order.viewed'` → "handling your order"). The actions covered are order, user, return, task, invoice and credit_note. It also serves as the list of actions that count as a consultation, so a new `admin.<resource>.viewed` action must be added here or it never reaches the data-subject export. It is declared `as const satisfies Partial<Record<AuditAction, string>>`.
+- **`recordStaffRead(request, target)`**: records the read via `recordAudit`, with outcome `'success'`. It is a no-op when:
+  - there is no `request.caller`;
+  - the caller does not hold `target.key` (checked with `heldRules`);
+  - the caller is a session (no `credentialId`) reading their own record (`subjectId === caller.id`).
 
 ## Relationships
-
-- **`src/kernel/ability.ts`** — `heldRules(caller)` is used to check whether the caller holds the wide-read key before recording.
-- **`src/kernel/permissions.ts`** — provides the `PermissionRuleId` type that this file imports for typing the permission key.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts the caller context passed into `recordAudit`.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the entry; `AuditAction` types the action field.
-- **Detail-view controllers** (`get-order`, `get-user`, `get-return`, `get-task`, `get-order-invoice`, `get-order-credit-note`) — each calls `recordStaffRead` after a successful detail fetch to register the consultation.
-- **`src/modules/audit-logs/service.ts`** — consumes the stored entries (keyed by `subjectId`) to answer "who looked at my data" queries.
+- `@kernel/ability` supplies `heldRules`, used to test whether the caller holds the staff key.
+- `@kernel/permissions` supplies the `PermissionRuleId` type for `key`.
+- `@infrastructure/http/request` supplies `callerContextOf`, which builds the audit context from the request.
+- `@infrastructure/observability/audit` supplies `recordAudit` and the `AuditAction` type.
+- The detail controllers call `recordStaffRead` after `getAuth`: get-order, get-return, get-task, get-user, get-order-invoice and get-order-credit-note.
+- `src/modules/audit-logs/service.ts` is a graph neighbor. The `STAFF_READ_PURPOSES` doc comment ties it to the "who looked" export, but the file's content doesn't show how the service uses it.
 
 ## Notes
-
-- **Detail reads only.** List/index endpoints are deliberately excluded; a list would emit one entry per page, and the meaningful event is the one naming a specific record.
-- **Self-read nuance.** A key carries its minter's id but is *not* the minter. The guard checks `credentialId === undefined` (i.e. a session, not a key) so that a key reading its own minter's record **is** recorded — only a true session reading itself is suppressed.
-- **`subjectId` is optional.** Absent for guest orders and any record that does not belong to a person; the audit row simply omits the column, which keeps the "who looked at *my* data" query to `WHERE subjectId = :id`.
-- **Extending the set of consultations.** Adding a new `admin.<resource>.viewed` action requires a matching entry in `STAFF_READ_PURPOSES`; without it the action is logged but invisible to the data-subject export.
+- An API key shares its minter's id, so it is not treated as "own". A key reading its minter's record is recorded; only sessions (`credentialId === undefined`) are exempt.
+- The own-record check applies only when `subjectId` is provided.
+- Don't call it from list endpoints.
