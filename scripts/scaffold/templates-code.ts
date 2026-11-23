@@ -146,7 +146,7 @@ export const auditFile = (names: ModuleNames): string => `/**
 import { ${names.pluralCamel}AuditActions } from './rules.generated';
 
 /** The audit action vocabulary this module owns, generated from rules.yaml. */
-export { ${names.pluralCamel}AuditActions };
+export { ${names.pluralCamel}AuditActions } from './rules.generated';
 
 /** Registers this module's actions into the app-wide AuditActionMap union. */
 declare module '@infrastructure/observability/audit' {

@@ -774,13 +774,14 @@ jobs:
 
             # `-v .git:ro`: the build context leaves `.git` out, and lint's `local/comment-links` rule runs
             # `git ls-files`. `safe.directory`: the checkout is the runner's uid and the container runs as
-            # root, which git >= 2.35.2 refuses as "dubious ownership"; GIT_CONFIG_* sets it without a file.
+            # root, which git >= 2.35.2 refuses as "dubious ownership"; the container's own `git config`
+            # sets it, because the repo's git helpers strip every `GIT_*` variable (scripts/git-base.ts).
             - name: Run the gate inside it — no services, no network
               run: >
                   docker run --rm --network=none
                   -v "$PWD/.git:/app/.git:ro"
-                  -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/app
-                  boilerplate-api-gate:${{ github.sha }} npm run complete
+                  boilerplate-api-gate:${{ github.sha }}
+                  sh -c 'git config --global --add safe.directory /app && npm run complete'
 
     boot:
         # Proves the image we SHIP starts: the `runtime` stage of `docker/Dockerfile` against a real Mongo (queue
@@ -975,7 +976,7 @@ jobs:
                   dbdir=$(mktemp -d)
                   "$mongod_bin" --dbpath "$dbdir" --port 27099 --bind_ip 127.0.0.1 --fork --logpath "$dbdir/mongod.log" >/dev/null
                   trap '"$mongod_bin" --dbpath "$dbdir" --shutdown >/dev/null 2>&1 || true' EXIT
-                  out=$(NODE_DB_URI="mongodb://127.0.0.1:27099/zammad-setup" NODE_ZAMMAD_URL="http://127.0.0.1:$ZAMMAD_PORT" NODE_ZAMMAD_API_TOKEN="$admin" NODE_ZAMMAD_GROUP=Users ZAMMAD_ADMIN_TOKEN="$admin" npm run zammad:setup 2>&1) || { echo "$out"; exit 1; }
+                  out=$(NODE_ENV=test NODE_DB_URI="mongodb://127.0.0.1:27099/zammad-setup" NODE_ZAMMAD_URL="http://127.0.0.1:$ZAMMAD_PORT" NODE_ZAMMAD_API_TOKEN="$admin" NODE_ZAMMAD_GROUP=Users ZAMMAD_ADMIN_TOKEN="$admin" npm run zammad:setup 2>&1) || { echo "$out"; exit 1; }
                   echo "$out"
                   if echo "$out" | grep -q '"restartNeeded":true'; then
                       restarted=no
