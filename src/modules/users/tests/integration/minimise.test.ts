@@ -1,24 +1,17 @@
 /**
  * @module
  * Inactivity minimisation, through the real module wiring: an account quiet past the window loses
- * its address book and starts its orders' PII clock, keeps its login and its orders, and is stamped
- * so the next run leaves it alone until it has been active and quiet again.
+ * its address book, keeps its login, and is stamped so the next run leaves it alone until it has
+ * been active and quiet again. What it does to the account's orders is `src/modules/users/tests/integration/minimise-orders.test.ts`.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { registerCheckoutModules } from '@tests/checkout-modules';
 import { resetDomainEvents } from '@kernel/events';
 import { registerModules } from '@kernel/registry';
+import accountModule from '@modules/account/module';
 import addressesModule from '@modules/addresses/module';
 import { giveAddress } from '@modules/addresses/tests/factories';
 import { addressService } from '@modules/addresses';
-import { createProduct } from '@modules/products/tests/factories';
-import {
-    createOrder,
-    toOrderItem,
-    markOrderPaidAt,
-    orderRepository
-} from '@modules/orders/tests/factories';
 import { accountUserService } from '../../friends/account';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import usersModule from '../../module';
@@ -45,53 +38,43 @@ const makeInactive = (id: string, extra: Record<string, unknown> = {}) =>
 /** The caller's saved addresses. */
 const addressesOf = (userId: string) => addressService.list(userId).then((view) => view.addresses);
 
-/** The PII clock on one order. */
-const clockOf = (orderId: string) =>
-    orderRepository.findById(orderId).then((order) => order?.piiClockStartedAt);
-
 /** Whether the account carries the minimised marker. */
 const isMinimised = (userId: string) =>
     userModel
         .exists({ _id: userId, inactivityMinimisedAt: { $exists: true } })
         .then((found) => found !== null);
 
-/** An inactive customer with an address book and one paid order. */
-const inactiveCustomerWithOrder = async (name: string) => {
+/** An inactive customer with an address book. */
+const inactiveCustomer = async (name: string) => {
     const user = await createUser({ email: `${name}@minimise.test`, username: name }, 'customer');
     await giveAddress(user.id);
-    const product = await createProduct();
-    const order = await createOrder(user, [toOrderItem(product, 1)]);
-    await markOrderPaidAt(String(order._id), LONG_AGO);
     await makeInactive(user.id);
-    return { user, orderId: String(order._id) };
+    return user;
 };
 
 describe('inactivity minimisation', () => {
     beforeEach(() => {
-        registerCheckoutModules([addressesModule]);
+        registerModules([accountModule, usersModule, addressesModule]);
     });
 
     afterEach(() => {
         resetDomainEvents();
     });
 
-    it('drops the address book, starts the orders’ clock, and keeps the login and the orders', async () => {
-        const { user, orderId } = await inactiveCustomerWithOrder('quiet');
+    it('drops the address book and keeps the login', async () => {
+        const user = await inactiveCustomer('quiet');
 
         const result = await accountUserService.minimiseInactiveBefore(daysAgo(30));
 
         expect(result).toEqual({ minimised: 1, failed: 0 });
         expect(await addressesOf(user.id)).toEqual([]);
-        const order = await orderRepository.findById(orderId);
-        expect(order?.piiClockStartedAt).toBeInstanceOf(Date);
-        expect(String(order?.userId)).toBe(user.id);
         const reloaded = await userRepository.findById(user.id);
         expect(reloaded?.email).toBe('quiet@minimise.test');
         expect(await isMinimised(user.id)).toBe(true);
     });
 
     it('minimises a banned account too: it drops data and deletes nothing', async () => {
-        const { user } = await inactiveCustomerWithOrder('banned');
+        const user = await inactiveCustomer('banned');
         await makeInactive(user.id, { active: false });
 
         const result = await accountUserService.minimiseInactiveBefore(daysAgo(30));
@@ -102,14 +85,12 @@ describe('inactivity minimisation', () => {
     });
 
     it('is a no-op on a rerun', async () => {
-        const { orderId } = await inactiveCustomerWithOrder('rerun');
+        await inactiveCustomer('rerun');
         await accountUserService.minimiseInactiveBefore(daysAgo(30));
-        const stamped = await clockOf(orderId);
 
         const again = await accountUserService.minimiseInactiveBefore(daysAgo(30));
 
         expect(again).toEqual({ minimised: 0, failed: 0 });
-        expect(await clockOf(orderId)).toEqual(stamped);
     });
 
     it('leaves an active account untouched', async () => {
@@ -126,7 +107,7 @@ describe('inactivity minimisation', () => {
     });
 
     it('minimises again an account that came back and went quiet again', async () => {
-        const { user } = await inactiveCustomerWithOrder('boomerang');
+        const user = await inactiveCustomer('boomerang');
         await accountUserService.minimiseInactiveBefore(daysAgo(30));
         await giveAddress(user.id);
         // Back for a day, long enough ago to be quiet again, but after the first minimising.
@@ -148,7 +129,7 @@ describe('inactivity minimisation', () => {
     });
 
     it('does not stamp an account whose hook failed, so the next run retries it', async () => {
-        const { user } = await inactiveCustomerWithOrder('flaky');
+        const user = await inactiveCustomer('flaky');
         registerModules([
             {
                 name: 'failing',

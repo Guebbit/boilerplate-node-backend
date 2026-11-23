@@ -139,6 +139,11 @@ module that also has shop cases keeps those cases in a file of their own (`shop.
 through `isDeployed(<module>)` from `@tests/paths`, and a canary floor is `≥ 1` against the disk
 (see below).
 
+The app-wide sweeps (fuzz, negative, request-contract, method-not-allowed, malformed-ids) need rows
+for `{id}` to name, and a module owns the row it seeds: it ships `tests/spec-world.ts` exporting a
+`specWorld` (`SpecWorldContribution`, in `tests/support/spec-world.ts`), found from disk. A removed
+module takes its seeder with it, and the sweeps run on what is left.
+
 ---
 
 ## The shared contract, in both directions

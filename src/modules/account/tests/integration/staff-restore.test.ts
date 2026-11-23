@@ -7,7 +7,9 @@
 
 import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
-import { registerCheckoutModules } from '@tests/checkout-modules';
+import { registerModules } from '@kernel/registry';
+import accountModule from '@modules/account/module';
+import usersModule from '@modules/users/module';
 import { resetDomainEvents } from '@kernel/events';
 import { settleOutboxNudges } from '@kernel/outbox';
 import { createUser, userRepository } from '@modules/users/tests/factories';
@@ -31,7 +33,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 setupTestDb();
 
 beforeEach(() => {
-    registerCheckoutModules();
+    registerModules([accountModule, usersModule]);
     mockOutbox.length = 0;
 });
 

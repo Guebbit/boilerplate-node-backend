@@ -6,7 +6,9 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { registerCheckoutModules } from '@tests/checkout-modules';
+import { registerModules } from '@kernel/registry';
+import accountModule from '@modules/account/module';
+import usersModule from '@modules/users/module';
 import { resetDomainEvents } from '@kernel/events';
 import { createUser, userRepository } from '@modules/users/tests/factories';
 import { accountService } from '@modules/account/services';
@@ -32,7 +34,7 @@ setupTestDb();
 
 // The real cascade needs every module's erase hook registered, the way a boot does it.
 beforeEach(() => {
-    registerCheckoutModules();
+    registerModules([accountModule, usersModule]);
     (mailerPort.enqueueEmail as jest.Mock).mockClear();
 });
 
