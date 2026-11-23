@@ -6,6 +6,8 @@ import { api } from '@tests/http';
 import { setupTestDb } from '@tests/setup-test-db';
 import { listOperations, type HttpMethod, type Operation } from '@tests/spec-walk';
 import { buildUrl, seedWorld } from '@tests/spec-world';
+import { isDeployed } from '@tests/paths';
+import { createUser } from '@modules/users/tests/factories';
 import { authenticateAs } from '@tests/http';
 
 setupTestDb();
@@ -43,6 +45,20 @@ describe('every path of the spec, asked with every method it does not declare', 
     it('walks some paths', () => {
         // A walk that found nothing would pass the sweep below by testing nothing.
         expect(PATHS.length).toBeGreaterThan(40);
+    });
+
+    it('seeds the rows of every installed module, and only those', async () => {
+        // The sweep below names rows from this world; a module whose seeder went unfound would
+        // leave its paths on a well-formed id and pass by testing less.
+        const world = await seedWorld(await createUser());
+
+        expect(Object.keys(world).toSorted()).toEqual(
+            [
+                'userId',
+                ...(isDeployed('orders') ? ['orderId'] : []),
+                ...(isDeployed('products') ? ['productId'] : [])
+            ].toSorted()
+        );
     });
 
     it.each(PATHS)(

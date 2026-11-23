@@ -6,7 +6,9 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { registerCheckoutModules } from '@tests/checkout-modules';
+import { registerModules } from '@kernel/registry';
+import accountModule from '@modules/account/module';
+import usersModule from '@modules/users/module';
 import { testCallerContext } from '@tests/callers';
 import { observePort } from '@tests/ports';
 import { markDomainEventsWired, onDomainEvent, resetDomainEvents } from '@kernel/events';
@@ -37,7 +39,7 @@ jest.mock('@infrastructure/adapters/mailer', () => ({
 setupTestDb();
 
 beforeEach(() => {
-    registerCheckoutModules();
+    registerModules([accountModule, usersModule]);
 });
 
 afterEach(() => {

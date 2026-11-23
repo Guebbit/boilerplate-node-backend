@@ -8,7 +8,9 @@
  * not restored, or restored and not erased, never both and never an error.
  */
 import { setupTestDb } from '@tests/setup-test-db';
-import { registerCheckoutModules } from '@tests/checkout-modules';
+import { registerModules } from '@kernel/registry';
+import accountModule from '@modules/account/module';
+import usersModule from '@modules/users/module';
 import { resetDomainEvents } from '@kernel/events';
 import { systemCallerContext } from '@kernel/permissions';
 import { createUser, userRepository } from '@modules/users/tests/factories';
@@ -19,7 +21,7 @@ import { withTransaction } from '@infrastructure/runtime/database';
 setupTestDb();
 
 beforeEach(() => {
-    registerCheckoutModules();
+    registerModules([accountModule, usersModule]);
 });
 
 afterEach(() => resetDomainEvents());

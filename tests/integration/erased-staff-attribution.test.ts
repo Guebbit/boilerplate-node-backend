@@ -5,7 +5,9 @@
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
-import { registerCheckoutModules } from '@tests/checkout-modules';
+import { registerModules } from '@kernel/registry';
+import accountModule from '@modules/account/module';
+import usersModule from '@modules/users/module';
 import { TEST_TENANT_ID } from '@tests/callers';
 import { resetDomainEvents } from '@kernel/events';
 import webhooksModule from '@modules/webhooks/module';
@@ -19,7 +21,7 @@ import { createUser, eraseAsScheduled, userRepository } from '@modules/users/tes
 setupTestDb();
 
 beforeEach(() => {
-    registerCheckoutModules([webhooksModule, localesModule]);
+    registerModules([accountModule, usersModule, webhooksModule, localesModule]);
 });
 
 afterEach(() => resetDomainEvents());

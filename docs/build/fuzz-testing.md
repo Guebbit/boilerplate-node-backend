@@ -71,8 +71,8 @@ These are weighted rather than uniform. Uniform random strings essentially never
 
 The same generator fills **query parameters** from each operation's `in: query` declarations —
 required ones always, optional ones sometimes, an array as a repeated key. **Path parameters**
-name real rows where the path says which kind: a product, an order and a second user are seeded
-before each operation, so `/orders/{id}/cancel` reaches the cancel rather than stopping at a 404.
+name real rows where the path says which kind: each installed module seeds its own rows (today
+users, products, orders) before each operation, so `/orders/{id}/cancel` reaches the cancel rather than stopping at a 404.
 A path whose resource is not seeded still gets a well-formed id nothing holds.
 
 ### `allOf` is folded, not flattened
@@ -200,16 +200,16 @@ it passes the oracle, but it locks `authenticateAs` out and the fuzzing quietly 
 
 ## File map
 
-| Path                                 | Contents                                                                                                   |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `tests/fuzz/endpoints.fuzz.test.ts`  | The driver: three callers per operation, the two assertions, the self-tripwire                             |
-| `tests/fuzz/negative.fuzz.test.ts`   | Negative mode: hostile path and query values, never 5xx, 4xx where the schema is closed                    |
-| `tests/support/spec-walk.ts`         | Parses `openapi.yaml`, resolves `$ref` and folds `allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS` |
-| `tests/support/spec-world.ts`        | The seeded rows a path parameter names, shared with the request-contract walk                              |
-| `tests/support/spec-arbitraries.ts`  | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                                         |
-| `tests/support/http.ts`              | The supertest harness and `authenticateAs`, shared with the integration and contract suites                |
-| `tests/support/response-contract.ts` | `assertResponseMatchesContract` — judges one response against its operation+status Zod schema              |
-| `.github/workflows/fuzz.yml`         | The nightly schedule and manual dispatch                                                                   |
+| Path                                 | Contents                                                                                                                                 |
+| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `tests/fuzz/endpoints.fuzz.test.ts`  | The driver: three callers per operation, the two assertions, the self-tripwire                                                           |
+| `tests/fuzz/negative.fuzz.test.ts`   | Negative mode: hostile path and query values, never 5xx, 4xx where the schema is closed                                                  |
+| `tests/support/spec-walk.ts`         | Parses `openapi.yaml`, resolves `$ref` and folds `allOf`, enumerates operations, owns `SUPPORTED_KEYWORDS`                               |
+| `tests/support/spec-world.ts`        | The seeded rows a path parameter names, shared with the request-contract walk; each module seeds its own, from its `tests/spec-world.ts` |
+| `tests/support/spec-arbitraries.ts`  | JSON Schema → `fast-check` arbitrary, and the hostile-value tables                                                                       |
+| `tests/support/http.ts`              | The supertest harness and `authenticateAs`, shared with the integration and contract suites                                              |
+| `tests/support/response-contract.ts` | `assertResponseMatchesContract` — judges one response against its operation+status Zod schema                                            |
+| `.github/workflows/fuzz.yml`         | The nightly schedule and manual dispatch                                                                                                 |
 
 ## Commands
 

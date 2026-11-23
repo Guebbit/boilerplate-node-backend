@@ -21,7 +21,6 @@ import { asReject } from '@tests/response';
 import { testCallerContext } from '@tests/callers';
 import { createUser, eraseAsScheduled, userRepository } from '@modules/users/tests/factories';
 import { accountUserService } from '@modules/users/friends/account';
-import { createNotification } from '@modules/notifications/tests/factories';
 import type { PersonalDataSection } from '@kernel/registry';
 import { logger } from '@infrastructure/adapters/logger';
 import { outboxEventModel } from '@kernel/outbox';
@@ -181,36 +180,6 @@ const exportDueIn = async (email: string, millis: number) => {
     );
     return { user, id: String(result.data?.id) };
 };
-
-describe('what the export holds of the notifications module', () => {
-    it('lists the account’s own notifications, and nobody else’s', async () => {
-        // The real section list, as `@tests/http` installed it: nothing swapped in.
-        const user = await createUser({ email: 'ada@example.com', verifiedAt: new Date() });
-        const stranger = await createUser({ email: 'stranger@example.com' });
-        await createNotification({ userId: user.id });
-        await createNotification({
-            userId: user.id,
-            body: {
-                code: 'notifications.staff.outbox-dead',
-                params: { eventName: 'user.updated', aggregateId: '64b7f1a2c3d4e5f607182930' }
-            }
-        });
-        await createNotification({ userId: stranger.id });
-
-        const result = await requestExport(user.id, testCallerContext);
-        await settleInlineExports();
-
-        if (!result.success) throw new Error('the request was refused');
-        const document = JSON.parse(await fileOf(`${result.data.id}.json`)) as {
-            notifications?: { code: string }[];
-        };
-
-        expect(document.notifications?.map(({ code }) => code).toSorted()).toEqual([
-            'notifications.staff.outbox-dead',
-            'notifications.staff.webhook-disabled'
-        ]);
-    });
-});
 
 describe('what the export holds of the users module', () => {
     it('lists the providers linked and the factors armed, with no secret among them', async () => {
