@@ -91,6 +91,7 @@ export default {
         // `POST /orders/{id}/process`: the order's own URL, delivery's own key.
         { basePath: '/orders', routes: orderRouter }
     ],
+    languageNeutralReads: ['/delivery/methods'],
     jobs: deliveryJobs,
     config: [deliveryConfig.slice],
     publicEvents,

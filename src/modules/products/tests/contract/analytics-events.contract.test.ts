@@ -1,7 +1,10 @@
 /**
  * @module
- * Contract tests for `POST /analytics/events`: the two events in the contract answer `204`, and
- * anything outside the closed set answers `422`.
+ * Contract tests for `POST /analytics/events`: the two events `products` declares answer `204`,
+ * and anything outside the closed set answers `422`. They live here because the closed set is the
+ * deployed modules' events: with none declared, the contract keeps one open `event` name.
+ *
+ * @see docs/modules/analytics.md#the-story
  */
 
 import '@tests/contract';

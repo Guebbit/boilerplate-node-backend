@@ -152,7 +152,7 @@ describe('CORS', () => {
      */
     it('lets a browser send If-Match and read ETag', async () => {
         const preflight = await api()
-            .options('/products/507f1f77bcf86cd799439011')
+            .options('/users/507f1f77bcf86cd799439011')
             .set('Origin', ALLOWED_ORIGIN)
             .set('Access-Control-Request-Method', 'PATCH')
             .set('Access-Control-Request-Headers', 'if-match');

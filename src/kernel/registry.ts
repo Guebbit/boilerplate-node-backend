@@ -495,6 +495,16 @@ export interface AppModule {
     staffReadPurposes?: Readonly<Partial<Record<AuditAction, string>>>;
 
     /**
+     * The GET reads of this module whose success body does not depend on the visitor's language,
+     * as OpenAPI path templates (`/products/facets`, `/locales/{locale}`). Each is a `setCache`
+     * route that also declares `languageNeutral: true`; `locales` collects them for `attachLocale`,
+     * which runs before routing and so cannot read the flag off the route.
+     *
+     * @see docs/understand/redis-cache-keys.md#language-neutral-routes
+     */
+    languageNeutralReads?: readonly string[];
+
+    /**
      * Paths whose callers SIGN the request body, so the JSON parser must keep the bytes verbatim.
      * Relative to the first of {@link mounts}.
      *
@@ -709,6 +719,23 @@ export const resolveStaffReadPurposes = (
             )
         ),
         'staff-read action'
+    );
+
+/**
+ * Every registered module's {@link AppModule.languageNeutralReads}, in module order. Built from
+ * the passed-in list for the same reason {@link resolvePublicEvents} is.
+ *
+ * @param appModules - the enabled module list
+ * @throws {Error} when two modules declare the same path
+ */
+export const resolveLanguageNeutralReads = (appModules: readonly AppModule[]): string[] =>
+    Object.keys(
+        uniqueEntries(
+            appModules.flatMap((appModule) =>
+                (appModule.languageNeutralReads ?? []).map((path): [string, true] => [path, true])
+            ),
+            'language-neutral read'
+        )
     );
 
 /**

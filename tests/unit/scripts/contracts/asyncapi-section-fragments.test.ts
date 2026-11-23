@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { parseDocument, type Document } from 'yaml';
+import { MODULES_ROOT, modulesWith } from '../../../../scripts/modules-on-disk';
 import {
     localiseOpenApiReferences,
     sectionFragments,
@@ -19,14 +20,26 @@ describe('withSectionFragments', () => {
         const result = withSectionFragments('webhooks', document, merge);
 
         expect(result).toBe(document);
-        expect(merge.mock.calls.map((call) => call[1])).toEqual([
-            'orders',
-            'delivery',
-            'payments',
-            'returns',
-            'example',
-            'users'
-        ]);
+        // Whichever modules are installed: each owner once, none dropped (the order is pinned below).
+        expect(merge.mock.calls.map((call) => call[1]).toSorted()).toEqual(
+            modulesWith(MODULES_ROOT, 'asyncapi.webhooks.yaml')
+        );
+    });
+
+    it('lists the shop modules’ webhook fragments first, in their narrative order, then the rest alphabetically', () => {
+        const root = mkdtempSync(path.join(os.tmpdir(), 'section-fragments-'));
+        try {
+            for (const name of ['users', 'returns', 'alpha', 'orders']) {
+                mkdirSync(path.join(root, name));
+                writeFileSync(path.join(root, name, 'asyncapi.webhooks.yaml'), 'channels: {}\n');
+            }
+
+            expect(
+                sectionFragments('webhooks', root).map((file) => path.basename(path.dirname(file)))
+            ).toEqual(['orders', 'returns', 'alpha', 'users']);
+        } finally {
+            rmSync(root, { recursive: true, force: true });
+        }
     });
 
     it('leaves every other section alone', () => {

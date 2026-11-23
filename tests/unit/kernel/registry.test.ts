@@ -16,6 +16,7 @@ import {
     resolvePublicEvents,
     resolveBrowserEvents,
     resolveStaffReadPurposes,
+    resolveLanguageNeutralReads,
     type AppModule
 } from '@kernel/registry';
 import { coreAuditActions } from '@infrastructure/observability/audit';
@@ -316,5 +317,30 @@ describe('resolveStaffReadPurposes', () => {
         ];
 
         expect(() => resolveStaffReadPurposes(modules)).toThrow(/"security\.forbidden"/);
+    });
+});
+
+describe('resolveLanguageNeutralReads', () => {
+    it('lists every module’s declared reads in module order, and nothing for a module with none', () => {
+        const modules: AppModule[] = [
+            {
+                name: 'first',
+                languageNeutralReads: ['/first', '/first/{id}'],
+                personalData: 'none'
+            },
+            { name: 'quiet', personalData: 'none' },
+            { name: 'second', languageNeutralReads: ['/second'], personalData: 'none' }
+        ];
+
+        expect(resolveLanguageNeutralReads(modules)).toEqual(['/first', '/first/{id}', '/second']);
+    });
+
+    it('refuses to boot when two modules declare the same read, instead of keeping one', () => {
+        const modules: AppModule[] = [
+            { name: 'first', languageNeutralReads: ['/shared'], personalData: 'none' },
+            { name: 'second', languageNeutralReads: ['/shared'], personalData: 'none' }
+        ];
+
+        expect(() => resolveLanguageNeutralReads(modules)).toThrow(/"\/shared"/);
     });
 });

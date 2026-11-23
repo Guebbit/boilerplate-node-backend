@@ -35,7 +35,11 @@ const yaml = parse(
 
 describe('permission vocabulary', () => {
     it('lists exactly what the shared yaml declares', () => {
-        expect([...PERMISSION_ACTIONS]).toEqual(yaml.actions);
+        // Only an action some rule carries is a vocabulary entry (a deployment without the module
+        // that owns `checkout` loses it); the yaml keeps the declared order.
+        expect([...PERMISSION_ACTIONS]).toEqual(
+            yaml.actions.filter((action) => yaml.rules.some((rule) => rule.action === action))
+        );
         expect([...AUTHORIZATION_SCOPES]).toEqual(Object.keys(yaml.scopes));
         expect([...STEP_UP_TIERS]).toEqual(Object.keys(yaml.stepUp));
         expect([...PERMISSION_SET_NAMES]).toEqual(yaml.sets.map((set) => set.name));

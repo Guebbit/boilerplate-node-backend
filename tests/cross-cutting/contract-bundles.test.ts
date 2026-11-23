@@ -31,6 +31,7 @@ import { SHARED_FILES } from '../../scripts/pairing/spec-identity';
 import * as generatedTypes from '../../src/types/asyncapi.generated';
 import { enabledModules } from '../../src/modules';
 import { REPO_ROOT } from '../../scripts/modules-on-disk';
+import { isDeployed } from '@tests/paths';
 
 /** How many requests a collection's folders hold, whichever key that tool nests them under. */
 const counted = (groups: { items?: unknown[]; children?: unknown[] }[]): number =>
@@ -308,12 +309,11 @@ describe('the public AsyncAPI bundle', () => {
 describe('the domain-events section', () => {
     /** The in-process events, as decided: every other domain event is stored through the outbox. */
     const IN_PROCESS_EVENTS = [
-        'cart.lines_removed',
-        'cart.merge_refused',
-        'order.purchase_hold_placed',
+        ...(isDeployed('cart') ? ['cart.lines_removed', 'cart.merge_refused'] : []),
+        ...(isDeployed('orders') ? ['order.purchase_hold_placed'] : []),
         'outbox.event_dead',
         'webhook.subscription_auto_disabled',
-        'wishlist.items_removed'
+        ...(isDeployed('wishlist') ? ['wishlist.items_removed'] : [])
     ];
 
     /** Every `domain.*` channel of the full bundle, by key. */

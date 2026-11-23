@@ -9,20 +9,26 @@
 import '@tests/contract';
 import { setupTestDb } from '@tests/setup-test-db';
 import { api, authenticateAsRole } from '@tests/http';
+import { isDeployed } from '@tests/paths';
 
 setupTestDb();
 
-/** The list reads a staff caller may make, each with the path a filter would be spelled on. */
+/**
+ * The list reads a staff caller may make, each with the path a filter would be spelled on. A read
+ * whose module is not deployed (`demo:remove`) drops out, so the table stays exact for what remains.
+ */
 const LIST_ROUTES = [
-    '/products',
-    '/orders',
-    '/users',
-    '/audit',
-    '/returns',
-    '/tasks',
-    '/webhooks/subscriptions',
-    '/api-keys'
-] as const;
+    ['products', '/products'],
+    ['orders', '/orders'],
+    ['users', '/users'],
+    ['audit-logs', '/audit'],
+    ['returns', '/returns'],
+    ['tasks', '/tasks'],
+    ['webhooks', '/webhooks/subscriptions'],
+    ['api-keys', '/api-keys']
+]
+    .filter(([module]) => isDeployed(module))
+    .map(([, route]) => route);
 
 describe('a stray query parameter on a list read', () => {
     it.each(LIST_ROUTES)('GET %s answers 422 for it, and 200 without', async (route) => {
@@ -43,7 +49,7 @@ describe('a stray query parameter on a list read', () => {
         expect(response.status).toBe(422);
     });
 
-    it('counts exactly eight list routes, so an emptied table cannot pass', () => {
-        expect(LIST_ROUTES).toHaveLength(8);
+    it('keeps the foundation’s five list routes, so an emptied table cannot pass', () => {
+        expect(LIST_ROUTES.length).toBeGreaterThanOrEqual(5);
     });
 });

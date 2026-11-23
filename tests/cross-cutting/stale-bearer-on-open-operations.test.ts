@@ -69,7 +69,7 @@ describe('a stale bearer on an operation whose contract takes no sign-in', () =>
 
     it('is the same bearer that a sign-in-accepting operation refuses', async () => {
         // The canary: without it, a bearer that was simply never bad would pass every case above.
-        const response = await api().get('/products').set('Authorization', STALE_BEARER);
+        const response = await api().get('/account').set('Authorization', STALE_BEARER);
 
         expect(response.status).toBe(401);
         expect(response.headers['www-authenticate']).toBe(INVALID_TOKEN);

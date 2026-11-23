@@ -324,8 +324,8 @@ describe('db:sync', () => {
             .collection('users')
             .insertMany([{ email: 'both@example.com' }, { email: 'both@example.com' }]);
         await nativeDb()
-            .collection('carts')
-            .insertMany([{ userId: 'dupe-user' }, { userId: 'dupe-user' }]);
+            .collection('locales')
+            .insertMany([{ tag: 'dupe-tag' }, { tag: 'dupe-tag' }]);
 
         const usersOnly = [
             {
@@ -343,15 +343,15 @@ describe('db:sync', () => {
         ]);
 
         /**
-         * Unscoped, the same database reports the cart collision too — so the scoping above is
+         * Unscoped, the same database reports the locale collision too — so the scoping above is
          * what suppressed it, not an absence of anything to find.
          */
         await expect(findBlockingDuplicates()).resolves.toEqual(
-            expect.arrayContaining([expect.stringContaining('dupe-user')])
+            expect.arrayContaining([expect.stringContaining('dupe-tag')])
         );
 
         await nativeDb().collection('users').deleteMany({ email: 'both@example.com' });
-        await nativeDb().collection('carts').deleteMany({ userId: 'dupe-user' });
+        await nativeDb().collection('locales').deleteMany({ tag: 'dupe-tag' });
     });
 
     it('refuses to build a unique index the existing rows already violate', async () => {

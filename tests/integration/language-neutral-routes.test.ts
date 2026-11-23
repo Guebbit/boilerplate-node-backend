@@ -36,10 +36,13 @@ import { asStub } from '@tests/stub';
 import { languageNeutralReads } from '@tests/cached-routes';
 import { enabledModules } from '../../src/modules';
 import { givenLocale } from '@modules/locales/tests/factories';
-import { LANGUAGE_NEUTRAL_READS } from '@infrastructure/http/middlewares/locale';
+import { resolveLanguageNeutralReads } from '@kernel/registry';
 import { router as configRoutes } from '../../src/app/config-routes';
 
 setupTestDb();
+
+/** What `attachLocale` treats as language-neutral: what the installed modules declare, plus `/config`. */
+const LANGUAGE_NEUTRAL_READS = ['/config', ...resolveLanguageNeutralReads(enabledModules)];
 
 /**
  * The path each template is asked at, and the language the answer names itself. `pt` has rows
@@ -55,19 +58,26 @@ const asked = (template: string): { path: string; labelled?: string } => {
 const HIT = /; hit; ttl=\d+/;
 
 describe('the registry and the routes agree', () => {
-    it('lists exactly the routes that declare languageNeutral, plus /config', () => {
-        const declared = enabledModules.flatMap(({ mounts = [] }) => languageNeutralReads(mounts));
+    it('lists, per module, exactly the routes that declare languageNeutral', () => {
+        const disagreeing = enabledModules.filter(
+            ({ mounts = [], languageNeutralReads: listed = [] }) =>
+                JSON.stringify(languageNeutralReads(mounts)) !== JSON.stringify(listed.toSorted())
+        );
+
+        expect(disagreeing.map(({ name }) => name)).toEqual([]);
+        // The canary: with no module declaring anything, the loops below would check only `/config`.
+        expect(LANGUAGE_NEUTRAL_READS.length).toBeGreaterThan(1);
+    });
+
+    it('serves `/config`, the one read no module owns, from the app’s own router', () => {
         // Express keeps a route's path and methods on its layer (undocumented, pinned by `router-internals.test.ts`).
         const layers = asStub<{ route?: { path: string; methods: Record<string, boolean> } }[]>(
             configRoutes.stack
         );
-        const configRead = layers.some(
-            ({ route }) => route?.path === '/config' && route.methods.get
-        );
 
-        expect(declared.length).toBeGreaterThan(0);
-        expect(configRead).toBe(true);
-        expect([...declared, '/config'].toSorted()).toEqual([...LANGUAGE_NEUTRAL_READS].toSorted());
+        expect(layers.some(({ route }) => route?.path === '/config' && route.methods.get)).toBe(
+            true
+        );
     });
 });
 

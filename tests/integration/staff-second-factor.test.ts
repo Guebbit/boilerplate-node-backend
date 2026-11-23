@@ -30,7 +30,7 @@ describe('a staff role without an authenticator app', () => {
     it('answers the staff door with the enrolment code, and the customer door as usual', async () => {
         const { bearer } = await unarmedStaff('manager');
 
-        const staff = await api().get('/orders/export').set('Authorization', bearer);
+        const staff = await api().get('/webhooks/subscriptions').set('Authorization', bearer);
         const own = await api().get('/account').set('Authorization', bearer);
 
         expect(staff.status).toBe(403);
@@ -49,7 +49,7 @@ describe('a staff role without an authenticator app', () => {
     it('is not told apart from a plain refusal when the rule is not the role’s anyway', async () => {
         const { bearer } = await unarmedStaff('editor');
 
-        const response = await api().get('/orders/export').set('Authorization', bearer);
+        const response = await api().get('/webhooks/subscriptions').set('Authorization', bearer);
 
         expect(response.status).toBe(403);
         expect(response.body.errors[0].code).toBe('FORBIDDEN');
@@ -63,7 +63,7 @@ describe('a staff role without an authenticator app', () => {
         const bearer = `Bearer ${login.body.token as string}`;
         await seedMembership(user.id, DEPLOYMENT_TENANT_ID, 'tenant', 'manager');
 
-        const response = await api().get('/orders/export').set('Authorization', bearer);
+        const response = await api().get('/webhooks/subscriptions').set('Authorization', bearer);
 
         expect(response.body.errors[0].code).toBe('SECOND_FACTOR_ENROLLMENT_REQUIRED');
     });
@@ -97,7 +97,7 @@ describe('a staff role without an authenticator app', () => {
         // Enrolling ends the session that did it; the suite keeps its bearer, a client swaps it.
         await forgetSessionEpoch(bearer);
 
-        const staff = await api().get('/orders/export').set('Authorization', bearer);
+        const staff = await api().get('/webhooks/subscriptions').set('Authorization', bearer);
         const account = await api().get('/account').set('Authorization', bearer);
 
         expect(staff.status).toBe(200);
@@ -134,7 +134,7 @@ const managerWithKey = async () => {
     const minted = await mint(
         {
             name: 'integration',
-            permissions: ['display:Order'],
+            permissions: ['read:WebhookSubscription'],
             expiresAt: new Date(Date.now() + 7 * 24 * 3_600_000).toISOString()
         },
         {
@@ -142,7 +142,7 @@ const managerWithKey = async () => {
                 id: user.id,
                 tenantId: DEPLOYMENT_TENANT_ID,
                 scope: 'tenant',
-                permissions: ['display:Order'],
+                permissions: ['read:WebhookSubscription'],
                 unrestricted: false,
                 system: false
             },
@@ -177,6 +177,6 @@ describe('losing the authenticator app', () => {
 
         const resolved = await credentialOf(secret);
 
-        expect(resolved?.caller.permissions).not.toContain('display:Order');
+        expect(resolved?.caller.permissions).not.toContain('read:WebhookSubscription');
     });
 });

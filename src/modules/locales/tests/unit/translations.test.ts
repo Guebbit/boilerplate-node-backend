@@ -1,8 +1,8 @@
 /**
  * @module
  * `deriveSourceDigest` — the pure half of the translation write path. Everything that touches the
- * `locales`/`translations` collections or the registry is driven through Mongo instead, in
- * `../integration/translations.test.ts`.
+ * `locales`/`translations` collections or the registry is driven through Mongo instead, in the
+ * module's integration suite, which drives a product as its translatable entity.
  */
 
 import { deriveSourceDigest } from '../../repository';

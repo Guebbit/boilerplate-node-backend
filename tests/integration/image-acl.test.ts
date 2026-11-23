@@ -5,6 +5,7 @@ import { emptyFileSandbox } from '@tests/file-sandbox';
 import { setupTestDb } from '@tests/setup-test-db';
 import { givenLocale } from '@modules/locales/tests/factories';
 import { decodablePng, publicDirectory } from '@tests/images';
+import { isDeployed } from '@tests/paths';
 
 /**
  * A client may never name a path in the image store — the cross-module rule behind
@@ -104,12 +105,12 @@ describe('imageUrl is never a client-named path', () => {
         userBearer = user.bearer;
         userId = user.user.id;
 
-        // The victim: a product whose picture arrived as an upload, like every real one.
+        // The victim: an account whose picture arrived as an upload, like every real one.
         const created = await api()
-            .post('/products')
+            .post('/users')
             .set('Authorization', adminBearer)
-            .field('title', 'Victim')
-            .field('price', '10')
+            .field('email', 'victim@example.com')
+            .field('username', 'victim')
             .attach('imageUpload', PNG_BYTES, { filename: 'v.png', contentType: 'image/png' });
         victimCreatedStatus = created.status;
         victimUrl = created.body.imageUrl as string;
@@ -150,47 +151,50 @@ describe('imageUrl is never a client-named path', () => {
         );
     });
 
-    it.each(['POST /products', 'PUT /products/{id}', 'PATCH /products/{id}'])(
-        '%s refuses a client-named path, JSON and multipart alike',
-        async (label) => {
-            const target = await api()
-                .post('/products')
-                .set('Authorization', adminBearer)
-                .send({ price: '1.00', title: 'Target' });
-            const url = label.startsWith('POST') ? '/products' : `/products/${target.body.id}`;
-            const method = label.split(' ', 1)[0].toLowerCase() as 'post' | 'put' | 'patch';
-            const full = {
-                price: '1.00',
-                title: 'Attempt',
-                active: true,
-                purchasable: true,
-                requiresShipping: true,
-                allowBackorder: false,
-                noWithdrawal: false,
-                categories: [],
-                tags: []
-            };
+    // The catalogue's own doors: present only where `products` is deployed.
+    if (isDeployed('products')) {
+        it.each(['POST /products', 'PUT /products/{id}', 'PATCH /products/{id}'])(
+            '%s refuses a client-named path, JSON and multipart alike',
+            async (label) => {
+                const target = await api()
+                    .post('/products')
+                    .set('Authorization', adminBearer)
+                    .send({ price: '1.00', title: 'Target' });
+                const url = label.startsWith('POST') ? '/products' : `/products/${target.body.id}`;
+                const method = label.split(' ', 1)[0].toLowerCase() as 'post' | 'put' | 'patch';
+                const full = {
+                    price: '1.00',
+                    title: 'Attempt',
+                    active: true,
+                    purchasable: true,
+                    requiresShipping: true,
+                    allowBackorder: false,
+                    noWithdrawal: false,
+                    categories: [],
+                    tags: []
+                };
 
-            const json = await api()
-                [method](url)
-                .set('Authorization', adminBearer)
-                .send({
-                    ...full,
-                    imageUrl: victimUrl
-                });
-            const multipart = await api()
-                [method](url)
-                .set('Authorization', adminBearer)
-                .field('title', full.title)
-                .field('price', '1')
-                .field('active', 'true')
-                .field('requiresShipping', 'true')
-                .field('imageUrl', victimUrl);
+                const json = await api()
+                    [method](url)
+                    .set('Authorization', adminBearer)
+                    .send({
+                        ...full,
+                        imageUrl: victimUrl
+                    });
+                const multipart = await api()
+                    [method](url)
+                    .set('Authorization', adminBearer)
+                    .field('title', full.title)
+                    .field('price', '1')
+                    .field('active', 'true')
+                    .field('requiresShipping', 'true')
+                    .field('imageUrl', victimUrl);
 
-            expect([json.status, multipart.status]).toEqual([422, 422]);
-            expect(fileExists(victimUrl)).toBe(true);
-        }
-    );
+                expect([json.status, multipart.status]).toEqual([422, 422]);
+                expect(fileExists(victimUrl)).toBe(true);
+            }
+        );
+    }
 
     describe('what stays allowed', () => {
         it("imageUrl: null removes the record's OWN image and deletes that file", async () => {

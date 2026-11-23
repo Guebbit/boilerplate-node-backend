@@ -78,10 +78,10 @@ describe('contract responses never carry null', () => {
 
     it('still sees null in a request body, so the walk is not blind', () => {
         const spec = readSpec();
-        const request = spec.components?.schemas?.UpdateInventoryLevelRequest;
+        const request = spec.components?.schemas?.UpdateUserByIdRequest;
 
         expect(
-            nullableSchemas(spec, request as Node, 'UpdateInventoryLevelRequest', new Set())
+            nullableSchemas(spec, request as Node, 'UpdateUserByIdRequest', new Set())
         ).not.toEqual([]);
     });
 });

@@ -169,10 +169,11 @@ The routes: `/config`, `/shop`, `/payments/methods`, `/delivery/methods`, `/prod
 `/locales`, `/locales/apps`, `/locales/{locale}`, `/locales/{locale}/messages` and
 `/locales/{locale}/dictionary`.
 
-`attachLocale` runs before routing, so it cannot read a flag off the route that will match. The
-list lives next to it (`LANGUAGE_NEUTRAL_READS`, `middlewares/locale.ts`), and each cached route
-also declares `languageNeutral: true` on its `setCache`. `tests/integration/language-neutral-routes.test.ts`
-fails when the two differ, and checks that two `Accept-Language` values get one body and one entry.
+`attachLocale` runs before routing, so it cannot read a flag off the route that will match. Each
+module lists its own reads (`AppModule.languageNeutralReads`), `locales` hands the merged list to
+`middlewares/locale.ts` at boot, and each cached route also declares `languageNeutral: true` on its
+`setCache`. `tests/integration/language-neutral-routes.test.ts` fails when a module's list and its
+routes differ, and checks that two `Accept-Language` values get one body and one entry.
 
 `/shop`, `/payments/methods` and `/delivery/methods` mount `environmentCache`: their bodies come
 from the environment, so they are kept a minute, with no tag, and nothing clears them. An old copy

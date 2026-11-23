@@ -18,6 +18,7 @@ import { connection } from '@infrastructure/runtime/database';
 import { leaseModel } from '@infrastructure/persistence/lease';
 import { currentEnvironment } from '@infrastructure/config/store';
 import { eventually } from '@tests/eventually';
+import { isDeployed } from '@tests/paths';
 
 setupTestDb();
 
@@ -180,7 +181,8 @@ describe('GET /observability/metrics/overview', () => {
          * survives a deleted module and one that 500s on it.
          */
         expect(response.body.auth.loginSuccess).toBeGreaterThan(0);
-        expect(response.body.business.checkoutSuccess).toBe(0);
+        // With no shop module the `business` block is left out, since nothing registered its counters.
+        expect(response.body.business?.checkoutSuccess).toBe(isDeployed('cart') ? 0 : undefined);
     });
 });
 

@@ -23,7 +23,8 @@ import type { NextFunction, Request, Response } from 'express';
 import {
     attachLocale,
     isLanguageNeutral,
-    labelNeutralRefusal
+    labelNeutralRefusal,
+    setLanguageNeutralReads
 } from '@infrastructure/http/middlewares/locale';
 import {
     getCurrentLocale,
@@ -277,12 +278,25 @@ const getOf = (path: string, method = 'GET') =>
     });
 
 describe('a language-neutral read', () => {
+    // What the enabled modules would declare, spelled out: a module's real list is its own test's business.
+    beforeAll(() => {
+        setLanguageNeutralReads([
+            '/examples/facets',
+            '/locales',
+            '/locales/apps',
+            '/locales/{locale}',
+            '/locales/{locale}/messages',
+            '/locales/{locale}/dictionary'
+        ]);
+    });
+
+    afterAll(() => {
+        setLanguageNeutralReads([]);
+    });
+
     it.each([
         '/config',
-        '/shop',
-        '/payments/methods',
-        '/delivery/methods',
-        '/products/facets',
+        '/examples/facets',
         '/locales',
         '/locales/apps',
         '/locales/it',
@@ -294,8 +308,8 @@ describe('a language-neutral read', () => {
     });
 
     it.each([
-        '/products',
-        '/products/p1',
+        '/examples',
+        '/examples/e1',
         '/locales/it/entries',
         '/locales/translations/product/p1'
     ])('is not mistaken for a language-bound read: GET %s', (path) => {
@@ -307,13 +321,13 @@ describe('a language-neutral read', () => {
     });
 
     it('treats a HEAD like the GET it is served through', () => {
-        expect(isLanguageNeutral(getOf('/shop', 'HEAD'))).toBe(true);
+        expect(isLanguageNeutral(getOf('/examples/facets', 'HEAD'))).toBe(true);
     });
 
     it('sets neither header on the success, and says nothing about language', () => {
         const response = makeResponse();
 
-        attachLocale(getOf('/shop'), response, jest.fn() as NextFunction);
+        attachLocale(getOf('/examples/facets'), response, jest.fn() as NextFunction);
 
         expect(response.set).not.toHaveBeenCalled();
         expect(response.vary).not.toHaveBeenCalled();
@@ -321,7 +335,7 @@ describe('a language-neutral read', () => {
 
     it('labels its refusal with the language the visitor was answered in', () => {
         const response = makeResponse();
-        attachLocale(getOf('/shop'), response, jest.fn() as NextFunction);
+        attachLocale(getOf('/examples/facets'), response, jest.fn() as NextFunction);
 
         labelNeutralRefusal(response);
 
@@ -331,7 +345,7 @@ describe('a language-neutral read', () => {
 
     it('leaves a response attachLocale already labelled alone', () => {
         const response = makeResponse();
-        attachLocale(getOf('/products'), response, jest.fn() as NextFunction);
+        attachLocale(getOf('/examples'), response, jest.fn() as NextFunction);
         response.set.mockClear();
 
         labelNeutralRefusal(response);

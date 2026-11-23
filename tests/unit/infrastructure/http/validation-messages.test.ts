@@ -61,8 +61,8 @@ describe('a missing field versus a wrongly-typed one', () => {
         ['object', z.object({}), 'x', 'type-object'],
         ['other', z.date(), 'x', 'type-other']
     ])('names a wrongly-typed %s in its own words', (_name, schema, value, key) => {
-        expect(messageOf(field('quantity', schema), { quantity: value })).toBe(
-            render(key, { attribute: copy.attributes.quantity })
+        expect(messageOf(field('pageSize', schema), { pageSize: value })).toBe(
+            render(key, { attribute: copy.attributes.pageSize })
         );
     });
 
@@ -75,19 +75,17 @@ describe('a missing field versus a wrongly-typed one', () => {
 
 describe('the label of the field', () => {
     it('uses the innermost labelled segment and skips indexes', () => {
-        const schema = z.object({ items: z.array(z.object({ quantity: z.number() })) });
+        const schema = z.object({ entries: z.array(z.object({ pageSize: z.number() })) });
 
-        expect(messageOf(schema, { items: [{ quantity: 'x' }] })).toContain(
-            copy.attributes.quantity
+        expect(messageOf(schema, { entries: [{ pageSize: 'x' }] })).toContain(
+            copy.attributes.pageSize
         );
     });
 
     it('skips an unlabelled segment and falls back to the one above it', () => {
-        const schema = z.object({ translations: z.record(z.string(), z.string().min(1)) });
+        const schema = z.object({ fields: z.record(z.string(), z.string().min(1)) });
 
-        expect(messageOf(schema, { translations: { zz: '' } })).toContain(
-            copy.attributes.translations
-        );
+        expect(messageOf(schema, { fields: { zz: '' } })).toContain(copy.attributes.fields);
     });
 
     it('falls back to the neutral phrase when nothing on the path is labelled', () => {
@@ -134,60 +132,64 @@ describe('size constraints carry the unit they measure', () => {
     });
 
     it('measures a small number as a value', () => {
-        expect(messageOf(field('price', z.number().min(5)), { price: 1 })).toBe(
-            render('too-small-number', { attribute: copy.attributes.price, minimum: '5' })
+        expect(messageOf(field('page', z.number().min(5)), { page: 1 })).toBe(
+            render('too-small-number', { attribute: copy.attributes.page, minimum: '5' })
         );
     });
 
     it('says "greater than" for an exclusive minimum, not "at least"', () => {
-        expect(messageOf(field('amount', z.number().gt(0)), { amount: 0 })).toBe(
+        expect(messageOf(field('value', z.number().gt(0)), { value: 0 })).toBe(
             render('too-small-number-exclusive', {
-                attribute: copy.attributes.amount,
+                attribute: copy.attributes.value,
                 minimum: '0'
             })
         );
     });
 
     it('measures a large number as a value', () => {
-        expect(messageOf(field('price', z.number().max(5)), { price: 9 })).toBe(
-            render('too-big-number', { attribute: copy.attributes.price, maximum: '5' })
+        expect(messageOf(field('page', z.number().max(5)), { page: 9 })).toBe(
+            render('too-big-number', { attribute: copy.attributes.page, maximum: '5' })
         );
     });
 
     it('says "less than" for an exclusive maximum', () => {
-        expect(messageOf(field('price', z.number().lt(5)), { price: 5 })).toBe(
-            render('too-big-number-exclusive', { attribute: copy.attributes.price, maximum: '5' })
+        expect(messageOf(field('page', z.number().lt(5)), { page: 5 })).toBe(
+            render('too-big-number-exclusive', { attribute: copy.attributes.page, maximum: '5' })
         );
     });
 
     it('measures a short array in items', () => {
-        expect(messageOf(field('tags', z.array(z.string()).min(2)), { tags: ['a'] })).toBe(
-            render('too-small-items', { attribute: copy.attributes.tags, minimum: '2' })
-        );
+        expect(
+            messageOf(field('permissions', z.array(z.string()).min(2)), { permissions: ['a'] })
+        ).toBe(render('too-small-items', { attribute: copy.attributes.permissions, minimum: '2' }));
     });
 
     it('does not pluralise a one-item minimum', () => {
-        expect(messageOf(field('tags', z.array(z.string()).min(1)), { tags: [] })).toBe(
-            render('too-small-items-one', { attribute: copy.attributes.tags })
-        );
+        expect(
+            messageOf(field('permissions', z.array(z.string()).min(1)), { permissions: [] })
+        ).toBe(render('too-small-items-one', { attribute: copy.attributes.permissions }));
     });
 
     it('measures a long array in items', () => {
         expect(
-            messageOf(field('tags', z.array(z.string()).max(2)), { tags: ['a', 'b', 'c'] })
-        ).toBe(render('too-big-items', { attribute: copy.attributes.tags, maximum: '2' }));
+            messageOf(field('permissions', z.array(z.string()).max(2)), {
+                permissions: ['a', 'b', 'c']
+            })
+        ).toBe(render('too-big-items', { attribute: copy.attributes.permissions, maximum: '2' }));
     });
 
     it('does not pluralise a one-item ceiling', () => {
-        expect(messageOf(field('tags', z.array(z.string()).max(1)), { tags: ['a', 'b'] })).toBe(
-            render('too-big-items-one', { attribute: copy.attributes.tags })
-        );
+        expect(
+            messageOf(field('permissions', z.array(z.string()).max(1)), { permissions: ['a', 'b'] })
+        ).toBe(render('too-big-items-one', { attribute: copy.attributes.permissions }));
     });
 
     it('measures a set in items, not characters', () => {
-        expect(messageOf(field('tags', z.set(z.string()).min(2)), { tags: new Set(['a']) })).toBe(
-            render('too-small-items', { attribute: copy.attributes.tags, minimum: '2' })
-        );
+        expect(
+            messageOf(field('permissions', z.set(z.string()).min(2)), {
+                permissions: new Set(['a'])
+            })
+        ).toBe(render('too-small-items', { attribute: copy.attributes.permissions, minimum: '2' }));
     });
 });
 
@@ -207,16 +209,16 @@ describe('formats worth their own sentence', () => {
 
     /** An unnamed format — a bare regex — falls to the generic sentence, never to a missing key. */
     it('answers the generic format sentence for an unnamed format', () => {
-        expect(messageOf(field('sku', z.string().regex(/^\d+$/)), { sku: 'abc' })).toBe(
-            render('invalid-format', { attribute: copy.attributes.sku })
+        expect(messageOf(field('code', z.string().regex(/^\d+$/)), { code: 'abc' })).toBe(
+            render('invalid-format', { attribute: copy.attributes.code })
         );
     });
 });
 
 describe('the remaining named constraints', () => {
     it('names the divisor a value had to be a multiple of', () => {
-        expect(messageOf(field('amount', z.number().multipleOf(5)), { amount: 7 })).toBe(
-            render('not-multiple-of', { attribute: copy.attributes.amount, divisor: '5' })
+        expect(messageOf(field('value', z.number().multipleOf(5)), { value: 7 })).toBe(
+            render('not-multiple-of', { attribute: copy.attributes.value, divisor: '5' })
         );
     });
 
@@ -258,13 +260,13 @@ describe('nothing falls through to Zod English', () => {
     it('translates every issue of a multi-error parse', () => {
         const schema = z.object({
             name: z.string().min(3),
-            price: z.number().max(10),
+            page: z.number().max(10),
             email: z.email()
         });
 
-        expect(messagesOf(schema, { name: 'a', price: 99, email: 'nope' })).toEqual([
+        expect(messagesOf(schema, { name: 'a', page: 99, email: 'nope' })).toEqual([
             render('too-small-string', { attribute: copy.attributes.name, minimum: '3' }),
-            render('too-big-number', { attribute: copy.attributes.price, maximum: '10' }),
+            render('too-big-number', { attribute: copy.attributes.page, maximum: '10' }),
             render('format-email', { attribute: copy.attributes.email })
         ]);
     });

@@ -12,8 +12,13 @@
  */
 
 import path from 'node:path';
-import { type AppModule, resolveTranslatables } from '@kernel/registry';
+import {
+    type AppModule,
+    resolveLanguageNeutralReads,
+    resolveTranslatables
+} from '@kernel/registry';
 import { registerLocaleOverrideProvider } from '@infrastructure/i18n';
+import { setLanguageNeutralReads } from '@infrastructure/http/middlewares/locale';
 import { registerTranslationPort } from '@kernel/translation';
 import { hasAnonymousReadScope } from '@kernel/access/query';
 import { router } from './routes';
@@ -24,8 +29,8 @@ import { localesConfig } from './config';
 
 /**
  * Everything this module installs once every enabled module is known: the two kernel ports it
- * owns, plus its own `translatables` lookup — built here, by this module, rather than by the app
- * tier collecting it and handing it in by name.
+ * owns, plus its own `translatables` lookup and the language-neutral reads `attachLocale` needs —
+ * built here, by this module, rather than by the app tier collecting them and handing them in.
  *
  * Ports are registered HERE rather than at import time, so importing this file (a type, a test)
  * does not install them — only a module `registerModules` actually runs `onRegistered` for does.
@@ -69,12 +74,22 @@ const onRegistered = (modules: readonly AppModule[]): void => {
     });
 
     localeService.setTranslatables(resolveTranslatables(modules));
+
+    // `attachLocale` runs before routing, so it needs the list of reads that carry no language.
+    setLanguageNeutralReads(resolveLanguageNeutralReads(modules));
 };
 
 /** This module's manifest entry: routes and its own locales. */
 export default {
     name: 'locales',
     mounts: [{ basePath: '/locales', routes: router }],
+    languageNeutralReads: [
+        '/locales',
+        '/locales/apps',
+        '/locales/{locale}',
+        '/locales/{locale}/messages',
+        '/locales/{locale}/dictionary'
+    ],
     config: [localesConfig.slice],
     onRegistered,
     /**

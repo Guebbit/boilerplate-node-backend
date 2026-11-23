@@ -190,9 +190,22 @@ describe('declared error codes', () => {
         Object.values(index.listed).flatMap((byStatus) => Object.values(byStatus).flat())
     );
 
+    /**
+     * The codes the idempotency middleware answers. The catalogue is the root contract's, so it
+     * keeps them in a deployment where no operation takes the header (no module that moves money
+     * or stock): with nothing to answer from, there is nothing to list them on.
+     */
+    const IDEMPOTENCY_CODES = new Set(['IDEMPOTENCY_KEY_REQUIRED', 'IDEMPOTENCY_OUTCOME_UNKNOWN']);
+    const someOperationTakesAKey = listOperations().some((operation) =>
+        operation.requiredHeaders.some((name) => name.toLowerCase() === 'idempotency-key')
+    );
+
     it('lists every catalogue code that is not app-wide on at least one operation', () => {
         const orphans = index.catalogue.filter(
-            (code) => !index.appScoped.has(code) && !listed.has(code)
+            (code) =>
+                !index.appScoped.has(code) &&
+                !listed.has(code) &&
+                (!IDEMPOTENCY_CODES.has(code) || someOperationTakesAKey)
         );
 
         expect(orphans).toEqual([]);

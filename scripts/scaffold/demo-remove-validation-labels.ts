@@ -68,21 +68,25 @@ const reachableFields = (roots: unknown[], schemas: Record<string, unknown>): Se
 };
 
 /**
- * The JSON schema of one operation's request body, the one the client generator exports as
- * `<Operation>Body`. A multipart body is not one of those.
+ * The schema of one operation's request body that the client generator's `<Operation>Body` is
+ * built from: the JSON one (`application/json` or any `+json` type) when the operation has one,
+ * else the first other media type (a multipart-only operation). A multipart schema beside a JSON
+ * one is not a second `Body`, so its extra fields are not a surviving request field.
  * @param requestBody - one operation's `requestBody`
  */
-const jsonBody = (requestBody: unknown): unknown[] =>
-    isPlainObject(requestBody) &&
-    isPlainObject(requestBody.content) &&
-    isPlainObject(requestBody.content['application/json'])
-        ? [requestBody.content['application/json'].schema]
-        : [];
+const bodySchemas = (requestBody: unknown): unknown[] => {
+    if (!isPlainObject(requestBody) || !isPlainObject(requestBody.content)) return [];
+    const media = Object.entries(requestBody.content);
+    if (media.length === 0) return [];
+    const [, chosen] =
+        media.find(([type]) => type === 'application/json' || type.endsWith('+json')) ?? media[0];
+    return isPlainObject(chosen) ? [chosen.schema] : [];
+};
 
 /**
  * What a request can carry, across a set of parsed contracts — the set the validation-attributes
- * test reads off the generated `*Body` schemas: every field reachable from a JSON request body,
- * plus every query parameter name.
+ * test reads off the generated `*Body` schemas: every field reachable from a request body (the
+ * JSON schema, else the multipart one), plus every query parameter name.
  * @param contracts - parsed `openapi*.yaml` documents
  */
 const requestFields = (contracts: unknown[]): Set<string> => {
@@ -92,7 +96,7 @@ const requestFields = (contracts: unknown[]): Set<string> => {
     eachObject(contracts, (object) => {
         if (isPlainObject(object.components) && isPlainObject(object.components.schemas))
             Object.assign(schemas, object.components.schemas);
-        bodies.push(...jsonBody(object.requestBody));
+        bodies.push(...bodySchemas(object.requestBody));
         if (object.in === 'query' && typeof object.name === 'string') queries.add(object.name);
     });
     return new Set([...reachableFields(bodies, schemas), ...queries]);

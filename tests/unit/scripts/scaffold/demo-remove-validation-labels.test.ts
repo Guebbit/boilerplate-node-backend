@@ -84,6 +84,13 @@ const SURVIVOR = `paths:
                 content:
                     multipart/form-data:
                         schema: { type: object, properties: { imageUpload: { type: string } } }
+        post:
+            requestBody:
+                content:
+                    application/json:
+                        schema: { type: object, properties: { email: { type: string } } }
+                    multipart/form-data:
+                        schema: { type: object, properties: { caption: { type: string } } }
 components:
     schemas:
         Address:
@@ -106,6 +113,7 @@ const REMOVED = `paths:
                                 city: { type: string }
                                 page: { type: integer }
                                 quantity: { type: integer }
+                                caption: { type: string }
                                 imageUpload: { type: string }
                                 total: { type: integer }
 `;
@@ -124,9 +132,9 @@ afterEach(() => {
 });
 
 describe('readRemovedFields', () => {
-    it('keeps what a surviving JSON body or query still carries, drops what only responses or multipart name', () => {
+    it('keeps what a surviving JSON body, a multipart-only body or a query carries, drops what only responses or a JSON operation’s multipart twin name', () => {
         expect([...readRemovedFields(root, ['cart'])].toSorted()).toEqual([
-            'imageUpload',
+            'caption',
             'quantity',
             'total'
         ]);

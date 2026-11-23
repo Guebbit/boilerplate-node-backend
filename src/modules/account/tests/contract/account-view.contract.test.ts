@@ -11,7 +11,7 @@
  */
 
 import '@tests/contract';
-import { api, authenticateAs } from '@tests/http';
+import { api, authenticateAs, authenticateAsRole } from '@tests/http';
 import { unpackRules } from '@casl/ability/extra';
 import { createMongoAbility, subject, type MongoAbility } from '@casl/ability';
 import { setupTestDb } from '@tests/setup-test-db';
@@ -31,17 +31,15 @@ const abilityFrom = (
 ): MongoAbility => createMongoAbility(unpackRules(body.abilities[scope] as never) as never);
 
 describe('GET /account abilities', () => {
-    it('carries a signed-in customer’s own rules, and only their own rows', async () => {
-        const { user, bearer } = await authenticateAs('user');
+    it('carries a staff member’s own-rows rule, and only their own rows', async () => {
+        const { user, bearer } = await authenticateAsRole('editor');
 
         const response = await api().get('/account').set('Authorization', bearer).expect(200);
         const ability = abilityFrom(response.body, 'tenant');
         const { tenantId } = response.body.abilities;
 
-        expect(
-            ability.can('read', subject('Order', { userId: user.id, deletedAt: null, tenantId }))
-        ).toBe(true);
-        expect(ability.can('read', subject('Order', { userId: 'somebody-else', tenantId }))).toBe(
+        expect(ability.can('read', subject('Example', { userId: user.id, tenantId }))).toBe(true);
+        expect(ability.can('read', subject('Example', { userId: 'somebody-else', tenantId }))).toBe(
             false
         );
     });
@@ -54,7 +52,7 @@ describe('GET /account abilities', () => {
 
         // The same key that lets the route guard through: one rule set, asked twice.
         expect(
-            abilityFrom(response.body, 'tenant').can('delete', subject('Product', { tenantId }))
+            abilityFrom(response.body, 'tenant').can('delete', subject('Example', { tenantId }))
         ).toBe(true);
     });
 

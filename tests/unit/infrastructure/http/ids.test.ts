@@ -61,7 +61,7 @@ describe('requireId', () => {
         const { response, sent } = makeResponse();
 
         const id = requireId(makeRequest({ params: { id: OBJECT_ID } }), response, {
-            notFound: 'orders.not-found'
+            notFound: 'example.not-found'
         });
 
         expect(id).toBe(OBJECT_ID);
@@ -72,12 +72,12 @@ describe('requireId', () => {
         const { response, sent } = makeResponse();
 
         const id = requireId(makeRequest({ params: { id: 'abc' } }), response, {
-            notFound: 'orders.not-found'
+            notFound: 'example.not-found'
         });
 
         expect(id).toBeUndefined();
         expect(sent.status).toBe(404);
-        expect(errorsOf(sent)).toEqual([{ code: 'NOT_FOUND', message: t('orders.not-found') }]);
+        expect(errorsOf(sent)).toEqual([{ code: 'NOT_FOUND', message: t('example.not-found') }]);
     });
 
     it('answers the bare 404 envelope when the module has no copy of its own', () => {
@@ -95,18 +95,18 @@ describe('requireId', () => {
         const { response, sent } = makeResponse();
 
         requireId(makeRequest({ params: { id: 'abc' } }), response, {
-            notFound: () => `No product with id abc`
+            notFound: () => `No example with id abc`
         });
 
-        expect(errorsOf(sent)).toEqual([{ code: 'NOT_FOUND', message: 'No product with id abc' }]);
+        expect(errorsOf(sent)).toEqual([{ code: 'NOT_FOUND', message: 'No example with id abc' }]);
     });
 
     it('reads the param it is told to, not `id`', () => {
         const { response } = makeResponse();
 
-        const id = requireId(makeRequest({ params: { orderId: OBJECT_ID } }), response, {
-            notFound: 'orders.not-found',
-            name: 'orderId'
+        const id = requireId(makeRequest({ params: { exampleId: OBJECT_ID } }), response, {
+            notFound: 'example.not-found',
+            name: 'exampleId'
         });
 
         expect(id).toBe(OBJECT_ID);
@@ -115,9 +115,9 @@ describe('requireId', () => {
     it('answers a malformed BODY id with a 422 naming the field, never a 404', () => {
         const { response, sent } = makeResponse();
 
-        const id = requireId(makeRequest({ body: { productId: 'abc' } }), response, {
-            notFound: 'products.not-found',
-            name: 'productId',
+        const id = requireId(makeRequest({ body: { userId: 'abc' } }), response, {
+            notFound: 'example.not-found',
+            name: 'userId',
             surface: 'write'
         });
 
@@ -127,9 +127,9 @@ describe('requireId', () => {
             {
                 code: 'VALIDATION_ERROR',
                 message: t('validation.invalid-format', {
-                    attribute: t('validation.attributes.productId')
+                    attribute: t('validation.attributes.userId')
                 }),
-                details: { field: 'productId' }
+                details: { field: 'userId' }
             }
         ]);
     });
@@ -172,7 +172,7 @@ describe('requireId', () => {
         const id = requireId(
             makeRequest({ params: { id: OBJECT_ID }, body: { id: 'abc' } }),
             response,
-            { notFound: 'orders.not-found', surface: 'write' }
+            { notFound: 'example.not-found', surface: 'write' }
         );
 
         expect(id).toBe(OBJECT_ID);

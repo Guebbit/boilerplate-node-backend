@@ -71,7 +71,7 @@ describe.each(MODES)('the staff idle timeout in %s mode', (mode) => {
         const { user, bearer } = await signInAs('editor');
         await idleFor(user.id, LIMIT + 60);
 
-        const response = await api().get('/products').set('Authorization', bearer);
+        const response = await api().get('/locales').set('Authorization', bearer);
 
         expect(response.status).toBe(401);
         expect(response.body.errors[0].code).toBe('SESSION_IDLE');

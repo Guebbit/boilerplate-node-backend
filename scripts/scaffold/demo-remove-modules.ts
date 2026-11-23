@@ -2,7 +2,7 @@
  * @module
  * Taking any set of modules out of the tree — the part of a removal that does not care WHICH
  * modules: their folders, the registry line that names them, the shared authorization files, the
- * alert rules on their metrics, the validation labels only their fields used, the reap/sweep
+ * alert rules on their metrics, the validation labels and frontend-link rows only they used, the reap/sweep
  * scripts they own, their scenario files and test doubles and the tests that need them. The
  * registries that listed those files are NOT edited: `npm run regenerate` rebuilds them,
  * and `regenerate` runs it.
@@ -13,6 +13,7 @@
 
 import { readRemovedMetrics, stripAlertRules } from './demo-remove-alert-rules';
 import { readRemovedFields, stripValidationLabels } from './demo-remove-validation-labels';
+import { readRemovedLinkRows, stripFrontendLinks } from './demo-remove-frontend-links';
 import {
     readRemovedAuthorization,
     stripConformanceCases,
@@ -35,6 +36,7 @@ export const removeModules = (repoRoot: string, names: readonly string[]): Remov
     const removedAuthorization = readRemovedAuthorization(repoRoot, names);
     const removedMetrics = readRemovedMetrics(repoRoot, names);
     const removedFields = readRemovedFields(repoRoot, names);
+    const removedLinkRows = readRemovedLinkRows(repoRoot, names);
 
     return [
         ...removeModuleFolders(repoRoot, names),
@@ -44,6 +46,7 @@ export const removeModules = (repoRoot: string, names: readonly string[]): Remov
         stripConformanceCases(repoRoot, removedAuthorization),
         ...stripAlertRules(repoRoot, removedMetrics),
         ...stripValidationLabels(repoRoot, removedFields),
+        ...stripFrontendLinks(repoRoot, removedLinkRows),
         ...removeResidueTests(repoRoot, names)
     ];
 };

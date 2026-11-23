@@ -2,7 +2,8 @@
  * @module
  * The relay's one promise: nothing reaches the analytics provider before the visitor consents,
  * and the answer is the same `204` either way. Driven through the real app, with the resolved
- * provider's `capture` spied on.
+ * provider's `capture` spied on. It lives with `products` because the closed set of events is the
+ * deployed modules' own: `product_viewed` and `products_searched` are this module's.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';

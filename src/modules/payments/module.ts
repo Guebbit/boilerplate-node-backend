@@ -117,6 +117,7 @@ export default {
         // `POST /orders/{id}/payments`: the order's URL, payments' own key.
         { basePath: '/orders', routes: orderRouter }
     ],
+    languageNeutralReads: ['/payments/methods'],
     jobs: paymentsJobs,
     publicEvents,
     /** The webhook and card-testing budgets — see `./rate-limits.ts`. */

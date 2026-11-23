@@ -8,6 +8,7 @@ import {
 } from '../../../../scripts/contracts/analytics-browser-events';
 import type { OpenApiDocument } from '../../../../scripts/contracts/openapi-document';
 import { asStub } from '@tests/stub';
+import { MODULES_ROOT, modulesWith } from '../../../../scripts/modules-on-disk';
 
 /** The scratch directories this file made, removed after each case. */
 const made: string[] = [];
@@ -59,8 +60,10 @@ const assembled = (document: OpenApiDocument, fragments: string[]) => {
 };
 
 describe('browserEventFragments', () => {
-    it('finds the products fragment on disk', () => {
-        expect(browserEventFragments().map((file) => file.split('/').at(-2))).toContain('products');
+    it('finds the fragment of every module that ships one', () => {
+        const owners = browserEventFragments().map((file) => file.split('/').at(-2));
+
+        expect(owners.toSorted()).toEqual(modulesWith(MODULES_ROOT, 'openapi.browser-events.yaml'));
     });
 });
 

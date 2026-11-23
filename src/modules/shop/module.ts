@@ -15,6 +15,7 @@ import { shopConfig } from './config';
 export default {
     name: 'shop',
     mounts: [{ basePath: '/shop', routes: router }],
+    languageNeutralReads: ['/shop'],
     config: [shopConfig.slice],
     /** No collection: everything here is the deployer's own configuration. */
     personalData: 'none'

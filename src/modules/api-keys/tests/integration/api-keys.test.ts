@@ -97,7 +97,7 @@ describe('mint — the subset boundary', () => {
         const result = await mint(
             {
                 name: 'partner integration',
-                permissions: ['read:WebhookSubscription', 'display:Order'],
+                permissions: ['read:WebhookSubscription', 'display:Locale'],
                 expiresAt: IN_A_WEEK
             },
             context
@@ -175,27 +175,27 @@ describe('mint — the subset boundary', () => {
 
 describe('an own-rows rule is not a staff rule', () => {
     /**
-     * A holder of `display:Order` also passes a plain `read` check on `Order`, so the credential's
+     * A holder of `display:Locale` also passes a plain `read` check on `Locale`, so the credential's
      * floor reads the literal rules the minter holds.
      */
-    it('refuses to mint display:Order for a minter who holds only read:Order', async () => {
+    it('refuses to mint display:Locale for a minter who holds only read:Locale', async () => {
         const user = await createRealUser('self-minter');
         const context = contextFor(String(user._id), keysInScope(null, 'tenant', 'customer'));
 
         const result = await mint(
-            { name: 'wide read', permissions: ['display:Order'], expiresAt: IN_A_WEEK },
+            { name: 'wide read', permissions: ['display:Locale'], expiresAt: IN_A_WEEK },
             context
         );
 
         expect(result.success).toBe(false);
     });
 
-    it('shrinks a minted display:Order to nothing once its minter holds no staff role', async () => {
+    it('shrinks a minted display:Locale to nothing once its minter holds no staff role', async () => {
         const user = await createRealUser('wide-then-narrow');
         const userId = String(user._id);
         await makeArmedAdmin(userId);
         const minted = await mint(
-            { name: 'wide read', permissions: ['display:Order'], expiresAt: IN_A_WEEK },
+            { name: 'wide read', permissions: ['display:Locale'], expiresAt: IN_A_WEEK },
             contextFor(userId, keysInScope('admin', 'tenant', 'customer'))
         );
         if (!minted.data) throw new Error('setup failed: mint was refused');
@@ -203,7 +203,7 @@ describe('an own-rows rule is not a staff rule', () => {
         await accessService.revokeRole(userId, TEST_TENANT_ID, 'tenant', callerContextAs('admin'));
 
         const resolved = await credentialOf(minted.data.secret);
-        expect(resolved?.caller.permissions).not.toContain('display:Order');
+        expect(resolved?.caller.permissions).not.toContain('display:Locale');
     });
 });
 

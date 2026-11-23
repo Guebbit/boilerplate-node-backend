@@ -60,7 +60,7 @@ export const cachedReadPolicies = (mounts: readonly RouteMount[]): [string, stri
 
 /**
  * Every GET across one module's mounts whose `setCache` declares `languageNeutral`, as OpenAPI
- * paths: the list `attachLocale`'s registry (`LANGUAGE_NEUTRAL_READS`) must equal.
+ * paths: what the module's own `languageNeutralReads` (collected for `attachLocale`) must list.
  *
  * @param mounts - the module's `mounts`
  * @returns the OpenAPI paths, sorted

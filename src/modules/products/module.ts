@@ -23,6 +23,7 @@ import { productsBrowserEvents } from './browser-events';
 export default {
     name: 'products',
     mounts: [{ basePath: '/products', routes: router }],
+    languageNeutralReads: ['/products/facets'],
     /**
      * The catalogue resolves a product's tax class into a rate, so the rates are this module's
      * config — `orders` only freezes the number `resolveTaxRate` hands it.

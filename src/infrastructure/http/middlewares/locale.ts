@@ -40,36 +40,39 @@ const negotiateLocale = (request: Pick<Request, 'acceptsLanguages'>): string => 
 };
 
 /**
- * The reads whose SUCCESS body does not depend on the visitor's language, as OpenAPI path
- * templates. Each one is a `languageNeutral` `setCache` route (and `GET /config`, which is not
- * cached in Redis); `tests/integration/language-neutral-routes.test.ts` keeps the list and the
- * routes equal.
+ * `GET /config` answers from the process, not from a module, so it is the one language-neutral
+ * read no module declares.
+ */
+const CONFIG_READ = '/config';
+
+/**
+ * Matchers for the reads whose SUCCESS body does not depend on the visitor's language, as OpenAPI
+ * path templates (`{name}` is one path segment): {@link CONFIG_READ} plus each module's
+ * `languageNeutralReads`. Each is a `languageNeutral` `setCache` route (`GET /config` is not
+ * cached in Redis); `tests/integration/language-neutral-routes.test.ts` keeps each module's list
+ * and its routes equal.
  *
  * A list here, not a flag on the route, because `attachLocale` runs before routing (so a refusal
  * from the limiter or a parser already speaks the caller's language) and cannot yet know which
  * route will match. A header it set then could only be stripped later, and a global header is
  * never patched after the fact.
  */
-export const LANGUAGE_NEUTRAL_READS: readonly string[] = [
-    '/config',
-    '/shop',
-    '/payments/methods',
-    '/delivery/methods',
-    '/products/facets',
-    '/locales',
-    '/locales/apps',
-    '/locales/{locale}',
-    '/locales/{locale}/messages',
-    '/locales/{locale}/dictionary'
-];
+let languageNeutralPatterns: readonly RegExp[] = [];
 
 /**
- * {@link LANGUAGE_NEUTRAL_READS} as matchers: `{name}` is one path segment.
- * Built once at load.
+ * Install the language-neutral reads the enabled modules declare, replacing any earlier list.
+ * Called once from `locales`' `onRegistered`; a test calls it to install a fixture.
+ *
+ * @param declared - the modules' `languageNeutralReads` (`resolveLanguageNeutralReads`)
  */
-const LANGUAGE_NEUTRAL_PATTERNS: readonly RegExp[] = LANGUAGE_NEUTRAL_READS.map(
-    (template) => new RegExp(`^${template.replaceAll(/\{\w+\}/g, '[^/]+')}$`)
-);
+export const setLanguageNeutralReads = (declared: readonly string[]): void => {
+    languageNeutralPatterns = [CONFIG_READ, ...declared].map(
+        (template) => new RegExp(`^${template.replaceAll(/\{\w+\}/g, '[^/]+')}$`)
+    );
+};
+
+// So `/config` alone is recognised before any module has declared.
+setLanguageNeutralReads([]);
 
 /**
  * Whether the request is a read of a language-neutral route.
@@ -80,7 +83,7 @@ const LANGUAGE_NEUTRAL_PATTERNS: readonly RegExp[] = LANGUAGE_NEUTRAL_READS.map(
 export const isLanguageNeutral = (request: Pick<Request, 'method' | 'path'>): boolean => {
     if (request.method !== 'GET' && request.method !== 'HEAD') return false;
     const path = request.path.length > 1 ? request.path.replace(/\/$/, '') : request.path;
-    return LANGUAGE_NEUTRAL_PATTERNS.some((pattern) => pattern.test(path));
+    return languageNeutralPatterns.some((pattern) => pattern.test(path));
 };
 
 /**

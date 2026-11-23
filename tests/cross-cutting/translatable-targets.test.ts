@@ -5,10 +5,12 @@
  * `collection`/`fieldRules` before the write path does, so a typo or a renamed field would otherwise
  * surface as a 500 on someone's first translation edit rather than as a failing test.
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import mongoose from 'mongoose';
 import { resolveTranslatables } from '@kernel/registry';
 import { enabledModules } from '../../src/modules';
-import { isDeployed } from '@tests/paths';
+import { MODULES_ROOT } from '@tests/paths';
 
 /** The translatable targets the enabled modules declare. */
 const translatables = resolveTranslatables(enabledModules);
@@ -46,11 +48,18 @@ describe('the translatables registry', () => {
         );
     }
 
-    it('has an entry whenever `products`, the module that registers one, is deployed', () => {
+    it('has an entry whenever a deployed module writes a `translatables` manifest field', () => {
         /**
          * The canary for the two checks above: an empty registry must mean "nothing translatable
-         * is deployed", never "the manifest stopped being read".
+         * is deployed", never "the manifest stopped being read". Read off each module's own file,
+         * so a module that gains or loses the field moves the expectation with it.
          */
-        expect(entries.length > 0).toBe(isDeployed('products'));
+        const declaring = enabledModules.filter(({ name }) =>
+            /^ {4}translatables:/m.test(
+                readFileSync(path.join(MODULES_ROOT, name, 'module.ts'), 'utf8')
+            )
+        );
+
+        expect(entries.length > 0).toBe(declaring.length > 0);
     });
 });

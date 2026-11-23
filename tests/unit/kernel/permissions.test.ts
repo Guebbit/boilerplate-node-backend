@@ -32,19 +32,19 @@ const validKeysDocument = {
     scopes: { tenant: 'Content belonging to one shop.', platform: 'Shared operational data.' },
     rules: [
         {
-            module: 'products',
-            subject: 'Product',
+            module: 'example',
+            subject: 'Example',
             action: 'read',
             scope: 'tenant',
-            description: 'Read active products.'
+            description: 'Read published examples.'
         }
     ],
     sets: [
         {
-            name: 'ProductStorefront',
-            module: 'products',
+            name: 'ExampleDisplay',
+            module: 'example',
             description: 'What the storefront shows.',
-            rules: ['read:Product']
+            rules: ['read:Example']
         }
     ]
 };
@@ -110,7 +110,7 @@ describe('keysDocumentSchema', () => {
 const validAudience = Object.fromEntries(
     AUDIENCE_NAMES.map((name) => [
         name,
-        { title: `The ${name}`, description: 'd', sets: ['ProductStorefront'] }
+        { title: `The ${name}`, description: 'd', sets: ['ExampleDisplay'] }
     ])
 );
 
@@ -306,11 +306,6 @@ describe('audience roles', () => {
         expect(PRESET_ROLES.some((role) => isAudienceName(role.name))).toBe(false);
     });
 
-    it('lets only a proven address spend a basket', () => {
-        expect(callerAs('customer').permissions).toContain('checkout:Cart');
-        expect(callerAs('unverified').permissions).not.toContain('checkout:Cart');
-    });
-
     it('leaves authoring examples to staff, never to a shopper', () => {
         for (const name of ['unverified', 'customer'] as const) {
             expect(callerAs(name).permissions).not.toContain('create:Example');
@@ -343,7 +338,7 @@ describe('audience roles', () => {
         const manager = callerAs('manager').permissions;
 
         expect(manager).toEqual(expect.arrayContaining(AUDIENCE_ROLES.customer.permissions));
-        expect(manager).toContain('display:Order');
+        expect(manager).toContain('create:Locale');
     });
 
     it('gives a platform caller no shop rule from its audience', () => {
@@ -379,7 +374,7 @@ describe('the staff gate', () => {
         const caller = callerInScope(unarmedManager, 'tenant');
 
         expect(caller.permissions).toEqual(AUDIENCE_ROLES.customer.permissions);
-        expect(caller.permissions).not.toContain('display:Order');
+        expect(caller.permissions).not.toContain('create:Locale');
         expect(caller.unrestricted).toBe(false);
     });
 
@@ -390,6 +385,6 @@ describe('the staff gate', () => {
     it('restores the role the moment an authenticator app is armed', () => {
         const caller = callerInScope({ ...unarmedManager, authenticatorArmed: true }, 'tenant');
 
-        expect(caller.permissions).toContain('display:Order');
+        expect(caller.permissions).toContain('create:Locale');
     });
 });

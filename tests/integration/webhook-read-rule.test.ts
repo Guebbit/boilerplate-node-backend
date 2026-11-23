@@ -15,7 +15,7 @@ setupTestDb();
 /** A week from now, as a key's expiry. */
 const inAWeek = () => new Date(Date.now() + 7 * 86_400_000).toISOString();
 
-/** A key holding the webhook rules and nothing that reads orders, payments, returns or accounts. */
+/** A key holding the webhook rules and nothing that reads accounts. */
 const webhookOnlyKey = async (): Promise<string> => {
     await createUser({ email: 'minter@example.com' });
     const { bearer: admin } = await authenticateAs('admin');
@@ -59,6 +59,7 @@ describe('a key holding only the webhook rules', () => {
             catalogue.items.map((event) => [event.name, event.actions.subscribe])
         );
         expect(flags['user.updated']).toBe(false);
-        expect(flags['order.paid']).toBe(false);
+        // A public event (`example.published`) carries no read rule: a per-event rule, not a blanket one.
+        expect(flags['example.published']).toBe(true);
     });
 });

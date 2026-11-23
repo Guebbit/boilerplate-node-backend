@@ -17,7 +17,7 @@ const ALLOWED_ORIGIN = (process.env.NODE_CORS_ORIGIN ?? 'http://localhost:8080')
 
 describe('a wrong method on a known path', () => {
     it('answers 405 with Allow and the METHOD_NOT_ALLOWED code', async () => {
-        const response = await api().delete('/shop');
+        const response = await api().delete('/config');
 
         expect(response.status).toBe(405);
         expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
@@ -55,6 +55,7 @@ describe('every path of the spec, asked with every method it does not declare', 
         expect(Object.keys(world).toSorted()).toEqual(
             [
                 'userId',
+                ...(isDeployed('example') ? ['exampleId'] : []),
                 ...(isDeployed('orders') ? ['orderId'] : []),
                 ...(isDeployed('products') ? ['productId'] : [])
             ].toSorted()
@@ -100,7 +101,7 @@ describe('what stays as it was', () => {
 
     it('answers a preflight OPTIONS 204 for an allowed origin', async () => {
         const response = await api()
-            .options('/shop')
+            .options('/config')
             .set('Origin', ALLOWED_ORIGIN)
             .set('Access-Control-Request-Method', 'GET');
 
@@ -116,7 +117,7 @@ describe('what stays as it was', () => {
 
 describe('OPTIONS says what a path accepts', () => {
     it('answers Allow and Accept-Patch where the path has a PATCH', async () => {
-        const response = await api().options('/products/some-id');
+        const response = await api().options('/users/some-id');
 
         expect(response.status).toBe(204);
         expect(response.headers.allow).toContain('PATCH');
@@ -124,7 +125,7 @@ describe('OPTIONS says what a path accepts', () => {
     });
 
     it('answers no Accept-Patch where the path has no PATCH', async () => {
-        const response = await api().options('/shop');
+        const response = await api().options('/config');
 
         expect(response.status).toBe(204);
         expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
@@ -132,28 +133,22 @@ describe('OPTIONS says what a path accepts', () => {
     });
 
     it('lets a literal path win over its templated sibling', async () => {
-        const response = await api().options('/products/facets');
+        const response = await api().options('/locales/apps');
 
         expect(response.headers.allow).toBe('GET, HEAD, OPTIONS');
         expect(response.headers['accept-patch']).toBeUndefined();
     });
 
-    it('lets a literal sub-path win over a templated sibling under the same parent', async () => {
-        const response = await api().options('/payments/abc/refunds/sync');
-
-        expect(response.headers.allow).toBe('OPTIONS, POST');
-    });
-
     it('sends no Content-Length on the 204', async () => {
-        const response = await api().options('/shop');
+        const response = await api().options('/config');
 
         expect(response.headers['content-length']).toBeUndefined();
     });
 
     it('answers the same Allow for a refused, an allowed and an absent Origin', async () => {
-        const refused = await api().options('/shop').set('Origin', 'http://evil.example');
-        const allowed = await api().options('/shop').set('Origin', ALLOWED_ORIGIN);
-        const absent = await api().options('/shop');
+        const refused = await api().options('/config').set('Origin', 'http://evil.example');
+        const allowed = await api().options('/config').set('Origin', ALLOWED_ORIGIN);
+        const absent = await api().options('/config');
 
         expect([refused.status, allowed.status, absent.status]).toEqual([204, 204, 204]);
         expect(refused.headers.allow).toBe(absent.headers.allow);
@@ -163,7 +158,7 @@ describe('OPTIONS says what a path accepts', () => {
 
     it('keeps the preflight headers on a real preflight', async () => {
         const response = await api()
-            .options('/shop')
+            .options('/config')
             .set('Origin', ALLOWED_ORIGIN)
             .set('Access-Control-Request-Method', 'GET');
 
@@ -186,8 +181,8 @@ describe('OPTIONS says what a path accepts', () => {
 
 describe('Allow lists OPTIONS itself, on both answers', () => {
     it('lists OPTIONS on the OPTIONS 204 and on a 405, the same set', async () => {
-        const options = await api().options('/shop');
-        const refused = await api().delete('/shop');
+        const options = await api().options('/config');
+        const refused = await api().delete('/config');
 
         expect(options.status).toBe(204);
         expect(refused.status).toBe(405);

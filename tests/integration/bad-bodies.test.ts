@@ -188,7 +188,7 @@ describe('a malformed multipart body', () => {
     /** A customer upload door and a staff one: both sit behind multer. */
     const UPLOAD_ROUTES = [
         { method: 'put' as const, path: '/account', role: 'user' as const },
-        { method: 'post' as const, path: '/products', role: 'admin' as const }
+        { method: 'put' as const, path: '/users/65dc8a99604c307b702b5ccc', role: 'admin' as const }
     ];
 
     const MALFORMED_BODIES = [
@@ -331,7 +331,7 @@ describe('hostile content in a well-formed body', () => {
     it('refuses the 100 kB `[[[…]]]` body that overflowed every recursive walker', async () => {
         const hostile = `{"title":${'['.repeat(49_990)}${']'.repeat(49_990)}}`;
 
-        for (const route of ['/products/search', '/account/login']) {
+        for (const route of ['/users/search', '/account/login']) {
             const response = await api()
                 .post(route)
                 .set('Content-Type', 'application/json')

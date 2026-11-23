@@ -32,6 +32,7 @@ import {
     type Segment
 } from '@tests/spec-ids';
 import { withoutInstance } from '@tests/problem';
+import { isDeployed } from '@tests/paths';
 
 /**
  * No real Chromium here: the invoice route with a real order would render, and a missing browser
@@ -183,9 +184,9 @@ describe('the id sites the spec declares', () => {
          * Counts, not a floor of one: a walk that quietly stopped recognising `Id` would still
          * find a few, and every sweep below would shrink to a rounding error.
          */
-        expect(PATH_SITES.length).toBeGreaterThanOrEqual(71);
-        expect(BODY_SITES.length).toBeGreaterThanOrEqual(19);
-        expect(QUERY_SITES.length).toBeGreaterThanOrEqual(8);
+        expect(PATH_SITES.length).toBeGreaterThanOrEqual(isDeployed('orders') ? 71 : 45);
+        expect(BODY_SITES.length).toBeGreaterThanOrEqual(isDeployed('orders') ? 19 : 2);
+        expect(QUERY_SITES.length).toBeGreaterThanOrEqual(isDeployed('orders') ? 8 : 2);
     });
 });
 

@@ -33,8 +33,28 @@ import { isNullable, listOperations, type Operation, type SchemaNode } from '@te
 import { seedWorld, buildUrl, requiredHeadersOf, OBJECT_ID, type World } from '@tests/spec-world';
 import * as zodSchemas from '@api/schemas.zod';
 import { givenLocale } from '@modules/locales/tests/factories';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { MODULES_ROOT, isDeployed } from '@tests/paths';
 
 setupTestDb();
+
+/**
+ * The table rows a module owns, kept only where that module is deployed: a checkout without it
+ * (`demo:remove`) names no operation it lacks, and the tables stay exact for what remains.
+ * @param module - the folder name under `src/modules/`
+ * @param rows - the entries (a record's) that belong to it
+ */
+const ownedBy = <T extends object>(module: string, rows: T): Partial<T> =>
+    isDeployed(module) ? rows : {};
+
+/**
+ * {@link ownedBy} for a list of operation ids.
+ * @param module - the folder name under `src/modules/`
+ * @param operationIds - the ids that belong to it
+ */
+const idsOwnedBy = (module: string, operationIds: string[]): string[] =>
+    isDeployed(module) ? operationIds : [];
 
 // `@tests/http`'s import boots the real app, which registers every enabled module's `translatables`.
 
@@ -254,12 +274,12 @@ describe('invalid query parameters (contract-derived)', () => {
 
 /** The operations whose relinked legal body must be answered with a 2xx, not just not refused. */
 const STRICT_2XX = new Set([
-    'createUser',
-    'createProduct',
-    'createOrder',
-    'addCartItem',
-    'createContactTask',
-    'signup'
+    ...idsOwnedBy('users', ['createUser']),
+    ...idsOwnedBy('products', ['createProduct']),
+    ...idsOwnedBy('orders', ['createOrder']),
+    ...idsOwnedBy('cart', ['addCartItem']),
+    ...idsOwnedBy('tasks', ['createContactTask']),
+    ...idsOwnedBy('account', ['signup'])
 ]);
 
 /** Every POST/PUT/PATCH with a JSON body. */
@@ -303,8 +323,10 @@ const NEEDS_STATE_OR_SIGNATURE: Record<string, string> = {
     regenerateBackupCodes: 'two-factor must already be enabled on the account',
     disableTwoFactor: 'two-factor must already be enabled on the account',
     removeTwoFactorMethod: 'that method must already be armed on the account',
-    receivePaymentWebhook:
-        'a provider-signed request: the signature is checked before the body, and a bad one is 400'
+    ...ownedBy('payments', {
+        receivePaymentWebhook:
+            'a provider-signed request: the signature is checked before the body, and a bad one is 400'
+    })
 };
 
 /**
@@ -314,10 +336,12 @@ const NEEDS_STATE_OR_SIGNATURE: Record<string, string> = {
  *
  * @see docs/understand/request-input.md#the-rules-behind-the-table
  */
-const ACCEPTS_ANY_TYPE = new Set(['searchProducts::category', 'searchProducts::tag']);
+const ACCEPTS_ANY_TYPE = new Set(
+    idsOwnedBy('products', ['searchProducts::category', 'searchProducts::tag'])
+);
 
 /** Operations whose violations are not answered 422, because the refusal comes earlier. */
-const REFUSED_BEFORE_VALIDATION = new Set(['receivePaymentWebhook']);
+const REFUSED_BEFORE_VALIDATION = new Set(idsOwnedBy('payments', ['receivePaymentWebhook']));
 
 /** Computes the real value for one field from the seeded rows and the payload around it. */
 type FieldOverride = (world: World, payload: Record<string, unknown>) => unknown;
@@ -329,84 +353,97 @@ type FieldOverride = (world: World, payload: Record<string, unknown>) => unknown
  * once per operation, and never applied to the field a case is testing.
  */
 const FIELD_OVERRIDES: Record<string, Record<string, FieldOverride>> = {
-    // `role` is a plain string to the schema, because roles are data a deployment may add to.
-    createUser: { role: () => 'editor' },
-    assignUserRole: { role: () => 'editor' },
-    /**
-     * `translations` is a `Record<locale, ...>` to the schema: it cannot say a key must be a
-     * language other than the default one, whose row must exist. No other language is legal here.
-     */
-    createProduct: { translations: () => ({}) },
-    createOrder: {
-        userId: (world) => world.userId,
+    ...ownedBy('users', {
+        // `role` is a plain string to the schema, because roles are data a deployment may add to.
+        createUser: { role: () => 'editor' },
+        assignUserRole: { role: () => 'editor' },
+        searchUsers: { id: () => [OBJECT_ID] },
+        // A generated date-time can be in the past; a purchase hold must end in the future.
+        placeUserPurchaseHold: { until: () => new Date(Date.now() + 7 * 86_400_000).toISOString() }
+    }),
+    ...ownedBy('products', {
         /**
-         * A shelf no generated quantity can exhaust, and the admin line limit is a deployment knob
-         * under the contract's wider ceiling: one unit of the seeded product.
+         * `translations` is a `Record<locale, ...>` to the schema: it cannot say a key must be a
+         * language other than the default one, whose row must exist. No other language is legal here.
          */
-        items: (world, payload) =>
-            Array.isArray(payload.items)
-                ? (payload.items as Record<string, unknown>[]).map((item) => ({
-                      ...item,
-                      quantity: 1,
-                      productId: world.productId
-                  }))
-                : payload.items
-    },
-    // The generated quantity is the contract's hard ceiling (999); the shop's per-line cap refuses it.
-    addCartItem: { productId: (world) => world.productId, quantity: () => 1 },
-    signup: { passwordConfirm: (_world, payload) => payload.password },
-    searchUsers: { id: () => [OBJECT_ID] },
-    // A generated date-time can be in the past; a purchase hold must end in the future.
-    placeUserPurchaseHold: { until: () => new Date(Date.now() + 7 * 86_400_000).toISOString() },
-    searchProducts: { id: () => [OBJECT_ID] },
-    searchOrders: {
-        id: () => [OBJECT_ID],
-        userId: (world) => world.userId,
-        productId: (world) => world.productId
-    },
-    // The generated quantity is the contract's hard ceiling (999); the shop's per-line cap refuses it.
-    updateCartItemByProductId: { quantity: () => 1 },
-    createWishlistItem: { productId: (world) => world.productId },
-    createStockAlert: { productId: (world) => world.productId },
-    createPayment: { orderId: (world) => world.orderId },
-    createReturn: {
-        orderId: (world) => world.orderId,
-        lines: (world) => [{ productId: world.productId, quantity: 1 }],
+        createProduct: { translations: () => ({}) },
+        searchProducts: { id: () => [OBJECT_ID] },
+        replaceProductById: { translations: () => ({}) },
+        updateProductById: { translations: () => ({}) }
+    }),
+    ...ownedBy('orders', {
+        createOrder: {
+            userId: (world) => world.userId,
+            /**
+             * A shelf no generated quantity can exhaust, and the admin line limit is a deployment knob
+             * under the contract's wider ceiling: one unit of the seeded product.
+             */
+            items: (world, payload) =>
+                Array.isArray(payload.items)
+                    ? (payload.items as Record<string, unknown>[]).map((item) => ({
+                          ...item,
+                          quantity: 1,
+                          productId: world.productId
+                      }))
+                    : payload.items
+        },
+        searchOrders: {
+            id: () => [OBJECT_ID],
+            userId: (world) => world.userId,
+            productId: (world) => world.productId
+        }
+    }),
+    ...ownedBy('cart', {
+        // The generated quantity is the contract's hard ceiling (999); the shop's per-line cap refuses it.
+        addCartItem: { productId: (world) => world.productId, quantity: () => 1 },
+        updateCartItemByProductId: { quantity: () => 1 }
+    }),
+    ...ownedBy('wishlist', { createWishlistItem: { productId: (world) => world.productId } }),
+    ...ownedBy('stock-alerts', { createStockAlert: { productId: (world) => world.productId } }),
+    ...ownedBy('payments', { createPayment: { orderId: (world) => world.orderId } }),
+    ...ownedBy('returns', {
+        createReturn: {
+            orderId: (world) => world.orderId,
+            lines: (world) => [{ productId: world.productId, quantity: 1 }],
+            /**
+             * A cancellation names a fulfillment order and sends no lines; the schema cannot say so, so
+             * the legal body is the goods return the generated `lines` belong to.
+             */
+            kind: () => 'return',
+            fulfillmentOrderId: () => undefined,
+            /**
+             * A buyer's own return takes neither field: the server sets the date, and a channel belongs
+             * to a withdrawal that staff record. The schema declares both for the staff path.
+             */
+            requestedAt: () => undefined,
+            statedVia: () => undefined,
+            /**
+             * A preferred remedy is legal only beside a `defective` or `wrong_item` reason, which the
+             * schema cannot say; a generated pair that disagrees is a 422, not a schema refusal.
+             */
+            preferredRemedy: () => undefined
+        }
+    }),
+    ...ownedBy('account', {
+        signup: { passwordConfirm: (_world, payload) => payload.password },
+        changePassword: {
+            currentPassword: () => PLAIN_PASSWORD,
+            passwordConfirm: (_world, payload) => payload.password
+        },
+        confirmPasswordReset: { passwordConfirm: (_world, payload) => payload.password },
         /**
-         * A cancellation names a fulfillment order and sends no lines; the schema cannot say so, so
-         * the legal body is the goods return the generated `lines` belong to.
+         * `otp` is optional and only legal for an account with a second factor armed; the generated
+         * account has none, so the legal body leaves it out (it is a 422, not a schema refusal).
          */
-        kind: () => 'return',
-        fulfillmentOrderId: () => undefined,
-        /**
-         * A buyer's own return takes neither field: the server sets the date, and a channel belongs
-         * to a withdrawal that staff record. The schema declares both for the staff path.
-         */
-        requestedAt: () => undefined,
-        statedVia: () => undefined,
-        /**
-         * A preferred remedy is legal only beside a `defective` or `wrong_item` reason, which the
-         * schema cannot say; a generated pair that disagrees is a 422, not a schema refusal.
-         */
-        preferredRemedy: () => undefined
-    },
-    changePassword: {
-        currentPassword: () => PLAIN_PASSWORD,
-        passwordConfirm: (_world, payload) => payload.password
-    },
-    confirmPasswordReset: { passwordConfirm: (_world, payload) => payload.password },
-    /**
-     * `otp` is optional and only legal for an account with a second factor armed; the generated
-     * account has none, so the legal body leaves it out (it is a 422, not a schema refusal).
-     */
-    reauth: { password: () => PLAIN_PASSWORD, otp: () => undefined },
-    createApiKey: { permissions: () => ['read:User'] },
+        reauth: { password: () => PLAIN_PASSWORD, otp: () => undefined }
+    }),
+    ...ownedBy('api-keys', { createApiKey: { permissions: () => ['read:User'] } }),
     // An event name is legal only if the catalogue lists it, which the schema cannot say: `*` always is.
-    createWebhookSubscription: { eventTypes: () => ['*'] },
-    replaceWebhookSubscription: { eventTypes: () => ['*'] },
-    updateWebhookSubscription: { eventTypes: () => ['*'] },
-    replaceProductById: { translations: () => ({}) },
-    updateProductById: { translations: () => ({}) }
+    ...ownedBy('webhooks', {
+        createWebhookSubscription: { eventTypes: () => ['*'] },
+        replaceWebhookSubscription: { eventTypes: () => ['*'] },
+        updateWebhookSubscription: { eventTypes: () => ['*'] }
+    })
 };
 
 /** A legal translations body: one language besides the default, with one field. */
@@ -611,33 +648,46 @@ const KEY_REQUIRED_OPERATIONS = listOperations().filter((operation) =>
 describe('every operation that requires an Idempotency-Key (contract-derived)', () => {
     it('walks the do-not-retry operations the spec declares', () => {
         // A vacuous pass would read as green: this walk would check nothing if the filter found none.
+        // So the walk finds some exactly when a deployed module's contract uses the header, read off disk.
+        const declaring = readdirSync(MODULES_ROOT).filter((name) => {
+            const contract = path.join(MODULES_ROOT, name, 'openapi.yaml');
+            return (
+                existsSync(contract) &&
+                readFileSync(contract, 'utf8').includes('RequiredIdempotencyKeyHeader')
+            );
+        });
+        expect(KEY_REQUIRED_OPERATIONS.length > 0).toBe(declaring.length > 0);
         expect(
             KEY_REQUIRED_OPERATIONS.map((operation) => operation.operationId).toSorted()
         ).toEqual(
             expect.arrayContaining([
-                'adjustStock',
-                'createRefund',
-                'receiveStock',
-                'shipFulfillmentOrder'
+                ...idsOwnedBy('inventory', ['adjustStock', 'receiveStock']),
+                ...idsOwnedBy('payments', ['createRefund']),
+                ...idsOwnedBy('delivery', ['shipFulfillmentOrder'])
             ])
         );
     });
 
-    it.each(KEY_REQUIRED_OPERATIONS.map((operation) => ({ label: labelOf(operation), operation })))(
-        '$label refuses a request without the key as 400 IDEMPOTENCY_KEY_REQUIRED',
-        async ({ operation }) => {
-            const { user, bearer } = await authenticateAs(roleReaching(operation));
-            const world = await seedWorld(user);
+    // `it.each` rejects an empty table: a checkout whose modules take no key has no operation to walk.
+    if (KEY_REQUIRED_OPERATIONS.length > 0) {
+        it.each(
+            KEY_REQUIRED_OPERATIONS.map((operation) => ({ label: labelOf(operation), operation }))
+        )(
+            '$label refuses a request without the key as 400 IDEMPOTENCY_KEY_REQUIRED',
+            async ({ operation }) => {
+                const { user, bearer } = await authenticateAs(roleReaching(operation));
+                const world = await seedWorld(user);
 
-            const response = await api()
-                [operation.method](buildUrl(operation, world))
-                .set('Authorization', bearer)
-                .set('Accept-Language', 'en');
+                const response = await api()
+                    [operation.method](buildUrl(operation, world))
+                    .set('Authorization', bearer)
+                    .set('Accept-Language', 'en');
 
-            expect([response.status, response.body.errors?.[0]?.code]).toEqual([
-                400,
-                'IDEMPOTENCY_KEY_REQUIRED'
-            ]);
-        }
-    );
+                expect([response.status, response.body.errors?.[0]?.code]).toEqual([
+                    400,
+                    'IDEMPOTENCY_KEY_REQUIRED'
+                ]);
+            }
+        );
+    }
 });

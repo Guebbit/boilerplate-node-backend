@@ -16,6 +16,7 @@
  */
 
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -274,31 +275,39 @@ describe('scenarios/apply.ts', () => {
         APPLY_TIMEOUT_MS
     );
 
-    it(
-        'lifts the rate limits before any limiter is built, so a driving scenario outruns a small .env budget',
-        async () => {
-            /**
-             * `shop` is the scenario that DRIVES requests (hundreds, from one address). With the
-             * `.env` budget this small, a limiter built before the overrides applied answers 429.
-             */
-            const dbUri = freshDbUri();
-            const result = await runApply(['shop'], dbUri, 'test', {
-                NODE_RATE_LIMIT_MAX: '5',
-                NODE_AUTH_RATE_LIMIT_MAX: '2'
-            });
+    /**
+     * Needs the `shop` scenario, the one that drives requests; a checkout without the shop modules
+     * has no scenario that does.
+     */
+    if (existsSync(path.join(REPO_ROOT, 'scenarios', 'shop.scenario.ts'))) {
+        it(
+            'lifts the rate limits before any limiter is built, so a driving scenario outruns a small .env budget',
+            async () => {
+                /**
+                 * `shop` is the scenario that DRIVES requests (hundreds, from one address). With the
+                 * `.env` budget this small, a limiter built before the overrides applied answers 429.
+                 */
+                const dbUri = freshDbUri();
+                const result = await runApply(['shop'], dbUri, 'test', {
+                    NODE_RATE_LIMIT_MAX: '5',
+                    NODE_AUTH_RATE_LIMIT_MAX: '2'
+                });
 
-            expect(result.stdout + result.stderr).not.toContain('"http.response.status_code":429');
-            expect(result.status).toBe(0);
+                expect(result.stdout + result.stderr).not.toContain(
+                    '"http.response.status_code":429'
+                );
+                expect(result.status).toBe(0);
 
-            // Proof the scenario really drove checkouts, not just exited cleanly.
-            const connection = await mongoose
-                .createConnection(dbUri, JEST_DRIVER_OPTIONS)
-                .asPromise();
-            await expect(connection.collection('orders').countDocuments()).resolves.toBeGreaterThan(
-                0
-            );
-            await connection.close();
-        },
-        APPLY_TIMEOUT_MS * 8
-    );
+                // Proof the scenario really drove checkouts, not just exited cleanly.
+                const connection = await mongoose
+                    .createConnection(dbUri, JEST_DRIVER_OPTIONS)
+                    .asPromise();
+                await expect(
+                    connection.collection('orders').countDocuments()
+                ).resolves.toBeGreaterThan(0);
+                await connection.close();
+            },
+            APPLY_TIMEOUT_MS * 8
+        );
+    }
 });

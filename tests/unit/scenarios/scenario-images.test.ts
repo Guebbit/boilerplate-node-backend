@@ -98,9 +98,12 @@ describe('seed row imageUrls', () => {
          * named and filler product, and every seeded user, carries one today, drawing from a
          * fixed pool of physical files — the count here is far higher than that pool, since most
          * rows share a photo. The floor is deliberately low enough to survive a row being
-         * retired and high enough to catch a broken walk.
+         * retired and high enough to catch a broken walk. A checkout whose demo catalogue is
+         * stripped (`scenarios/products.ts` gone) has no image rows, and that must read as none.
          */
-        expect(imageUrls.length).toBeGreaterThanOrEqual(5);
+        const catalogueInstalled = existsSync(path.join(SCENARIOS_ROOT, 'products.ts'));
+
+        expect(imageUrls.length).toBeGreaterThanOrEqual(catalogueInstalled ? 5 : 0);
     });
 
     it('is a URL path, not a filesystem path', () => {
