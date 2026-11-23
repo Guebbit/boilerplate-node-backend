@@ -1,40 +1,48 @@
 ---
 source: src/modules/account/tests/integration/mail-recipient-budget.test.ts
-sha256: 43a00d898eea4cc424e5b89697dc5a6203690122f816f4f1d51d67df3b6fa128
-generated_at: 2026-11-14T19:05:11.209970+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cc0aff6482e5621dc9c2b40609ebfef04cf895903da0e2bbfb9d247c915b3c5d
+context_sha256: ba5331194d3a891aa12ff1b64814efaf99802da2519e7bb86ba00ec43f76894d
+generated_at: 2026-11-22T03:57:07.300966+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/mail-recipient-budget.test.ts
 
 ## Purpose
-
-Integration tests for the per-recipient mail rate-limit budget. They exercise every entry point that can direct mail at a chosen address — the two body-addressed routes (signup, reset) and the three server-chosen service paths (verification resend, pending-email resend, email change) — verifying that the budget tracks the canonical mailbox, that refusals carry consistent metadata (status, `Retry-After`, body, `RateLimit` header), and that no state is persisted when a request is refused.
+Integration tests for the per-recipient mail budget, which caps how much mail can be pointed at a single mailbox per day. This bounds the victim of a mail bomb, which a budget on the caller cannot do. The tests cover every path that can send mail to a third party: two routes whose request body names the address (signup, reset), and three services where the server chooses the recipient (verification resend, pending-email resend, email change).
 
 ## Key elements
-
-- **`refusals()`** — Reads the `rateLimitRefusalsTotal` metric and returns the count where `labels.budget === 'mail-recipient'`, used to assert that a service-level refusal was tallied.
-- **`withBudget(limit, body)`** — Runs `body` under a `NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX` environment override so each test controls its daily cap.
-- **`routeBehindLimiter()`** — Builds a minimal Express app with `mailRecipientLimiter` mounted on `POST /mail`; the handler returns 200, so any non-200 is the limiter's doing. Calls `jest.resetModules()` first to get a fresh budget store.
-- **`post(app, body)`** — Shorthand for a supertest POST that returns only the status code.
-- **`describe('the route door — signup and reset')`** — Six tests covering: budget exhaustion at the cap, `+tag`/casing normalization, Gmail dot-variant folding (and non-Gmail non-folding), `Retry-After` + `RateLimit` header + body consistency on refusal, absence of budget headers on allowed requests, and pass-through of addressless/malformed bodies to validation.
-- **`describe('the service doors — the recipient is chosen by the server')`** — Five tests covering: verification resend charged to the account's own mailbox, refusal count increment in the metric, pending-email resend charged to the pending mailbox, email-change refusal leaving `pendingEmail` unset, and 409 (duplicate/conflict) being answered by service logic rather than the budget's 429.
+- `refusals()`: reads the `rate_limit_refusals_total` metric for the `mail-recipient` budget label, returning 0 if there is none.
+- `withBudget(limit, body)`: runs `body` with `NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX` overridden to `limit`, via `withEnvironmentOverrides`.
+- `routeBehindLimiter()`: calls `jest.resetModules()`, dynamically imports `mailRecipientLimiter`, and returns an Express app with `POST /mail` behind it that answers 200 when allowed.
+- `post(app, body)`: sends a request and returns only the status code.
+- `describe('the route door …')`: covers the following behaviours.
+  - Refusal with 429 once a mailbox has spent its budget.
+  - `+tag` and case variants count as one inbox.
+  - Gmail dot variants collapse, but only for gmail.com.
+  - Other mailboxes are unaffected.
+  - A refusal carries `Retry-After`, a `RATE_LIMITED` error body with `details {policy, retryAfter}`, and a `RateLimit` header of the form `"mail-recipient";r=0;t=<retry-after>`. `RateLimit-Policy` is absent.
+  - Allowed requests carry no `RateLimit` header.
+  - Bodies without a usable address (`{}`, `email: 5`) pass through for validation to handle.
+- `describe('the service doors …')`: covers the following behaviours.
+  - `accountService.requestEmailVerificationFor` is charged to the account's own mailbox, and its 429 has the same body shape as the route.
+  - A refusal from the service increments the refusal metric.
+  - `resendPendingEmailVerificationFor` is charged to the pending mailbox.
+  - `requestEmailChange` is refused with 429 and saves no `pendingEmail`.
+  - An email change to the current or already-pending address returns 409, not 429.
 
 ## Relationships
-
-- **`src/modules/account/mail-budget.ts`** — Source of `mailRecipientLimiter`, the Express middleware mounted by `routeBehindLimiter()`.
-- **`src/modules/account/services/index.ts`** — Source of `accountService`, whose `requestEmailVerificationFor`, `requestEmailChange`, and `resendPendingEmailVerificationFor` methods are the "service door" targets.
-- **`src/infrastructure/observability/metrics-rate-limit.ts`** — Source of `rateLimitRefusalsTotal`, the Prometheus-style counter read by `refusals()`.
-- **`src/modules/users/repository.ts`** — Source of `userRepository`, used to assert that a refused email-change did not persist `pendingEmail`.
-- **`src/modules/users/tests/factories.ts`** — Provides `createUser` (with optional `verifiedAt`, `pendingEmail` overrides) for seeding accounts.
-- **`tests/support/callers.ts`** — Provides `testCallerContext` passed to every `accountService` call.
-- **`tests/support/environment.ts`** — Provides `withEnvironmentOverrides`, the mechanism behind `withBudget`.
-- **`tests/support/response.ts`** — Provides `asReject` to unwrap the `{ status, errors }` rejection envelope returned by services.
-- **`tests/support/setup-test-db.ts`** — Provides `setupTestDb`, called once at the top to initialise the in-memory test database.
+- `src/modules/account/mail-budget.ts`: supplies `mailRecipientLimiter`, the unit under test. It is imported dynamically after a module reset.
+- `src/modules/account/services/index.ts`: supplies `accountService`, whose methods are exercised for the service doors.
+- `src/infrastructure/observability/metrics-rate-limit.ts`: supplies `rateLimitRefusalsTotal`, read to check that refusals are counted.
+- `src/modules/users/tests/factories.ts`: supplies `createUser` and `userRepository`. The repository's `findByIdWithCredentials` is used to confirm that nothing was persisted.
+- `src/modules/users/repository.ts`: the underlying user repository, reached through the factories re-export rather than imported directly.
+- `tests/support/setup-test-db.ts`: `setupTestDb()` prepares the database.
+- `tests/support/environment.ts`: `withEnvironmentOverrides` sets the per-test limit.
+- `tests/support/callers.ts`: `testCallerContext` is the caller context passed to the services.
+- `tests/support/response.ts`: `asReject` narrows service results to the rejection shape.
 
 ## Notes
-
-- `jest.resetModules()` is called both in `afterEach` and inside `routeBehindLimiter()` because the budget's in-memory store lives in module state; without the reset, successive tests (or successive `routeBehindLimiter()` calls within a test) would share the same counter.
-- The Gmail dot test deliberately asserts that dot-variants are **not** folded for non-Gmail domains (`v.ictim@example.com` ≠ `victim@example.com`), pinning the normalisation rule to the provider.
-- The "saves nothing" test is the key correctness guarantee: the budget check fires *before* `requestEmailChange` writes `pendingEmail`, so a 429 leaves the user record untouched.
-- The final service-door test (409 vs 429) documents that domain-level rejections (same-as-current, already-pending) are the service's own concern and must not be conflated with rate-limit refusals.
+- `afterEach(() => jest.resetModules())`, along with a reset inside `routeBehindLimiter`, is needed because the store the budget counts in lives in module state. Each test therefore starts with a fresh budget.
+- Service-door tests share one budget across different accounts by using `+tag` variants of the same mailbox (e.g. `resend+a@` and `resend+b@`). The second request is the one that gets refused.
+- The pending-email resend test spends the budget through two `requestEmailChange` calls before the resend is refused, because the limit is 2.

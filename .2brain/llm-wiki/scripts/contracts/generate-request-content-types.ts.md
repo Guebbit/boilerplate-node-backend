@@ -1,36 +1,37 @@
 ---
 source: scripts/contracts/generate-request-content-types.ts
-sha256: 207ed8f38bac1c1b93c6437e5b8ad48038edd0bcf6037e1209d59c92c801fcd5
-generated_at: 2026-11-14T17:25:53.885143+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T01:57:08.946028+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/generate-request-content-types.ts
 
 ## Purpose
-
-Builds two generated TypeScript files from `openapi.yaml`: a **request content-type table** (one row per write operation with its accepted media types, consumed by the 415 `content-type` middleware) and an **operation-routes table** (one row per path with its declared methods, owning module, and security-open methods, consumed by the 405 `method-not-allowed` middleware). Both files carry pre-compiled regex literals so the runtime never builds matchers at boot.
+A generator script that reads the bundled `openapi.yaml` and writes two TypeScript files under `api.generated/`. The first is a request media-type table. The second is a per-path route table (written as `operation-routes.ts`, beside the first). The backend uses these tables so the 415 content-type guard and the 405 method-not-allowed handler need no hand-written route knowledge and compile no regexes at boot. The frontend does not use them.
 
 ## Key elements
-
-- **`compileTemplate(template)`** — Splits a contract path like `/products/{id}/restore` on `{param}` tokens, escapes literal segments, joins with `[^/]+`, and returns a regex literal string (`/^…$/i`) plus the parameter count. Case-insensitive to match Express routing.
-- **`renderRows()`** — Iterates `document.paths` × `WRITE_METHODS`, emits one `RequestContentType` row per operation that has a `requestBody`. Operations without a body get `types: []` (any body refused). Sorted by `parameterCount` ascending, then `key` locale-compare for stable diffs.
-- **`renderRouteRows()`** — Iterates `document.paths`, emits one `OperationRoute` row per path listing upper-cased methods, the `x-module` owner (or `null`), and `securityOpenMethods`. Same sort order.
-- **`output` / `routesOutput`** — Full file text (header comment, interface declaration, exported `readonly` array) for each generated file.
-- **`writeOrCheck(OUTPUT, …)`** — Writes the content-types file to the `--out` path; writes the routes file into the same directory. Under `--check`, compares in place and exits 1 on mismatch.
+- `INPUT` / `OUTPUT` / `document`: input is `<REPO_ROOT>/openapi.yaml`, parsed with `parseOpenApi`. `OUTPUT` comes from the required `--out` argument.
+- `compileTemplate(template)`: turns a contract path such as `/products/{id}/restore` into the source text of a case-insensitive regex literal. Each `{param}` becomes `[^/]+`, and the text between params is regex-escaped. It also returns `parameterCount`. Params may sit inside a segment, as in `products-{page}.xml`.
+- `renderRows()`: builds one row per write operation (`WRITE_METHODS`) with `method`, `pattern`, `parameterCount` and `types`.
+  - `types` holds the request body's content types. A write with no `requestBody` gets `types: []`, so any body is refused.
+  - Rows are sorted by fewest parameters first, then by key.
+- `renderRouteRows()`: builds one row per path with `pattern`, `parameterCount`, `module`, `methods` and `securityOpenMethods`.
+  - `module` is the first `x-module` found across the path's operations, or `null`.
+  - `securityOpenMethods` comes from `securityOpenMethods(operations)`.
+  - Rows use the same ordering as above.
+- `output` / `routesOutput`: the full file text, with a "DO NOT EDIT" header. They export `RequestContentType` and `REQUEST_CONTENT_TYPES`, and `OperationRoute` and `OPERATION_ROUTES`.
+- The last two lines call `writeOrCheck` for both files. The routes file is placed in the same folder as `--out`.
 
 ## Relationships
-
-- **`scripts/cli.ts`** — Provides `requiredPath('out', REPO_ROOT)` to parse the mandatory `--out` CLI argument.
-- **`scripts/contracts/generated-file.ts`** — Provides `writeOrCheck`, which handles the write-vs-check logic and stamps the "generated from" source metadata.
-- **`scripts/contracts/openapi-document.ts`** — Exports `parseOpenApi`, `HTTP_METHODS`, `WRITE_METHODS`, and `securityOpenMethods`, all consumed here.
-- **`scripts/modules-on-disk.ts`** — Exports `REPO_ROOT`, used to locate `openapi.yaml` and to resolve the `--out` path.
-- **`tests/cross-cutting/contract-error-declarations.test.ts`** — Cross-cutting test that exercises the generated contract declarations this script emits.
+- `scripts/contracts/openapi-document.ts`: supplies `parseOpenApi`, `HTTP_METHODS`, `WRITE_METHODS` and `securityOpenMethods`.
+- `scripts/contracts/generated-file.ts`: supplies `writeOrCheck`, which writes the files or, under `--check`, compares them with disk and exits 1 on a mismatch.
+- `scripts/cli.ts`: supplies `requiredPath`, which parses `--out`.
+- `scripts/modules-on-disk.ts`: supplies `REPO_ROOT`, used to resolve the contract input and `--out`.
+- `tests/cross-cutting/contract-error-declarations.test.ts`: listed as a graph neighbor. The file's content shows no direct interaction with it.
 
 ## Notes
-
-- Only **write methods** (POST, PUT, PATCH, DELETE) appear in the content-types file; GET/HEAD have no body by contract.
-- A write operation with **no** `requestBody` still gets a row with `types: []`, which the 415 guard interprets as "refuse any body."
-- The routes file is written **next to** the `--out` path (same directory), named `operation-routes.ts`.
-- Both generated files live under `api/` and are rebuilt from scratch by `npm run gen:api`; they are backend-only (no frontend equivalent).
-- Sorting by fewest parameters first is load-bearing: the 415/405 guards iterate the array and match the first hit, so a static segment like `/products/search` must precede `/products/{id}`.
+- The script runs at import time (top-level execution) and has no exports. Run it as `tsx scripts/contracts/generate-request-content-types.ts --out <path> [--check]`.
+- Output is invoked via `npm run gen:api`, which rebuilds `api.generated/` from scratch.
+- Regexes are case-insensitive because Express routing is, so `/Account` must reach the same gate as `/account`.
+- Specific paths sort before parameterized ones, so static segments such as `/products/search` match before `/products/{id}`.
+- A write method with no declared body is listed with empty `types`. This stops a gateway that strips bodies from changing a request, and stops a body sent to a button endpoint from being silently dropped with a 200.

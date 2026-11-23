@@ -1,24 +1,25 @@
 ---
 source: shared/rules/schemas/semantic-log-names.generated.schema.json
-sha256: 364f423fc1d6a925202ca1050d9ae35b13d2912a090c244364d22a88715bf547
-generated_at: 2026-11-08T03:11:30.205639+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 364f423fc1d6a925202ca1050d9ae35b13d2912a090c244364d22a88715bf547
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:28:21.495374+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/schemas/semantic-log-names.generated.schema.json
 
 ## Purpose
-
-JSON Schema (draft 2020-12) that validates the shape of a `semanticLogNames` mapping — a dictionary of log-name identifiers to display strings. It enforces that keys are lowercase-prefixed camelCase-style identifiers and values are non-empty strings, while rejecting any extra top-level properties.
+A JSON Schema (draft 2020-12) that validates a "semantic log names" document: an object mapping camelCase identifiers to non-empty string values. The `.generated` name suggests it is produced by tooling rather than hand-edited.
 
 ## Key elements
+- **Root object**: requires a single property, `semanticLogNames`; no other top-level properties are allowed (`additionalProperties: false`).
+- **`semanticLogNames`**: an object whose keys must match `^[a-z][A-Za-z0-9]*$`. That means a lowercase first letter followed by letters or digits only, with no underscores, hyphens, or dots.
+- **Values**: each value must be a string of at least one character (`minLength: 1`).
 
-- **Top-level object** — requires exactly one property (`semanticLogNames`) and forbids additional properties.
-- **`semanticLogNames`** — an open object whose keys are constrained by `propertyNames.pattern: ^[a-z][A-Za-z0-9]*$` (must start with a lowercase letter, then alphanumeric only) and whose values must be strings with `minLength: 1`.
-- **`additionalProperties` (on `semanticLogNames`)** — allows any number of valid key/value pairs (open vocabulary), but each value is type-checked as a non-empty string.
+## Relationships
+No graph neighbors are listed. The schema declares no `$ref`s, and nothing in the file shows what consumes or generates it.
 
 ## Notes
-
-- The key pattern `^[a-z][A-Za-z0-9]*$` forbids hyphens, underscores, leading digits, and uppercase-first names. If a new log name uses any of those, the schema will reject the config.
-- Because the top level has `"additionalProperties": false`, wrapping this mapping in any extra metadata fields (e.g. a `"version"` key) will fail validation.
-- No `$id`, `$ref`, or `definitions` are used; the schema is fully self-contained and has no graph neighbors.
+- The `.generated` suffix implies edits should be made in the generator or its source, not in this file. The generator is not visible here.
+- The key pattern rejects PascalCase, snake_case, and kebab-case names. Keys must be lowerCamelCase.
+- The schema places no constraint on the string values beyond being non-empty, and an empty `semanticLogNames` object is valid because `minProperties` is not set.

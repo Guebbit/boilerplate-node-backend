@@ -1,45 +1,53 @@
 ---
 source: src/modules/invoicing/tests/integration/issue-invoice.test.ts
-sha256: b28020c6d689da4b8fef390957dbcd9910a602edbc68e27c2ac44b72b3649969
-generated_at: 2026-11-14T20:15:27.954002+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4148f3f2f952b3d66c6bf3712581e1f95c30d7ba6e599293f1a5a23bc6663a6a
+context_sha256: 26aba89c2f3e8dd0249889a31c2e4bac748621770cdd5edd0fd2252ce5a236a1
+generated_at: 2026-11-22T05:39:04.891722+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/tests/integration/issue-invoice.test.ts
 
 ## Purpose
-
-End-to-end integration tests for invoice issuance triggered by the `ORDER_STATUS_CHANGED` event. The suite proves that an order's `pending → paid` transition is the sole path to freezing an invoice, exercising the real `module.ts` subscription and event wiring rather than calling `issueInvoice` in isolation. It also covers PII re-encryption, VAT rounding semantics, number allocation under race conditions, timezone-aware year numbering, and timeline bookkeeping.
+Integration tests for invoice issuance, end to end. An order's `pending → paid` transition is the only thing that freezes an invoice. Most tests reach it through `orders`' own `markPaid` and the real `src/modules/invoicing/module.ts` subscription. They never call `issueInvoice` directly, so the event wiring is tested too. The tests that do call `invoicingService.issueInvoice` directly are the race, idempotency and failure cases.
 
 ## Key elements
-
-- **`describe('issuing an invoice off ORDER_STATUS_CHANGED')`** – the top-level suite; every test drives the flow through `markPaid` (for the first several tests) or through direct `invoicingService.issueInvoice` calls (for idempotency/edge-case tests).
-- **`beforeEach` / `afterEach`** – registers all five modules (`users`, `products`, `inventory`, `orders`, `invoicing`) via `registerModules`; resets domain events after each test.
-- **`waitForInvoice`** (from `src/modules/invoicing/tests/factories.ts`) – polls the database for the asynchronously-created invoice rather than relying on event delivery timing.
-- **VAT rounding test (BR-CO-17)** – asserts that tax is rounded once per rate on the aggregate taxable total, not summed from per-line rounded values.
-- **Idempotency / race tests** – fire two concurrent `issueInvoice` calls; assert a single invoice, a single counter increment, one `invoice_issued` timeline row, and that a failed insert rolls back the number allocation.
-- **Timezone test** – freezes the clock at 23:30 UTC (00:30 in Rome) on 31 Dec to verify the invoice number uses the shop's calendar year, not UTC's.
+- **Setup**: `setupTestDb()`. `beforeEach` registers the users, products, inventory, orders and invoicing modules via `registerModules`. `afterEach` calls `resetDomainEvents()`.
+- **Single `describe`**: "issuing an invoice off ORDER_STATUS_CHANGED". Its tests cover:
+  - **Numbering and PII**
+    - The invoice gets a number matching `^\d{4}-\d{6}$` once the order is paid.
+    - The billing address is stored encrypted under the invoice's own id, so the order's ciphertext was re-encrypted. Tests check this with `decryptInvoiceParty(..., 'invoice', id)`.
+    - A line-total check expects `grandTotal` of `'39.80'` for 2 × 19.90.
+  - **Buyer address**
+    - Walk-in orders have no account, created via `orderService.create` as admin, and the invoice has no `billingAddress`.
+    - The invoice bills the billing address, never the ship-to one.
+    - An order with only a ship-to address yields no buyer address.
+  - **VAT**
+    - Per BR-CO-17, VAT is rounded once per rate, not per line. Three 0.10 lines at 22% give a tax of `0.05` and a gross of `0.30`.
+    - The order line's `rateType` (`zero_rated` / `exempt`) is carried onto the invoice lines.
+  - **Sequencing**
+    - Two invoices in the same year get numbers one apart.
+  - **Idempotency and races**
+    - Concurrent `issueInvoice` calls on the same order return the same invoice, and the counter (`invoiceNumberCounterModel`, keyed by year) stays at `seq` 1.
+    - Exactly one `invoice_issued` timeline row is written, read via `timelineOf`.
+    - Invoicing again later returns the existing invoice.
+  - **Failure**
+    - If `insertInvoice` is mocked to reject once with "disk full", the error propagates and no invoice number counter exists afterward. A later retry is then expected to succeed.
 
 ## Relationships
-
-- **`src/modules/orders/friends/payments.ts` → `markPaid`** – the trigger action that emits `ORDER_STATUS_CHANGED`, which the invoicing module subscribes to.
-- **`src/modules/invoicing/module.ts`** – the real subscription under test; registers the event handler that calls `issueInvoice`.
-- **`src/modules/invoicing/services/index.ts` → `invoicingService`** – the service whose `issueInvoice` method performs the freeze, numbering, and persistence.
-- **`src/modules/invoicing/pii.ts` → `decryptInvoiceParty`** – used to verify that billing-address PII is re-encrypted under the invoice's own id.
-- **`src/modules/invoicing/repository.ts` → `invoicingRepository`** – read back for assertions and spied on in the rollback test.
-- **`src/modules/invoicing/model.ts` → `invoiceNumberCounterModel`** – inspected to assert counter state (sequential numbering, rollback on failure).
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`, `timelineOf` helpers.
-- **`src/modules/invoicing/tests/factories.ts`** – `waitForInvoice` polling helper.
-- **`src/kernel/events.ts` → `resetDomainEvents`** – teardown to prevent cross-test event leakage.
-- **`src/kernel/outbox.ts` → `settleOutboxNudges`** – imported to ensure outbox nudges are processed in the test environment.
-- **`src/kernel/registry.ts` → `registerModules`** – wires all five modules into the test DI container.
-- **`src/domain-primitives/time.ts` → `yearInZone`** – resolves the shop-calendar year used in number assertions.
-- **`src/modules/orders/module.ts`** – registered in `beforeEach`; its `markPaid` subscription chain is the event source under test.
-- **`src/modules/inventory/module.ts`** – registered in `beforeEach` as part of the full module graph required by the invoicing flow.
+- **Kernel**: `@kernel/registry` (`registerModules`), `@kernel/events` (`resetDomainEvents`) and `@kernel/outbox` (`settleOutboxNudges`, imported).
+- **Modules registered**: the `users`, `products`, `inventory`, `orders` and `invoicing` module files.
+- **Triggering**: `orders/friends/payments` supplies `markPaid`. `orders` exports `orderService`.
+- **Invoicing internals**:
+  - `invoicingService` (`../../services`) for `issueInvoice`.
+  - `invoicingRepository` for `findInvoiceByOrderId` and `insertInvoice`, which is spied on.
+  - `invoiceNumberCounterModel` (`../../model`) to inspect the counter.
+  - `decryptInvoiceParty` (`../../pii`) to verify encryption.
+- **Factories**: `../factories` supplies `waitForInvoice`. The products, users and orders factories supply `createProduct`, `createUser`, `createOrder`, `timelineOf` and `toOrderItem`.
+- **Helpers**: `domain-primitives/time` (`yearInZone`) and `@modules/shop` (`shopTimezone`) compute the expected counter year. Shared test helpers come from `@tests/*`.
 
 ## Notes
-
-- The first five tests deliberately avoid calling `invoicingService.issueInvoice` directly; they go through `markPaid` → event → subscription to prove the wiring. Later tests (idempotency, rollback, timezone) call `issueInvoice` directly to isolate those concerns.
-- Mongoose subdocument arrays (e.g. `invoice.taxSummary`) are asserted field-by-field rather than with `toEqual` on the whole array, because `toEqual` trips on Mongoose internal state.
-- The PII test asserts that the stored ciphertext differs from the order's original ciphertext (re-encryption under the invoice id) and then decrypts to verify correctness.
-- The "gives the number back" test relies on the fact that the counter allocation and the invoice insert share a transaction; a mocked `insertInvoice` rejection leaves the counter document absent.
+- Invoice creation is asynchronous, driven by events, so tests poll with `waitForInvoice` instead of assuming the invoice exists right after `markPaid`.
+- `settleOutboxNudges` and `freezeDate`/`setEnvironment` are imported, but their use is not visible in the portion of the file shown.
+- Dates and the counter key use the shop's timezone (`yearInZone(new Date(), shopTimezone())`), not UTC.
+- VAT assertions read `taxSummary` fields one by one, because a Mongoose subdocument array trips `toEqual`.

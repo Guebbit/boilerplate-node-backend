@@ -1,49 +1,47 @@
 ---
 source: src/modules/invoicing/services/issue-credit-note.ts
-sha256: 9dc37cbcd5a39f08791d9c90c970acadf5d7985ce4dbaa4a4e62e540a90a7fac
-generated_at: 2026-11-14T20:13:35.795379+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d3b202b10bd0bb48f3f1f2682cce9437c46e1c9a6ff9070040688126cf8db236
+context_sha256: fc0fb70830a6b45c4b97539944dacf7bc79fab4725304cbd60dd8d8307abe328
+generated_at: 2026-11-22T05:35:32.570820+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/services/issue-credit-note.ts
 
 ## Purpose
-
-Issues a credit note for each payment refund on an order. Full refunds mirror the original invoice's lines and totals; partial refunds derive only the refunded share (via credit-shares). One credit note per refund, so an order refunded in parts accumulates one per part. Serves as the handler for the `PAYMENT_REFUNDED` event in the invoicing module.
+Freezes and numbers a credit note for a refund. It is the work behind this module's `PAYMENT_REFUNDED` listener in `module.ts`. One credit note is issued per refund. A full refund mirrors the original invoice's lines and totals. A partial refund carries only the refunded share, so an order refunded in parts gets one note per part.
 
 ## Key elements
-
-- **`RefundedInput`** (exported interface) — the payload shape: `orderId`, `refundId`, `amount` (decimal string), `full` (boolean), and optional `goods` for partial refunds.
-- **`creditableOf`** (internal) — converts an `InvoiceDocument` into the domain's `CreditableInvoice` shape (ids as strings) so `creditShares` can read it.
-- **`reversedFigures`** (internal) — computes the frozen figures (lines, net/tax totals, shipping, taxSummary, grandTotal). Full refunds copy the invoice; partial refunds re-derive via `creditShares` + `creditBreakdownOf` + `orderTotal`.
-- **`appendIssuedRow`** (internal) — writes a `credit_note_issued` timeline row on the order within the same transaction.
-- **`issueCreditNote`** (exported) — the main entry point. Looks up the invoice, allocates a number, inserts the credit note, and appends the timeline row — all in one `withTransaction`. Returns `undefined` (never throws) when no invoice exists. On a lost race (duplicate refund), `readWinner` aborts and returns the already-inserted note.
-- **`findCreditNotesForOrder`** (exported) — lists all credit notes for an order, oldest first.
-- **`findCreditNoteForOrderById`** (exported) — fetches a single credit note scoped to an order; returns `null` if not found or if it belongs to a different order.
-- **`creditSettledRefunds`** (exported) — catch-up after a late/revived invoice event: iterates settled refund payloads sequentially (oldest first) and calls `issueCreditNote` for each. Idempotent via the unique `refundId`.
+- `RefundedInput` — the refund payload this module needs: `orderId`, `refundId`, `amount` (gross decimal string), `full` flag, and optional `goods` (`RefundedGoods`).
+- `issueCreditNote(input)` — main entry point, marked `@internal` and not on `invoicingService`.
+  - Resolves to `undefined` (no throw) when the order has no invoice.
+  - Otherwise it mints the note's `_id` and `issuedAt` before the transaction so a retry reuses them.
+  - Inside `withTransaction` it allocates the number, inserts the credit note, and appends the order timeline row.
+  - If a concurrent issuer already created the note for this refund, `readWinner` falls back to `findCreditNoteByRefundId`.
+- `findCreditNotesForOrder(orderId)` — all credit notes for an order, oldest first. Backs `GET /orders/{id}/credit-notes`.
+- `findCreditNoteForOrderById(orderId, creditNoteId)` — one note scoped to its order, or `null`. Backs `GET /orders/{id}/credit-notes/{creditNoteId}`.
+- `creditSettledRefunds(orderId)` — catch-up after a revived invoice event. It loads settled refund payloads and calls `issueCreditNote` for each, sequentially.
+- Private helpers:
+  - `creditableOf` converts an invoice to the plain `CreditableInvoice` shape, with ids as strings.
+  - `reversedFigures` returns `mirrorOf(invoice)` for a full refund. For a partial refund it calls `creditShares(...)` and then `figuresOfLines`.
+  - `appendIssuedRow` records a `credit_note_issued` timeline event on the order in the same session.
+  - `allocateWhileLive` re-reads the order's invoice in the transaction and allocates the number only if it is still the live invoice.
 
 ## Relationships
-
-- **`src/modules/invoicing/module.ts`** — the `PAYMENT_REFUNDED` listener is the sole caller of `issueCreditNote`; this file is deliberately `@internal` and not exposed on `invoicingService`.
-- **`src/modules/invoicing/services/issue-invoice.ts`** — provides `findInvoiceForOrder`, which `issueCreditNote` calls to locate the invoice to reverse.
-- **`src/modules/invoicing/services/numbering.ts`** — provides `allocateCreditNoteNumber` (in-transaction allocation) and `readWinner` (recovers the existing note when a duplicate refund race aborts the transaction).
-- **`src/modules/invoicing/services/credit-breakdown.ts`** — provides `creditBreakdownOf`, used to compute net/tax/shipping splits for partial-refund credit notes.
-- **`src/modules/invoicing/domain/credit-shares.ts`** — provides `creditShares` and the `RefundedGoods`/`CreditableInvoice` types; performs the proportional line allocation for partial refunds.
-- **`src/modules/invoicing/domain/tax-items.ts`** — provides `asTaxItems`, used in `reversedFigures` to compute the partial refund's grand total via `orderTotal`.
-- **`src/modules/invoicing/domain/index.ts`** — barrel re-export consumed for `asTaxItems`, `creditShares`, and domain types.
-- **`src/modules/invoicing/pii.ts`** — `decryptInvoiceParty` / `encryptInvoiceParty` re-encrypt the billing address from the invoice's PII context into the credit note's.
-- **`src/modules/invoicing/repository.ts`** — `invoicingRepository` performs the `insertCreditNote`, `findCreditNotesByOrderId`, `findCreditNoteById`, and `findCreditNoteByRefundId` operations.
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps the number-allocation + insert + timeline-append into an atomic unit.
-- **`src/infrastructure/i18n/index.ts`** — re-exports `translator`, which supplies the localized label for the partial-refund line.
-- **`src/infrastructure/i18n/context.ts`** — provides the translation context consumed by `translator`.
-- **`src/modules/invoicing/model.ts`** — defines `CreditNoteDocument` and `InvoiceDocument` used throughout.
-- **`src/modules/invoicing/services/index.ts`** — barrel that re-exports this module's public functions.
+- `./issue-invoice` — `findInvoiceForOrder` supplies the invoice to reverse.
+- `./numbering` — `allocateCreditNoteNumber` allocates the number, and `readWinner` resolves a lost race.
+- `./figures` — `mirrorOf` and `figuresOfLines` build the frozen `DocumentFigures`.
+- `../domain` (`credit-shares.ts`) — `creditShares` splits a partial refund across VAT rates. The `CreditableInvoice` and `RefundedGoods` types come from here too.
+- `../repository` — `invoicingRepository` provides `findInvoiceByOrderId`, `insertCreditNote`, `findCreditNoteByRefundId`, `findCreditNotesByOrderId` and `findCreditNoteById`.
+- `../pii` — the billing address is decrypted under the invoice's id and re-encrypted under the note's id.
+- `../model` — supplies the `InvoiceDocument` and `CreditNoteDocument` types.
+- `@infrastructure/runtime/database` — `withTransaction`.
+- `@infrastructure/i18n` — `translator` localizes the partial-refund line label.
+- `module.ts` calls `issueCreditNote`.
 
 ## Notes
-
-- **No-op, not an error, when no invoice exists.** A refund with no invoice (late payment on a canceled order, amount mismatch) produces no credit note. The docstring cites VAT Directive Art. 2(1)(a) / 65 as the rationale.
-- **Race handling.** `allocateCreditNoteNumber` is called inside `withTransaction`; if two concurrent calls race on the same refund, the loser's transaction aborts and `readWinner` returns the winner's already-inserted note.
-- **Retry safety.** `_id` and `issuedAt` are fixed *before* the transaction so a Mongoose retry reuses the same identity and date.
-- **Sequential catch-up.** `creditSettledRefunds` awaits each `issueCreditNote` in order because credit-note numbers are allocated sequentially (oldest refund first).
-- **PII re-encryption.** The billing address is decrypted under the invoice's PII key and re-encrypted under the credit note's own key — it is never stored in plaintext or under a foreign key.
-- **Not on `invoicingService`.** Marked `@internal`; the module's event listener is the only sanctioned caller.
+- Skipping when no invoice exists is deliberate. A refund with no sale behind it (a late payment on a canceled order, an amount mismatch) has no supply and needs no document. Alternatively, the invoice event died. In that case reviving it issues the invoice, and `creditSettledRefunds` then catches up.
+- `allocateWhileLive` guards against a buyer-correction race. A correction cancels the invoice and issues a new one in a transaction that writes the same counter, so the two conflict. A refund that finds its invoice cancelled throws, and the outbox retries it against the new live invoice.
+- Idempotency relies on `refundId` being unique. A repeated refund returns the existing note, and a lost race aborts the transaction, which releases the allocated number.
+- `creditSettledRefunds` runs sequentially on purpose, so credit-note numbers are allocated oldest refund first.
+- The note copies the invoice's `timezone`, `currency`, `locale`, `orderNumber` and `seller`, so it reads like the invoice it corrects.

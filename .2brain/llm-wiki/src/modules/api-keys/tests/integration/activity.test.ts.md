@@ -1,36 +1,38 @@
 ---
 source: src/modules/api-keys/tests/integration/activity.test.ts
-sha256: 371adaedc7bd61881d555cb22ad5d173a013c402313ec45ded0a5c67f21ddbe7
-generated_at: 2026-11-08T05:05:11.786699+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 371adaedc7bd61881d555cb22ad5d173a013c402313ec45ded0a5c67f21ddbe7
+context_sha256: 8aca78bf0741393875d81463d830586508e693cc0798245b1784953c1e68d83a
+generated_at: 2026-11-22T04:24:07.515750+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/api-keys/tests/integration/activity.test.ts
 
 ## Purpose
-
-Integration test verifying that resolving (using) an API key stamps the minter's account with `lastApiKeyUseAt`. This guarantees a key-only account is never mistaken for idle by the inactivity reaper. The test exercises the full credential-resolution path rather than the write in isolation.
+Integration test verifying that using an API key marks the account that minted it as active. The inactivity reaper reads `lastApiKeyUseAt`, so an account that only authenticates via API keys must not be treated as idle. The test checks that resolving a key's credential stamps that field on the minter.
 
 ## Key elements
-
-- **`stampOf(id)`** — helper that reads `lastApiKeyUseAt` directly from the user collection via `userRepository.findById`.
-- **`apiKeysModule.onRegistered?.()`** — called once after DB setup to install the credential resolver, mirroring what a real boot does when the module is enabled.
-- **`describe('an api key in use')` → `it('stamps its minter as active')`** — mints a key for a verified admin user, calls `resolveCredential` with the secret, then asserts `lastApiKeyUseAt` transitions from `undefined` to a `Date` instance.
+- `setupTestDb()` — sets up the test database for the suite.
+- `apiKeysModule.onRegistered?.()` — called at load time to install the credential resolver, mimicking a real boot once the module is enabled.
+- `stampOf(id)` — helper that reads `lastApiKeyUseAt` directly from the user repository (`userRepository.findById`).
+- `describe('an api key in use')` / `it('stamps its minter as active')` — the single test:
+  1. Creates a verified `admin` user with `createUser`.
+  2. Builds a `TenantCallerContext` (tenant scope, `DEPLOYMENT_TENANT_ID`, admin permissions via `permissionsOfRole('admin')`, not unrestricted, not system).
+  3. Mints a key via `mint` named `ci`, with permission `read:WebhookSubscription` and a 7-day expiry.
+  4. Asserts the stamp is initially `undefined`.
+  5. Calls `resolveCredential` with the minted secret and expects an `ok` property on the result.
+  6. Polls with `eventually` until the stamp is defined, then asserts it is a `Date`.
 
 ## Relationships
-
-- **`@modules/api-keys/module`** — triggers `onRegistered` to register the credential resolver into the kernel.
-- **`@modules/api-keys/services/api-keys`** — `mint` is the service that creates the key under test.
-- **`@kernel/authentication`** — `resolveCredential` is the entry point that simulates a real key use and triggers the stamp write.
-- **`@kernel/permissions`** — `permissionsOfRole('admin')` builds the auth context needed to mint.
-- **`@kernel/access/tenant`** — supplies `DEPLOYMENT_TENANT_ID` for the test context.
-- **`@modules/users/tests/factories`** — provides `createUser` (test fixture) and `userRepository` (read-back verification).
-- **`tests/support/eventually.ts`** — polls until the fire-and-forget stamp write lands.
-- **`tests/support/setup-test-db.ts`** — initializes a clean in-memory/ephemeral database.
-- **`@types`** — `TenantCallerContext` shapes the minting context.
+- `@modules/api-keys/module` — its `onRegistered` hook wires the credential resolver that `resolveCredential` uses.
+- `@modules/api-keys/services/api-keys` — `mint` creates the key under test.
+- `@kernel/authentication` — `resolveCredential` is the action being exercised.
+- `@kernel/permissions` — `permissionsOfRole` supplies the caller's permissions.
+- `@kernel/access/tenant` — `DEPLOYMENT_TENANT_ID` is the tenant for the caller context.
+- `@modules/users/tests/factories` — `createUser` and `userRepository` (the repository from `src/modules/users/repository.ts`) create the minter and read back the stamp.
+- `@types` — provides the `TenantCallerContext` type (auth-context types).
+- `@tests/eventually` and `@tests/setup-test-db` — shared test helpers for polling and DB setup.
 
 ## Notes
-
-- The stamp write is **fire-and-forget**; the test uses `eventually` (polling) rather than awaiting the write directly. Do not add a bare `expect` immediately after `resolveCredential`—the write may not have landed yet.
-- `apiKeysModule.onRegistered?.()` uses an optional chain because the hook is only present when the module is actually registered; in test isolation it may be a no-op, but here it is expected to install the resolver.
-- The module-level doc comment is the primary rationale for this test's existence: without it, key-only accounts would be reaped as idle.
+- The stamp write is fire-and-forget, so the test polls with `eventually` instead of asserting immediately.
+- The test only asserts that the resolution has an `ok` property, not that it succeeded; the focus is the side effect on the user.

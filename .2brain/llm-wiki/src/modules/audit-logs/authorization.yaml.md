@@ -1,28 +1,24 @@
 ---
 source: src/modules/audit-logs/authorization.yaml
-sha256: da9bb97871bf508160ce8545153cbe5750687381c287f4ff45576711ca2606c9
-generated_at: 2026-11-08T05:07:17.827279+00:00
-model: ollama:qwen3.8:27b
+source_sha256: da9bb97871bf508160ce8545153cbe5750687381c287f4ff45576711ca2606c9
+context_sha256: a31bc07585d8907b950e3273bdfcf645a3b30c70a6cf3bd32747daf668d151af
+generated_at: 2026-11-22T04:26:02.500246+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/audit-logs/authorization.yaml
 
 ## Purpose
-
-Declares the authorization rules for the `audit-logs` module. It restricts access to a single read-only permission on the `AuditLog` resource, enforcing that audit rows can be inspected but never modified.
+Declares the authorization rules and permission sets for the `audit-logs` module. It defines a single read-only permission on the audit trail and bundles it into a named set that roles can reference.
 
 ## Key elements
-
-- **`rules`** – A single rule granting `read` on `AuditLog` within the `audit-logs` module at `tenant` scope. Explicitly notes there is no corresponding write key.
-- **`sets.AuditDisplay`** – A named permission set that re-exposes `read:AuditLog` as a coarse-grained grant ("Read the audit trail"). Intended for role/permission assignment rather than per-action checks.
+- **Rule `read:AuditLog`**: action `read`, subject `AuditLog`, module `audit-logs`, scope `tenant`. Description notes there is no write key, so nothing edits an audit row.
+- **Set `AuditDisplay`**: module `audit-logs`, "Read the audit trail." Contains one rule, `read:AuditLog`.
 
 ## Relationships
-
-- **`src/modules/audit-logs/module.ts`** – The module entry point this file authorizes; the rules and sets here gate access to that module's endpoints.
-- **`src/modules/audit-logs/openapi.yaml`** – The OpenAPI contract for the module's endpoints; the `read` rule here is the authorization backing the read operations defined there.
+- `src/modules/audit-logs/openapi.yaml` is the module's API spec and sits alongside this file. Nothing in this file's content references it directly, so the link is only the shared module.
 
 ## Notes
-
-- By design there is **no write, create, or delete rule** — audit log immutability is enforced at the authorization layer, not just the service layer.
-- Scope is `tenant`, meaning cross-tenant access is not granted by this file.
-- The `AuditDisplay` set is a thin wrapper (one rule); it exists for convenience when assigning permissions to roles rather than referencing `read:AuditLog` inline.
+- The module is read-only by design: no create, update or delete rules exist for `AuditLog`.
+- The rule is tenant-scoped (`scope: tenant`).
+- Rules are referenced inside sets with the `action:Subject` shorthand (e.g. `read:AuditLog`).

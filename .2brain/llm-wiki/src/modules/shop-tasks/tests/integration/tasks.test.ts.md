@@ -1,47 +1,55 @@
 ---
 source: src/modules/shop-tasks/tests/integration/tasks.test.ts
-sha256: ff841c69a28a260ae11754a08d538aa01b3872c7e554488f5f85c32c14a5b539
-generated_at: 2026-11-14T21:57:56.764730+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 932f07a3796cd1978ed841d58f47849e17964e0666bfbf0c6fae158c59bb1034
+context_sha256: 91f2427780daa4536c88d72ebcfbb35b7f6e45f2338c9904b7c4790024bb6ac4
+generated_at: 2026-11-22T07:45:44.115550+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/tests/integration/tasks.test.ts
 
 ## Purpose
-
-Integration test suite that drives the shop-task lifecycle exactly as production does: real modules are registered, domain events are emitted (with outbox-stamped `eventId`s), and the test reads tasks back from a live test database. It pins which events open which task kind/route/set/screen, which events close them, how due dates are computed (provider deadlines, agreed + 30 days, keep-earlier rule), how the delay jurisdiction rule follows the shop's legal country, and that the correct staff receive bell and mail notifications. Engine-internal rules (dedup, replays, staff-closes-first) are covered in a separate `tasks` unit test.
+Integration test for the shop's staff to-do tasks, driven the way production drives them. It registers the real modules and emits payment, stock and delivery domain events with an outbox-style `eventId`. It then reads the resulting task back from storage and checks the staff's bell and mail. It pins which events open tasks, which clear them, the screen each alert opens, who is told, and how far the delay rule reaches. The engine's own rules (dedup, replays, staff closing first) are tested elsewhere, in `tasks`.
 
 ## Key elements
-
-- **`OPENERS`** — table of seven (event-name, emit-fn, `TaskKind`, route-set, work-screen) tuples covering refund-owed, refund-refused (final), refund-reversed, amount-mismatch, dispute-opened, hold-orphaned, and fulfillment-delay (US). Drives an `it.each` that asserts a single new system task with the expected fields.
-- **"opens nothing" table** — six negative cases (non-final retryable failure, disputed reversal, out-of-rule ship country, missing `promisedAt`, already-won dispute) that must produce zero tasks.
-- **Delay-rule block** — asserts the rule fires when the shop's `NODE_LEGAL_COUNTRY` is `US` (any destination or missing destination), and also fires when the ship-to is `US` regardless of shop country.
-- **Closers** — `it.each` pairs of (open-event + close-event) verifying that the closing event resolves the task (refunded, refund-canceled, refunded-after-reversal, dispute-lost, order-canceled, shipped).
-- **`onlyTask` / `allTasks`** — thin wrappers over `findAllTasks` that assert exactly one task exists before returning it.
-- **`nextEventId`** — monotonically increasing `event-N` string simulating the outbox relay stamp.
-- **Mailer mock** — `enqueueEmail` is jest-mocked; tests assert who is told (staff bell/mail) rather than asserting the email queue.
-- **`beforeEach`** — resets the mail mock, sets `NODE_SUPPORT_EMAIL` / `NODE_LEGAL_COUNTRY`, resets domain events, and re-registers `enabledModules`.
+- **Mailer mock**: `@infrastructure/adapters/mailer` is replaced so `enqueueEmail` is a `jest.fn()` (`mockEnqueueEmail`). Cases assert which mail was enqueued.
+- **`setupTestDb()`** and **`beforeEach`/`afterEach`**:
+  - `beforeEach` resets the mail mock, sets `NODE_SUPPORT_EMAIL` and `NODE_LEGAL_COUNTRY` (`IT`) through `setEnvironment`, calls `resetDomainEvents()`, and runs `registerModules(enabledModules)`.
+  - `afterEach` resets domain events and restores mocks.
+- **Fixtures**:
+  - ids: `PAYMENT`, `ORDER`, `RETURN`.
+  - `nextEventId()` returns incrementing `event-N` ids.
+  - event payloads: `MISMATCH_PAYLOAD`, `REFUND`, `REVERSAL`, `UNRECORDED`, `SHORT`, `DISPUTE`, `DELAY`.
+- **`allTasks` / `onlyTask`**: read every stored task, or assert exactly one exists and return it. `allTasks` is `findAllTasks` from the tasks factories.
+- **`OPENERS`**: a table of `[event, emit, TaskKind, routeSet, work screen]` rows, one per opener:
+  - `payment.refund_owed_by_hand` → `manual_refund_owed`
+  - final `payment.refund_failed` → `refund_refused`
+  - `payment.refund_reversed` → `refund_reversed`
+  - `payment.amount_mismatch` → `amount_mismatch` (route set `AuditDisplay`, work `sales/payments`)
+  - `payment.refund_unrecorded` → `refund_unrecorded`
+  - `payment.return_refund_short` → `return_refund_short` (route set `ReturnReceiving`, work `returns/<id>`)
+  - `payment.dispute_opened` → `dispute`
+  - `inventory.hold_orphaned` → `paid_without_hold` (route set `InventoryManagement`, work `orders/<id>`)
+  - `fulfillment_order.delayed` (US) → `consent_due` (route set `OrderEditing`, work `orders/<id>`)
+  - Most payment rows use route set `PaymentRefunding` and work `sales/payments?tab=attention`.
+- **`describe('what opens a task')`**:
+  - Each opener creates one task with the right `kind`, `routeSet` and `work`, plus `status: new`, `source: 'system'`, a defined `openKey` and a `Date` `dueAt`.
+  - The mismatch task message carries the expected and received figures and links the payment.
+  - A dispute is due at the provider's `evidenceDueBy`.
+  - A consent reminder is due at the agreed date plus 30 days.
+  - A repeated delay keeps the earlier due date.
+  - Some events open nothing: a refund failure the sweep will retry, a delay shipping to `DE`, a delay with no `promisedAt`, and a dispute already `won`.
+- **`standing(open)`**: spies on `paymentService.disputeStanding` to fake whether a dispute is open.
+- **Disputed-refund `describe`**: covers refund failures and reversals whose `failureReason` is `disputed`. While a dispute is open, no separate to-do is opened. When none is open, the refund opens its own task (the rest of this case is not shown).
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** (`registerModules`) — wires the real module graph so handlers actually subscribe to events.
-- **`src/modules.ts`** (`enabledModules`) — the list passed to `registerModules`; determines which task openers/closers are active.
-- **`src/kernel/events.ts`** (`emitDomainEvent`, `resetDomainEvents`, `DomainEventMap`) — the sole trigger mechanism; every test action is an event emission.
-- **`src/kernel/outbox.ts`** (`settleOutboxNudges`) — flushed so outbox-stamped events reach handlers within the test.
-- **`src/infrastructure/adapters/mailer.ts`** (`enqueueEmail`) — mocked; assertions verify the notification target.
-- **`src/kernel/access/tenant.ts`** (`DEPLOYMENT_TENANT_ID`) — scopes the test tenant.
-- **`src/kernel/permissions.ts`** (`callerInScope`) — used to act as a specific role for permission-sensitive assertions.
-- **`src/modules/shop/index.ts` / `service.ts`** (`shopTimezone`) — provides the shop's timezone for due-date assertions.
-- **`src/domain-primitives/time.ts`** (`dayInZone`) — timezone-aware day arithmetic for delay-rule date math.
-- **`src/modules/notifications/…`** — the service that actually enqueues bell + mail; exercised transitively through the mailer mock.
-- **`src/modules/payments/…`** — payment service whose handlers react to the emitted refund/dispute events.
-- **`src/modules/tasks/tests/factories.ts`** (`findAllTasks`) — reads tasks from the test DB for assertions.
+- Drives the real module set through `registerModules(enabledModules)` from `src/modules.ts` and `@kernel/registry`, and publishes through `@kernel/events` (`emitDomainEvent`, `resetDomainEvents`, `DomainEventMap`).
+- Mocks `src/infrastructure/adapters/mailer.ts` so staff mail goes to a spy and not a real queue.
+- Spies on `paymentService` from `src/modules/payments` for dispute standing. Also imports `paymentAttentionMinutes` from there, as well as `notificationsService` from `src/modules/notifications`, `shopTimezone`, `dayInZone` from `src/domain-primitives/time.ts`, `settleOutboxNudges` from `@kernel/outbox`, `callerInScope` from `@kernel/permissions`, `DEPLOYMENT_TENANT_ID` from `@kernel/access/tenant`, and the `createUser`/`asRole` helpers. These are imported in the visible part; their use lies in the part not shown.
+- Reads tasks back through `@modules/tasks/tests/factories`.
+- Uses `TaskKind`, `TaskStatus`, `TaskResolution` and `RefundFailureReason` from `@types`.
 
 ## Notes
-
-- The mailer is **mocked**, not the notifications service: the test asserts *who* is notified by inspecting `enqueueEmail` call arguments, not by inspecting the notifications module's internal state.
-- `NODE_LEGAL_COUNTRY` controls the delay-rule jurisdiction. Tests that need a US shop call `setEnvironment` with `NODE_LEGAL_COUNTRY: 'US'`; the default in `beforeEach` is `'IT'`.
-- Due-date "keep earlier" rule: emitting a second delay with a later `promisedAt` must not push the existing `dueAt` forward.
-- The `it.each` tables use `as const` tuples; the emit function is the second element, so the test name comes from the first element (a human-readable label).
-- The file is an integration test by design: it uses `setupTestDb()` (real MongoDB) rather than in-memory mocks for the task store.
-- Truncated in the snapshot above; the closers table and any notification-recipient assertions continue past the visible cut.
+- Events are emitted with an explicit `eventId` from `nextEventId()`, imitating the id the outbox stamps on production rows.
+- `PAYMENT`, `ORDER` and `RETURN` are valid ObjectId strings because the system reads them back as ObjectIds (for example, to mail the order's buyer).
+- Delay-rule tests depend on `NODE_LEGAL_COUNTRY: 'IT'`. A US-bound delay opens a consent task, while a DE-bound one does not.

@@ -1,49 +1,43 @@
 ---
 source: src/modules/cart/tests/integration/checkout-expected-total.test.ts
-sha256: 9c286c47947585f4cc69e2e8c9255594a98b9c8c9264a6580a2c5a880c1fefa7
-generated_at: 2026-11-08T05:19:37.221527+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 9c286c47947585f4cc69e2e8c9255594a98b9c8c9264a6580a2c5a880c1fefa7
+context_sha256: f59ee51d46a52aef8158d214deba69ea3e2b07b0d57648098a5b7c3fd6b8f9e7
+generated_at: 2026-11-22T04:38:10.139287+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/integration/checkout-expected-total.test.ts
 
 ## Purpose
-
-Integration test for `POST /cart/checkout` that verifies the `expectedTotal` guard: checkout must match the total the buyer was shown, refuse (409) if any component moved, leave zero side effects on refusal, and reject malformed input with 422. It exists to lock down the atomicity invariant and the error-contract surface of the endpoint.
+Integration tests for `POST /cart/checkout` and its required `expectedTotal` field (the total the buyer was shown). The checkout must refuse any other total, because a price, shipping cost or the basket can change between the cart screen and "Place order", and a price change does not bump the cart's version. The tests assert the invariant: a refused checkout leaves no order, no held stock and the cart unchanged, and the refusal carries both totals so the UI can show the new one.
 
 ## Key elements
-
-- **`shopperWith(price, quantity)`** — Local helper that authenticates a user, gives them an address, creates a product at the given price with 10 on hand, adds `quantity` units to the cart, and sets shipping to `pickup` (free). Returns the bearer token and product.
-- **`describe('POST /cart/checkout and the total the buyer was shown')`** — The sole suite; contains 11 test cases covering:
-  - Happy path (201)
-  - Price-change refusal (409, `CART_TOTAL_CHANGED`, both totals in `details`)
-  - Atomicity of refusal (no order, no held stock, cart unchanged)
-  - Confirm-and-retry with the new total (409 → 201)
-  - Currency mismatch (409 even with same numeric amount)
-  - Basket mutation (added line) triggering refusal
-  - Minor-unit equivalence (`"20"` ≡ `"20.00"`)
-  - Excess decimal places → 422
-  - Missing `expectedTotal` → 422
-  - Malformed totals (negative, numeric type, wrong currency code, missing currency) → 422 via `it.each`
-  - Stock shortage takes priority over price mismatch → 409 `CART_INSUFFICIENT_STOCK`
-- **`setupTestDb()`** — Called at module scope; resets the test database before any test runs.
+- `shopperWith(price, quantity = 2)` — local helper. It authenticates a `user`, gives them an address, creates a product (`onHand: 10`), adds `quantity` units via `POST /cart/items`, and sets shipping to `pickup` (free) via `PUT /cart/shipping-method`. It returns `{ bearer, product }`.
+- `describe('POST /cart/checkout and the total the buyer was shown')` — the only suite. Its cases cover:
+  - **Happy path:** the named total matches, so the response is 201 with `totalPrice` `'20.00'`.
+  - **Price moved:** the response is 409 with code `CART_TOTAL_CHANGED` and `details` holding `expected` and `actual` (`20.00` vs `24.00`, EUR).
+  - **No side effects after a refusal:** `countOrders()` is 0, `countersOf(...).reserved` is 0, and the cart still has 1 item.
+  - **Confirm the new total:** after a 409, resending `details.actual` as `expectedTotal` gives 201 with `totalPrice` `'24.00'`.
+  - **Currency mismatch:** USD with the same amount is refused with 409.
+  - **Basket changed:** a line added after the total was read gives 409 with `actual.amount` `'30.00'`.
+  - **Amount spelling:** `'20'` and `'20.00'` are equivalent, giving 201.
+  - **Input errors (422):** too many decimal places (`details.field` is `expectedTotal.amount`), a missing `expectedTotal`, and malformed totals via `it.each` (negative, numeric amount, `EURO`, lowercase `eur`, missing currency).
+  - **Stock first:** a short line gives 409 `CART_INSUFFICIENT_STOCK` instead of a price refusal.
 
 ## Relationships
-
-- **`tests/support/http.ts`** — Provides `api()` (Supertest wrapper) and `authenticateAs()` used by every test to make authenticated requests.
-- **`tests/support/checkout-as.ts`** — Provides `checkoutAs(bearer, { expectedTotal })` and `shownTotal(bearer)`; the primary means of exercising the endpoint and reading the current cart total.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` seeds/resets the database for the test session.
-- **`src/modules/addresses/tests/factories.ts`** — `giveAddress(user.id)` ensures the user has a billing address (required for checkout).
-- **`src/modules/products/tests/factories.ts`** — `createProduct()` creates the test product; `countersOf(productId)` asserts inventory counters (reserved = 0) after a refused checkout.
-- **`src/modules/orders/tests/factories.ts`** — `countOrders()` asserts zero orders exist after a refusal.
-- **`src/modules/products/index.ts`** (via `productService`) — `updateById()` changes the product price mid-test to simulate a race.
-- **`src/modules/inventory/index.ts`** (via `inventoryService`) — `adjust()` reduces on-hand stock to trigger the insufficient-stock path.
-- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity required by service-method calls made outside the HTTP layer.
+- `tests/support/http.ts` — supplies `api()` (the HTTP client used for cart calls) and `authenticateAs`.
+- `tests/support/checkout-as.ts` — supplies `checkoutAs` (places the checkout, with an optional `expectedTotal`) and `shownTotal` (reads the total the cart shows).
+- `tests/support/setup-test-db.ts` — `setupTestDb()` is called at module level to prepare the test database.
+- `tests/support/callers.ts` — provides `testCallerContext`, passed to the service calls below.
+- `src/modules/products/tests/factories.ts` — `createProduct` and `countersOf`.
+- `src/modules/addresses/tests/factories.ts` — `giveAddress`.
+- `src/modules/orders/tests/factories.ts` — `countOrders`.
+- `src/modules/products/index.ts` — exports `productService`, whose `updateById` changes a product's price mid-flow.
+- `src/modules/inventory/index.ts` — exports `inventoryService`, whose `adjust` lowers stock for the stock-first test.
+- `src/modules/products/services/index.ts` and `src/modules/inventory/services/index.ts` are graph neighbors, but the file does not import them directly.
 
 ## Notes
-
-- **Status-code contract:** 409 means "the cart is valid but the total you named is stale" (business rule); 422 means "the input itself is malformed" (validation). Tests deliberately exercise both to pin this distinction.
-- **Priority:** When both stock is short and the price has moved, the stock refusal (`CART_INSUFFICIENT_STOCK`) wins — the last test asserts this ordering.
-- **Amount comparison is in minor units:** `"20"` and `"20.00"` are treated as identical; the test locks this in so a future refactor to float comparison is caught.
-- **Currency is case-sensitive ISO-4217:** `"EURO"`, `"eur"`, and a missing currency all produce 422, not 409 — the distinction is validation vs. business logic.
-- The `expectedTotal` field is **required**; an empty body gets 422, not a server error.
+- Price and stock changes go through the real services (`productService`, `inventoryService`) rather than the HTTP API, so they simulate changes made behind the buyer's back.
+- Refusal semantics: 409 `CART_TOTAL_CHANGED` means the total moved or does not match, including by currency. 422 means the input itself is invalid (format, missing field), not a moved cart.
+- Stock is checked before the total: with insufficient stock and a stale total, the response is `CART_INSUFFICIENT_STOCK`.
+- All tests use EUR and pickup shipping, so totals are `price × quantity`.

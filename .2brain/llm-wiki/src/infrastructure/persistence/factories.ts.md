@@ -1,33 +1,31 @@
 ---
 source: src/infrastructure/persistence/factories.ts
-sha256: c1ab18dff7e4b44e1f65268c7e8fd4fb1325861119260c90f9b6a44fa01fa576
-generated_at: 2026-11-08T03:42:45.086165+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c1ab18dff7e4b44e1f65268c7e8fd4fb1325861119260c90f9b6a44fa01fa576
+context_sha256: 6f35f2a060f3759c18264eb5d79d7f0d39babe75d73613848a412d2031fa8998
+generated_at: 2026-11-22T03:02:23.722403+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/factories.ts
 
 ## Purpose
-
-Shared building blocks that every module-level `factories.ts` would otherwise duplicate: the identity triple (`_id`, `createdAt`, `updatedAt`), the generic overrides type, and small coercion helpers. Exists so that the "boring 90%" of a Mongoose factory is written once and the modules only supply their domain-specific fields.
+Shared building blocks for the per-module test/seed factories. It supplies the pieces every module's `factories.ts` would otherwise repeat: an `_id`, a `createdAt`/`updatedAt` pair, and the type of the overrides bag.
 
 ## Key elements
-
-- **`FactoryIdentity`** — interface for the three identity fields every factory accepts (`id?`, `createdAt?`, `updatedAt?`). Dates are wire-format (`Date | string`).
-- **`OverridesFor<TEntity>`** — generic type alias: `FactoryIdentity` intersected with `Partial` of the entity (minus the identity fields, plus a widened `deletedAt?`). Deriving it from the contract entity means a rename in `openapi.yaml` breaks stale call sites at compile time.
-- **`toDate(value)`** — `Date | string | undefined → Date | undefined`. Passes `undefined` through untouched so `stripUndefined` (in `@infrastructure/object-guards`) can drop the key entirely, keeping `deletedAt` either present or absent.
-- **`toObjectId(id?)`** — `string | undefined → Types.ObjectId`. Mints a fresh ObjectId when the argument is omitted.
-- **`identityOf(identity: FactoryIdentity)`** — returns `{ _id, createdAt, updatedAt }`. When `createdAt` is omitted it is read from the ObjectId's embedded 4-byte timestamp (`getTimestamp()`); `updatedAt` defaults to `createdAt` unless explicitly supplied.
+- **`FactoryIdentity`** (interface): optional `id` (24-char hex), `createdAt` and `updatedAt` (`Date | string`). Every factory accepts these on top of its own fields.
+- **`OverridesFor<TEntity>`** (type): `FactoryIdentity` plus `Partial` of the contract entity, omitting `id`, `createdAt`, `updatedAt` and `deletedAt`. `deletedAt` is re-added as `Date | string`. Because it derives from the entity, a field renamed in `openapi.yaml` breaks stale call sites at `tsc` time.
+- **`toDate(value)`**: converts a wire date (`Date | string`) to a `Date`. `undefined` passes through unchanged.
+- **`toObjectId(id?)`**: returns a fresh `Types.ObjectId` when `id` is omitted, otherwise one built from the given string.
+- **`identityOf(identity)`**: returns `{ _id, createdAt, updatedAt }`. `createdAt` defaults to the ObjectId's embedded timestamp, and `updatedAt` defaults to `createdAt`.
 
 ## Relationships
-
-- **`src/modules/{locales,orders,products,users}/factories.ts`** — each module factory imports `OverridesFor`, `identityOf`, and typically `toDate` to construct its Mongoose document, replacing the repeated identity boilerplate this file provides.
-- **`tests/unit/infrastructure/persistence/factories.test.ts`** — unit-tests the coercion and defaulting logic (`toObjectId`, `identityOf`, `toDate`).
-- **`@infrastructure/object-guards`** (referenced in a doc comment) — provides `stripUndefined`, which pairs with `toDate`'s `undefined` pass-through to ensure absent dates leave no key behind.
+- The module factories (`src/modules/locales/factories.ts`, `src/modules/orders/factories.ts`, `src/modules/products/factories.ts`, `src/modules/users/factories.ts`) are the consumers. They build on these helpers and the `OverridesFor` type.
+- `tests/unit/infrastructure/persistence/factories.test.ts` is the unit test for this file.
+- The `toDate` doc comment says it is paired with `stripUndefined` from `@infrastructure/object-guards`. The file does not import it.
 
 ## Notes
-
-- `getTimestamp()` has **second granularity**: two identities generated in the same tick share an identical `createdAt`. Tests that sort or paginate by `createdAt` must supply explicit dates rather than relying on the ObjectId-derived default.
-- The module deliberately does **not** enforce ordering among the three dates (`createdAt ≤ updatedAt`). Any test that cares about temporal ordering is responsible for stating it.
-- `deletedAt` is widened to `Date | string` in `OverridesFor` because the wire format uses ISO strings while Mongoose stores `Date` objects; `toDate` is the conversion point.
-- `timestamps: true` on the Mongoose schema is what allows a supplied `createdAt`/`updatedAt` to survive an `insert` instead of being overwritten — a behavioral detail of the schema, not of this file, but one the factory output relies on.
+- Schemas use `timestamps: true`. A supplied `createdAt` is kept on insert, and `updatedAt` matches it unless supplied. The values therefore reach the stored document as given, not only in `build()`/`new Model()`.
+- `getTimestamp()` has one-second granularity. Rows built in the same second share an identical default `createdAt`, so a test that sorts or paginates by it must pass its own dates.
+- The file does not check that `createdAt`, `updatedAt` and the id's timestamp are consistent with each other. A test that cares about ordering must state the dates itself.
+- `toDate` combined with `stripUndefined` keeps `deletedAt` either present or missing, never present-and-undefined.
+- `id` is normally omitted, so a fresh id is generated. Pinning it is for the seed dataset.

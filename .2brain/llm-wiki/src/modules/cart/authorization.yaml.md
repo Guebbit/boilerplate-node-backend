@@ -1,27 +1,24 @@
 ---
 source: src/modules/cart/authorization.yaml
-sha256: 7eb676c0d80892714c1be643182ef0bcc9996adf07f8d95748ca75e0fd7b3676
-generated_at: 2026-11-08T05:11:00.223105+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T04:29:54.988323+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/authorization.yaml
 
 ## Purpose
-
-Defines the single authorization rule for the cart module: verifying that a caller's account has a confirmed email before they can *spend* their basket (i.e., check out). Cart contents themselves (add, remove, set-quantity) are intentionally rule-free; only the act of spending is gated because it is a fact about the account, not the basket.
+Declares the single authorization rule for the `cart` module and a permission set that wraps it. A basket is otherwise ruleless (every signed-in account can use one, staff included). Spending it, meaning placing an order and starting payment, is gated on a fact about the account, so an unverified email cannot check out.
 
 ## Key elements
-
-- **`rules`** — Contains one rule: `checkout` on subject `Cart`, scoped `tenant`, module `cart`. Its `deniedCode` is `EMAIL_NOT_VERIFIED`, which drives a specific 403 message ("confirm your email") rather than the generic `requirePermission` text.
-- **`sets.CartCheckout`** — A named rule set that bundles the single `checkout:Cart` rule for consumers that need a pre-packaged permission group.
+- **Rule `checkout` on `Cart`**: `module: cart`, `scope: tenant`. It covers spending the caller's own basket, which places an order and starts paying for it.
+  - `deniedCode: EMAIL_NOT_VERIFIED`: the 403 keeps this specific wording instead of the generic `requirePermission` message. The comment says the i18n key is `t('generic.error-<deniedCode, kebab-cased>')`.
+- **Set `CartCheckout`** (`module: cart`): bundles the single rule `checkout:Cart`.
 
 ## Relationships
-
-- **`src/modules/cart/openapi.yaml`** — The OpenAPI spec declares the cart endpoints (including checkout). This file is the authorization layer that gates those endpoints at the route level; the `checkout` rule is the permission checked before a checkout route handler executes.
+- `src/modules/cart/openapi.yaml` is the only graph neighbor. The file content shows no explicit reference to it, so this page does not describe any direct interaction.
 
 ## Notes
-
-- The action is deliberately `checkout`, **not** `create:Order`. `create:Order` is reserved for staff raising an order on someone else's behalf; reusing it here would produce an identical CASL tuple once packed for the browser, making the two permissions indistinguishable. See `docs/theory/authorization.md` for the full rationale.
-- `deniedCode` uses kebab-cased form (`EMAIL_NOT_VERIFIED`) and is looked up via `t('generic.error-<deniedCode>')`. This is the only cart rule that overrides the default 403 wording.
-- "Using a basket at all is no rule": every signed-in account, including staff, can read and mutate their own cart without a permission check.
+- Basket contents (add, remove, set quantity) deliberately have no rules.
+- The action is named `checkout` rather than `create` on `Order`. `create:Order` already means "raise an order on someone else's behalf", and reusing it would produce an identical CASL tuple that cannot be told apart once packed for the browser.
+- The rule is tied to the account (email verification), so it lives on a rule rather than on a route mount.
+- The header comment points to `docs/understand/authorization.md` for background.

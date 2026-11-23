@@ -1,40 +1,33 @@
 ---
 source: src/modules/account/mail-budget.ts
-sha256: 501659fa3e195a642fa15811308ddb8e3d18719b330ec0b6d61103544dd16324
-generated_at: 2026-11-14T18:36:54.713695+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:30:20.523281+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/mail-budget.ts
 
 ## Purpose
-
-Per-recipient mail budget that caps how many mails the app will deliver to a single mailbox within a 24-hour window (default 10), regardless of which flow (signup, reset, email-change, export) triggered the send. It protects the *victim's* inbox from being turned into a weapon by a caller who can point arbitrary flows at stranger addresses.
+Defines the per-recipient daily mail budget: how many mails the app will send to a single mailbox, regardless of which flow triggers them. Signup, password reset, email change, both resends and a data export can all be aimed at a stranger's address. A budget on the caller would not protect the victim, and `+tag` variants would defeat it. The account-deletion mail is deliberately not charged, since it goes to the caller's own address behind fresh auth.
 
 ## Key elements
-
-- **`MAIL_RECIPIENT_BUDGET`** (`RateLimitBudget`) — The budget descriptor. Spread from `accountRateLimitData.mailRecipient` (generated data) with an explicit `keyedBy` string describing the key shape: lowercased, `+tag` stripped, Gmail dots stripped, pseudonymised.
-- **`chargeMailRecipient(address)`** (internal) — Single point where the budget is actually charged: normalises via `canonicalMailbox`, pseudonymises with prefix `'rate-limit'`, then calls `chargeBudget`.
-- **`mailRecipientRefusal(address, context)`** (exported) — *Service-side* door. Returns a `ResponseReject` (429 envelope) or `undefined` (allowed). Also records the refusal against the caller's `CallerContext` for auditing. Used by services that picked the recipient themselves (resend, new-address change, export).
-- **`mailRecipientLimiter`** (exported, `RequestHandler`) — *Route-side* door. Reads `email` from the JSON body; if absent, calls `next()` (validation will reject). If present, charges the budget and either `next()`s or answers the shared 429 envelope via `refuseRateLimited`.
+- `MAIL_RECIPIENT_BUDGET` — a `RateLimitBudget` built from `accountRateLimitData.mailRecipient` (imported from `./rate-limits.generated`), plus a `keyedBy` description. The header documents a 24-hour window and a max of 10 (`NODE_MAIL_RECIPIENT_RATE_LIMIT_MAX`).
+- `mailRecipientRefusal(address, context)` — the service-side door. It charges one mail against `address`. It returns `undefined` if the mail fits. Otherwise it records the refusal against the caller's `CallerContext` and returns a 429 `ResponseReject` with `details.policy` set to the budget namespace.
+- `mailRecipientLimiter` — the route-side Express middleware. It reads `email` from the request body and charges it. If the body names no address, it calls `next()` and leaves validation to answer. If the budget is spent, it answers 429 through `refuseRateLimited`.
+- `chargeMailRecipient` (private) — the shared step. It canonicalises the address with `canonicalMailbox`, pseudonymises it under the `'rate-limit'` purpose, and calls `chargeBudget`.
 
 ## Relationships
-
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Supplies `chargeBudget`, `recordBudgetRefusal`, `readBodyField`, `refuseRateLimited`, and the `BudgetCharge` type that underpin all budget logic here.
-- **`src/infrastructure/persistence/normalize-email.ts`** — `canonicalMailbox` produces the stable key (strips `+tag`, collapses Gmail dots, lowercases).
-- **`src/infrastructure/security/pseudonymise.ts`** — `pseudonymise('rate-limit', …)` ensures the raw mailbox never appears as a stored key.
-- **`src/infrastructure/http/response.ts`** — `generateRateLimited` builds the 429 `ResponseReject` envelope.
-- **`src/modules/account/rate-limits.ts`** — Source of the numeric budget values (`max`, `windowMs`) spread into `MAIL_RECIPIENT_BUDGET`.
-- **`src/types/auth-context.ts`** — `CallerContext` type used when recording refusals.
-- **`src/types/rate-limit-budget.ts`** — `RateLimitBudget` type that `MAIL_RECIPIENT_BUDGET` conforms to.
-- **`src/modules/account/routes.ts`** — Mounts `mailRecipientLimiter` on routes whose body names a recipient address (signup, reset).
-- **`src/modules/account/services/email-change.ts`**, **`src/modules/account/services/verification.ts`**, **`src/modules/account/services/export.ts`** — Call `mailRecipientRefusal` when the service (not the body) chose the recipient.
-- **`src/modules/account/tests/integration/mail-recipient-budget.test.ts`** — Integration test exercising both doors.
+- `src/infrastructure/http/middlewares/rate-limit.ts` — supplies `chargeBudget`, `recordBudgetRefusal`, `readBodyField`, `refuseRateLimited` and the `BudgetCharge` type.
+- `src/infrastructure/persistence/normalize-email.ts` — `canonicalMailbox` provides the key. It strips `+tag`, and strips dots for Gmail.
+- `src/infrastructure/security/pseudonymise.ts` — `pseudonymise` keeps raw addresses out of the budget key.
+- `src/infrastructure/http/response.ts` — `generateRateLimited` and the `ResponseReject` type build the service-side 429.
+- `src/types/auth-context.ts`, `src/types/rate-limit-budget.ts` (via `@types`, re-exported from `src/types/index.ts`) — `CallerContext` and `RateLimitBudget`.
+- `src/modules/account/rate-limits.ts` — related to the budget's configuration data, which this file reads from `./rate-limits.generated`.
+- `src/modules/account/routes.ts` — per the header, `mailRecipientLimiter` is mounted on routes whose body names the address (signup, reset).
+- `src/modules/account/services/email-change.ts`, `src/modules/account/services/export.ts` and `src/modules/account/services/verification.ts` — per the header, services that pick the recipient themselves use `mailRecipientRefusal`.
+- `src/modules/account/tests/integration/mail-recipient-budget.test.ts` — integration test for this budget.
 
 ## Notes
-
-- **Account-deletion mail is intentionally NOT charged** against this budget; it goes to the caller's own address behind fresh auth and is excluded by design.
-- The key is *pseudonymised*, so the rate-limit store never holds a raw email address.
-- Gmail normalisation (dot collapsing, `+tag` stripping) means `User+spam@gmail.com` and `u.s.e.r@gmail.com` share one budget slot.
-- `mailRecipientLimiter` is a pass-through when the body has no `email` field — it does *not* reject; downstream validation handles that.
-- The 24-hour window is deliberate: a per-minute window would let a slow drip (1 mail/min) send ~1 440 mails/day.
+- The window is 24 hours on purpose, because a per-minute window lets a slow drip through.
+- The limiter should be mounted before the controller and after the route's other human-challenge-free limiters. A refused request then never reaches the code that sends.
+- A refusal is counted and audited against the caller. The budget key itself is the recipient, not the caller.
+- The header points to a "the rate-limit budgets" section in a security doc for further detail.

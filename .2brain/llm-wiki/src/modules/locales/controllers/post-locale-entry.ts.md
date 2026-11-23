@@ -1,30 +1,35 @@
 ---
 source: src/modules/locales/controllers/post-locale-entry.ts
-sha256: 49f3859d02f807103b5580a4939e453514c0e663af435fc1ad8609d2ad39ff3c
-generated_at: 2026-11-08T06:21:48.677858+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 49f3859d02f807103b5580a4939e453514c0e663af435fc1ad8609d2ad39ff3c
+context_sha256: 1ef629e14c1e4d6d84ff4476d825dd4abbbc8e80ec5e80b75778fb21c7b6f257
+generated_at: 2026-11-22T05:43:20.161426+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/controllers/post-locale-entry.ts
 
 ## Purpose
-Controller handler for `POST /locales/:locale/apps/:app/entries`. Validates the request body, delegates to the locale service to add a single key to an app's dictionary, and responds with `201 Created` including a `Location` header pointing to the new entry.
+Express controller for `POST /locales/:locale/apps/:app/entries` (admin). It adds a single key to an app's locale dictionary: validates the body, delegates creation to the locale service, and replies with a `201 Created` response for the new entry.
 
 ## Key elements
-- **`createTrimmedEntryBody`** — A local Zod schema extending `CreateLocaleEntryBody` with the `key` field wrapped in `trimmedInto`, ensuring whitespace-only keys fail as a field-level 422 rather than a generic validation error.
-- **`createLocaleEntry`** *(exported)* — The Express handler. Pipeline: `parseBody` → `localeService.createEntry` → `refused` check → `presentLocaleEntry` → `createdResponse` (with `Location` header). Errors are funneled through `catchAs(response, 'createLocaleEntry')`.
+- `createTrimmedEntryBody` (module-private): the `CreateLocaleEntryBody` Zod schema (imported from `@api/schemas.zod`) extended so `key` is passed through `trimmedInto(...)`. A blank key therefore fails as a field-level 422 rather than slipping through.
+- `createLocaleEntry` (exported): the request handler.
+  1. `parseBody` validates `request.body` against the trimmed schema. If it returns a falsy value, the handler returns early (the helper is passed `response`).
+  2. Calls `localeService.createEntry(locale, app, body, callerContextOf(request))`.
+  3. If `refused(response, result)` is true, it returns early.
+  4. Otherwise it maps `result.data` with `presentLocaleEntry` and sends `createdResponse<LocaleEntry>`. The location is `/locales/:locale/apps/:app/entries/:id`.
+  5. Errors are handled by `.catch(catchAs(response, 'createLocaleEntry'))`.
 
 ## Relationships
-- **`@infrastructure/http/controller`** — Supplies `parseBody`, `refused`, and `catchAs`, the project's standard controller utilities for validation, rejection short-circuiting, and error serialization.
-- **`@infrastructure/http/request`** — Supplies `callerContextOf`, used to forward authenticated caller context into the service call.
-- **`@infrastructure/http/response`** — Supplies `createdResponse`, which writes the `201` status, body, and `Location` header.
-- **`@infrastructure/http/schemas`** — Supplies `trimmedInto`, the Zod string transform used to trim the `key` field.
-- **`../services/index`** — Calls `localeService.createEntry(locale, app, body, callerContext)`, the business-logic entry point.
-- **`../presenters`** — Calls `presentLocaleEntry` to shape the service result into the API response model.
-- **`@types`** — Imports `CreateLocaleEntryRequest` and `LocaleEntry` as the request/response type contracts.
-- **`../routes`** — Wires this handler to the actual route path (graph neighbor; not imported here).
+- `src/infrastructure/http/controller.ts`: provides `parseBody`, `refused` and `catchAs`, which handle validation failure, service refusals and unexpected errors.
+- `src/infrastructure/http/request.ts`: `callerContextOf` extracts the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `createdResponse` builds the created response with its location.
+- `src/infrastructure/http/schemas.ts`: `trimmedInto` supplies the trimming wrapper for the key schema.
+- `src/modules/locales/services/index.ts`: exports `localeService`, whose `createEntry` method does the actual creation.
+- `src/modules/locales/presenters.ts`: `presentLocaleEntry` converts the service result into the API `LocaleEntry` shape.
+- `src/types/index.ts`: supplies the `CreateLocaleEntryRequest` and `LocaleEntry` types.
+- `src/modules/locales/routes.ts`: the route table that wires this handler to the endpoint. This is inferred from the graph, since the file itself doesn't show the registration.
 
 ## Notes
-- The `key` trim is applied at the *schema* layer (not in the service) so that a blank/whitespace key is rejected before any service call is made, producing a precise field-level 422 message.
-- The `Location` header is built from the *presented* entry's `id`, not from the raw service result, ensuring the URL reflects the final resource path.
-- Follows the project's uniform controller pattern: no `try/catch` blocks in the handler; all error handling is delegated to `catchAs`.
+- The handler does not use `async/await`. It returns a promise chain, and returns `undefined` on the early-exit paths after `parseBody` or `refused` has already written the response.
+- Admin-only access is stated in the doc comment. No authorization check is visible in this file, so it is presumably enforced elsewhere, such as in the routes or the service.

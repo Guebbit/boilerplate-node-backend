@@ -1,29 +1,30 @@
 ---
 source: scripts/contracts/run-with-timeout.ts
-sha256: afb91942f2ae5626ecb6efede11f369eae391995efc98d3dccfcc5e083be4090
-generated_at: 2026-11-14T17:29:18.251616+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 88a12d1a3fc8f83f0da7a99cc347531bfaf1c67ea5a9ae2bd82b898db95808e0
+context_sha256: dfa3d0d8770c71adb2e091c0ac04e1785d560a5ac232ace7a125de98bf824074
+generated_at: 2026-11-22T02:00:15.393750+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/run-with-timeout.ts
 
 ## Purpose
-
-Provides a thin wrapper around Node's `execFileSync` that enforces a hard wall-clock timeout on a child process. When the timeout expires the child is killed with `SIGKILL` and a dedicated `CommandTimeoutError` is thrown, so callers in the contract-checking pipeline can distinguish "command hung" from "command failed" without parsing generic `ETIMEDOUT` strings.
+A small wrapper around Node's `execFileSync` that enforces a timeout on nested commands. If a child process hangs, it is killed and a descriptive `CommandTimeoutError` is thrown. A hung child therefore fails the hook instead of freezing it.
 
 ## Key elements
-
-- **`COMMAND_TIMEOUT_MS`** (const, `300_000`) — default timeout (5 min). Generous for a bundle build; short enough to fail a pre-commit hook rather than freeze it.
-- **`CommandTimeoutError`** (class extends `Error`) — thrown when a command exceeds its timeout. The message embeds the full command line and the timeout value; the original `ETIMEDOUT` error is attached as `cause`.
-- **`runWithTimeout(command, arguments_, options?, timeoutMs?)`** — the sole function export. Spawns `command` synchronously via `execFileSync` with `timeout` and `killSignal: 'SIGKILL'`. On timeout it throws `CommandTimeoutError`; any other error is rethrown unchanged.
+- `COMMAND_TIMEOUT_MS`: default timeout of 300,000 ms (5 minutes). The comment calls this generous for a bundle build.
+- `CommandTimeoutError`: an `Error` subclass thrown when a command outlives its timeout.
+- `runWithTimeout(command, arguments_, options?, timeoutMs?)`: runs the command synchronously and returns `void`.
+  - It spreads the caller's `ExecFileSyncOptions` and then sets `timeout` and `killSignal: 'SIGKILL'`, so these two values override any caller-supplied ones.
+  - If the error has `code === 'ETIMEDOUT'`, it throws `CommandTimeoutError`. The message names the full command line and the timeout, and the original error is attached as `cause`.
+  - Any other error is rethrown unchanged.
 
 ## Relationships
-
-- **`tests/unit/scripts/contracts/run-with-timeout.test.ts`** — unit-test suite for this module; exercises the happy path, the timeout path, and the pass-through of non-timeout errors.
-- **`scripts/contracts/check-asyncapi-breaking.ts`** — sibling contract script in the same `scripts/contracts/` directory; consumes `runWithTimeout` to execute external checks under the shared timeout contract.
+- `scripts/contracts/check-asyncapi-breaking.ts` is a neighbor in the dependency graph. This file's own comments describe nested commands such as a bundle build, which fits this role. The file content doesn't show how that script calls it.
+- `tests/unit/scripts/contracts/run-with-timeout.test.ts` is the unit test for this module.
+- `src/infrastructure/adapters/logger.ts` is listed as a neighbor, but this file doesn't import or use it.
 
 ## Notes
-
-- The timeout detection is **duck-typed** (`error.code === 'ETIMEDOUT'`) rather than `instanceof Error`. This is intentional: under Jest's VM sandbox the `child_process` error originates from a different realm, so `instanceof` checks against the host `Error` class return `false`. Do not "fix" this to `instanceof` without removing the Jest sandbox first.
-- `killSignal` is hardcoded to `SIGKILL`; the caller cannot override it through the `options` parameter (it is spread after the user options).
-- The parameter is named `arguments_` (trailing underscore) to avoid shadowing the non-standard `arguments` object.
+- The timeout check is duck-typed (`typeof error === 'object'`, `'code' in error`) rather than using `instanceof Error`. Under jest's vm sandbox, errors from `child_process` come from another realm, so `instanceof` gives wrong results.
+- Because `SIGKILL` is used, the child gets no chance to clean up.
+- The call is synchronous and blocks the event loop for up to `timeoutMs`.

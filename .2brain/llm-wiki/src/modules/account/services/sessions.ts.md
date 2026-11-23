@@ -1,37 +1,31 @@
 ---
 source: src/modules/account/services/sessions.ts
-sha256: ec630a1fe677b380d8b52620b6b60686f6b971dcacd2f8e339ed5be5bcc7d899
-generated_at: 2026-11-08T04:22:59.444462+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ec630a1fe677b380d8b52620b6b60686f6b971dcacd2f8e339ed5be5bcc7d899
+context_sha256: d16ee10204ea160228634639865bb63fa7ffd63a6b3c7e4ccfa6a56ab7d20113
+generated_at: 2026-11-22T03:41:57.041048+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/sessions.ts
 
 ## Purpose
-
-Service layer for the authenticated caller's own live sessions. It exposes listing, single-session lookup, data-export, and hard-erasure operations for `GET /account/sessions` and the account-deletion flow. A hard rule governs the module: no live credential (refresh token, raw session id) is ever returned to a client—the family id is the only revocation handle that crosses the boundary.
+Service layer for an account's session data: listing the caller's own live sessions (as `GET /account/sessions` publishes them), exporting session metadata for the data export, and erasing sessions and one-time tokens during a hard account deletion. It never exposes credentials. A live refresh token or session id is as good as a password, so clients revoke by family id instead.
 
 ## Key elements
-
-- **`sessionsList(userId, request)`** – Returns the caller's live sessions (newest sign-in first) via the active session strategy. The `request` argument lets the current row be flagged `current: true`; a bare-token caller has no session of their own, so every row is `current: false`.
-- **`sessionGet(userId, sessionId, request)`** – Single-session lookup. Implemented as `sessionsList` + array `find`; no separate DB query. Returns `undefined` if the id doesn't belong to the caller or isn't live.
-- **`exportSessions(userId)`** – Produces `ExportSession[]` for the data export. Fetches live rows, deduplicates via `newestPerFamily`, then strips credentials through `presentExportSession`.
-- **`eraseSessionsAndTokens(userId, session)`** – Deletes all sessions **and** all verification tokens for the account. Both deletes join the caller's Mongoose `ClientSession` (transaction) so the erasure is atomic.
+- `sessionsList(userId, request)`: Gets the active strategy, then calls `strategy.list(userId, strategy.credentialOf(request))`. Returns the user's live sessions of the active mode, newest sign-in first. The caller's own session is marked `current`. A caller with no session of their own (e.g. a bare access token) gets every row as `current: false`.
+- `sessionGet(userId, sessionId, request)`: Finds one session by id in `sessionsList`'s result. Returns `undefined` if the session isn't the caller's, isn't live, or never existed.
+- `exportSessions(userId)`: Lists live sessions through `sessionRepository.listLive`, keeps the newest per family via `newestPerFamily`, and maps each row with `presentExportSession`. Returns `ExportSession[]` (metadata only, no credentials).
+- `eraseSessionsAndTokens(userId, session)`: Calls `sessionRepository.removeAll`, then `verificationTokenRepository.removeAll`. Both deletes use the passed Mongoose `ClientSession`, so they run inside the erasure's transaction.
 
 ## Relationships
-
-- **`../repository`** (`repository.ts`) – `sessionRepository.listLive` / `removeAll` and `verificationTokenRepository.removeAll` provide the data access; this file orchestrates but never touches the DB driver directly.
-- **`../session/strategy.ts`** – Supplies `activeStrategy()` (the live session-strategy instance) and the `SessionRequest` type. All listing/lookup goes through the strategy, not the repository.
-- **`../session/listing.ts`** – `newestPerFamily` collapses session rows to one per family before export.
-- **`../presenter.ts`** – `presentExportSession` maps a raw row to the credential-free `ExportSession` shape.
-- **`@types`** (`src/types/index.ts`) – Source of the `Session` and `ExportSession` contracts this file returns.
-- **`../services/index.ts`** – Barrel that re-exports this module so consumers import from the services entry point.
-- **`../module.ts`** – Routes/registers the exported functions as account-module endpoints.
-- **`../tests/integration/auth-storage.test.ts`** – Integration tests exercising the list/get/export/erase paths end-to-end.
+- `src/modules/account/repository.ts`: provides `sessionRepository` (`listLive`, `removeAll`) and `verificationTokenRepository` (`removeAll`).
+- `src/modules/account/presenter.ts`: `presentExportSession` shapes each row for the export.
+- `src/modules/account/session/listing.ts`: `newestPerFamily` collapses session rows to the newest per family.
+- `src/modules/account/session/strategy.ts`: `activeStrategy` and the `SessionRequest` type. The strategy does the mode-specific listing and credential extraction.
+- `src/types/index.ts`: supplies the `Session` and `ExportSession` types.
+- `src/modules/account/services/index.ts` and `src/modules/account/module.ts` are neighbors in the graph. This file's content doesn't show how they use it.
+- `src/modules/account/tests/integration/auth-storage.test.ts` is a related integration test.
 
 ## Notes
-
-- `sessionGet` does **not** issue a dedicated query; it fetches the full list and filters in memory. Fine for the expected row count, but it means a session id that was never issued will still trigger a full list fetch.
-- The `request` parameter on `sessionsList` / `sessionGet` is **not** an auth check—`userId` (set by upstream middleware) is the authorization boundary. The request only carries enough context to mark the caller's own row as `current`.
-- `eraseSessionsAndTokens` expects the caller to supply an **open** Mongoose transaction session; it will not begin one. Forgetting to commit/abort upstream will roll back both deletes.
-- The family-id-only rule is a deliberate security invariant: treating a raw refresh token or session id as a password means it must never appear in a response body, log line, or export payload produced by this module.
+- `sessionGet` and `sessionsList` read only the authenticated caller's own sessions, since the `userId` is the caller's own id.
+- `exportSessions` calls `listLive` with `undefined` as its second argument and `new Date()` as its third. It does not use the active strategy, so it isn't filtered by mode through `activeStrategy`.

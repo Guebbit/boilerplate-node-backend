@@ -1,34 +1,34 @@
 ---
 source: scripts/contracts/permission-security.ts
-sha256: ac8b3b176a55bbccaeeb2e989c4fa5876905f48aa6e74df24076ead5a8dd11ec
-generated_at: 2026-11-14T17:28:05.178858+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e84ce8169403a9433af0114b99abe29e644790394225946d8c813bdd81644f5d
+context_sha256: b9a882ca0359f3d7cff3f344a00e88634b6e661c8b44c75518677e3c62b765a9
+generated_at: 2026-11-22T01:58:53.414334+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/permission-security.ts
 
 ## Purpose
-
-A bundler step that derives the 401/403 error codes implied by the permission names in each operation's OpenAPI `security` requirements and merges them into `x-error-codes`. It exists so that contract fragments never have to hand-list permission-driven codes: the bundler reads the standard OAS 3.1 scopes slot and writes the codes automatically.
+Derives the error codes that a permission implies for an OpenAPI operation. A guarded operation names its permission in the scopes list of its `bearerAuth` / `apiKeyAuth` security requirement (e.g. `['display:Payment']`). This bundler step reads those names and writes the resulting 403/401 codes into the operation's `x-error-codes`, so fragments never list them by hand. Rules are read through the kernel, never copied, so the contract answers the same question the guard does.
 
 ## Key elements
-
-- **`permissionNamesOf(operation)`** — extracts the deduplicated, first-seen permission names from an operation's `bearerAuth` / `apiKeyAuth` scopes arrays.
-- **`sendsEnrollment(name)`** (internal) — for each preset role and verification state, builds a synthetic `AuthContext` to test whether a staff role is currently withheld but *would* hold the rule once `authenticatorArmed` is `true`. Returns `true` if so.
-- **`codesOfPermission(name, where)`** (internal) — looks up the rule via `findRule` and returns a `{ '403': [...], '401': [...] }` map. Throws if the name has no rule.
-- **`withPermissionErrorCodes: Step`** — the exported pipeline step. Iterates every operation, merges each permission's codes into `x-error-codes` (dedup + `toSorted` per status), and writes back only if the result is non-empty.
+- `permissionNamesOf(operation)` — exported. Returns the permission names across an operation's security requirements, de-duplicated in first-seen order. Only the `bearerAuth` and `apiKeyAuth` schemes are read.
+- `withPermissionErrorCodes` — exported bundler `Step`. For each operation (via `operationsOf`) it merges the codes of every named permission into `x-error-codes`. Codes are de-duplicated and sorted within each status. It sets `x-error-codes` only if the merged result is non-empty.
+- `codesOfPermission(name, where)` — internal. Looks up the rule with `findRule` and returns:
+  - 403: the rule's `deniedCode`, or `FORBIDDEN` if it has none, plus `SECOND_FACTOR_ENROLLMENT_REQUIRED` when `sendsEnrollment` is true.
+  - 401: `REAUTH_REQUIRED` when the rule has a `stepUp` tier.
+  - Throws if no rule declares the name.
+- `sendsEnrollment(name)` — internal. Builds a neutral `AuthContext` for every preset role and both `verified` values. It returns true if the staff role is withheld (`staffRoleWithheld`) and the rule would hold once `authenticatorArmed` is true but does not hold now. It mirrors `wouldHoldOnceEnrolled`.
 
 ## Relationships
-
-- **`src/kernel/permissions.ts`** — source of truth for rules. Imports `findRule`, `PRESET_ROLES`, `staffRoleWithheld`, `callerForSubject`, and the `PermissionSubject` type. All permission semantics are resolved through these; the file never caches or copies rule data.
-- **`src/kernel/ability.ts`** — imports `holds` to evaluate whether a given caller/action/subject triple is permitted. Used inside `sendsEnrollment` to test the enrolled-vs-unenrolled pair.
-- **`src/types/auth-context.ts`** (via `@types`) — imports `AuthContext` to construct the synthetic contexts in `sendsEnrollment`.
-- **`scripts/contracts/openapi-document.ts`** — imports `Operation`, `Step`, and `operationsOf`. Provides the document shape the step mutates and the iteration helper.
-- **`scripts/contracts/openapi-bundle.ts`** — consumes `withPermissionErrorCodes` as a step in the bundle pipeline (this file is a `Step` conforming to that contract).
+- `@kernel/permissions` — supplies `PRESET_ROLES`, `findRule`, `staffRoleWithheld`, `callerForSubject` and the `PermissionSubject` type. These are the rule source of truth.
+- `@kernel/ability` — supplies `holds`, which evaluates a rule for a caller. It is called with `PermissionSubject` as the generic.
+- `@types` (`src/types/index.ts`, with `AuthContext` from `src/types/auth-context.ts`) — the `AuthContext` type for the synthetic callers.
+- `./openapi-document` — supplies the `Operation` and `Step` types and the `operationsOf` iterator.
+- `openapi-bundle.ts` — the bundler that runs this step. Per the source comments, the step runs before the unknown-code check, so the codes it writes are validated too.
 
 ## Notes
-
-- Runs **before** the unknown-code validation step; any code it writes is itself subject to that later check.
-- The enrollment check (`sendsEnrollment`) is intentionally conservative: it only considers `id`, `roles`, and `authenticatorArmed` as discriminative; all other `AuthContext` fields are neutral filler.
-- Permission names use the `<action>:<Subject>` convention (e.g. `display:Payment`) and are placed in the OAS scopes slot under `bearerAuth` or `apiKeyAuth`—not in a custom extension.
-- `toSorted()` is used (non-mutating), implying a modern target (ES2023+ / TS 5.4+).
+- An unknown permission name fails the bundle with `[openapi] <METHOD> <route>: security names "<name>", which no rule declares.`
+- The synthetic `AuthContext` fills everything except `id`, `roles`, `verified` and the armed flag with placeholder values. Only those fields decide the outcome.
+- The `holds` calls are widened to the whole `PermissionSubject` union because the generic cannot correlate the rule's action/subject pair.
+- The module's doc comment points to `scripts/contracts/fragments.ts` for the design write-up (section "the permission on an operation").

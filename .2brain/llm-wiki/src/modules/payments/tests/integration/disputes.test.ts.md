@@ -1,46 +1,54 @@
 ---
 source: src/modules/payments/tests/integration/disputes.test.ts
-sha256: 1aa015241ca6a0eeb7072b70d8cbbb57791586086e030c1b86db19358db6b2b3
-generated_at: 2026-11-14T21:13:40.329823+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 83350b9e41838a7a65f9aa8e4828456b96c32e746ba5f17d8310b6cc42890388
+context_sha256: e27c739095bbdb7adf5b7a94ac39cdb78f94d567a14825733be4dfb65fec8208
+generated_at: 2026-11-22T06:56:34.947635+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/disputes.test.ts
 
 ## Purpose
-
-Integration test that exercises the full dispute lifecycle (chargeback and inquiry) against real Mongo, driving the fake payment provider's dispute lever through the public `paymentService` API. It verifies that disputes are persisted, announced once, surfaced on the order timeline and staff attention list, and that they gate or reduce the refundable amount without ever being treated as a refund (no `payment.refunded`, no credit note, no order-status change).
+Integration test suite for the payments module's handling of card-payment disputes (chargebacks and inquiries) reported by the provider. It checks that a delivered dispute report is stored on the payment, ordered by the provider's own `observedAt`, announced via outbox events, written to the order's staff timeline, and surfaced to staff. It also checks that disputes affect refund eligibility without being treated as refunds. It runs against real Mongo and the fake provider's dispute lever, going through the services' public API.
 
 ## Key elements
-
-- **`paidOrder()`** — Creates a unique buyer, a 50.00 product × 2, a card payment of 100.00 EUR, settles outbox nudges, and returns `{ orderId, providerRef }`.
-- **`report(over?)`** — Returns a default `ProviderDisputeState` (chargeback, `needs_response`, 100.00 EUR, `fundsWithdrawn: true`) merged with optional overrides.
-- **`deliverReport(providerRef, over?)`** — Wires the fake provider's dispute lever and hands the report to the service via `deliver()`, mirroring the webhook path.
-- **`staffView(orderId)`** — Calls `paymentService.getForOrder` with an admin caller to read the staff-facing payment object.
-- **`events(name)`** — Counts outbox rows for a given event name (asserts announce-once semantics).
-- **`refund(orderId, amount?)`** — Attempts a refund through `refundOrderPayment` with admin context.
-- **`when(min)` / `at(min)`** — Time helpers anchored to the fixed `START` (2026-10-01T10:00Z); `when` returns a `Date`, `at` an ISO string.
-- **Three `describe` blocks** — "a dispute is reported", "the refund door while a dispute stands", "a refund the chargeback blocks".
+- **`paidOrder()`**: creates a unique buyer, a 50.00 product (2 units, so 100.00) and an order. It pays by card, settles outbox nudges, and returns `{ orderId, providerRef }`.
+- **`report(over)`**: builds a `ProviderDisputeState` for `dp_1`. Defaults are chargeback, `needs_response`, `fraudulent`, 100.00 EUR, funds withdrawn, evidence due in 7 days, `observedAt` at the start. Fields can be overridden.
+- **`deliverReport(providerRef, over)`**: sends a report through `deliver(setFakeDispute(...))`, the same path the webhook route uses.
+- **`when` / `at` / `START`**: a deterministic clock. `when(minutes)` gives a `Date` and `at(minutes)` an ISO string, that many minutes after 2026-10-01T10:00Z.
+- **`staffView(orderId)`**: reads `paymentService.getForOrder` as admin.
+- **`events(name)`**: counts outbox rows for an event name.
+- **`refund(orderId, amount?)`**: calls `refundOrderPayment` as an admin operator.
+- **`describe('a dispute is reported')`** covers:
+  - storing the dispute, announcing it once, adding a timeline row, and leaving the order untouched;
+  - visibility to staff only, not to the payer;
+  - dropping reports older than the stored one and ignoring repeats;
+  - newer reports applying as updates, with the timeline closing once;
+  - a closed dispute flipping to won, or reopening and clearing `closedAt`;
+  - dropping reports for an unknown intent or the wrong provider;
+  - storing a report in a different currency than the payment.
+- **`describe('the refund door while a dispute stands')`** covers:
+  - an open chargeback giving 409 `PAYMENT_DISPUTED` and greying out `actions.refund`;
+  - refunds staying allowed during an inquiry;
+  - a lost chargeback reducing the refundable amount, where asking for more than the remainder is a 422.
+  
+  The visible portion of this block ends partway through the last case.
 
 ## Relationships
-
-- **`scenarios/support/doubles/payments/fake.ts`** — Supplies `fakePaymentProvider` (registered in the provider registry) and `setFakeDispute`, which the tests use to inject dispute reports without a real webhook.
-- **`src/modules/payments/services/index.ts`** — `paymentService` is the public door through which every dispute delivery, staff read, and refund attempt flows.
-- **`src/modules/payments/repository.ts`** — Used for direct DB assertions (confirming no refund rows exist, reading `providerRef` after setup).
-- **`src/modules/payments/providers/registry.ts`** — `registerPaymentProvider` swaps in a renamed fake provider to test the "wrong provider" rejection path.
-- **`src/modules/payments/providers/index.ts`** — Imports the `ProviderDisputeState` type used by the `report()` helper.
-- **`src/modules/payments/events.ts`** — Event-name constants (`PAYMENT_DISPUTE_OPENED`, `PAYMENT_DISPUTE_UPDATED`, `PAYMENT_REFUNDED`) used to count outbox rows.
-- **`src/modules/payments/module.ts`** — `paymentsModule` registered in `beforeEach` so the service's dependencies are wired.
-- **`src/kernel/events.ts`** — `resetDomainEvents` in `afterEach` clears the domain-event queue between tests.
-- **`src/kernel/outbox.ts`** — `outboxEventModel` (count assertions) and `settleOutboxNudges` (flush async outbox before reading).
-- **`src/modules/orders/index.ts`** — `orderService` is used to assert the order is untouched by a dispute.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`, `timelineOf` for order setup and timeline-row queries.
+- **`@modules/payments/services` (`paymentService`)**: the public door under test (`getForOrder`).
+- **`@modules/payments/providers/registry`**: `registerPaymentProvider` registers a second provider named `some-other-provider`, to test cross-provider rejection.
+- **`@scenarios/support/doubles/payments/fake`**: supplies `fakePaymentProvider` and `setFakeDispute`, which stages the dispute for the next delivery.
+- **`@modules/payments/repository`**: `paymentRepository` is used to fetch `providerRef`, `userId` and `refunds`.
+- **`@modules/payments/events`**: the event name constants `PAYMENT_DISPUTE_OPENED`, `PAYMENT_DISPUTE_UPDATED`, `PAYMENT_REFUNDED` and `PAYMENT_REFUND_OWED_AFTER_DISPUTE`. The last is imported, but not used in the visible portion.
+- **`@kernel/outbox`**: `outboxEventModel` and `settleOutboxNudges` for counting and flushing events.
+- **`@kernel/events`**: `resetDomainEvents` runs in `afterEach`.
+- **`@modules/orders`** and **`@modules/orders/tests/factories`**: `orderService` checks the order is unchanged. `createOrder`, `toOrderItem` and `timelineOf` build orders and read the staff timeline.
+- **`@modules/payments/module`**: registered through `registerCheckoutModules([paymentsModule])`.
+- **`@modules/payments/model`** (`paymentModel`) and **`@modules/payments/providers`** (`ProviderDisputeState` type): imported. `ProviderDisputeState` types `report`; `paymentModel` is not used in the visible portion.
 
 ## Notes
-
-- **Real Mongo, not mocked.** `setupTestDb()` spins up a real database; there is no repository-level mocking.
-- **Fixed reference clock.** All `observedAt` values are derived from the constant `START` (2026-10-01T10:00Z). The ordering tests depend on this deterministic timeline rather than `Date.now()`.
-- **`buyers` counter** ensures each test gets a unique email so Mongo unique indexes don't collide across `it` blocks.
-- **`displayStatus` is independent of disputes.** Even with an open chargeback the payment's `displayStatus` remains `'succeeded'` (mirrors Shopify's separation of `displayFinancialStatus` from dispute state).
-- **Visibility gate.** `getForOrder` with a customer caller must return `disputes: undefined`; the test asserts this explicitly.
-- **Truncated file.** The last test in "a refund the chargeback blocks" is cut off mid-assertion (`expect(send).not.toHaveBee…`); the full suite may contain additional cases not visible here.
+- `payByCard`, `refundOrderPayment`, `deliver`, and the `@tests/*` helpers (`setupTestDb`, `asAdmin`, `asCustomer`, `callerContextAs`, `asReject`) come from shared test utilities.
+- A dispute is deliberately not a refund. The tests assert no `payment.refunded` event, no order status change, and `displayStatus` stays `'succeeded'`.
+- Disputes are visible to staff only. A payer's view has `disputes` undefined.
+- A dispute in a currency other than the payment's is stored and announced. A lost chargeback in a different currency does not reduce the refundable amount.
+- `buyers` is a module-level counter that keeps each test's email unique.

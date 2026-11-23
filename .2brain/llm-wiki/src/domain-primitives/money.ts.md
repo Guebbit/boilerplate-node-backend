@@ -1,56 +1,53 @@
 ---
 source: src/domain-primitives/money.ts
-sha256: fec72b0a9ef495acdb36c0d0326adeabdf7e13c6ec3f350eda68b9f96df3fc14
-generated_at: 2026-11-14T17:50:44.910558+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c40672af6cca65875a9729fa22c34a4a901203e297288d2541d51546d67cc256
+context_sha256: 3bdacc8716465bca6cf7ce4470afce2b32980008e509dea8a40fbea61ada18c8
+generated_at: 2026-11-22T02:32:55.869712+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/domain-primitives/money.ts
 
 ## Purpose
-
-A zero-dependency domain primitive that represents monetary amounts as **whole integers of minor units** (never floats) and provides exact, order-independent arithmetic and string conversion. It pins the ISO 4217 minor-unit exponents in-repo so that every read, write, and display in the system agrees on a currency's scale without relying on the runtime's CLDR/`Intl` data. The `Money` type is a compile-time brand over `number`, not a class, so there is no runtime cost.
+Defines `Money`, a branded integer type holding an amount in a currency's minor units, plus the helpers that convert it to and from decimal strings and do arithmetic on it. Keeping amounts as integers between the boundaries makes totals exact and order-independent. Decimal strings appear only on the contract/wire side, at the currency's own number of places.
 
 ## Key elements
-
-- **`Money`** (type) — `number & { [MONEY_BRAND]: true }`; a branded integer of minor units. Only `asMoney` (private) produces it.
-- **`NO_MONEY`** — the zero identity (`0 as Money`), the fold point for `addMoney`.
-- **`ISO_4217_EXPONENTS`** (private) — in-repo map of every supported ISO 4217 code to its decimal exponent (0, 2, 3, or 4). Sourced from SIX List One, pinned 2026-09-17.
-- **`isIso4217Code`** — table-membership check; returns `false` for withdrawn or unknown codes.
-- **`minorUnitExponent`** — looks up a code's exponent; defaults to **2** for any code not in the table.
-- **`toMinorUnits(value, currency)`** — converts a raw decimal (number, `Decimal128` string, or any `unknown`) to minor units. Decimal strings are parsed digit-by-digit (no float); numbers are multiplied and rounded.
-- **`toDecimalString(amount, currency)`** — renders minor units back to plain decimal text at exactly the currency's places (e.g. `"1000"` JPY, `"1.500"` KWD). Uses `BigInt` to avoid exponent notation for large values.
-- **`padDecimal(value, currency)`** — round-trip: `toDecimalString(toMinorUnits(...))`; normalises any input to the canonical padded form.
-- **`formatMoney(locale, amount, currency)`** — locale-aware display via `Intl.NumberFormat`, with `min/maxFractionDigits` driven by the pinned exponent so mail and ledger agree.
-- **`fitsCurrency(amount, currency)`** — validation: returns `true` only when a plain-decimal string has no significant digits past the currency's places (trailing zeros are ignored).
-- **`addMoney(...amounts)` / `subtractMoney(a, b)`** — exact integer addition/subtraction.
-- **`scaleMoney(amount, count)`** — multiply by a whole count (non-finite → 0).
-- **`averageMoney(amount, count)`** — `amount / count` rounded half-up; returns `NO_MONEY` if `count ≤ 0`.
-- **`minMoney(first, ...rest)`** — smallest of a set of amounts.
-- **`wholeCount(count)`** — coerces any `unknown` to a finite whole number (non-finite → 0).
-- **Fractional-share function** (name truncated in source) — applies a fractional rate (e.g. a tax or credit percentage) to an amount, rounding half-up. The only place a multiply is intentionally fractional; described as distinct from `scaleMoney`.
+- **`Money`**: `number & { brand }`. The brand exists only at compile time; at runtime it is a plain number. `toDecimalString` is the intended way back out.
+- **`NO_MONEY`**: zero, the identity for `addMoney`.
+- **`asMoney`** (private): the single constructor. It maps non-finite values and `-0` to `0`.
+- **`ISO_4217_EXPONENTS`** (private): a pinned in-repo table of minor-unit exponents. Most currencies are 2; 0 covers JPY, KRW and similar; 3 covers KWD, BHD and similar; 4 covers CLF and UYW.
+- **`isIso4217Code(code)`**: table-membership check. It rejects withdrawn codes.
+- **`minorUnitExponent(currency)`**: returns the exponent from the table, falling back to 2 for unlisted codes.
+- **`toMinorUnits(value, currency)`**: reads `unknown` input into minor units.
+  - Plain decimal text (a string or `Decimal128`) is parsed by moving digits, with no float involved. Extra digits round half-up on the first dropped digit.
+  - A `number` is multiplied by 10^exponent and rounded.
+- **`toDecimalString(amount, currency)`**: formats minor units as padded decimal text (`"19.90"`, `"1000"` for JPY, `"1.500"` for KWD). It uses `BigInt` to avoid exponent notation.
+- **`padDecimal(value, currency)`**: re-pads any amount to the currency's places by round-tripping through `toMinorUnits` and `toDecimalString`.
+- **`formatMoney(locale, amount, currency)`**: `Intl.NumberFormat` currency formatting, with the fraction digits forced to the pinned exponent.
+- **`fitsCurrency(amount, currency)`**: true if the text is plain decimal with no non-zero digits past the currency's places. It keeps stored amounts equal to charged amounts.
+- **Arithmetic**:
+  - `addMoney(...amounts)`: variadic integer sum.
+  - `subtractMoney(a, b)`: integer difference.
+  - `minMoney(first, ...rest)`: the smallest amount.
+  - `scaleMoney(amount, count)`: multiply by a whole count, coerced by `wholeCount`.
+  - `averageMoney(amount, count)`: half-up rounded share; returns `NO_MONEY` if `count <= 0`.
+  - `scaleMoneyByRate(amount, rate)`: the one place a fractional rate is applied, rounded half-up.
+- **`wholeCount(count)`**: coerces anything to a finite rounded integer, or 0.
 
 ## Relationships
+The neighbor list gives dependency-graph edges only. The visible file imports nothing, so it is a leaf primitive, and the neighbors are presumably its consumers. The visible code shows no direct interaction with any of them.
 
-- **`src/infrastructure/persistence/money-field.ts`** — the persistence layer that serialises/deserialises `Money` values to/from the database; calls `toMinorUnits` on read and `toDecimalString` on write.
-- **`src/infrastructure/config/fields.ts`** — defines configuration schema fields whose values are `Money`; relies on `isIso4217Code` and `minorUnitExponent` for validation.
-- **`src/modules/orders/domain/totals.ts`** — composes line items via `addMoney`, applies tax via the fractional-share function, and renders order totals with `toDecimalString`.
-- **`src/modules/orders/domain/tax.ts`** — computes per-line tax amounts using the fractional-share function and `subtractMoney`.
-- **`src/modules/orders/emails.ts`** — renders order-confirmation mail with `formatMoney`.
-- **`src/modules/invoicing/domain/credit-shares.ts`** — splits a total across parties using `averageMoney` and the fractional-share function.
-- **`src/modules/invoicing/presenter.ts`** — formats invoice line items and totals with `toDecimalString` / `formatMoney`.
-- **`src/modules/invoicing/emails.ts`** — composes e-mail body text using `formatMoney`.
-- **`src/modules/invoicing/services/stats.ts`** — aggregates historical amounts with `addMoney` and `averageMoney`.
-- **`src/modules/cart/services/checkout.ts`** — sums cart lines (`addMoney`), applies delivery charge, and validates with `fitsCurrency` before placing the order.
-- **`src/modules/cart/services/view.ts`** — renders cart display via `toDecimalString` / `formatMoney`.
-- **`src/modules/delivery/domain/rates.ts`** — returns delivery charges as `Money`; uses `scaleMoney` and `minMoney` to cap or scale zone rates.
-- **`src/modules/delivery/tests/unit/rates.test.ts`** / **`src/modules/delivery/tests/unit/rates.property.test.ts`** / **`src/modules/delivery/tests/unit/money-reconciliation.property.test.ts`** — unit and property-based tests that exercise `toMinorUnits`, `toDecimalString`, `addMoney`, and the rate-calculation path to confirm round-trip fidelity and reconciliation.
+- `formatMoney` and `padDecimal` are plausibly used by presentation neighbors such as `src/modules/invoicing/emails.ts` and `src/modules/invoicing/presenter.ts`. The source comments mention mails and the ledger agreeing on scale, but no file is named.
+- `src/infrastructure/persistence/money-field.ts` is presumably the persistence side. The comments mention stored `Decimal128` values and raw aggregate output as inputs to `toMinorUnits`.
+- `src/infrastructure/config/fields.ts` may use the currency-code check or `fitsCurrency`. This is not confirmed by the file.
+- The orders, cart, delivery and invoicing domain and service files, and the delivery property tests, sit in the graph as neighbors. They presumably use the arithmetic helpers, but nothing visible here confirms specific calls.
+- A comment says `formatMoney`'s input is numeric because of the `DecimalAmount` pattern in the OpenAPI contract, so the contract defines the decimal-string format that `formatMoney` assumes.
 
 ## Notes
-
-- **Brand, not class.** `Money` is indistinguishable from `number` at runtime. Any code that casts a raw `number` to `Money` bypasses the `asMoney` guard (finite check, `-0` normalisation). Use the exported constructors, not raw casts.
-- **Exponent source is the in-repo table, not `Intl`.** CLDR disagrees with ISO 4217 for at least 17 currencies (e.g. `IDR`, `HUF`, `IRR`). `formatMoney` still uses `Intl.NumberFormat` for *display*, but passes explicit `min/maxFractionDigits` from the pinned table to keep the scale correct.
-- **`toDecimalString` uses `BigInt`.** `String(1e21)` would switch to exponent notation; `BigInt` keeps the full digit string intact. This matters for very large KRW/JPY amounts.
-- **The fractional-share function rounds half-up, and `Math.round(-0.5) === -0`.** All current callers pass non-negative amounts, so this is a non-issue today; the source comment flags it for the day a negative share is needed.
-- **`minorUnitExponent` defaults to 2 for unknown codes.** Use `isIso4217Code` first if you need to *reject* unlisted codes (e.g. in validation); `minorUnitExponent` alone will silently accept anything.
-- **`fitsCurrency` ignores trailing zeros** past the exponent (`"19.990"` EUR is valid). It does not reject exponent-notation strings (`"1e2"`).
+- The exponent table is deliberately pinned to ISO 4217 rather than `Intl`/CLDR. CLDR reports 0 places for several currencies where ISO says 2, such as HUF, COP and IDR.
+- `minorUnitExponent` silently returns 2 for unknown codes. Use `isIso4217Code` when validation is needed.
+- `toMinorUnits` parses only plain decimal text. Exponent notation or junk falls to the numeric path, and non-numeric junk becomes `NO_MONEY` via `asMoney`.
+- `scaleMoneyByRate` and `averageMoney` use `Math.round`, which rounds negative halves toward +∞. The source says this is harmless today because the amounts passed in are non-negative, and it flags the issue for revisiting if negative shares are ever needed.
+- Rounding appears only in `toMinorUnits` and in the rate and average helpers. Addition, subtraction and `scaleMoney` are exact.
+- The table's header comment cites "SIX List One, published 2026-09-17".
+- `formatMoney` casts its input to the template type `${number}`. Callers must pass a numeric amount.

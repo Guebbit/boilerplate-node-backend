@@ -1,43 +1,35 @@
 ---
 source: src/infrastructure/security/versioned-secret.ts
-sha256: 4398f3fb6a56f2e9b5b1335c963cfbd9da9a9785c88e99d36cea0fa4867f7345
-generated_at: 2026-11-08T03:50:18.618965+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 04340d84f4fd5e3e8f5e88a2aa227f88938689f5420f0352d89566e7dc537ef1
+context_sha256: b5566d8c6a14b66d463f84e3d0db79e22b4757e84f8e76f3c25830e5f110516a
+generated_at: 2026-11-22T03:09:59.930658+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/security/versioned-secret.ts
 
 ## Purpose
-
-Provides versioned AES-256-GCM encryption for secrets stored at rest, so a key rotation can decrypt old rows under their original key while encrypting new ones with the newest key. Shared across the PII, TOTP, and webhook-secret rings — same crypto, different HKDF-derived keys — so the logic is written once and parameterized by a `SecretBinding`.
+Shared AES-256-GCM encryption for secrets stored at rest, with a key version stamped on each ciphertext so keys can be rotated. Old rows decrypt against the key that wrote them, while new writes use the newest key. TOTP and webhook-secret encryption both use it, so the crypto lives in one place.
 
 ## Key elements
-
-- **`VersionedKey`** — `{ version: string; key: string }`, one operator-configured key tagged with the version it stamps on ciphertext.
-- **`parseVersionedKeyRing(raw)`** — splits a comma-separated `version:key,…` env string into `VersionedKey[]` (newest first). A bare value with no `:` defaults to version `v1` for backward compatibility.
-- **`SecretPurpose`** — `'pii' | 'totp' | 'webhook-secret'`; used as the HKDF `info` label for domain separation between rings.
-- **`SecretBinding`** — `{ purpose, aad }`; the HKDF label plus GCM associated data that ties a ciphertext to a specific row/field.
-- **`encryptVersionedSecret(plaintext, ring, binding)`** — encrypts under `ring[0]` (newest key). Returns `version:iv-hex:auth-tag-hex:ciphertext-hex`.
-- **`keyVersionOf(stored)`** — extracts the version token from the front of a stored ciphertext string.
-- **`decryptVersionedSecret(stored, ring, binding, label)`** — looks up the key by the ciphertext's own stamped version (position-independent), enforces the full 128-bit auth tag, and verifies AAD. Throws on unknown version, malformed format, or tag mismatch.
-- **`rewrapVersionedSecret(stored, ring, binding, label)`** — idempotent re-encryption: returns the value unchanged if already on `ring[0]`, otherwise decrypt-and-re-encrypt under the newest key.
+- `VersionedKey` — `{ version, key }`: an operator-configured secret and the label stamped on ciphertext it produces.
+- `parseVersionedKeyRing(raw)` — parses `version:key,version:key` (newest first) into a `VersionedKey[]`. An entry with no `:` becomes version `v1`, so single-key deployments need no env change. Empty entries are dropped, and undefined input gives an empty ring.
+- `SecretPurpose` — `'pii' | 'totp' | 'webhook-secret'`. It is the HKDF `info` label, so each ring derives unrelated keys even if the same secret is reused.
+- `SecretBinding` — `{ purpose, aad }`. `aad` is the GCM associated data (e.g. `users:phone:<id>`), so a ciphertext copied to another row or field fails authentication.
+- `encryptVersionedSecret(plaintext, ring, binding)` — always encrypts with `ring[0]`. It uses a random 12-byte IV and a key derived via `deriveSubkey`. Output format: `<version>:<iv-hex>:<tag-hex>:<ciphertext-hex>`.
+- `keyVersionOf(stored)` — returns the version prefix, which a rotation job can count by.
+- `decryptVersionedSecret(stored, ring, binding, label)` — finds the ring entry by the stamped version (ring order is irrelevant) and decrypts with a strict 16-byte auth tag length. `label` only names the secret in the "Unknown … key version" error.
+- `rewrapVersionedSecret(stored, ring, binding, label)` — moves a value onto `ring[0]`. A value already on the newest key is returned unchanged, so re-encryption jobs are idempotent. Otherwise it decrypts and re-encrypts.
 
 ## Relationships
-
-- **`./subkey.ts`** — imports `deriveSubkey` to stretch the operator's arbitrary-length key into a 32-byte AES-256 key via HKDF-SHA256, using `binding.purpose` as the domain label.
-- **`src/modules/account/two-factor/totp.ts`** — consumer; calls `encryptVersionedSecret` / `decryptVersionedSecret` with `purpose: 'totp'` and `NODE_TOTP_ENCRYPTION_KEY`.
-- **`src/modules/webhooks/secrets.ts`** — consumer; same pattern with `purpose: 'webhook-secret'` and `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`.
-- **`src/infrastructure/security/pii-encryption.ts`** — consumer; uses the same module with `purpose: 'pii'` for PII fields (phone, etc.).
-- **`src/infrastructure/security/reencrypt.ts`** — orchestration layer that calls `rewrapVersionedSecret` across rows during a rotation job.
-- **`src/modules/users/services/reencrypt.ts`** — per-module reencrypt service that delegates to the shared rewrap.
-- **`src/modules/account/session/config.ts`** — the "ring" shape (newest-first, position-based encrypt, version-lookup decrypt) mirrors the `parseKeyRing` pattern established there for JWT secrets.
-- **`src/infrastructure/config/fields.ts`** — declares the env-var fields (`NODE_TOTP_ENCRYPTION_KEY`, `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY`) whose raw values are fed to `parseVersionedKeyRing`.
-- **Integration tests** (`src/modules/{account,addresses,delivery,invoicing,orders,users}/tests/integration/reencrypt.test.ts`) — exercise the decrypt/rewrap path against a multi-version ring to verify rotation correctness end-to-end.
+- `src/infrastructure/security/subkey.ts` (`deriveSubkey`) — turns the configured string into a 32-byte AES key with HKDF-SHA256, using `purpose` as the label.
+- `src/modules/account/two-factor/totp.ts` and `src/modules/webhooks/secrets.ts` — consumers, using `NODE_TOTP_ENCRYPTION_KEY` and `NODE_WEBHOOK_SECRET_ENCRYPTION_KEY` respectively.
+- `src/modules/account/session/config.ts` — its `parseKeyRing` for JWT secrets is the model for this ring shape (newest first).
+- `src/infrastructure/security/pii-encryption.ts`, `src/infrastructure/security/reencrypt.ts`, `src/modules/users/services/reencrypt.ts` and the per-module `reencrypt` integration tests — related through the dependency graph. The `'pii'` purpose and `rewrapVersionedSecret` exist for this kind of rotation and re-encryption work.
+- `src/infrastructure/config/fields.ts` and `src/modules/webhooks/config.ts` — config-side neighbors. This file does not import them.
 
 ## Notes
-
-- **Auth tag length is locked to 16 bytes.** `createDecipheriv` is called with `{ authTagLength: 16 }` explicitly; without it Node would accept a 4-byte truncated tag that is far easier to forge.
-- **Idempotency of rewrap.** `rewrapVersionedSecret` short-circuits when the stored version already equals `ring[0].version`, returning the input byte-for-byte (no fresh IV), so a re-encryption job is safe to re-run.
-- **AAD is not stored.** The binding string (e.g. `users:phone:<id>`) must be re-supplied at decrypt time; a ciphertext copied to a different row or field will fail its GCM auth tag.
-- **Delimiter safety.** The `version:key` split uses `:`; the two expected key encodings (base64, hex) contain neither `:` nor `,`, so the parse is unambiguous.
-- **Rotation is a ring, not a migration.** Old keys remain in the env string until every row has been rewrapped; the operator-facing runbook lives in `docs/tools/security.md`.
+- Decryption throws on a malformed format, an unknown version, or an auth-tag mismatch. A key version dropped from the ring therefore surfaces as an error, and `rewrapVersionedSecret` propagates it so a corrupt row stops the job.
+- The binding (`purpose` and `aad`) must be identical at encrypt and decrypt time. The AAD is authenticated but not stored.
+- Decryption does not validate the stored format beyond splitting on `:`. Malformed input fails with an error from the lookup or from Node crypto.
+- `:` and `,` are safe as delimiters because base64 and hex output contain neither.

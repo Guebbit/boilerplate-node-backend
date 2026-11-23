@@ -1,54 +1,41 @@
 ---
 source: src/modules/returns/tests/integration/withdrawal-before-dispatch.test.ts
-sha256: c3b185a5cd042e609610747f894ab19a57623686f0ebf859b276888e14379532
-generated_at: 2026-11-14T21:48:27.322686+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4e8f686f92c674187c8850cb4d613b7e5f37f1ba10289f355f4b5999b379ba30
+context_sha256: 48c87e25d04ddf9c660b3cfb26c3c9d1af6fd4f9211093ca12e01afcfa7f6d1e
+generated_at: 2026-11-22T07:38:33.750278+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/tests/integration/withdrawal-before-dispatch.test.ts
 
 ## Purpose
-
-Integration test for the "withdrawal before dispatch" flow on a fully-paid order. It pins the cross-module contract: a single `payment.refunded` event drives both the refund and the credit note (so money is never announced twice), the return is written **closed at birth**, exactly one acknowledgement mail goes out from `returns`, and the entire operation is atomic — either the record, the cancel, and the outbox rows all land, or none do.
+Integration test for a customer withdrawal on a paid order before dispatch. It checks that the order is canceled, the full payment is refunded through the order's own refund path, and the return record is written already closed. It pins what crosses module boundaries, so that a refund and a return never announce the same money twice: one `payment.refunded` event, one credit note, and one mail from `returns`.
 
 ## Key elements
-
-- **`paidOrder()`** (local helper) — builds a user, two products (Shirt 30.00, Mug 10.00), an order with one of each, reserves inventory, charges by card via `payByCard`, and calls `settleOutboxNudges()` so the settlement rows are visible before the test proceeds.
-- **`withdrawalRows(orderId)`** (local helper) — counts outbox documents for the order whose name is one of `order.canceled`, `return.requested`, `return.closed`; used in failure tests to assert nothing was written.
-- **`describe("a withdrawal before dispatch on a paid order")`** — four happy-path tests:
-  - *single refund, credit note, closed return* — asserts order status → `canceled`, payment `displayStatus` → `refunded` at 40.00, return record status `closed` with `refundAmount: '40.00'` and empty `lines`, exactly one `PAYMENT_REFUNDED` payload with **no** `returnId`, and exactly one credit note.
-  - *14-day refund stamp* — asserts `storedRefundStamps` carries `dueRule: 'withdrawal'` and `dueBy` computed by `withdrawalRefundDueBy(requestedAt, shopTimezone())`.
-  - *one returns mail* — filters `enqueueEmail` calls for template `returns.notice`; expects exactly one, subject "We received your withdrawal", with `postage` and `address` both `undefined`.
-  - *one refund-issued mail, no cancel notice* — expects one `payments.refund-issued`, one `returns.notice`, and **zero** `orders.order-canceled` mails.
-- **`describe("a withdrawal before dispatch that dies half way")`** — two failure/atomicity tests:
-  - *`returnRepository.create` rejects* — order stays `paid`, no return record, zero outbox rows.
-  - *`outboxEventModel.create` rejects* — same assertions; the cancel rolled back with the record.
-- **Mocks / spies** — `enqueueEmail` is module-mocked (cleared in `beforeEach`); `returnRepository.create` and `outboxEventModel.create` are spied per-test in the failure block.
+- `paidOrder()`: helper that creates a user, a shirt (30.00) and a mug (10.00), and an order for both. It reserves inventory, pays by card, and calls `settleOutboxNudges()` so the settlement rows are published. It returns `{ user, orderId }`.
+- `mockEnqueueEmail`: a `jest.mock` of the mailer adapter's `enqueueEmail`. Cases assert which mail templates were enqueued.
+- `withdrawalRows(orderId)`: counts outbox rows for the order named `order.canceled`, `return.requested` or `return.closed`, whatever their delivery state.
+- Suite "a withdrawal before dispatch on a paid order" has four cases:
+  - **Refund, credit note and closed return**: the order is `canceled`. The payment shows `refunded` with `amountRefunded` `'40.00'`. The return is `closed` with `refundAmount` `'40.00'` and no lines. Exactly one `PAYMENT_REFUNDED` event fires, with `full: true` and no `returnId`. Exactly one credit note exists.
+  - **Refund due date**: `storedRefundStamps` holds `dueRule: 'withdrawal'` and a `dueBy` equal to `withdrawalRefundDueBy(requestedAt, shopTimezone())`. The test title describes this as the end of the shop day 14 days after the shop was told.
+  - **One mail from `returns`**: a single `returns.notice` with subject "We received your withdrawal" and no postage or address.
+  - **Refund mail**: exactly one `payments.refund-issued`, one `returns.notice`, and zero `orders.order-canceled`.
+- Suite "a withdrawal before dispatch that dies half way" has two cases, both expecting `createReturn` to reject with "disk full":
+  - `returnRepository.create` fails.
+  - `outboxEventModel.create` fails.
+  - In both, the order stays `paid`, no return exists, and no withdrawal outbox rows exist.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/kernel/events.ts` | `onDomainEvent` captures the `PAYMENT_REFUNDED` payload; `resetDomainEvents` clears listeners in `afterEach`. |
-| `src/kernel/outbox.ts` | `settleOutboxNudges` drains the async relay after each state change; `outboxEventModel` is used to count rows and is spied in the failure test. |
-| `src/modules/payments/index.ts` | Imported for `paymentService` (read to assert final payment state) and `PAYMENT_REFUNDED` (the event constant listened to). |
-| `src/modules/payments/module.ts` | Registered via `registerCheckoutModules` so the payment listener chain is wired. |
-| `src/modules/payments/services/index.ts` | Graph neighbor reached through `src/modules/payments/index.ts`; the `paymentService` export ultimately resolves to the services layer. |
-| `src/modules/payments/tests/factories.ts` | `payByCard` simulates the card charge; `storedRefundStamps` reads the dated stamp rows. |
-| `src/modules/invoicing/index.ts` | Imported for `invoicingService` (used to query credit notes for the order). |
-| `src/modules/invoicing/module.ts` | Registered so the credit-note listener fires in the relay pass. |
-| `src/modules/invoicing/services/index.ts` | Graph neighbor reached through `src/modules/invoicing/index.ts`; the `invoicingService` export ultimately resolves to the services layer. |
-| `src/modules/inventory/index.ts` | Imported for `inventoryService` (used to reserve stock in the fixture). |
-| `src/modules/inventory/services/index.ts` | Graph neighbor reached through `src/modules/inventory/index.ts`; the `inventoryService` export ultimately resolves to the services layer. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `readOrder`, `toOrderItem` build and inspect the order fixture. |
-| `src/modules/orders/index.ts` | Imported for `withdrawalRefundDueBy` (pure function computing the expected 14-day stamp); the function is defined in `src/modules/orders/domain/withdrawal.ts`. |
-| `src/modules/orders/domain/withdrawal.ts` | Source of `withdrawalRefundDueBy`, re-exported through the orders index. |
-| `src/infrastructure/adapters/mailer.ts` | `enqueueEmail` is the sole mail seam; the whole module is replaced with a jest mock to assert template, subject, and payload. |
+- The code under test is the `returns` module's `returnService` and `returnRepository`; `returnsModule` is registered with `paymentsModule` and `invoicingModule` through `registerCheckoutModules`.
+- `@kernel/events`: `onDomainEvent` subscribes to `PAYMENT_REFUNDED` (from `@modules/payments`), and `resetDomainEvents` runs in `afterEach`.
+- `@kernel/outbox`: `settleOutboxNudges` waits for the relay to deliver events. `outboxEventModel` is used to count rows and to inject a failure.
+- `@infrastructure/adapters/mailer`: mocked so the tests can inspect the enqueued mail.
+- `@modules/payments` (`PAYMENT_REFUNDED`, `paymentService`, and the factories `payByCard` and `storedRefundStamps`) and its `module` are used to verify the refund and register the module.
+- `@modules/invoicing` and its `module` are used to check the credit note and register the module.
+- `@modules/inventory` is used to reserve stock when setting up the paid order.
+- `@modules/orders` supplies the order factories (`createOrder`, `readOrder`, `toOrderItem`) and `withdrawalRefundDueBy`.
 
 ## Notes
-
-- **Multiple `settleOutboxNudges()` calls are intentional.** The relay publishes settlement rows *after* the HTTP response returns, and each listener (refund, credit note, mail) runs in its own pass. The tests call it 2–3 times to let every pass complete.
-- **`eventually()` is required for the `payments.refund-issued` mail.** `announceRefund` starts with `void`, so the mail is enqueued *after* `settleOutboxNudges` resolves; a plain assertion would race.
-- **The refund event carries no `returnId`.** This is the core "never announce the same money twice" invariant: the refund belongs to the order's cancel, and the already-closed return is not re-closed by it.
-- **Failure tests assert triple-absence** (order unchanged, no return record, zero outbox rows) to prove the record and cancel are in the same transaction.
-- The `beforeEach` registers all three modules (`paymentsModule`, `invoicingModule`, `returnsModule`) via `registerCheckoutModules`; omitting any of them would silently skip a listener.
+- Event delivery is asynchronous through the outbox relay, so the tests call `settleOutboxNudges()` before asserting. The refund mail is started with `void` inside `announceRefund`, so one case also polls with `eventually(...)`.
+- The refund belongs to the order's cancel, not to the return. That is why the `payment.refunded` payload has no `returnId`, and why the already-closed return is not closed again.
+- The failure cases verify atomicity: the cancel and the return record are written together or not at all.

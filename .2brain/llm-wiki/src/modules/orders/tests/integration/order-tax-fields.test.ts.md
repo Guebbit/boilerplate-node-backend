@@ -1,32 +1,37 @@
 ---
 source: src/modules/orders/tests/integration/order-tax-fields.test.ts
-sha256: 408df5c678258fc0fbcdbe158d96cc29f8ca0fd64cd1b2419bd568ef52457d99
-generated_at: 2026-11-08T07:07:10.802255+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 408df5c678258fc0fbcdbe158d96cc29f8ca0fd64cd1b2419bd568ef52457d99
+context_sha256: 4c8a48aaaa6efa2f94f531222b49b9e03f6e51eaa90b30bb952fad0200425f6b
+generated_at: 2026-11-22T06:30:33.925542+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/order-tax-fields.test.ts
 
 ## Purpose
-
-Integration test verifying that `GET /orders/{id}` returns a complete VAT breakdown: per-line tax fields (`taxRate`, `taxAmount`, `netAmount`) and order-level aggregates (`netTotal`, `taxTotal`). It exists to lock in the contract that every order response carries these fields on every line and at the top level.
+Integration test for the VAT fields returned by `GET /orders/{id}`. It checks that an order's response carries a full VAT breakdown on each line and at the order level. The VAT table in the invoice document belongs to the `invoicing` module and is tested separately (`src/modules/invoicing/tests/unit/emails.test.ts`).
 
 ## Key elements
-
-- **`taxedLine(productId, price, taxRate)`** — local helper that shapes a frozen order line (product snapshot + quantity) the way `freezeOrderLines` produces it at real checkout. Used to seed a line with a concrete 22 % VAT rate.
-- **`describe('GET /orders/{id} — the VAT fields on the response')`** — the single test suite.
-- **`it('publishes netTotal/taxTotal and every line tax field')`** — the one test case: creates a product and an order via factories, calls the endpoint as `admin`, and asserts that the line carries `taxRate = 0.22`, `taxAmount = '7.18'`, `netAmount = '32.62'`, and the order carries matching `netTotal` / `taxTotal`.
+- `setupTestDb()`: called at module level to prepare the test database.
+- `taxedLine(productId, price, taxRate)`: helper that builds an order line shaped like the output of `freezeOrderLines` at checkout. It has a product snapshot (`id`, title `'Taxed Product'`, `price`, `taxRate`) and `quantity: 2`.
+- Test `publishes netTotal/taxTotal and every line tax field`:
+  - Authenticates as `admin` and creates a product and an order with one line (price `'19.90'`, rate `0.22`).
+  - Requests `GET /orders/{id}` with the bearer token.
+  - Expects status 200 and these values:
+    - `items[0].product.taxRate` is `0.22`.
+    - `items[0].taxAmount` is `'7.18'`.
+    - `items[0].netAmount` is `'32.62'`.
+    - `netTotal` is `'32.62'`.
+    - `taxTotal` is `'7.18'`.
 
 ## Relationships
-
-- **`@modules/orders/tests/factories`** (`createOrder`) — creates the test order with the supplied taxed line.
-- **`@modules/products/tests/factories`** (`createProduct`) — creates the product that the line references.
-- **`@tests/http`** (`api`, `authenticateAs`) — provides the authenticated HTTP client used to hit the endpoint.
-- **`@tests/setup-test-db`** (`setupTestDb`) — initialises the in-memory / test database before the suite runs.
-- **`@tests/contract`** — imported as a side-effect module (test contract / global setup).
+- `@modules/products/tests/factories`: `createProduct()` supplies the product whose id goes into the line.
+- `@modules/orders/tests/factories`: `createOrder(user, lines)` persists the order that the endpoint then reads.
+- `@tests/setup-test-db`: `setupTestDb()` provides the database lifecycle for the suite.
+- `@tests/http`: `api()` is the HTTP client, and `authenticateAs('admin')` returns `{ bearer, user }`.
+- `@tests/contract`: imported for its side effects only. Its contents are not visible in this file.
 
 ## Notes
-
-- **Boundary with invoicing:** The module doc explicitly states that the invoice document's own VAT table is covered by `src/modules/invoicing/tests/unit/emails.test.ts`; this file only asserts the *order* response shape, not the rendered invoice.
-- **Tax-inclusive pricing:** The line price (`19.90`) is gross. The expected split (`netAmount 32.62`, `taxAmount 7.18` for qty 2 at 22 %) confirms the API returns tax *extracted* from a tax-inclusive total, not added on top.
-- **Decimal-as-string:** All monetary values in the assertions are strings (`'7.18'`, `'32.62'`), consistent with the codebase's convention of serialising money as fixed-point strings rather than numbers.
+- Monetary amounts are strings in the response, while `taxRate` is a number.
+- The expected numbers imply gross-inclusive pricing. 19.90 × 2 = 39.80 gross, of which 7.18 is tax and 32.62 is net.
+- The order is created directly from a pre-frozen line, so the test does not go through checkout or `freezeOrderLines`.

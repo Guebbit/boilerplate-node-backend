@@ -1,34 +1,32 @@
 ---
 source: src/modules/cart/tests/unit/routes.test.ts
-sha256: c6cfbea5b5a9abd182baa76ade5f8da29276d0c706e83b42394ad9578b5719fa
-generated_at: 2026-11-14T19:37:06.725757+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f7b1b65ea5b31de8bb7f0cbfc9a6d05f972ede45bd94fd770245c47a2a6fe286
+context_sha256: 36c90008fe09ef144495e4ec122c7c93650ed6994a67bb402b7fa3dd2ed9a44d
+generated_at: 2026-11-22T04:43:42.946962+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/unit/routes.test.ts
 
 ## Purpose
-
-Unit tests for the cart route table. Verifies the exact set and order of mounted endpoints, the authorization guards on each, the relative ordering of middleware in each chain (permission → budget → idempotency), and the caching/idempotency guarantees that protect per-caller state and bounded spending.
+Unit test that pins the cart module's route table: which endpoints are mounted, in what order, and which middleware guards each one. It makes adding or changing a cart route a deliberate act, and locks in the security and idempotency invariants of checkout, merge, and caching.
 
 ## Key elements
-
-- **`ALL`** – Canonical array of the ten cart route signatures (method + path). Serves as the single source of truth for which endpoints exist and in what order.
-- **`describe("cart routes — what is mounted")`** – Asserts `routeSignatures(router)` equals `ALL` exactly (order-sensitive).
-- **`describe("cart routes — authorization")`** – Iterates every entry in `ALL` and asserts `guardsOn` includes `isAuth`.
-- **`describe("cart routes — who spends")`** – Confirms only `POST /checkout` carries `requirePermissionGuard`, and that it is ordered *after* `isAuth`.
-- **`describe("cart routes — the checkout budget")`** – Asserts the `checkout` budget appears on `POST /checkout` alone, and that it sits between `requirePermissionGuard` and `idempotencyKey` in the chain.
-- **`describe("cart routes — a merge …")`** – Asserts `POST /merge` is idempotent (`idempotencyKey`) and that its own `cart-merge` budget is consumed *before* the idempotency ledger.
-- **`describe("cart routes — caching")`** – Asserts `POST /checkout` invalidates the `products` cache; asserts **no** cart route calls `setCache` (per-caller state must never be shared).
-- **Mock setup (top of file)** – `@infrastructure/http/middlewares/cache` and `@infrastructure/http/middlewares/rate-limit` are replaced with `cacheMock()` / `securityMock()` pulled from `@tests/routes`.
+- `ALL`: the explicit list of the 10 expected route signatures (e.g. `GET /summary`, `POST /checkout`, `POST /merge`, `PATCH /items/:productId`). It is the source of truth for the "mounted" test and the iteration set for the others.
+- **Mounted endpoints**: `routeSignatures(router)` must equal `ALL` exactly, including order.
+- **Authorization**: every route in `ALL` must have `isAuth` among its guards.
+- **Who spends**: only `POST /checkout` carries `requirePermissionGuard`, and `isAuth` must come before it in the guard list.
+- **Checkout budget**: only `POST /checkout` has a `checkout` entry in its chain. That entry sits after `requirePermissionGuard` and before `idempotencyKey`. An in-file comment explains why: a refused caller must not spend the budget, and a replayed request must not escape it.
+- **Merge**: `POST /merge` includes `idempotencyKey`. Its own `cart-merge` budget entry must be present and come before `idempotencyKey`.
+- **Caching**: no route's chain may contain an entry starting with `setCache`, because a cart is per-caller state and a shared cache could serve one shopper's cart to another.
 
 ## Relationships
-
-- **`src/modules/cart/routes.ts`** – The module under test. This file imports its exported `router` and inspects its route table and middleware chains via the test helpers.
-- **`tests/support/routes.ts`** – Provides the three introspection helpers (`routeSignatures`, `guardsOn`, `chainOf`) used throughout the tests, and the mock factories (`cacheMock`, `securityMock`) referenced in the `jest.mock` calls at the top of this file.
+- Imports `router` from `src/modules/cart/routes.ts`, the unit under test.
+- Imports `routeSignatures`, `guardsOn`, and `chainOf` from `tests/support/routes.ts` (via the `@tests/routes` alias). These helpers read the router's signatures, guard names, and middleware chain.
+- Also uses `cacheMock()` and `securityMock()` from `tests/support/routes.ts`, which stand in for the `@infrastructure/http/middlewares/cache` and `@infrastructure/http/middlewares/rate-limit` modules.
 
 ## Notes
-
-- Middleware **ordering** is the contract, not just presence. The tests assert `indexOf` relationships (e.g., budget after permission, budget before idempotency) because a wrong order changes security semantics (a refused caller spending budget, or a replayed request escaping it).
-- The "caches nothing" check is an **absence assertion**: the invariant is that zero cart routes write to a shared cache, so the test explicitly verifies the list is empty rather than relying on the other positive assertions.
-- The cache and rate-limit mocks are resolved through `tests/support/routes.ts` (imported as `@tests/routes`) rather than defined inline. This means the mock factories must be kept in sync with that support file.
+- The mocks are registered before the `router` import, so the router is built with the mocked middlewares.
+- The module header says every route is authenticated at the router level and needs no rule except `/checkout`, which needs `checkout:Cart` (see `shared/authorization-keys.generated.yaml`).
+- The header also says lines are written under `/items`, so no root parameter route competes with a literal segment.
+- The tests inspect middleware names, not behavior. Renaming a guard or budget entry (`isAuth`, `requirePermissionGuard`, `checkout`, `cart-merge`, `idempotencyKey`) will break them.

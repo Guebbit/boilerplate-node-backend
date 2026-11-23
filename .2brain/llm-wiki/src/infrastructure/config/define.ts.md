@@ -1,40 +1,49 @@
 ---
 source: src/infrastructure/config/define.ts
-sha256: 44f6bc7aed5f4ba380f202cfbb1947c77457f4dade6137c94040d5284a3462de
-generated_at: 2026-11-08T03:24:45.195397+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 97ceda9d1fe1dee6aaf0af36ce917f5c99e33f2e1bb28e5986d837a541d525d3
+context_sha256: 08ec2cf2c07c7683b55f7b855bb443a35eea7bc8b19365735ad242f23c9fea2a
+generated_at: 2026-11-22T02:43:36.320711+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/config/define.ts
 
 ## Purpose
-Defines the core configuration-slice system. `defineConfig` turns a named, typed set of environment-variable fields (with optional cross-field validation) into a memoised, type-safe accessor. This is the single layer where the environment is read and validated; every other part of the app consumes the typed result, following the Laravel/AdonisJS/NestJS/Spring convention of one parse point.
+Defines the "config slice" primitive: one owner's slice of the environment, made of a name, a shape of `Field`s keyed by environment-variable name, and an optional cross-field check. `defineConfig` turns that into a typed, memoised accessor. The environment is read in one layer and validated against a schema, and everything else reads the typed result. A boot gate (`assertConfigIn`) validates all slices at once and reports every problem, not just the first.
 
 ## Key elements
-- **`Shape`** — `Readonly<Record<string, Field<unknown>>>`; the type of a slice's field map keyed by env-var name.
-- **`Parsed<TShape>`** — Mapped type that resolves each `Field<T>` to its parsed type `T`.
-- **`FieldInfo`** — Type-erased per-field metadata (name, optional presence rule, sensitivity flag) used by the boot gate.
-- **`SliceProblems`** — Groups a slice's issues into `invalid`, `presence`, and `checks` buckets.
-- **`ConfigSlice`** — Type-erased view of a slice (name, fields, `inspect(env)` method) shared across slices and the boot gate.
-- **`ConfigAccessor<TShape>`** — A callable returning `Parsed<TShape>`, augmented with `.slice` (the `ConfigSlice`) and `.readIn(env)` (parse against a given environment without memoising or throwing).
-- **`ConfigError`** — Thrown when a value is refused or the boot gate finds problems.
-- **`isRelaxedIn(env)`** — Returns `true` when `NODE_ENV` is exactly `development` or `test`; used to skip presence checks.
-- **`ConfigDefinition<TShape>`** — Input to `defineConfig`: `name`, `shape`, optional `check(config, env) → string[]`.
-- **`defineConfig<TShape>(definition)`** — The main factory. Builds a `ConfigSlice`, a memoised reader (invalidates on store version change), and a non-throwing `readIn`. Returns the `ConfigAccessor`.
-- **`configProblems(slices, env)`** / **`assertConfigIn`** (truncated) — Aggregate all slices' problems, deduplicate, and throw a single `ConfigError` listing every mistake at boot.
-- **`presenceBroken`** — Per-member validation of comma-separated values (min length, placeholder detection, `minBytes` via hex/base64 decode).
-- **`parseField` / `parseShape`** — Zod `safeParse` per field; sensitive values are never included in error messages.
+- **`Shape` / `Parsed<TShape>`**: a slice's fields keyed by variable name, and the typed values derived from it.
+- **`FieldInfo`**: the type-erased description of a field (`name`, optional `presence` rule, `sensitive`).
+- **`SliceProblems`**: problems grouped as `invalid` (shape refused), `presence` (missing, too short, placeholder, or too few key bytes) and `checks` (cross-field messages).
+- **`ConfigSlice`**: the type-erased view of a slice. It has `name`, `fields` and `inspect(environment)`. Boot code and lists of slices use this view.
+- **`ConfigAccessor<TShape>`**: the callable returned by `defineConfig`. Calling it returns the typed values. It also carries:
+  - `.slice`: the type-erased `ConfigSlice`.
+  - `.readIn(environment)`: parses a given environment. It never throws and never memoises, and returns `undefined` on a misfit value.
+- **`ConfigError`**: the error thrown when a slice can't be read, and by the boot gate.
+- **`isRelaxedIn(environment)`**: true only when `NODE_ENV` is exactly `development` or `test`.
+- **`ConfigDefinition`**: the input to `defineConfig` (`name`, `shape`, optional `check(config, environment)` returning a list of problem strings).
+- **`defineConfig(definition)`**: builds the accessor and slice.
+  - `read` parses the store's current environment and memoises the result against `environmentVersion()`.
+  - A refusal throws `ConfigError("Invalid configuration (<name>): ...")` and is never cached.
+  - Parsed values are frozen.
+- **`assertConfigIn(slices, environment)`**: the boot gate. It refuses to boot on any problem in any slice, using the internal `configProblems` aggregator. Its body is not shown in the visible portion of the file.
+
+Internal helpers:
+- `parseField` and `parseShape` do the parsing.
+- `presenceBroken` and `presenceProblems` apply presence rules.
+- `decodedBytes` measures key length.
+- `describeShape` builds the `FieldInfo` list.
 
 ## Relationships
-- **`src/infrastructure/config/fields.ts`** — Source of the `Field<T>` and `Presence` types that shape every slice.
-- **`src/infrastructure/config/store.ts`** — Provides `currentEnvironment()`, `environmentVersion()`, and the `Environment` type that the memoisation and `inspect` logic read against.
-- **All `*/config.ts` files** (`src/app/config.ts`, `src/kernel/config.ts`, `src/infrastructure/adapters/config.ts`, `src/infrastructure/persistence/config.ts`, `src/infrastructure/security/config.ts`, `src/infrastructure/i18n/config.ts`, `src/infrastructure/observability/config.ts`, `src/infrastructure/http/config.ts`, `src/infrastructure/runtime/config.ts`, `scenarios/config.ts`, etc.) — Each defines its slice via `defineConfig` and exports the resulting accessor; the boot gate (`assertConfigIn`) in this file validates all of them collectively.
-- **`src/infrastructure/adapters/antibot-providers/index.ts`**, **`src/infrastructure/observability/analytics/index.ts`** — Consume specific slices (e.g. antibot ring keys, analytics keys) whose presence/length rules are declared here.
+- Imports the `Field` and `Presence` types from `./fields` (`src/infrastructure/config/fields.ts`), which supply each field's `schema`, `sensitive` flag and `presence` rule.
+- Imports `currentEnvironment`, `environmentVersion` and the `Environment` type from `./store` (`src/infrastructure/config/store.ts`). The accessor reads the environment and its version from there, and the version drives memoisation.
+- The neighbouring `config.ts` modules (`scenarios/config.ts`, `src/app/config.ts`, `src/infrastructure/adapters/config.ts`, `src/infrastructure/http/config.ts`, `src/infrastructure/i18n/config.ts`, `src/infrastructure/observability/config.ts`, `src/infrastructure/persistence/config.ts`, `src/infrastructure/runtime/config.ts`, `src/infrastructure/security/config.ts`, `src/kernel/config.ts`), plus `src/infrastructure/adapters/mail-transports.ts` and `src/infrastructure/adapters/antibot-providers/index.ts`, are graph neighbours. Per the module doc, each owner defines its slice with `defineConfig`. The file content shown does not confirm the details of how each one uses it.
 
 ## Notes
-- **Memoisation invalidation** is keyed on `environmentVersion()` from the store, not on a deep-equality check. A parse failure is *never* memoised, so a bad value throws on every read until fixed.
-- **Credential safety:** `parseField` omits the raw value from error messages when `field.sensitive` is `true`. Presence checks similarly never log the value.
-- **`decodedBytes`** checks hex *before* base64 because every hex string is also valid base64; the alphabet is validated first because `Buffer.from(x, 'base64')` silently skips invalid characters.
-- **`readIn`** never throws and never memoises — it is designed for cross-slice `check` callbacks that need to read another slice's values from a *given* environment.
-- **Deduplication** in `configProblems`: if two slices both declare the same variable (e.g. an adapter reads it, a module adds a presence rule), the error lists it once.
-- The file documents itself as the "one layer" boundary; downstream code should never call `process.env` or `currentEnvironment()` directly.
+- **Test environment:** with `NODE_ENV=test`, `inspect` reports only shape problems. Presence and cross-field checks are skipped.
+- **Production-only presence rules:** a presence rule with `productionOnly` is skipped when the environment is relaxed (`development` or `test`). `skipWhen(environment)` can also exempt a field.
+- **Secrets stay out of messages:** error messages for `sensitive` fields never include the raw value. Other fields include up to 60 characters of it.
+- **Rings of values:** presence is checked per member of a comma-separated value, so a placeholder or truncated key anywhere in a ring fails. Blank members, such as from a trailing comma, are ignored. A `vN:` prefix is stripped before the byte count is measured.
+- **Key decoding:** `minBytes` is checked by trying hex first and then base64, after validating the alphabet. A value that is neither counts as 0 bytes.
+- **Duplicate variables across slices:** `configProblems` deduplicates identical messages, so a variable declared by two slices is reported once.
+- **Cross-slice checks:** a check in one slice should read another slice through its `readIn`, not through raw variables, so each variable has a single parser.

@@ -1,31 +1,36 @@
 ---
 source: shared/cases/rate-limit-keys.cases.yaml
-sha256: 21eb2f7d8d1c547cd71ef4c2f1bcccc8e68e7bc23bd4a3ef946c183e864ffa17
-generated_at: 2026-11-08T03:06:05.749861+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 21eb2f7d8d1c547cd71ef4c2f1bcccc8e68e7bc23bd4a3ef946c183e864ffa17
+context_sha256: 32253ad8052a46dea0ce14c076e7241d3597d570d1677bf8348abdeb27167703
+generated_at: 2026-11-22T02:22:06.211673+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/cases/rate-limit-keys.cases.yaml
 
 ## Purpose
 
-Declares the expected bucketing keys a rate-limiter assigns to a request across three tiers—`address` (per-connection), `block` (per-subnet), and `identity` (per-user). It pins down the exact masking, unwrapping, pseudonymisation, and fallback rules so that any reimplementation or refactoring stays compatible with the documented behavior.
+A shared, data-driven test-case table describing how a request is bucketed by a rate-limit budget. Each entry gives inputs (IP, optional request body, optional pseudonym root) and the expected bucket key, so any implementation can be checked against the same expectations.
 
 ## Key elements
 
-- **`kind: address`** — Asserts the per-connection key. IPv4 is used verbatim; IPv6 is masked to /56 (express-rate-limit default); IPv4-mapped IPv6 (`::ffff:a.b.c.d` and hex `::ffff:xxxx:xxxx`) is unwrapped to the bare IPv4.
-- **`kind: block`** — Asserts the per-subnet key. IPv4 → /24, IPv6 → /48, mapped → unwrapped then /24. A request with no address yields the literal key `unknown`.
-- **`kind: identity`** — Asserts the per-user key. A non-blank, string `email` (or `username`) is normalised (lower-cased, trimmed) and HMAC-pseudonymised under the `rate-limit` purpose using the supplied `root`. Priority: `email` > `username`; a present-but-blank field *wins* and yields `anon:<block>` rather than falling through. Non-string values (e.g. `42`) are treated as absent.
-- **`root`** — A fixed test-only HMAC secret (`shared-cases-root-secret-…`) used to derive the expected pseudonym hash in `identity` cases.
+All entries live under a top-level `cases:` list. Each has a `name`, a `kind`, inputs, and the expected `key`.
+
+- **`kind: address`**: plain address key. IPv4 is used as is. IPv6 is masked to its `/56` (the express-rate-limit default). An IPv4-mapped IPv6 address is unwrapped first.
+- **`kind: block`**: wider block key. IPv4 maps to `/24` and IPv6 to `/48`. IPv4-mapped addresses are unwrapped first, including the hex spelling (`::ffff:cb00:7105`). A request with no `ip` yields the stable key `unknown`.
+- **`kind: identity`**: a budget keyed on a submitted email. Inputs are `root`, `ip` and `body`. The key is a keyed HMAC (64 hex chars) of the normalised address under the `rate-limit` purpose. Otherwise it is `anon:<block>`.
+  - `email` and `username` give the same key (lowercased and trimmed).
+  - `email` wins over `username`.
+  - A non-string, blank, `{}` or missing body falls back to `anon:<block>`.
+  - A blank `email` still wins over `username`, so it names nobody and does not fall through.
+- `root` is the pseudonym root, a test-only public value: `shared-cases-root-secret-do-not-use-in-production-0001`.
 
 ## Relationships
 
-- **shared/cases/crypto.cases.yaml** — The `identity` cases depend on the HMAC-pseudonymisation function (purpose `rate-limit`) whose behaviour is specified there. The `key` values in this file are the expected outputs of that function.
-- **shared/cases/normalize-email.cases.yaml** — The lower-casing and trimming applied before hashing in `identity` cases is the normalisation contract defined in that file.
+- Sits alongside `shared/cases/crypto.cases.yaml` and `shared/cases/normalize-email.cases.yaml` in the shared cases set. The identity cases depend on their behaviours: the keyed HMAC and `rate-limit` purpose (crypto) and the lowercase/trim normalisation (normalize-email). The expected hash values here are not derived in this file.
 
 ## Notes
 
-- `root` is explicitly test-only; the value is visible in the file and must never appear in production configuration.
-- A blank `email` (`'  '`) takes precedence over a valid `username`—it does **not** fall through. This is a deliberate design choice, not a bug.
-- IPv4-mapped IPv6 must be recognised in **both** dotted-decimal (`::ffff:203.0.113.5`) and hex (`::ffff:cb00:7105`) spellings; both forms must unwrap to the same IPv4 key.
-- The /56 and /48 masks follow `express-rate-limit` conventions; changing the mask width without updating these cases will silently break rate-limit bucketing.
+- The `root` secret is intentionally public and must never be used in production.
+- The expected identity hash is the same for the three cases that name `ada@example.com` (`'  Ada@Example.com '`, `ADA@example.com`, and `email` plus a different `username`).
+- Several `address` and `block` cases check bucket boundaries: two addresses in one `/56` share a key, adjacent `/24`s differ, and different `/48`s differ.

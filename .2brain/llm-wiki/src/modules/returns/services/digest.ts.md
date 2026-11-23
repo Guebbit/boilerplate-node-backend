@@ -1,31 +1,30 @@
 ---
 source: src/modules/returns/services/digest.ts
-sha256: 874b1d864f99e21647c5b2d8aa604dad66dfdbb0610b703f36d3380d3b0fdd1a
-generated_at: 2026-11-14T21:38:53.202336+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:29:48.089612+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/digest.ts
 
 ## Purpose
-
-Produces the two headline counts the daily staff digest needs from the returns module: how many requests are still undecided past their allowed waiting period, and how many approved returns are overdue for the buyer's goods. It returns bare numbers, not records.
+Computes the two return-related counts used by the daily staff digest: requests still undecided after an allowance, and approved returns whose goods are overdue. It returns counts only. The module doc points to the staff-digest section of the shop-tasks module documentation; the referenced `docs/modules/shop-tasks.md` is not in this repository (the shop-tasks module is `src/modules/shop-tasks/module.ts`).
 
 ## Key elements
-
-- **`ReturnsDigest`** (interface) — the result shape: `undecided: number` and `returnsAwaitingGoods: number`.
-- **`ReturnsDigestAllowances`** (interface) — caller-supplied thresholds: `decisionDays` (how long a request may sit) and `sendBackOverdueDays` (how long an approved return may wait for goods/proof).
-- **`returnsDigest(now, allowances)`** (function) — the sole logic export. Runs two `count` queries in parallel via `Promise.all` and maps the results into a `ReturnsDigest`.
+- `ReturnsDigest` (interface): result shape with `undecided` and `returnsAwaitingGoods`.
+- `ReturnsDigestAllowances` (interface): inputs `decisionDays` and `sendBackOverdueDays`.
+- `returnsDigest(now, allowances)`: runs two `returnRepository.count` queries in parallel with `Promise.all` and resolves to a `ReturnsDigest`.
+  - **undecided**: status is `requested` and `createdAt` is at or before `now - decisionDays`.
+  - **returnsAwaitingGoods**: status is `approved`, kind is `return`, and `proofOfSendingAt` does not exist. It also needs one of these:
+    - reason `withdrawal` with `requestedAt` at or before the overdue cutoff.
+    - reason `defective` or `wrong_item` with `decidedAt` at or before the overdue cutoff.
 
 ## Relationships
-
-- **`src/types/index.ts`** — imports `ReturnStatus`, `ReturnKind`, and `ReturnReason` enums used to build the query filters.
-- **`src/domain-primitives/time.ts`** — imports the `DAY_MS` constant to convert the day-based allowances into millisecond offsets.
-- **`src/modules/returns/repository.ts`** — imports `returnRepository` from this file and calls its `count` method twice (once for undecided, once for overdue-goods).
-- **`src/modules/returns/services/index.ts`** — barrel re-exports `returnsDigest`, `ReturnsDigest`, and `ReturnsDigestAllowances` for downstream importers.
+- `@domain-primitives/time` (`src/domain-primitives/time.ts`): supplies `DAY_MS` for converting day allowances to milliseconds.
+- `../repository` (`src/modules/returns/repository.ts`): supplies `returnRepository`, whose `count` method runs both queries.
+- `@types` (`src/types/index.ts`): supplies the `ReturnKind`, `ReturnReason` and `ReturnStatus` enums used in the filters.
+- `src/modules/returns/services/index.ts` is a neighbor in the graph. This file does not import it, so the link is likely a re-export or aggregation there, but that isn't visible here.
 
 ## Notes
-
-- The "overdue" timestamp differs by reason: for **withdrawal** the clock starts at `requestedAt` (the buyer's initial action), but for **defective** / **wrong_item** it starts at `decidedAt` (the staff approval moment). Both are compared against the same `overdueBefore` cutoff, so the two `$or` branches are not interchangeable.
-- The second count requires `kind: ReturnKind.return` and `proofOfSendingAt: { $exists: false }`, meaning a return that already has proof-of-sending is excluded regardless of age.
-- The function is async purely to match the repository's promise-based API; there is no internal branching or I/O beyond the two `count` calls.
+- The overdue clock differs by reason. For withdrawals it starts at `requestedAt`, when the buyer stated the withdrawal. For faulty or wrong items it starts at `decidedAt`, when staff approved. In both cases this is when the buyer's days to send the goods began.
+- The "no goods" condition is checked only through the absence of `proofOfSendingAt`. The query has no separate received-goods check.
+- `now` is passed in rather than read from the clock, so results are deterministic for a given instant.

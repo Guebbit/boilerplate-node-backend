@@ -1,30 +1,26 @@
 ---
 source: src/modules/sitemap/controllers/get-sitemap-index.ts
-sha256: 916e44d1e7c2e203fa9cc8393193937f78817e5e118050c7b237c0c998967e58
-generated_at: 2026-11-08T08:21:53.427897+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 916e44d1e7c2e203fa9cc8393193937f78817e5e118050c7b237c0c998967e58
+context_sha256: 15ea135da7acf6996b990d4a2d9a6885e45f565acf1fb7d6ebfb8aa1d3a51c1b
+generated_at: 2026-11-22T07:48:14.834826+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/sitemap/controllers/get-sitemap-index.ts
 
 ## Purpose
-
-Express handler for `GET /sitemap/index.xml`. It retrieves the list of sitemap files from the sitemap service and streams a Sitemap Index XML document back to the client — the top-level file that `robots.txt` points to and that references the individual per-page sitemaps.
+Express controller for `GET /sitemap/index.xml`. This is the sitemap index that `robots.txt` points to. It lists the other sitemap files: the shop pages file and one file per run of products.
 
 ## Key elements
-
-- **`getSitemapIndex`** (exported) — Express route handler `(req, res)`. Calls `sitemapService.listFiles()`, then passes the resulting file list to `sendXml` wrapped in a `SitemapIndexStream`. Errors are forwarded to `catchAs(response, 'getSitemapIndex')`.
-- **`SitemapIndexStream`** (imported from `sitemap`) — a writable stream that emits the `<sitemapindex>` XML envelope. It receives the array of file descriptors produced by the service.
+- `getSitemapIndex(_request, response)`: the exported request handler. It calls `sitemapService.listFiles()`, then passes the result to `sendXml` together with a new `SitemapIndexStream` from the `sitemap` package. Any rejection is handled by `catchAs(response, 'getSitemapIndex')`.
 
 ## Relationships
-
-- **`src/modules/sitemap/service.ts`** — `getSitemapIndex` calls `sitemapService.listFiles()` to obtain the array of sitemap file descriptors that populate the index.
-- **`src/modules/sitemap/controllers/send-xml.ts`** — `getSitemapIndex` delegates actual XML serialisation and the HTTP response write to the shared `sendXml` helper, passing the `SitemapIndexStream` as the stream argument.
-- **`src/infrastructure/http/controller.ts`** — provides `catchAs`, which the handler uses to convert a rejected Promise into a standardised error response.
-- **`src/modules/sitemap/routes.ts`** — registers `getSitemapIndex` as the handler for the `GET /sitemap/index.xml` route.
+- `src/modules/sitemap/service.ts` (`sitemapService`): `listFiles()` supplies the list of sitemap files to include in the index.
+- `src/modules/sitemap/controllers/send-xml.ts` (`sendXml`): writes the XML response, given the response object, the file list and the stream.
+- `src/infrastructure/http/controller.ts` (`catchAs`): builds the error handler for the promise chain, labelled `'getSitemapIndex'`.
+- `src/modules/sitemap/routes.ts`: the file where this handler is wired to a route. The route definition is not visible in this file.
 
 ## Notes
-
-- The request parameter is intentionally unused (`_request`); the route carries no query or path params.
-- The file is a `@module` (no default export) — consumers import the named `getSitemapIndex` symbol.
-- The handler is a Promise chain, not an `async` function; `catchAs` is attached as the `.catch` continuation rather than wrapped in a `try/catch`.
+- The request argument is unused (`_request`).
+- The handler returns a promise chain and does not use `async`/`await`.
+- Errors are not handled in this file. They are delegated to `catchAs`.

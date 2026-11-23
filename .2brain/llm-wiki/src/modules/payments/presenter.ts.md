@@ -1,36 +1,35 @@
 ---
 source: src/modules/payments/presenter.ts
-sha256: 43690acaeb79cb83edd344927550ac6b48fa79370675d95a482618e6307cc56b
-generated_at: 2026-11-14T21:02:37.679467+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T06:47:04.159980+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/presenter.ts
 
 ## Purpose
-
-The single presentation boundary that turns a stored `PaymentDocument` into the `Payment` wire contract. Every write endpoint (confirm, offline, refund, sync, intent) serialises its response through this file. It produces two views: the payer's default view and a staff view that additionally exposes provider IDs and refund failure reasons — fields the payer-facing serializer always strips.
+Turns a stored payment document into the `Payment` wire contract. It is the single place this conversion happens: every write endpoint (confirm, offline, refund, sync, intent) answers with this output alone, and `withActions` in the payments `services/view.ts` builds on it for reads that also need `actions`. It serves two audiences: the payer (default) and staff, who additionally see provider ids and failed-refund reasons.
 
 ## Key elements
-
-- **`presentPayment(document, staff?)`** — the sole export. Takes a stored `PaymentDocument`, computes `displayStatus` and (when applicable) `nextAction`, marks refunds owed another way, and returns a `Payment`. When `staff` is true, also injects provider refs, per-refund failure reasons, and the disputes array (if non-empty).
-- **`nextActionOf(document)`** — returns the buyer's pending `PaymentNextAction` (bank-transfer beneficiary, IBAN, BIC, reference, deadline) or `undefined`. Reads beneficiary/IBAN/BIC **live** from deployment config; reference and deadline come from the document.
-- **`staffFieldsOf(raw)`** — extracts the staff-only slice (`providerRef`, per-refund `providerRefundRef` / `failureReason`) from the stored row.
-- **`withStaffFields(wire, staff)`** — merges those staff fields onto an already-serialised `Payment`.
-- **`StaffFields`** (interface) — shape of the staff-only additions.
+- **`presentPayment(document, staff = false)`** (exported): Calls `document.toJSON()` and casts the result to the wire shape. Then it:
+  - marks refunds with `owedAnotherWay: true` where `owesBuyerAnotherWay` says so;
+  - adds `displayStatus` from `displayStatusOf`;
+  - adds `nextAction` when there is one.
+  
+  If `staff` is true, it also includes `disputes` (only when non-empty) and the staff-only fields. For payers, `disputes` is stripped.
+- **`nextActionOf(document)`** (internal): Returns bank-transfer instructions (`type: 'bank_transfer'`, beneficiary, IBAN, optional BIC, reference, `payBy` as an ISO string). It returns this only when the method is `bank_transfer`, the status is `requires_action`, the payment has `transferReference` and `payBy`, and the deployment config supplies a beneficiary and IBAN. Otherwise it returns `undefined`.
+- **`staffFieldsOf(raw)`** (internal): Extracts `providerRef` and, per refund, `providerRefundRef`, `failureReason` and `paidOutside` (`method` plus optional `reference`). It copies these field by field.
+- **`withStaffFields(wire, staff)`** (internal): Merges the staff fields into the wire payment. Refunds are matched to the staff fields by array index.
 
 ## Relationships
-
-- **`src/types/index.ts`** — imports the `Payment`, `PaymentNextAction`, and `Refund` wire types that define the output contract.
-- **`src/modules/payments/config.ts`** — calls `bankTransferBeneficiary`, `bankTransferBic`, `bankTransferIbanFriendly` to populate `nextAction` from the current deployment config.
-- **`src/modules/payments/domain/display-status.ts`** (via `./domain`) — calls `displayStatusOf` to derive the buyer-facing status label.
-- **`src/modules/payments/domain/lifecycle.ts`** (via `./domain`) — calls `owesBuyerAnotherWay` to flag refunds the buyer will be asked to receive by another method.
-- **`src/modules/payments/model.ts`** — imports the `PaymentDocument` and `RefundRecord` stored-shape types.
-- **`src/modules/payments/services/view.ts`** — downstream consumer; its `withActions` wraps this presenter's output to add `actions` for read endpoints.
+- `./config`: `bankTransferBeneficiary`, `bankTransferBic` and `bankTransferIbanFriendly` are read live on each call, not stored on the payment.
+- `./domain` (`display-status.ts`, `lifecycle.ts`, exposed via `index.ts`): supplies `displayStatusOf` and `owesBuyerAnotherWay`.
+- `./model`: provides the `PaymentDocument` and `RefundRecord` types and the `toJSON` transform that the presenter relies on.
+- `@types` (`src/types/index.ts`): provides the `Payment`, `PaymentNextAction` and `Refund` contract types.
+- `src/modules/payments/services/view.ts`: builds `withActions` on top of this presenter.
+- The integration tests (`canceled`, `refunds`, `transfer`) exercise payment output; their specifics are not visible here.
 
 ## Notes
-
-- `document.toJSON()` performs the `_id` → `id` rename and date-to-ISO-string transform; the result is cast to the wire shape because the compiler cannot see through the generic `toJSON`.
-- Beneficiary, IBAN, and BIC are **not** frozen on the document — they are re-read from config on every presentation, so a config change immediately affects all still-open transfers. A deployment that has since removed bank transfers simply yields `undefined` for `nextAction`.
-- `disputes` is fully omitted from the payer view and included in the staff view only when the array is non-empty.
-- `owesBuyerAnotherWay` lets the payer see only a boolean `owedAnotherWay` flag on the refund; the actual alternative channel details remain staff-visible.
+- Bank transfer details are deliberately not frozen on the payment. A config change shows on every still-open transfer. If the deployment stops offering transfers, `nextAction` is omitted.
+- Staff and payer refund arrays are aligned by index. `withStaffFields` and the `owedAnotherWay` mapping both assume `document.refunds` and the serialized `refunds` have the same order.
+- The `toJSON() as Omit<Payment, ...>` cast is intentional. The stored document is typed as stored, not as the wire shape.
+- `paidOutside` is copied field by field because the stored value is a subdocument, and spreading it would carry its internals.

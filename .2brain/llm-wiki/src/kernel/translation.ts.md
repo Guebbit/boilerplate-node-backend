@@ -1,48 +1,53 @@
 ---
 source: src/kernel/translation.ts
-sha256: f2307e6f1244dce065496968285f5cde1e1cfd7c9a6f824f609b4331fa0a2a9a
-generated_at: 2026-11-08T03:55:37.518238+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6b8f474b11b39f3e94d4927f2fa363b10f74ddfe49f10b1bba93e13139b30096
+context_sha256: 32c6e7770461a2af7451b16b3597f675d57b2e66a5fcfa00deb18728ef37babe
+generated_at: 2026-11-22T03:14:57.369430+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/kernel/translation.ts
 
 ## Purpose
-
-Defines the **translation port**: the kernel-level contract for resolving user-authored content (product titles, category descriptions) into a caller's language and for cascade-removing translation rows on a hard delete. The kernel declares the interface; `modules/locales` registers the concrete implementation, so decorators and other kernel-adjacent code can depend on translation without importing `src/modules/*` and risking a circular dependency. The same port/adapter pattern used by `kernel/authentication.ts`'s `AuthResolver`.
+Defines the kernel's "translation port": a hook through which read paths resolve user-authored content (a product's title, a category's description) into the caller's language, and through which a hard delete removes an entity's translation rows. `modules/locales` registers the implementation, mirroring how `src/kernel/authentication.ts`'s `AuthResolver` is registered by `account`. Code such as a `createRepository` decorator can therefore depend on translation without importing `src/modules/*` and creating a cycle.
 
 ## Key elements
-
-- **`TranslationPort`** (interface) — the full contract: `resolve`, `removeAll`, `search`, `canPreviewDrafts`, `plan`, `write`, `readAll`, `readServed`. Registered once by `modules/locales`.
-- **`TranslatedFields`** / **`TranslationFieldChanges`** / **`TranslationBatch`** — core data types. An absent key means "untranslated", never `""`. Writes follow RFC 7396 merge semantics (string sets, `null` clears, absent leaves).
-- **`TranslationWriteSlot`** / **`TranslationWritePlan`** — the validated intermediate between `plan` (validate, no write) and `write` (apply, no validate).
-- **`registerTranslationPort`** — sets or replaces the port. Passing `undefined` unregisters.
-- **`resolveTranslations`** — read-path entry; returns an empty `Map` when unregistered or the id list is empty (callers never branch on wiring).
-- **`removeTranslations`** — hard-delete entry; returns `0` when unregistered. Joins the caller's Mongoose transaction via `session`.
-- **`searchTranslatedEntityIds`** — search entry; returns `[]` when unregistered.
-- **`previewDraftTag`** — reads the ambient request's preview locale from i18n context; `undefined` for workers/snapshots.
-- **`canPreviewDraftLanguages`** — delegates to the port; returns `false` when unregistered.
-- **`isTranslationAvailable`** — simple `translationPort !== undefined` check for UI affordances.
-- **`planTranslations`** — validate-half of a write. Unregistered, falls back to a single fallback-locale upsert; naming any other locale or leaving the fallback slot empty yields a `ResponseReject` (422).
+- **Types**
+  - `TranslatedFields`: `Record<string, string>`. An absent key means untranslated, never an empty string.
+  - `TranslationFieldChanges`: one locale's write in RFC 7396 style. A string sets the field, `null` clears it, and an absent key leaves it alone.
+  - `TranslationBatch`: locale tag mapped to `{ fields, origin? }`, or to `null` to delete that locale's row.
+  - `TranslationWriteSlot` and `TranslationWritePlan`: the validated output of `plan`, either an upsert or a delete per locale, plus `fallbackLocale`.
+- **`TranslationPort`** is the interface the module supplies:
+  - `resolve`: batch lookup over the full locale-candidate chain, with an optional `draftTag`.
+  - `removeAll`: removes every locale's row for one entity, optionally inside a session.
+  - `search`: returns entity ids whose translated fields match a pre-escaped pattern.
+  - `canPreviewDrafts`: whether a caller may read draft-language text.
+  - `plan`: validates a batch without writing and needs no entity id.
+  - `write`: applies an already-validated plan. It does not touch cache tags or audit trails, but it does write the derived index column.
+  - `readAll`: every locale's row for an entity, unresolved.
+  - `readServed`: only served languages plus the fallback.
+- **`registerTranslationPort(port?)`** sets or clears the module-level port.
+- **Safe wrappers** that no-op when no port is registered:
+  - `resolveTranslations`: returns an empty map, also for an empty id list.
+  - `removeTranslations`: returns 0.
+  - `searchTranslatedEntityIds`: returns `[]`.
+  - `canPreviewDraftLanguages`: returns `false`.
+  - `isTranslationAvailable`: returns whether a port is registered.
+- **`previewDraftTag()`** returns the ambient locale when the request-bound locale context has `preview` set, and `undefined` otherwise.
+- **`planTranslations`** is the validate half of a write. Unregistered, it falls back to fallback-language-only content. The rest of its body and any further exports are not shown in the excerpt I was given.
 
 ## Relationships
-
-- **`src/infrastructure/i18n/index.ts`** — imports `t`, `getCurrentLocale`, `getFallbackLocale`, `getLocaleContext`, `localeCandidatesFor`. `localeCandidatesFor` is pure locale-chain maths that stays in infrastructure, not in this port.
-- **`src/infrastructure/i18n/context.ts`** / **`catalog.ts`** — underlying i18n context and catalog the port's resolve/search paths depend on.
-- **`src/infrastructure/http/response.ts`** — imports `fieldError`, `generateReject`, `ResponseReject` for the `plan` validation return type.
-- **`src/infrastructure/persistence/versioning.ts`** — imports `carryVersion` for optimistic-concurrency bookkeeping on writes.
-- **`src/modules/locales/module.ts`** — calls `registerTranslationPort` from its `onRegistered` hook; the sole production registrar.
-- **`src/modules/locales/services/translations.ts`** — implements `TranslationPort` (the adapter side).
-- **`src/kernel/middlewares/locale-preview.ts`** — binds the preview tag that `previewDraftTag` later reads.
-- **`src/modules/products/services/read.ts`** / **`lookups.ts`** — product read paths that call `resolveTranslations` and `searchTranslatedEntityIds`.
-- **`src/modules/orders/services/snapshot.ts`** — order snapshots resolve translations at capture time (no preview tag, so draft text cannot leak into a message that outlives the request).
-- **`src/modules/example/services/crud.ts`** — example caller exercising `plan` + `write` in the same transaction as its own entity write.
-- **`src/app.ts`** — application bootstrap; indirectly ensures `modules/locales` is loaded so the port is registered before request handling.
+- **`@infrastructure/i18n`** (`src/infrastructure/i18n/index.ts`, `context.ts`, `catalog.ts`): the file imports `t`, `getCurrentLocale`, `getFallbackLocale`, `getLocaleContext` and `localeCandidatesFor` from it. `previewDraftTag` reads the locale context. `localeCandidatesFor` stays in i18n because it is pure locale-chain maths.
+- **`src/infrastructure/http/response.ts`**: supplies `fieldError`, `generateReject` and the `ResponseReject` type, used for rejections such as the 422 in `planTranslations`.
+- **`src/infrastructure/persistence/versioning.ts`**: `carryVersion` is imported.
+- **`modules/locales`** (`src/modules/locales/module.ts`, `src/modules/locales/services/translations.ts`): the module that owns languages and registers the port. This follows from the file's own doc comment.
+- **`src/kernel/middlewares/locale-preview.ts`**: binds the preview flag that `previewDraftTag` reads. This follows from the doc comment on `previewDraftTag`.
+- **Other graph neighbors** (`src/modules/products/services/read.ts` and `lookups.ts`, `src/modules/orders/services/snapshot.ts`, `src/modules/example/services/crud.ts`, `src/app.ts`, `scenarios/products.ts`): I can't confirm from the visible content how they use this file. The doc comments suggest product reads, hard deletes and order snapshots are among the consumers.
 
 ## Notes
-
-- **Unregistered is a valid state.** Unit tests that never import `modules/locales` get no-op returns from every entry point by design.
-- **`plan` before `write`.** `write` never validates; calling it with an unvalidated plan can corrupt data. `plan` is also entity-id-free, so a caller creating a new entity in the same request can validate translations before the row exists.
-- **`removeAll` is hard-delete only.** A soft delete (restore candidate) must not strip translations — a restored product with no translated name is the bug this distinction prevents.
-- **`write` never touches the entity's cache tag or audit trail.** The caller writing its own document owns both, in the same transaction. The derived search index column *is* written regardless of caller.
-- **`localeCandidatesFor` is deliberately not a port method.** It is pure arithmetic on locale tags and lives next to `getFallbackLocale` in `@infrastructure/i18n`.
+- Soft deletes must not call `removeAll`. A soft-deleted entity is a restore candidate, and restoring a product with no translated name is the bug the port exists to prevent.
+- Only `removeAll` is exposed for removal. A `null` in a PATCH and a language's own delete cascade are handled inside `modules/locales` against its own repository.
+- `previewDraftTag` returns nothing for workers or order snapshots run under `runWithLocale`, so draft text can't reach messages that outlive the request.
+- `write` never validates, so callers must run `plan` first or risk corrupting data.
+- A caller can pass `plan` a batch for an entity that doesn't exist yet, such as `POST /products`, since validation checks only locales and field names.
+- With no port registered, the shop is effectively monolingual, but writing fallback-language content still works.

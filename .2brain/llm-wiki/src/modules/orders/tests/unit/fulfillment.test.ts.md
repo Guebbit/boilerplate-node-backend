@@ -1,35 +1,38 @@
 ---
 source: src/modules/orders/tests/unit/fulfillment.test.ts
-sha256: 34f8b75e341faa48d8c21b02b96a0257872aeccf7134820cc3cc5fad8b2a62a1
-generated_at: 2026-11-14T20:57:05.568183+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 34f8b75e341faa48d8c21b02b96a0257872aeccf7134820cc3cc5fad8b2a62a1
+context_sha256: 4a5b18b9c25364db1ae727a6017b1e26a0169836d469d260ae3190c40c6bda71
+generated_at: 2026-11-22T06:36:21.770206+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/fulfillment.test.ts
 
 ## Purpose
-
-Unit tests that pin down the projection logic for order fulfillment status: the truth table for `fulfillmentStatusOf`, the agreement between that function and the Mongo query builder `fulfillmentStatusFilter`, and the settlement-action decision in `settlementFor`. They exist so that any change to the domain's status derivation or its query filter is caught by a concrete, enumerated matrix of order shapes.
+Unit tests for the order fulfillment projection. They cover every row of the `fulfillmentStatusOf` table in read order (first match wins), check that the listing filter `fulfillmentStatusFilter` agrees with it, and check the `settlementFor` transitions.
 
 ## Key elements
-
-- **`summary(fields)`** – local helper that spreads `NO_FULFILLMENT` then overrides with the given partial, producing a fully-populated `FulfillmentSummary` for test fixtures.
-- **`describe('fulfillmentStatusOf')`** – 14-row table-driven test covering every branch of the first-match-wins projection (pending/canceled → `unfulfilled`; delivered → `fulfilled`; shipped → `shipped`; partially shipped → `partially_fulfilled`; fully held → `on_hold`; otherwise → `in_progress`/`unfulfilled`). Also asserts behavior when no summary is passed at all.
-- **`SAMPLES`** – 12 representative order documents (status + optional fulfillment) used as the ground truth for filter tests.
-- **`matches(node, sample)`** – a minimal in-test Mongo query evaluator supporting `$and`, `$or`, `$nor`, `$in`, `$ne`, `$gt`, dotted-path equality, and the single `$expr` equality the filter uses. It lets the suite verify the filter without a database.
-- **`describe('fulfillmentStatusFilter')`** – iterates every value of `OrderFulfillmentStatus` and asserts the filter selects exactly the `SAMPLES` whose `fulfillmentStatusOf` value matches. A dedicated test also pins the `awaiting_shipment` filter to `isAwaitingGoods` and confirms it never selects shipped/fulfilled orders.
-- **`describe('settlementFor')`** – 9-row table covering the settlement-action decision matrix (returns `'ship'`, `'deliver'`, `'complete'`, `'undeliverable'`, or `undefined`) across status × summary combinations.
+- `summary(fields)` — test helper. Spreads a partial over `NO_FULFILLMENT`, so unspecified fields are zero.
+- `describe('fulfillmentStatusOf')` — a table-driven `it.each` whose rows are labeled by table row number (1–4). Expected results:
+  - Row 1 is decided by status alone. `pending` and `canceled` give `unfulfilled`, `delivered` gives `fulfilled` and `shipped` gives `shipped`. A pending order stays `unfulfilled` whatever the summary says.
+  - Row 2: something shipped and units remain gives `partially_fulfilled`, even if the rest is held.
+  - Row 3: nothing shipped and every remaining unit held gives `on_hold`, which beats `in_progress` and applies to `paid` orders.
+  - Row 4: `processing` with only some units held, or with no summary, gives `in_progress`. `paid` gives `unfulfilled`.
+  - One extra test calls `fulfillmentStatusOf` with no summary argument.
+- `SAMPLES` — a fixed list of order documents (status plus optional summary) that covers every fulfillment value.
+- `matches(node, sample)` — a small in-test Mongo-style matcher. It supports `$and`, `$or`, `$nor`, `$in`, `$ne`, `$gt`, equality on dotted paths (keys prefixed with `fulfillment.`), and a single `$expr` clause.
+- `describe('fulfillmentStatusFilter')`:
+  - For each value of `OrderFulfillmentStatus`, the filter must select exactly the samples whose `fulfillmentStatusOf` equals that value. Each value must be reachable by at least one sample.
+  - `'awaiting_shipment'` must select exactly the samples where `isAwaitingGoods(status)` is true. Each selected sample must read `unfulfilled`, `in_progress`, `on_hold` or `partially_fulfilled`.
+- `describe('settlementFor')` — a table of status and summary combinations. The expected result is `undefined`, `'ship'`, `'complete'`, `'deliver'` or `'undeliverable'`.
 
 ## Relationships
-
-- **`src/modules/orders/domain/fulfillment.ts`** – source of `fulfillmentStatusOf`, `fulfillmentStatusFilter`, `NO_FULFILLMENT`, and the `FulfillmentSummary` type; this file tests its exported contract.
-- **`src/modules/orders/domain/lifecycle.ts`** – provides `isAwaitingGoods` and `settlementFor`, both exercised here.
-- **`src/modules/orders/domain/index.ts`** – the barrel through which all domain symbols are imported (`from '../../domain'`).
-- **`src/types/index.ts`** – provides `OrderStatus` and `OrderFulfillmentStatus` enums used throughout the assertions.
-- **`tests/contract/ownership-shop.contract.test.ts`** – contract-level test that exercises the same fulfillment status derivation end-to-end; this file pins the unit-level truth table that contract test depends on.
+- Imports `NO_FULFILLMENT`, `fulfillmentStatusFilter`, `fulfillmentStatusOf`, `isAwaitingGoods`, `settlementFor` and the `FulfillmentSummary` type through the domain barrel (`src/modules/orders/domain/index.ts`). The implementations are presumably in `src/modules/orders/domain/fulfillment.ts` and `src/modules/orders/domain/lifecycle.ts`, but the barrel's contents are not visible in this file.
+- Imports `OrderStatus` and `OrderFulfillmentStatus` from `@types` (`src/types/index.ts`).
+- `tests/contract/ownership-shop.contract.test.ts` has no visible interaction with this file.
 
 ## Notes
-
-- The `matches` helper is intentionally minimal: it hard-codes the one `$expr` clause to `remaining === onHold` rather than evaluating arbitrary expressions. If the filter gains a new operator, `matches` must be extended in lockstep or the filter test will silently pass/fail incorrectly.
-- The `fulfillmentStatusFilter` test uses `Object.values(OrderFulfillmentStatus)` to guarantee exhaustiveness — adding a new enum value without a matching sample will cause the `expected.length > 0` guard to fail, which is the intended failure mode.
-- `settlementFor` tests treat `lastDeliveredAt` as a concrete 2026 date; the function only checks presence/absence, not the actual timestamp, but the fixture is kept realistic.
+- `matches` is hand-written and handles only the operators the filter currently uses. If the filter gains a new operator, the matcher must be extended or the tests will misjudge it.
+- The `$expr` branch is hardcoded to compare `fulfillment.remaining` with `fulfillment.onHold`. It does not evaluate the actual expression.
+- `values` comes from `Object.values(OrderFulfillmentStatus)`, so a new enum member automatically gets a test case. The reachability assertion then fails until a sample produces that value.
+- `'awaiting_shipment'` is passed to the filter as a literal and is not in the `values` loop. The test relies on the filter accepting it as input.

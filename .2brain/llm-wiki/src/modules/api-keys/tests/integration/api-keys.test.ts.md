@@ -1,51 +1,52 @@
 ---
 source: src/modules/api-keys/tests/integration/api-keys.test.ts
-sha256: 3165e658a2964d10e1af423db4cf0db75084201ce6268740b2012aef03f045bc
-generated_at: 2026-11-08T05:05:31.428486+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a166aaf8d04fcf3313adfbbd3cd3fa28db5cc31cdb0e818d7e03fa484a2379d7
+context_sha256: 1bb2e79b0f65abeeb7c48a4db81e725929f3862646a001257828ed4a3b895ac4
+generated_at: 2026-11-22T04:24:29.226490+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/api-keys/tests/integration/api-keys.test.ts
 
 ## Purpose
-
-Integration test suite that proves the "credential ⊆ minter" invariant end-to-end against a real database. It validates both halves of the boundary: (1) mint-time refusal when the caller lacks a requested permission, and (2) use-time re-flooring where `resolveCredential` re-reads the minter's *current* permissions rather than trusting the snapshot stored on the key document.
+Integration suite proving the API-key invariant "a credential holds a subset of the minter's permissions, never more". Mint-time enforcement (`isMintable` in `src/modules/api-keys/services/api-keys.ts`) is checked against the caller's own permissions. The suite also checks that every later use re-reads what the minter holds *now* through the real `resolveCredential` path, a real database and real role changes. A mocked repository could only prove the mint half.
 
 ## Key elements
+- **`mockOutbox` and the `jest.mock` of `@infrastructure/adapters/mailer`**: replaces `enqueueEmail` (rather than spying on it) with a function that records `{to, template, data}`. The `mock*` prefix is required because `jest.mock` is hoisted above the imports.
+- **`setupTestDb()`**: provides the real database.
+- **`apiKeysModule.onRegistered?.()`**: called at module load so `registerCredentialResolver` runs and `resolveCredential` can answer, as it would on a real boot.
+- **`IN_A_WEEK`**: a valid expiry for mints, one week out and inside the one-year ceiling.
+- **`createRealUser(id)`**: persists a user through `userRepository`, so the suite can change that user's role later.
+- **`makeArmedAdmin(userId)`**: seeds a tenant `admin` membership and arms an authenticator, since a staff role grants nothing and a key borrows staff rules only while one is armed.
+- **`contextFor(userId, permissions)`**: builds a `TenantCallerContext` for `mint`, with the user's id, `TEST_TENANT_ID`, tenant scope, and the given permissions.
+- **Test groups visible in this excerpt**:
+  - `mint — the subset boundary`: `mint` returns status 422 for:
+    - a permission the caller doesn't hold;
+    - a permission with a step-up tier (`delete:User`);
+    - a permission no credential route uses (`read:Stats`, `credential: false`).
 
-- **`mockOutbox`** — Array that captures every queued email. Named `mock*` because `jest.mock` hoisting only permits closing over identifiers with that prefix.
-- **`jest.mock('@infrastructure/adapters/mailer', …)`** — Replaces the mailer module (not a spy) because `jest.spyOn` cannot redefine a namespace-import getter under the SWC transform.
-- **`setupTestDb()`** — Boots a real test database; required because the re-flooring tests need a persisted user whose role can change between mint and use.
-- **`apiKeysModule.onRegistered?.()`** — Invokes the module's registration hook so `resolveCredential` is wired up, mirroring what a real boot does.
-- **`createRealUser(id)`** — Persists a real user via `userRepository.create` so the suite can mutate their role/active status between assertions.
-- **`makeArmedAdmin(userId)`** — Seeds a `tenant:admin` membership and arms an authenticator app, making the user's staff rules active for key minting.
-- **`contextFor(userId, permissions)`** — Builds a `TenantCallerContext` shaped for `mint` calls.
-- **`describe('mint — the subset boundary')`** — Four cases: missing permission → 422, step-up permission → 422, `credential: false` permission → 422, valid subset → success with `sk_` secret.
-- **`describe('an own-rows rule is not a staff rule')`** — Verifies `display:Order` cannot be minted by a minter holding only `read:Order`, and that a demotion shrinks a previously-minted `display:Order` to nothing.
-- **`describe('the credential-resolve path …')`** — Proves that demoting or deactivating the minter instantly narrows or kills the key's resolved permissions *without the key document changing*; also checks the audit-trail credential id is display-shaped.
+    It succeeds when every requested key is held, returning a plaintext secret starting `sk_` once, and when a wildcard holder names one specific key.
+  - `an own-rows rule is not a staff rule`: a holder of only `read:Order` can't mint `display:Order`. A minted `display:Order` stops resolving once its minter loses the staff role.
+  - `the credential-resolve path — re-floored at every use`: after the minter is demoted, the key's permissions shrink while the document is untouched. If the minter is deactivated, the key stops resolving, `revokedAt` stays unset, and it resolves again after unban. The group also starts a test on carrying the credential id for the audit trail, which continues past this excerpt.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|----------|-------------|
-| `src/kernel/authentication.ts` | Imports `resolveCredential`; the re-flooring tests exercise this real path. |
-| `src/kernel/permissions.ts` | Imports `keysInScope` to derive the full admin permission set for context building. |
-| `src/kernel/registry.ts` | Imports `registerModules` (module registration lifecycle). |
-| `src/kernel/events.ts` | Imports `resetDomainEvents` / `emitDomainEvent` for event-driven assertions. |
-| `src/modules/api-keys/module.ts` | Imports `apiKeysModule`; calls `onRegistered` to activate the `CredentialResolver`. |
-| `src/modules/api-keys/services/api-keys.ts` | Imports `mint` and `revoke`; the primary SUT. |
-| `src/modules/api-keys/repository.ts` | Imports `apiKeyRepository`; used to assert the stored document is *unchanged* after a demotion. |
-| `src/modules/api-keys/credentials.ts` | Imports `mintApiKey` (credential helper). |
-| `src/modules/access/index.ts` | Imports `accessService` for role revocation mid-test. |
-| `src/modules/access/tests/factories.ts` | Imports `seedMembership` to grant `tenant:admin`. |
-| `src/modules/account/index.ts` | Imports `ACCOUNT_SESSIONS_REVOKED` (event name for deactivation assertions). |
-| `src/modules.ts` | Imports `enabledModules` for module-list assertions. |
-| `src/infrastructure/adapters/logger.ts` | Imported as `logger` (test observability / suppression). |
+- **`src/modules/api-keys/module.ts`**: the default import `apiKeysModule`; its `onRegistered` hook registers the `CredentialResolver` that the suite exercises.
+- **`src/modules/api-keys/services/api-keys.ts`**: `mint` and `revoke` are imported from here. `mint` is called throughout the visible tests.
+- **`src/modules/api-keys/repository.ts`**: `apiKeyRepository` is imported and used to read the stored key back after a ban, confirming it is not revoked.
+- **`src/modules/api-keys/credentials.ts`**: `mintApiKey` is imported.
+- **`src/kernel/authentication.ts`**: `resolveCredential` is imported. The visible tests resolve through the `credentialOf` helper from `@tests/credentials`.
+- **`src/kernel/permissions.ts`**: `keysInScope` builds the permission sets for the roles used in the tests.
+- **`src/modules/access/index.ts`**: `accessService` is imported; its `revokeRole` is used to demote the minter.
+- **`src/modules/access/services/index.ts`**: a neighbor in the dependency graph; the visible code does not use it directly.
+- **`src/modules/access/tests/factories.ts`**: `seedMembership` seeds the admin membership.
+- **`src/kernel/registry.ts` and `src/kernel/events.ts`**: `registerModules`, `resetDomainEvents` and `emitDomainEvent` are imported.
+- **`src/modules/account/index.ts`**: imports `ACCOUNT_SESSIONS_REVOKED`.
+- **`src/modules/account/tests/unit/family-liveness.test.ts`**: a neighbor in the dependency graph; the visible code does not use it directly.
+- **`src/modules.ts`**: `enabledModules` is imported.
+- **`src/infrastructure/adapters/logger.ts`**: `logger` is imported.
+- **Other imports** that I could not match to a graph neighbor: `@modules/users`, `userService`, and the `@tests/*` helpers (`callerContextAs`, `armAuthenticator`, `setupTestDb`).
 
 ## Notes
-
-- **Real DB is mandatory for the USE-time tests.** A mocked repository can prove mint-time refusal, but only a real database + real role mutation + the real `resolveCredential` path can prove the re-read (vs. trusting a stored snapshot).
-- **Mailer replacement, not spy.** `jest.spyOn` on a namespace import's getter breaks under the SWC transform used in the mutation test run (see `tests/support/ports.ts`). The module-level `jest.mock` + `requireActual` spread pattern is the workaround.
-- **`mockOutbox` naming is not cosmetic.** `jest.mock` is hoisted above imports; the factory may only reference identifiers prefixed with `mock`.
-- **Step-up and `credential: false` permissions are hard-denied at mint time.** They are filtered by `isMintable` in the service regardless of whether the caller holds them.
-- **The key document is never mutated by a demotion or ban.** Tests explicitly assert `stored?.revokedAt` is `undefined` after a minter deactivation, confirming the "re-floor at read" design.
+- The mailer is replaced because `jest.spyOn` can't redefine a namespace import's getter under the mutation run's swc transform (see `tests/support/ports.ts`).
+- Users are created with `createRealUser`, one unique id per test, and role changes go through `accessService`. This is the way the tests demote a minter without editing the key document.
+- `if (!minted.data) throw new Error('setup failed...')` guards are used to narrow types and to fail clearly when setup is wrong.

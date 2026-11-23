@@ -1,26 +1,23 @@
 ---
 source: src/modules/payments/tests/unit/jobs.test.ts
-sha256: c34ec51a0a3b00d1c8ca8a356899f50765dc028aed28bd4f3592c7de3b2648ad
-generated_at: 2026-11-08T07:39:53.511625+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c34ec51a0a3b00d1c8ca8a356899f50765dc028aed28bd4f3592c7de3b2648ad
+context_sha256: 64bfbe0756568d109335a7fab3d651bfde3cebca54ad11d1fb19bb436daacedd
+generated_at: 2026-11-22T07:05:26.039764+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/unit/jobs.test.ts
 
 ## Purpose
-
-Unit test that guards the lease configuration of the `sweep:payment-effects` job, ensuring its TTL is strictly longer than the 5-minute sweep interval so a hung provider call cannot cause a second pass to resend the same refund keys.
+Unit test guarding a configuration invariant of the payments module's scheduled jobs: the `sweep:payment-effects` job must hold a lease that outlasts its run interval. The stated rationale (module doc comment) is that a hung provider call must not let a second pass start and resend the same refund keys.
 
 ## Key elements
-
-- **`describe('the payment-effects sweep')`** — the single test suite in this file.
-- **`it('runs under a lease longer than its 5-minute interval')`** — looks up the job named `sweep:payment-effects` in the `paymentsJobs` array and asserts `job.lease.ttlMs > 5 * 60_000`.
+- `describe('the payment-effects sweep')` containing a single test.
+- Test `runs under a lease longer than its 5-minute interval`: looks up the job named `sweep:payment-effects` in `paymentsJobs` and asserts `job?.lease?.ttlMs` is greater than `5 * 60_000` (5 minutes in ms).
 
 ## Relationships
-
-- **`src/modules/payments/jobs.ts`** — provides the `paymentsJobs` array (the single import in this file). The test reads the `name` and `lease.ttlMs` fields of the `sweep:payment-effects` entry.
+- Imports `paymentsJobs` from `src/modules/payments/jobs.ts` (via `../../jobs`) and looks up the `sweep:payment-effects` entry by its `name`. It only reads the job definition and does not execute the job.
 
 ## Notes
-
-- The test is intentionally minimal (one assertion) because it guards a single invariant: lease TTL > sweep interval. If the interval constant changes elsewhere, this test must be updated to match.
-- The lookup uses `find` on `name`, so renaming the job in `jobs.ts` without updating this test will cause a silent pass (the `job` will be `undefined` and `job?.lease?.ttlMs` will be `undefined`, which is **not** greater than 300 000 — so it actually *fails*). Still, a rename will produce a confusing assertion error rather than a compile-time one.
+- The 5-minute interval is hardcoded in the test, not read from the job definition. If the job's interval changes, this threshold must be updated manually.
+- If the job is missing or has no lease, `job?.lease?.ttlMs` is `undefined` and the assertion fails, so removing the lease or renaming the job also breaks this test.

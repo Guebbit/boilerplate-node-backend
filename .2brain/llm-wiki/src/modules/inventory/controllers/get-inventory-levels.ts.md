@@ -1,33 +1,29 @@
 ---
 source: src/modules/inventory/controllers/get-inventory-levels.ts
-sha256: b2b0b8d7902cbb9be956e78fd8ed2f19c5243e8e3c78e5dbe05d3398c80136ed
-generated_at: 2026-11-14T20:03:02.195202+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b2b0b8d7902cbb9be956e78fd8ed2f19c5243e8e3c78e5dbe05d3398c80136ed
+context_sha256: d00a3232c4b3e1d8f96c9519b57694f8be96d10c8b0f1e5c269f74a91b38c295
+generated_at: 2026-11-22T05:16:47.361155+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/controllers/get-inventory-levels.ts
 
 ## Purpose
-
-Controller for `GET /inventory/levels` — the stock-board listing endpoint. It validates and parses query-string parameters (pagination + filters), coerces the `lowOnly` boolean, then delegates to the inventory service to return a page of inventory levels ordered scarcest-first.
+Controller for `GET /inventory/levels`. It returns a page of the stock board, listing every counter and its availability with the scarcest first. It is built with the shared list-controller factory, so it only declares the entity name, the query schema, and the service call.
 
 ## Key elements
-
-- **`getInventoryLevels`** (exported) — the list-controller handler built via `createListController`. Configured with:
-  - `entity: 'inventoryLevels'` — identifies the resource in list responses.
-  - `schema` — `ListInventoryLevelsQueryParams` extended with `page`/`pageSize` (from shared pagination schemas) and made fully `.partial()` so every param is optional.
-  - `input.booleans: ['lowOnly']` — tells the factory to coerce that param from its string representation to a real boolean before calling the service.
-  - `runList` — calls `inventoryService.listLevels(parsed)`.
+- `getInventoryLevels`: the exported controller, created by `createListController` with:
+  - `entity: 'inventoryLevels'`.
+  - `schema`: `ListInventoryLevelsQueryParams` (from `@api/schemas.zod`), extended with `page` (`pageSchema`) and `pageSize` (`pageSizeSchema`), then made `.partial()`, so every query parameter is optional.
+  - `input: { booleans: ['lowOnly'] }`: marks `lowOnly` as a boolean parsed from query-string text.
+  - `runList`: calls `inventoryService.listLevels(parsed)` with the parsed query.
 
 ## Relationships
-
-- **`src/infrastructure/http/schemas.ts`** — provides `pageSchema` and `pageSizeSchema`, the shared Zod validators used to type the pagination query params.
-- **`src/infrastructure/surfaces/create-list-controller.ts`** — provides the `createListController` factory that assembles validation, boolean coercion, and the HTTP response shape into a single handler.
-- **`src/modules/inventory/services/index.ts`** — the services module this file imports `inventoryService` from; the controller's `runList` callback invokes the service with the parsed query params.
-- **`src/modules/inventory/routes.ts`** — registers `getInventoryLevels` on the router for the `GET /inventory/levels` path.
+- `src/infrastructure/http/schemas.ts`: supplies `pageSchema` and `pageSizeSchema` for pagination.
+- `src/infrastructure/surfaces/create-list-controller.ts`: supplies the `createListController` factory that builds the handler.
+- `src/modules/inventory/services/index.ts`: supplies `inventoryService`, whose `listLevels` method does the actual listing.
+- `src/modules/inventory/routes.ts`: a graph neighbor of this file. The route registration is not visible here, but this controller is the handler for the `GET /inventory/levels` route.
 
 ## Notes
-
-- Query strings are always text; `lowOnly` is declared in the `input.booleans` array so the factory coerces `"true"`/`"false"` strings before they reach the service. Forgetting this would pass a string where a boolean is expected.
-- All query params are optional (`.partial()`), meaning a bare `GET /inventory/levels` with no query string is valid and returns the default first page.
-- Ordering ("scarcest first") is not specified here — it lives inside the service layer.
+- The `page` and `pageSize` fields are overridden on top of the generated API schema. Because of `.partial()`, all query fields, including the paging ones, are optional.
+- `lowOnly` needs the explicit `booleans` entry because a query string can only carry it as text.

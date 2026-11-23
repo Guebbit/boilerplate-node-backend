@@ -1,34 +1,31 @@
 ---
 source: src/modules/products/domain/index.ts
-sha256: 51c450f29877818d3ebc908de954dbdbfd64282d5f7ccfc06362768000182628
-generated_at: 2026-11-14T21:23:54.888570+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8dfc7188b7d691d06440c84c3b0d5b43c6cb28b2009107b179200d1404db0695
+context_sha256: 8936c7899a228918e8f2b5d2982cddd19b293b9fb808265f79d0f064fb6aa108
+generated_at: 2026-11-22T07:09:08.997351+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/domain/index.ts
 
 ## Purpose
-
-Barrel (re-export) file that defines the **public API surface** of the products domain layer. It curates a selective set of symbols from the domain's sub-modules so that consumers can import domain rules without reaching into individual files or pulling in the module's HTTP surface. See `docs/theory/domain-layer.md` for the architectural rationale.
+Barrel file for the products domain layer. It re-exports the domain rules (actions, stock, preorder, backorder, availability) so they can be imported without pulling in the module's HTTP surface.
 
 ## Key elements
-
-- **Re-exports from `./actions`** — `productActions`, `NO_PRODUCT_ACTIONS`, `NO_PRODUCT_STANDING` (values) and the `ProductStanding` type.
-- **Re-exports from `./stock`** — `availableStock`, `stockFlags`.
-- **Re-exports from `./preorder`** — `isPreorder`, `latestReleaseDate` (values) and the `PreorderFacts` type.
-- **Re-exports from `./backorder`** — `isBackorder` (value) and the `BackorderFacts` type.
-- **Re-exports from `./buyable`** — `isBuyable`, `becameBuyable` (values) and the `BuyableFacts` type.
-
-No logic lives in this file; it is purely an `export` list.
+- `productActions`, `NO_PRODUCT_ACTIONS`, `NO_PRODUCT_STANDING` — re-exported from `./actions`. The type `ProductStanding` comes from the same file.
+- `availableStock` — re-exported from `./stock`.
+- `isPreorder`, `latestReleaseDate` — re-exported from `./preorder`.
+- `isBackorder` — re-exported from `./backorder`.
+- `availabilityOf` — re-exported from `./availability`.
+- Types:
+  - `Availability`, `AvailabilityCounts`, `AvailabilityTerms`, `AvailabilityFacts` (from `./availability`)
+  - `BackorderFacts` (from `./backorder`)
+  - `PreorderFacts` (from `./preorder`)
 
 ## Relationships
-
-- **`./actions`, `./stock`, `./preorder`, `./backorder`, `./buyable`** — source modules whose symbols are re-exported here. Changing their exports requires updating this barrel if the public surface should change.
-- **`src/modules/products/index.ts`** — the parent module's top-level index; expected to import from this domain barrel to expose domain rules alongside the HTTP surface.
-- **`src/modules/products/tests/unit/stock-view.test.ts`** — unit test in the dependency graph that consumes symbols from this barrel rather than reaching into the sub-modules directly.
+- Re-exports from `actions.ts`, `stock.ts`, `preorder.ts`, `backorder.ts` and `availability.ts`. It contains no logic of its own.
+- `src/modules/products/index.ts` is a graph neighbor. The file's header describes this barrel as the domain entry point that is importable without the HTTP surface.
 
 ## Notes
-
-- Exports are **selective**, not `export *`. If a new symbol in a sub-module should be part of the domain's public API, it must be explicitly added here.
-- Types and values are exported separately (`export type` vs. `export`). Consumers using `verbatimModuleSyntax` or isolated module settings must respect this split.
-- The file carries no runtime logic; bundlers will tree-shake it away. Any "side effect" of importing from here is limited to whatever the sub-modules themselves execute.
+- The header comment's `@see` tag references a domain-layer document for the folder's conventions.
+- Types are exported with `export type`, so they are erased at runtime.

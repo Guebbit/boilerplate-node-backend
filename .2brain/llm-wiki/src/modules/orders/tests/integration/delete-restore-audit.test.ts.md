@@ -1,37 +1,37 @@
 ---
 source: src/modules/orders/tests/integration/delete-restore-audit.test.ts
-sha256: 41d7e5386a7471493439ad73a013306649e1af7d4a22f1b3f91a31d0018a1daa
-generated_at: 2026-11-14T20:50:03.995378+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7656d0a42b3699c2a5104e25477bcad283d05bccdef3e0f000a9bbfe060a8c05
+context_sha256: 9c3dbad91871b09375cb111cf6e657d711c56abba122d787ab336feaacbd2d90
+generated_at: 2026-11-22T06:27:10.502648+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/delete-restore-audit.test.ts
 
 ## Purpose
-
-Integration tests that verify `orderService.removeById` and `orderService.restoreById` emit the correct audit events (`ORDER_DELETED`, `ORDER_RESTORED`) with the expected fields. They exist to pin that audit logging was moved from the controller layer into the service layer (module-lifecycle rule 1) without losing the audit trail.
+Integration tests verifying that `orderService.removeById` and `orderService.restoreById` emit the correct audit events (`ORDER_DELETED` and `ORDER_RESTORED`) with the expected fields. The audit rows are written by the service itself, matching the write path used by other modules.
 
 ## Key elements
-
-- **`jest.mock('@infrastructure/observability/audit', …)`** — Replaces the audit port module at load time with `auditPortMock()` from `tests/support/ports`. This is a full module replacement, not a spy.
-- **`describe('removeById')`** — Two cases: soft delete (`hardDelete: false`) and hard delete (`hardDelete: true`), each asserting `emitAuditEvent` is called with `ORDER_DELETED`, the correct `metadata.hardDelete` flag, `outcome: 'success'`, and the order's id as `targetId`.
-- **`describe('restoreById')`** — Seeds a canceled order, removes it, then restores it; asserts `emitAuditEvent` is called with `ORDER_RESTORED` and the order's id.
-- **`observePort(auditPort.emitAuditEvent)`** — Wraps the port method to get a Jest spy for assertions.
-- **`callerContextAs('admin')`** — Builds a caller identity context passed into each service call.
+- `jest.mock('@infrastructure/observability/audit', ...)`: replaces the whole audit port with `auditPortMock()` from `@tests/ports`, rather than spying on it.
+- `setupTestDb()`: sets up the test database for the suite.
+- `afterEach(() => jest.restoreAllMocks())`: resets mocks between tests.
+- `describe('removeById')`:
+  - Soft delete (`hardDelete=false`): expects `ORDER_DELETED` with `metadata: { hardDelete: false }`.
+  - Hard delete (`hardDelete=true`): expects `ORDER_DELETED` with `metadata: { hardDelete: true }`.
+  - Both run as an `admin` caller and assert `outcome: 'success'`, `targetType: 'order'` and `targetId` equal to the order id.
+- `describe('restoreById')`: soft-deletes a canceled order, restores it as `admin`, and expects `ORDER_RESTORED` with `outcome: 'success'`, `targetType: 'order'` and the matching `targetId`.
 
 ## Relationships
-
-- **`src/modules/orders/services/index.ts`** — The service module under test; this file invokes its `removeById` and `restoreById` methods to trigger the audit emissions being asserted.
-- **`src/modules/orders/audit.ts`** — Source of the audit action constants (`ORDER_DELETED`, `ORDER_RESTORED`) referenced in the expectations.
-- **`src/infrastructure/observability/audit.ts`** — The module whose interface is replaced at load time so that `emitAuditEvent` can be observed through the port mock.
-- **`tests/support/ports.ts`** — Provides the port mock factory used by the `jest.mock` call and the `observePort` spy wrapper used in assertions.
-- **`tests/support/setup-test-db.ts`** — Initialises the in-memory test database before the test suite runs.
-- **`tests/support/callers.ts`** — Provides `callerContextAs` for constructing caller identity objects.
-- **`src/modules/orders/tests/factories.ts`** — Provides `seedOrder` for creating fixture orders with a given status.
-- **`src/types/index.ts`** — Provides the `OrderStatus` enum used when seeding orders.
+- `src/infrastructure/observability/audit.ts`: its `emitAuditEvent` is the mocked port that the tests observe.
+- `src/modules/orders/audit.ts`: provides `ordersAuditActions` (`ORDER_DELETED`, `ORDER_RESTORED`) used in the assertions.
+- `src/modules/orders/services/index.ts`: provides `orderService`, the code under test.
+- `src/modules/orders/tests/factories.ts`: `seedOrder` creates the fixture orders, seeded in the canceled status.
+- `src/types/index.ts`: provides the `OrderStatus` enum used when seeding orders.
+- `tests/support/ports.ts`: provides `auditPortMock()` and `observePort()`.
+- `tests/support/callers.ts`: `callerContextAs('admin')` builds the caller context.
+- `tests/support/setup-test-db.ts`: provides `setupTestDb`.
 
 ## Notes
-
-- The audit port is **replaced**, not spied on. The comment explains that `jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes, so a full `jest.mock` is required. See the sibling `create-audit.test.ts` for the full reasoning.
-- The tests assert on `expect.objectContaining(…)` rather than exact object equality, so new fields added to the audit event won't break these tests.
-- `afterEach(() => jest.restoreAllMocks())` is present even though the primary interaction is a module-level mock; it guards against any incidental `spyOn` usage in the mock factory.
+- The audit port is replaced, not spied on, because `jest.spyOn` cannot redefine the non-configurable getter that a CommonJS namespace import exposes. The reasoning is documented in `create-audit.test.ts` in the same directory.
+- In the restore test, the initial `removeById` call is made without a caller context. Only the `restoreById` call passes `callerContextAs('admin')`.
+- Assertions use `expect.objectContaining`, so other fields on the audit event are not checked.

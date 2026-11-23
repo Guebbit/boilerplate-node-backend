@@ -1,36 +1,36 @@
 ---
 source: src/modules/orders/services/index.ts
-sha256: 08b2234a997fca39d7c26a3335fe609a70ab5b84d3399ab9770f7670d5e60374
-generated_at: 2026-11-14T20:43:40.280866+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cbcf3e5b15dea9ada644d2b2ec6daf005b0725966015ec5deab87e2a03668424
+context_sha256: b9cc9a2ef7971951c3144622c3415f9348b881dc8febb4df843af1fa73291fd4
+generated_at: 2026-11-22T06:21:04.519713+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/index.ts
 
 ## Purpose
-
-Barrel module that aggregates every order-service function from ~20 sub-files and re-exports them as a single `orderService` object. It is the **only** import surface a controller or cross-module caller may use to reach Order business logic, enforcing the "one door in, one door out" layering rule described in `docs/theory/layers.md`.
+Barrel for the Order service. It imports the per-flow service files (one file per flow) and publishes them as a single `orderService` object, which is the only entry point controllers and other modules may use to reach order business logic. It contains no logic of its own.
 
 ## Key elements
-
-- **`orderService`** (const object) — flat namespace of every public order operation: reads, writes, cancellation, fulfillment, timeline, retention/PII, stats, scope helpers, and action decorators. This is the sole value export consumed externally.
-- **Type re-exports** — `OrderBrief`, `PlaceOrderInput`, `PlaceOrderLine`, `PlaceOrderOutcome`, `PlaceOrderShipping`, `CancelCause`, `OrderExport`, `PaidBucket`, `ProductTotal`, `CategoryTotal`, `ProductSeriesRead`, `AwaitingTransfers`, `PipelineRead`.
-- **Config re-exports** — `orderFrontendLink`, `orderPagePath`, `withdrawalPeriodDays` pulled from `../config`. Re-exported here (rather than from `../index.ts`) to satisfy the barrel-allowed-sources rule.
-- **Sub-module imports** — functions are sourced from `./read`, `./digest`, `./crud`, `./remove`, `./place`, `./notify`, `./cancel-mail`, `./purchase-hold`, `./retention`, `./scope`, `./actions`, `./snapshot`, `./reencrypt`, `./cancel`, `./status`, `./guarantee`, `./fulfillment`, `./override`, `./address`, `./export`, `./timeline`, `./stats`.
+- `orderService`: object aggregating all order operations, grouped by the source file they come from:
+  - **Reads/scope**: `search`, `getById`, `getForCaller`, `findManyByIds`, `ownOrderIds`, `findOwnOrders`, `orderBriefsByIds`, `openUnpaidOrderIds`, `billingAddressOf`, `shippingAddressOf` (`./read`); `callerScope`, `cancelScope`, `actorOf`, `ownerScope`, `ownLiveScope` (`./scope`); `ordersDigest`, `shippingMethodsOf` (`./digest`).
+  - **Writes**: `placeOrder` (`./place`, the single write path for new orders), `create`, `recordCreated`, `updateById` (`./crud`), `removeById`, `restoreById` (`./remove`), `freezeOrderLines` (`./snapshot`), `reencryptOrders`.
+  - **Cancellation/withdrawal**: `cancelOnRequestById`, `withdrawById`, `withdrawWithin`, `expireReservationById`, `cancelForPaymentMismatchById` (`./cancel`), plus `mailOrderCanceled`.
+  - **Status**: `markProcessing`, `settleFulfillment`, `reopenForFulfillment`, `markPaymentStatus`, `markReturnStatus`, `markMoneyReceived` (`./status`); `overrideStatus` (`./override`); `extendGuarantee`.
+  - **Fulfillment/stock**: `readOrder`, `recordFulfillmentProgress`, `shipStock`, `topUpStock`, `releaseStock`, `releaseTopUp`, `extendHold`, `isPayableNow`, `refreshShelf` (`./fulfillment`); `considerPurchaseHold`.
+  - **Notifications**: `mailOrderPlaced`, `mailBuyer`, `mailBuyerOfOrder` (`./notify`).
+  - **Address corrections**: `correctShippingAddress`, `correctBillingAddress`.
+  - **Export/timeline/notes**: `openOrderExport`; `appendTimeline`, `addNote`, `deleteNote`, `readTimeline`, `collectTimelineOf`, `clearTimelineActor`, `scrubTimelineText`.
+  - **Retention/PII**: `detachUserId`, `eraseUserOrders`, `startOrderPiiClock`, `anonymizeDueOrders`.
+  - **Stats**: `paidBuckets`, `productTotals`, `categoryTotals`, `productSeries`, `customerCounts`, `cancellationCohort`, `pipeline`.
+  - **Actions**: `withActions`, `withListActions`.
+- Type re-exports: `OrderBrief`, `PlaceOrderInput`, `PlaceOrderLine`, `PlaceOrderOutcome`, `PlaceOrderShipping`, `CancelCause`, `OrderExport`, and the stats types (`PaidBucket`, `ProductTotal`, `CategoryTotal`, `ProductSeriesRead`, `AwaitingTransfers`, `PipelineRead`).
+- Config re-exports: `orderFrontendLink`, `orderPagePath`, `withdrawalPeriodDays` (from `../config`).
 
 ## Relationships
-
-- **`src/modules/cart/services/checkout.ts` / `reorder.ts`** — depend on this module's `orderService` to perform order creation and post-creation recording during cart checkout flows.
-- **`src/modules/cart/controllers/post-checkout.ts`** — consumes `orderService` for post-creation follow-up operations after a checkout is finalized.
-- **`src/modules/delivery/services/digest.ts`** — imports from this module to build delivery-facing order summaries.
-- **`src/modules/delivery/services/act.ts`, `deliver.ts`, `cut.ts`, `board.ts`, `announce.ts`, `ensure.ts`, `cancel-remainder.ts`** — invoke fulfillment, status, and stock-management functions exposed through `orderService`.
-- **`src/modules/delivery/module.ts`** — delivery module registration; wires delivery services that in turn depend on `orderService`.
-- **`src/modules/cart/tests/integration/checkout-stock-divergence.test.ts`, `stock.test.ts`** — integration tests that exercise `orderService` fulfillment and stock functions end-to-end.
-- **`scenarios/flows/shop-history.ts`** — scripted flow that drives `orderService` read paths to assert shop-history behavior.
+- Imports from sibling files in `src/modules/orders/services/` (`read`, `crud`, `place`, `cancel`, `status`, `fulfillment`, `timeline`, `stats`, `scope`, etc.) and from `../config`.
+- Consumers listed in the graph call into this surface: the cart module (`src/modules/cart/controllers/post-checkout.ts`, `src/modules/cart/services/checkout.ts`, `src/modules/cart/services/reorder.ts`, and its `src/modules/cart/tests/integration/stock.test.ts` integration test), the delivery module (`src/modules/delivery/module.ts` and the `src/modules/delivery/services/` files `act`, `announce`, `board`, `cancel-remainder`, `cut`, `deliver`, `digest`, `ensure`, `found`), and the `scenarios/flows/shop-history.ts` scenario.
 
 ## Notes
-
-- Controllers must **not** import the sub-files (`./place`, `./cancel`, etc.) directly; the barrel is the enforced boundary. Bypassing it breaks the layering contract.
-- The `orderService` object is intentionally flat (no sub-namespaces), so callers use dot-access (`orderService.placeOrder`). Adding a nested structure here would be a breaking change for every consumer.
-- Config getters are re-exported from this file rather than `../index.ts` due to the `local/barrel-allowed-sources` restriction; adding new config re-exports should follow the same pattern.
-- `place.ts` is documented as the **only** write path for creating a new order; all other mutations go through `cancel`, `status`, `fulfillment`, `retention`, or `timeline` sub-modules.
+- Config getters are re-exported here rather than from the module's own public barrel (the parent-directory index) because a module's public barrel may only publish services, domain, events, emails and model (lint rule `local/barrel-allowed-sources`).
+- Per the header, `place.ts` is the sole function that writes a new order, and `scope.ts` governs visibility, so every read is meant to go through it.

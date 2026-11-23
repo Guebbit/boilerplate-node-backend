@@ -1,32 +1,28 @@
 ---
 source: src/modules/locales/tests/integration/manifest-visibility.test.ts
-sha256: 7bacd2cac735f73499c4ee459538c134e2752a928703cfe66fad9ec3b903b956
-generated_at: 2026-11-08T06:28:00.422706+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7bacd2cac735f73499c4ee459538c134e2752a928703cfe66fad9ec3b903b956
+context_sha256: 7bb92d9ce30aa802a840434711caa5d5edd1dcb37b5eb906de540acba6b3a56e
+generated_at: 2026-11-22T05:50:08.674115+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/tests/integration/manifest-visibility.test.ts
 
 ## Purpose
-
-Integration test verifying that `GET /locales` reports a file-backed language (one with a deployed dictionary file such as `shared/locales/it.json`) as `active: false` when its database row is switched off, and as `active: true` when the row is active or absent entirely. This guards the contract that every manifest consumer (client bundling logic, sitemap generator, etc.) sees a consistent visibility signal regardless of authentication level.
+Integration test for `GET /locales` covering who the manifest offers a switched-off language to. A language with a deployed dictionary file is always among the supported ones, so dropping a switched-off row in the scoped read was not enough: the file-backed language still came back as `active: true`. The test asserts that every caller now sees it as `active: false`, so a client bundling the language itself can stop offering it, and that activating it flips it back to `true`.
 
 ## Key elements
-
-- **`manifestTags(bearer?)`** — Helper that issues `GET /locales` (optionally with an `Authorization` header), asserts a 200 response, and returns the `[{ tag, active }]` pairs from the body.
-- **`describe('GET /locales for a language with a deployed file that is switched off')`** — Three cases:
-  - Switched-off file-backed language appears as `['it', false]` for both anonymous and admin callers.
-  - Activating the locale via `POST /locales/it/activate` flips it back to `['it', true]` for visitors.
-  - A file-backed language with **no** DB row at all still appears as `['it', true]` (the file's existence implies active by default).
+- `setupTestDb()` — called at module level to prepare the test database.
+- `manifestTags(bearer?)` — helper that calls `GET /locales` (optionally with an `Authorization` header), asserts status 200, and returns `[tag, active]` pairs from `response.body.locales`.
+- Test: lists `it` as `['it', false]` for both an anonymous visitor and an admin, while `['en', true]` is present for the visitor.
+- Test: after `POST /locales/it/activate` as admin (status 200), a visitor sees `['it', true]`.
+- Test: a file-backed language with no row at all (`it`) is still listed as `['it', true]`.
 
 ## Relationships
-
-- **`src/modules/locales/tests/factories.ts`** — Supplies `givenLocale`, which creates/updates the locale row in the test database (e.g. `givenLocale('it', { active: false })`).
-- **`tests/support/http.ts`** — Supplies the `api()` request helper and `authenticateAs(role)` for obtaining bearer tokens.
-- **`tests/support/setup-test-db.ts`** — Supplies `setupTestDb()`, called once at module top to provision a clean database for the suite.
+- `../factories` — `givenLocale('it', { active: false })` creates the switched-off locale row.
+- `tests/support/http.ts` — provides `api()` (HTTP request client) and `authenticateAs('admin')` (returns a `bearer` token).
+- `tests/support/setup-test-db.ts` — provides `setupTestDb`, imported via the `@tests/setup-test-db` alias.
 
 ## Notes
-
-- The critical invariant under test is the *file-backed* aspect: a language that has a deployed JSON file will always appear in the manifest; only its `active` flag toggles. A purely DB-only language (no file) would presumably be absent entirely — that case is not covered here.
-- The test asserts the same `['it', false]` result for both anonymous and admin callers, encoding the requirement that visibility is not role-gated at the manifest level.
-- The module-level doc comment is the authoritative explanation of *why* the scoped read that drops a switched-off row is insufficient on its own — the file-backed merge re-introduces the language, so the code must explicitly set `active: false` rather than relying on row absence.
+- The tests rely on `it` having a deployed dictionary file and `en` being listed as active; neither is created in the test itself.
+- The header comment also states that the sitemap, which lists only active languages, leaves the switched-off one out. This test does not exercise the sitemap.

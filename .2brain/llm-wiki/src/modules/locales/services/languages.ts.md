@@ -1,46 +1,39 @@
 ---
 source: src/modules/locales/services/languages.ts
-sha256: 32fb5c8fc764561f3bbc3e607e47dffbed7d9355445f290b140e447569512eba
-generated_at: 2026-11-08T06:26:06.238543+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8a47c48dded3c93b1bce8e01df0bf8040ca570a59857e1840214cb9aecf8983a
+context_sha256: facba21622125841ad3b6c33c5bf7f993bd2d300e07c29eaada17af05dcc88fd
+generated_at: 2026-11-22T05:48:00.808116+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/services/languages.ts
 
 ## Purpose
-
-Service layer for the dynamic language tier: creating, editing, activating/deactivating, and cascade-deleting a language row. It also centralises two cross-file validation rules shared by sibling services — refusing writes under an unknown app and protecting the deployment's fallback locale from deactivation or deletion.
+Service layer for language (locale) rows: registering, editing, activating/deactivating, and deleting a language together with everything translated into it. It also hosts the shared rules other files in the module reuse: the standard "language not found" rejection, and refusing writes under an unknown app.
 
 ## Key elements
-
-- **`createLanguage(payload, context?)`** – Registers a new language. Checks for an existing tag (409), inserts via the repository, emits `ADMIN_LOCALE_CREATED` audit, and refreshes the overlay.
-- **`updateLanguage(tag, payload, context?)`** – Edits display fields (`name`, `nativeName`, `direction`). Uses selective assignment (`!== undefined`) so a partial payload doesn't blank the other fields. `active` is deliberately **not** editable here. Emits `ADMIN_LOCALE_UPDATED`.
-- **`activateLanguage(tag, context?)` / `deactivateLanguage(tag, context?)`** – Thin wrappers over the internal `setActive`. Refuse a no-op state change (409) and, on deactivation, refuse if the tag is the fallback locale. Clear translatable caches and refresh the overlay on success.
-- **`removeLanguage(tag, context?)`** – Cascade-deletes the language, its entries, and all translations. Refuses if the tag is the fallback locale. Returns `{ removedEntries, removedTranslations }`. Clears translatable caches and refreshes the overlay.
-- **`languageNotFound()`** – Shared 404 rejection used by every route in this module.
-- **`rejectUnknownApp(app)`** *(exported)* – Returns a 422 rejection if `isKnownApp` fails; `undefined` otherwise. Consumed by sibling services that write translations under an app id.
-- **`rejectFallbackLocale(tag)`** *(internal)* – Returns a 409 rejection if the tag equals `getFallbackLocale()`; `undefined` otherwise.
-- **`clearTranslatableCaches()`** *(internal)* – Invalidates every cache tag that may carry translated entity text (via `invalidateCacheTagsLogged` + `translatableCacheTags`).
+- `languageNotFound()` – 404 `LOCALE_LANGUAGE_NOT_FOUND` rejection, used by every route in the module.
+- `rejectUnknownApp(app)` – returns a 422 `LOCALE_APP_UNKNOWN` rejection if `isKnownApp(app)` fails, else `undefined`. Applies to writes only; reads filtered by an unknown app just return an empty page.
+- `createLanguage(payload, context?)` – normalizes the tag, rejects a duplicate with 409 `LOCALE_LANGUAGE_EXISTS`, creates the row (trimmed names, default direction `ltr`, default `active: true`), audits `ADMIN_LOCALE_CREATED`, refreshes the overlay, returns 201.
+- `updateLanguage(tag, payload, context?)` – edits only `name`, `nativeName` and `direction`, and only the fields provided. Builds audit metadata via `auditChanges` before mutating, saves, audits `ADMIN_LOCALE_UPDATED`, then refreshes the overlay.
+- `activateLanguage` / `deactivateLanguage` – thin wrappers over the private `setActive`.
+- `setActive` (private) – the only place `active` changes after creation. Returns 409 if the language is already in the requested state, and 409 `LOCALE_LANGUAGE_IS_FALLBACK` when deactivating the fallback locale. It saves, clears translatable caches, audits activated/deactivated with a `{ changes: { active: { from, to } } }` payload, and refreshes the overlay.
+- `removeLanguage(tag, context?)` – refuses the fallback locale, calls `localeRepository.deleteLocaleCascade`, clears translatable caches, audits `ADMIN_LOCALE_DELETED` with `removedEntries` and `removedTranslations` counts, refreshes the overlay, and returns those counts.
+- `rejectFallbackLocale` and `clearTranslatableCaches` (private) – the fallback guard and the cache-tag invalidation helper.
 
 ## Relationships
-
-- **`@infrastructure/http/response`** – All success/reject envelopes are built with `generateSuccess` / `generateReject`; return types are `ResponseSuccess<T> | ResponseReject`.
-- **`@infrastructure/i18n`** (barrel) – `getFallbackLocale` identifies the protected tag; `t` localises every user-facing error message.
-- **`@infrastructure/observability/audit`** – `recordAudit` writes the audit row for every successful mutation (context may be `undefined` in tests, suppressing the emit).
-- **`@infrastructure/observability/audit-changes`** – `auditChanges` computes the field-diff metadata attached to the `ADMIN_LOCALE_UPDATED` audit entry.
-- **`../model`** – `normalizeTag` normalises the incoming tag; `LocaleDocument` is the domain shape returned to callers.
-- **`../repository`** – `localeRepository` supplies all persistence (`findByTag`, `create`, `save`, `deleteLocaleCascade`).
-- **`../apps`** – `isKnownApp` validates the app identifier before any write.
-- **`../audit`** – `localeAuditActions` provides the stable action-string constants (`ADMIN_LOCALE_CREATED`, `_UPDATED`, `_ACTIVATED`, `_DEACTIVATED`, `_DELETED`).
-- **`@infrastructure/adapters/cache`** – `invalidateCacheTagsLogged` performs the actual cache invalidation after any mutation.
-- **`./overlay`** (sibling, not in graph list) – `refreshOverlayNow` immediately updates this worker's in-memory served-language list.
-- **`./translatables`** (sibling, not in graph list) – `translatableCacheTags` enumerates which cache tags hold translated entity text.
-- **`services/index.ts`** – Re-exports the public functions from this module so route handlers import from the barrel.
+- `../repository` (`localeRepository`): all persistence (`findByTag`, `create`, `save`, `deleteLocaleCascade`).
+- `../model`: `normalizeTag` and the `LocaleDocument` type.
+- `../apps`: `isKnownApp` backs `rejectUnknownApp`.
+- `../audit` plus `infrastructure/observability/audit` and `audit-changes`: `localeAuditActions`, `recordAudit` and `auditChanges` produce the audit trail.
+- `@infrastructure/i18n`: `t` for messages and `getFallbackLocale` for the fallback guard.
+- `@infrastructure/http/response`: `generateSuccess` / `generateReject` build every return value.
+- `@infrastructure/adapters/cache`: `invalidateCacheTagsLogged` is used with `translatableCacheTags()` from `./translatables`.
+- `./overlay`: `refreshOverlayNow` is called after each mutation so this worker's in-memory served-language list updates immediately.
+- Sibling services (`entries`, `messages`, `capabilities`, `index`) share `languageNotFound` and `rejectUnknownApp`, as the module header describes.
 
 ## Notes
-
-- **Selective update semantics:** In `updateLanguage`, a field set to `undefined` in the payload is left untouched. A blanket object-spread assignment would silently clear unmentioned fields — the code tests each field individually.
-- **`active` is write-protected in `updateLanguage`:** Toggling the active flag is exclusively the job of `activateLanguage` / `deactivateLanguage`, which add the no-op guard, fallback guard, cache clear, and a dedicated audit action.
-- **Duplicate-tag race:** `createLanguage` checks for an existing tag at the app level for a friendly 409, but relies on a DB unique index as the real guard against concurrent inserts (E11000 → 409 via the shared error interpreter).
-- **Optional `context`:** Every exported mutation accepts `context?: CallerContext`. Omitting it (as tests do) simply skips the audit emit — no other behavior changes.
-- **Cache vs. overlay refresh:** Every mutation both clears translatable response caches *and* calls `refreshOverlayNow()`. The former prevents stale translated text from being served; the latter ensures this worker's negotiation list reflects the change immediately rather than waiting for a periodic timer.
+- Audit emission is skipped when `context` is omitted, which is what tests calling these as plain helpers do.
+- The unique index on tag backs the duplicate-tag check, so a concurrent create race reaches E11000, which the shared interpreter answers with 409.
+- Cache clearing happens after save/cascade but before the audit and overlay refresh. It is needed because translated text is cached by language for an hour.
+- Deleting an active language is allowed directly; any confirmation step is left to the client.

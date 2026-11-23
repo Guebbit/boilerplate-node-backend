@@ -1,32 +1,25 @@
 ---
 source: src/modules/audit-logs/config.ts
-sha256: 01c4b5147fdc4392779ad60dcc2c7efca0815ec32c6dbd1e3c0531de0265b288
-generated_at: 2026-11-14T19:23:47.190762+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5f57a1aa92bc75ed17ebb21190150c73305e32b4206461ca1c4c89e224d25afe
+context_sha256: 1f4024878a921ffe6bcc49dfb150131032f0aea377e9cb5fba94f63d856edc48
+generated_at: 2026-11-22T04:26:10.324931+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/audit-logs/config.ts
 
 ## Purpose
-
-Defines the sole configuration knob for the audit-logs module: how many days an audit entry is retained before it is eligible for cleanup. It exists to centralize that single value so it can be validated at startup and read uniformly by the rest of the module.
+Declares the configuration for the audit-logs module. Its only setting is how long an audit entry is retained, expressed in days.
 
 ## Key elements
-
-- **`auditLogsConfig`** (exported const) — the module's config object built via `defineConfig`. Contains:
-  - `name: 'audit-logs'` — namespace key used by the config infrastructure.
-  - `shape.NODE_AUDIT_RETENTION_DAYS` — an integer field (default `180`, minimum `1`) representing retention in days.
+- `auditLogsConfig`: the module's config, created with `defineConfig` under the name `'audit-logs'`. Its shape has one field:
+  - `NODE_AUDIT_RETENTION_DAYS`: an `int` field with default `180` and minimum `1`.
 
 ## Relationships
-
-- **`src/infrastructure/config/define.ts`** — provides the `defineConfig` helper that creates the typed config object and registers the `name` / `shape` structure.
-- **`src/infrastructure/config/fields.ts`** — provides the `int` field descriptor used to constrain `NODE_AUDIT_RETENTION_DAYS` (type, default, min).
-- **`src/modules/audit-logs/module.ts`** — consumes `auditLogsConfig` to wire the retention value into the module's dependency graph.
-- **`src/modules/audit-logs/service.ts`** — reads the resolved retention value to determine entry lifetime.
-- **`src/modules/audit-logs/model.ts`** — likely pairs with the retention setting for entity definitions or TTL annotations.
-- **`src/modules/audit-logs/tests/integration/repository.test.ts`** — exercises behavior that depends on the configured retention window.
+- `src/infrastructure/config/define.ts`: supplies `defineConfig`, which builds `auditLogsConfig`.
+- `src/infrastructure/config/fields.ts`: supplies the `int` field helper used to declare the retention setting.
+- `src/modules/audit-logs/model.ts`, `src/modules/audit-logs/module.ts`, `src/modules/audit-logs/service.ts` and `src/modules/audit-logs/tests/integration/repository.test.ts` are graph neighbors of this file. The file itself imports nothing from them, so this page does not describe how they use the config.
 
 ## Notes
-
-- This is intentionally the *only* knob in the audit-logs config. Adding a new tunable here means updating `docs/tools/configuration.md` (referenced in the module doc comment).
-- The field name prefix `NODE_` follows the project's convention for environment-variable-backed config keys; the runtime reads it from the environment under that name.
+- The header comment points to `docs/operate/health-checks.md#who-owns-what` for how config ownership is documented.
+- The environment variable is named `NODE_AUDIT_RETENTION_DAYS`. Values below 1 are excluded by `min: 1`.

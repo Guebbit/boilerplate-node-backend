@@ -1,29 +1,30 @@
 ---
 source: src/modules/account/cooldown.ts
-sha256: 383b6d91719388641b7fade391cfa06b4e7cd5590ab9bb62fd86d53ad7e114bc
-generated_at: 2026-11-14T18:35:17.472559+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 383b6d91719388641b7fade391cfa06b4e7cd5590ab9bb62fd86d53ad7e114bc
+context_sha256: 516be0258b90456fe697e36a26f556a76a11edb93446b2423a28f84684355e2d
+generated_at: 2026-11-22T03:28:08.097261+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/cooldown.ts
 
 ## Purpose
-
-Shared helper that computes the remaining cooldown before a "resend" action is allowed and produces the 429 response the client turns into a countdown. It exists so the two flows that publish mail on a button press — the 2FA delivered code and the verification link — share one source of truth for both the arithmetic and the error shape.
+Defines the shared shape of a "you just asked for this, wait a moment" refusal. Two flows send mail on a button press: the 2FA delivered code and the verification link. Both need a countdown that means the same thing to the client, so it is computed in one place. The file sits at the module root rather than under `services/`, so `two-factor/` can import it without creating a `two-factor` → `services` dependency. It holds no database access, no i18n keys and no clock beyond a default `now`. The caller supplies the anchor time, the window and already-translated text.
 
 ## Key elements
-
-- **`cooldownRemaining(sentAt, seconds, now?)`** — Returns whole seconds (rounded up) still to wait before the same send may recur, or `0` if nothing was ever sent or the window has elapsed. `now` defaults to `new Date()` but is injectable for tests.
-- **`resendTooSoon(code, message, seconds)`** — Builds a typed `ResponseReject` (HTTP 429) via `generateRateLimited`, carrying the caller-supplied `ErrorCode` and already-translated message. The `seconds` passed in should be the same value the successful response exposed as `resendAfter`.
+- `cooldownRemaining(sentAt, seconds, now = new Date())` returns the whole seconds left before another send is allowed, or `0` if a send may go ahead.
+  - It returns `0` when `sentAt` is `undefined`, because nothing was ever sent.
+  - The result is rounded up with `Math.ceil` and clamped to a minimum of `0`, so a client never re-enables its button early.
+  - `now` can be injected for tests.
+- `resendTooSoon(code, message, seconds)` builds the 429 `ResponseReject` by calling `generateRateLimited(seconds, { code, message })`.
+  - `code` is the flow's own `ErrorCode`, which the client branches on.
+  - `message` must already be translated.
+  - `seconds` is expected to be the value `cooldownRemaining` returned.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — Imports `generateRateLimited` and the `ResponseReject` type; the 429 is constructed through that factory.
-- **`src/modules/account/two-factor/delivered-codes.ts`** — Consumer. The module is deliberately placed at the account-module root (not under `services/`) so that `two-factor/` can import it alongside its existing `../emails` and `../session/` paths without creating a `two-factor → services` edge.
-- **`src/modules/account/services/verification.ts`** — Consumer. The verification-link resend flow uses the same `cooldownRemaining` / `resendTooSoon` pair to keep its countdown and 429 semantics identical to the 2FA flow.
+- `src/infrastructure/http/response.ts`: supplies `generateRateLimited` and the `ResponseReject` type. `resendTooSoon` delegates the actual 429 construction to it.
+- The other neighbors are the consumers named in the module doc: `src/modules/account/services/verification.ts` (verification link) and `src/modules/account/two-factor/delivered-codes.ts` (2FA delivered code). The remaining neighbors are `email-change.ts`, `password-reset-request.ts` and `two-factor-outcomes.ts`. This file does not import any of them, and its source does not say how they use it.
 
 ## Notes
-
-- Rounding is `Math.ceil`, never `Math.floor` or `Math.round` — the intent is that a client never re-enables its resend button one tick early.
-- This module holds no i18n keys, no database handle, and no configurable clock; the caller supplies the anchor `Date`, the window in seconds, and pre-translated text.
-- An absent `sentAt` (i.e. `undefined`) short-circuits to `0`; the code does not treat a past-date `sentAt` differently from a future one beyond the `Math.max(0, …)` clamp.
+- `details.retryAfter` is intended to equal the `resendAfter` value the successful response promised. A client that honors that promise should never see this 429.
+- Rounding up means the reported wait can be up to a second longer than the true remaining time. That is deliberate.

@@ -1,34 +1,27 @@
 ---
 source: src/modules/account/tests/integration/jobs.test.ts
-sha256: cee3b04b6b8482896a5715f2f2286c54541f575a81613285f29613b7d04d4023
-generated_at: 2026-11-08T04:37:23.580925+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 00b533a363d3dd850e367353e9cb59769f781f302665f978a75a81032ea5f6e9
+context_sha256: 07b755bdd0873d19487e3996219e18abbfa1a90ac962c150d2d60e7844429c92
+generated_at: 2026-11-22T03:55:50.367477+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/jobs.test.ts
 
 ## Purpose
-
-Integration test suite that verifies each declared account job resolves to the expected result shape (counts of swept rows/files). All counts are asserted as zero because the test DB is empty, confirming the jobs execute without error and return the documented contract.
+Integration test that runs each of the `account` module's declared jobs and asserts what each one resolves: a count of what it swept. These resolved values are what the demo profile's `POST /__test/jobs/:name` returns, so a journey can assert that a job did something.
 
 ## Key elements
-
-- **`run(name: string): Promise<unknown>`** — module-private helper. Looks up a job in the `accountJobs` array by name, throws `Error('no such job: …')` if missing, and invokes `job.run()`.
-- **`setupTestDb()`** — called once at module top-level to provision a clean test database before any test executes.
-- **`describe('account jobs')`** — contains three `it` blocks, one per job:
-  - `reap:inactive-accounts` — sets `NODE_INACTIVE_ACCOUNT_DAYS` and `NODE_INACTIVE_MINIMISE_DAYS` to `'0'` (both dials off), then asserts the result is `{ minimised: 0, warned: 0, softDeleted: 0, hardDeleted: 0 }`.
-  - `reap:previous-emails` — asserts `{ cleared: 0 }`.
-  - `reap:account-exports` — asserts `{ rows: 0, files: 0 }`.
+- `run(name)`: looks up a job by `name` in `accountJobs`, calls its `run()`, and returns the result. Throws `no such job: <name>` if no job matches.
+- `reap:inactive-accounts` test: with `NODE_INACTIVE_ACCOUNT_DAYS` and `NODE_INACTIVE_MINIMISE_DAYS` both `'0'` (both dials off), expects `{ minimised: 0, warned: 0, softDeleted: 0, hardDeleted: 0 }`.
+- `reap:previous-emails` test: expects `{ cleared: 0 }`.
+- `reap:account-exports` test: expects `{ rows: 0, files: 0 }`.
 
 ## Relationships
-
-- **`src/modules/account/jobs.ts`** — provides `accountJobs`, the array of job descriptors that this file iterates and invokes. Changing a job's `name` or its resolved return shape here will break the corresponding test.
-- **`tests/support/environment.ts`** — provides `setEnvironment`, used to stub process env vars (`NODE_INACTIVE_ACCOUNT_DAYS`, `NODE_INACTIVE_MINIMISE_DAYS`) before running `reap:inactive-accounts`.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb`, which the file calls at import time to create a fresh test schema.
+- `src/modules/account/jobs.ts`: provides `accountJobs`, the list of jobs (each with a `name` and `run()`) that this test looks up and executes.
+- `tests/support/setup-test-db.ts`: `setupTestDb()` is called at module level to prepare the test database (imported as `@tests/setup-test-db`).
+- `tests/support/environment.ts`: `setEnvironment()` sets the env vars for the inactive-accounts test (imported as `@tests/environment`).
 
 ## Notes
-
-- `setupTestDb()` is invoked at **module top-level**, not inside a `beforeAll`/`beforeEach` hook. It runs exactly once when the file is first imported by the test runner.
-- The `run` helper does no special handling beyond a linear `Array.find`; a typo in a job name surfaces as a thrown `Error` rather than a Jest assertion failure.
-- The file header comment references `POST /__test/jobs/:name` as the demo-profile endpoint that exposes the same resolved counts, tying the test contract to the API surface.
-- All three tests assert against a **zero-row** result set. They do not seed data or verify that rows *are* swept—only that the job runs and returns the documented keys.
+- All expected counts are zero, so these tests check each job's result shape and that it runs cleanly, not that it actually removes anything.
+- Only the inactive-accounts test sets environment values explicitly.

@@ -1,43 +1,36 @@
 ---
 source: src/infrastructure/adapters/ssrf-guard.ts
-sha256: f95aadda2b7fd6db62f2734038628e4091a688dd0a39b399fa5f0be7d9c5cf9d
-generated_at: 2026-11-14T17:55:37.748032+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:43:01.971200+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/ssrf-guard.ts
 
 ## Purpose
-
-SSRF guard for outbound requests this server initiates on a user's behalf (webhook delivery, OAuth avatar re-host). It resolves a URL's DNS, validates **every** resolved address against an allowlist, and returns a target pinned to the validated address so a second DNS lookup at connect time cannot answer differently (DNS-rebinding TOCTOU). Lives in `infrastructure` because it performs DNS I/O.
+SSRF guard for outbound requests the server makes on someone else's behalf (currently webhooks and the OAuth avatar re-host). It follows resolve → validate → pin, so a second DNS lookup can't return a different answer after a target is approved (DNS-rebinding TOCTOU). It lives in infrastructure rather than `domain/` because it performs DNS I/O. Range rationale and what is left to callers (redirects, timeouts) are documented in the project's SSRF defence documentation, referenced from the module docblock.
 
 ## Key elements
-
-- **`resolveSafeOutboundTarget`** (exported) — public API: takes a raw URL string (and optional `AbortSignal`), runs all checks, returns a `SafeOutboundTarget` or rejects with `SsrfRefusedError`.
-- **`SafeOutboundTarget`** (exported interface) — `{ hostname, resolvedAddress, lookup }`; `lookup` is a `node:net` `LookupFunction` that always answers with the pre-validated address, to be passed as `https.request`'s `lookup` option.
-- **`SsrfRefusedError`** (exported) — error subclass carrying a `reason: SsrfRefusalReason` so callers and tests can branch on *why* a URL was refused.
-- **`SsrfRefusalReason`** (exported type) — six-literal union: `invalid-url`, `insecure-scheme`, `credentials-in-url`, `dns-resolution-failed`, `unsafe-address`, `unsafe-port`.
-- **`isAddressUnsafe`** (internal) — allowlist via `ipaddr.js`: only `range() === 'unicast'` passes; manually refuses `::/96` (RFC 4291) which `ipaddr.js` misclassifies; unwraps IPv4-mapped IPv6.
-- **`resolveAllAddresses`** (internal) — queries A and AAAA independently with `Promise.allSettled`; a literal IP short-circuits. Returns *all* addresses so every one is validated.
-- **`buildPinnedLookup`** (internal) — fabricates the `LookupFunction` that ignores the hostname and always returns the single validated address (handles both `all: true` and single-address callback shapes).
-- **`rejectOnAbort` / `abortReason`** (internal) — races a promise against an `AbortSignal` because `node:dns/promises` `resolve4`/`resolve6` accept no signal; duck-types `signal.reason` to survive Jest cross-realm `instanceof` failures.
+- `SsrfRefusalReason`: union of refusal causes: `invalid-url`, `insecure-scheme`, `credentials-in-url`, `dns-resolution-failed`, `unsafe-address`, `unsafe-port`.
+- `SsrfRefusedError`: `Error` subclass carrying a `reason`, so callers and tests can branch on why a URL was refused.
+- `SafeOutboundTarget`: result shape with `hostname`, `resolvedAddress` (the single validated address), and `lookup`, a `LookupFunction` to pass to `https.request` so the connection uses the validated address instead of re-resolving.
+- `parseOutboundUrl` (internal): runs the no-I/O checks first. It requires `https:` and rejects embedded credentials, with no exemptions for either. It relies on WHATWG `new URL()` normalizing decimal/octal/hex IPv4 literals to dotted-decimal.
+- `isPortAllowed` (internal): allows 443 (or an omitted port) plus any port in `outboundConfig().NODE_OUTBOUND_ALLOWED_PORTS`.
+- `isAddressUnsafe` (internal): allowlist check. It returns true unless the `ipaddr.js` library classifies the address as `unicast`. It unwraps IPv4-mapped IPv6, treats non-IP strings as unsafe, and refuses the deprecated `::/96` block by CIDR.
+- `resolveAllAddresses` (internal): a literal IP resolves to itself. A hostname is looked up with `resolve4` and `resolve6` via `Promise.allSettled`, and it fails with `dns-resolution-failed` only if neither returns anything. An optional `AbortSignal` is raced against the lookup.
+- `abortReason` / `rejectOnAbort` (internal): turn an abort signal into a rejected `Error`. `abortReason` duck-types `name`/`message` rather than using `instanceof`, because of Jest cross-realm `DOMException` mismatches. `rejectOnAbort` is needed because `resolve4`/`resolve6` accept no signal.
+- `buildPinnedLookup` (internal): a `lookup` that ignores the hostname and always returns the validated address. It handles both the `all: true` and single-address callback shapes.
+- `resolveSafeOutboundTarget`: the main entry point. It resolves a URL, validates every resolved address, and returns a pinned `SafeOutboundTarget`. It fails closed: any unsafe address refuses the whole hostname. Every refusal, including parse errors, is a rejected promise rather than a synchronous throw. The rest of its implementation is not shown here.
 
 ## Relationships
-
-- **`./ssrf-exemptions`** — imports `isSsrfExemptOrigin`; an exempt origin skips the address-safety check (but *not* the scheme or credentials checks).
-- **`./config`** — imports `outboundConfig` to read `NODE_OUTBOUND_ALLOWED_PORTS` for the port gate.
-- **`pinned-https.ts`** — related outbound adapter in the same directory; appears in the dependency graph as a sibling consumer of this guard's output.
-- **`src/modules/webhooks/transport/webhook-delivery.ts`** and **`src/modules/webhooks/services/subscriptions.ts`** — callers that invoke the guard before delivering a webhook to a user-supplied URL.
-- **`tests/unit/infrastructure/adapters/ssrf-guard.test.ts`** — unit tests covering each refusal reason and the happy path.
-- **`tests/fuzz/ssrf-guard.fuzz.test.ts`** — fuzz-testing of the guard with arbitrary/malformed URLs and DNS answers.
-- **`tests/cross-cutting/ssrf-conformance.test.ts`** — cross-cutting conformance suite verifying the guard's behaviour against a shared spec.
-- **`tests/unit/infrastructure/adapters/remote-image.test.ts`** — tests for the OAuth avatar re-host path (the other named caller in the module docblock).
-- **`tests/unit/infrastructure/adapters/pinned-https.test.ts`** — unit tests for the pinned-https adapter, exercising the guard's output in context.
+- `src/infrastructure/adapters/config.ts`: provides `outboundConfig()`, whose `NODE_OUTBOUND_ALLOWED_PORTS` drives the port allowlist.
+- `src/infrastructure/adapters/ssrf-exemptions.ts`: provides `isSsrfExemptOrigin`, which is imported here. Per the comments, an exemption (such as the demo host) only ever covers the address check, never scheme or credentials.
+- `src/infrastructure/adapters/pinned-https.ts`: a related adapter. It is presumably where the pinned `lookup` gets used for the actual request, but that is not visible in this file.
+- `src/modules/webhooks/services/subscriptions.ts` and `src/modules/webhooks/transport/webhook-delivery.ts`: webhook callers, per the module docblock.
+- `tests/unit/infrastructure/adapters/remote-image.test.ts` covers the OAuth avatar re-host, the other caller named in the docblock.
+- Tests: `tests/unit/infrastructure/adapters/ssrf-guard.test.ts` (unit), `tests/fuzz/ssrf-guard.fuzz.test.ts` (fuzz), `tests/cross-cutting/ssrf-conformance.test.ts` (cross-cutting), `tests/unit/infrastructure/adapters/pinned-https.test.ts` and `tests/unit/infrastructure/adapters/remote-image.test.ts`.
 
 ## Notes
-
-- **Fails closed on multi-address answers.** If *any* resolved address is non-unicast, the entire hostname is refused — returning "the first address" would be the naive bypass this module exists to prevent.
-- **All refusals are async.** Even the synchronous URL-parse step is wrapped in `Promise.resolve().then(…)` so callers can uniformly `.catch()`; a sync throw from line 1 would skip that handler.
-- **`ipaddr.js` is used as an allowlist, not a blocklist.** Only `unicast` is accepted; benchmarking, NAT64, 6to4, Teredo, site-local, and any unregistered range are all refused by default.
-- **WHATWG URL parsing does work for this guard.** Decimal (`2130706433`), octal, and hex IPv4 literals are normalised to dotted-decimal by `new URL()` *before* `.hostname` is read, so they reach `isAddressUnsafe` in canonical form.
-- **The `lookup` pin is the security-critical output.** Without passing it to `https.request`, Node re-resolves the hostname at connect time, reopening the TOCTOU window.
+- Redirects and timeouts are deliberately left to the caller.
+- Address checking is an allowlist (`unicast` only), so unlisted special-purpose ranges are refused by default.
+- Every resolved address is validated, not just the first, because an attacker needs only one private answer.
+- Stryker mutation-testing disable comments mark a few equivalent mutants.

@@ -1,45 +1,37 @@
 ---
 source: scripts/contracts/openapi-extensions.ts
-sha256: 98477cbe888ea89f484777b9aa220e2f8145eafe13df7a68af53c8311a4dbbc4
-generated_at: 2026-11-14T17:27:52.540092+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 22371fe31ef43acdc7f355298c857b6d8f63b2f35839d1792ac5a7f340664c5d
+context_sha256: e9e6feddf819c8755656dc72e117264c2648bb74e882628c8452d803ae9810ec
+generated_at: 2026-11-22T01:58:38.981614+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/openapi-extensions.ts
 
 ## Purpose
-
-Implements the contract-extension mechanism that lets one module append values to another module's open enums or variants to its `oneOf` unions. It discovers `openapi.<owner>.yaml` fragment files on disk, validates them against the owner's declared schemas, and provides steps that integrate the extensions into the bundled OpenAPI document (enum filling, union variant appending, and redocly-mediated `$ref` resolution).
+Lets one module extend another module's open enums and unions through a fragment file of its own (`src/modules/<m>/openapi.<owner>.yaml`), without the owner naming the extension. The fragment carries an `x-extends` map and, for unions, the schemas being added. This file discovers and validates those fragments and provides the bundle steps that apply them. Deleting the extending module removes its fragment, so the owner's contract falls back to its own values and variants. It is used instead of OpenAPI Overlay 1.0, which is OpenAPI-only (AsyncAPI has no twin) and would add a new tool next to the bundler's own `x-` steps.
 
 ## Key elements
-
-- **`ExtensionFragment`** (interface) — A parsed fragment: owning module, target owner, file path, `extendsSchemas` map, and added `schemas`.
-- **`extensionFragments(modulesRoot?)`** (exported) — Walks `src/modules/*/` for files matching `openapi.<owner>.yaml`, parses them via `readFragment`, and validates ownership via `requireOwner`. Returns fragments sorted by module then file name.
-- **`enumSourcesOf(fragments)`** (exported) — Aggregates the values each fragment appends per schema name, for consumption by the enum-filling step.
-- **`checkExtensions(fragments)`** (exported, returns a `Step`) — Validates that every `x-extends` target is either a `oneOf` or declares `x-enum-from: <name>`; runs before `withFilledEnums` so the marker is still present.
-- **`withExtensionSchemas(rootText, fragments, modulesRoot?)`** (exported) — Inserts each fragment's schemas as `$ref` entries into the root document's `components.schemas` so redocly resolves them; throws on name collision.
-- **`readFragment`** (internal) — Parses one YAML file; returns `undefined` if the file lacks `x-extends` (i.e., it is a different fragment kind).
-- **`requireOwner`** (internal) — Confirms the owner module ships its own contract file and declares every schema the fragment targets.
-- **`appendVariants`** (internal) — Pushes `{$ref}` entries into a union's `oneOf` and updates its `discriminator.mapping`; reads each variant's discriminator value from `properties.<prop>.enum[0]`.
-- **`moveToEnd`** (internal) — Reorders fragment schemas to the tail of the schema map so generator output lists extensions last.
-- **`FRAGMENT_NAME`** — Regex `/^openapi\.([a-z][a-z0-9-]*)\.yaml$/` used to identify extension files and extract the owner name.
+- `ExtensionFragment` — parsed fragment: `module` (the shipper), `owner` (from the file name), `file`, `extendsSchemas` (schema name to appended values or schema names), and `schemas` (the schemas it adds).
+- `extensionFragments(modulesRoot = MODULES_ROOT)` — scans `src/modules/*/openapi.<owner>.yaml`, parses each, and validates the owner. Returns fragments ordered by module name, then file name.
+- `enumSourcesOf(fragments)` — merges the appended enum values per schema name, in fragment order, as input for `withFilledEnums`.
+- `checkExtensions(fragments)` — a `Step` that rejects an `x-extends` target that is missing from the bundle, or that is neither a `oneOf` nor an enum declaring `x-enum-from: <name>`. It runs before `withFilledEnums`, which consumes the marker.
+- `withExtensionSchemas(rootText, fragments, modulesRoot)` — edits the root YAML with the `yaml` Document API. Each fragment schema is added as a `$ref` to the staged fragment file (`../../src/modules/<module>/<file>#/components/schemas/<name>`). Redocly then resolves the refs, so a bad `$ref` fails the bundle as it would anywhere else. It throws if the root already declares the schema.
+- `appendVariants(...)` (internal) — pushes `$ref`s onto a union's `oneOf`. If the union has a `discriminator.mapping`, it also adds a mapping entry. The value is read from each variant's `properties.<propertyName>.enum[0]` (`discriminatorValueOf`). It throws on a reused discriminator value.
+- Internal helpers: `readFragment`, `requireOwner`, `schemasOf`.
+- The file continues past this point with further steps. They include moving fragment schemas to the end of the schema map in fragment order.
 
 ## Relationships
-
-- **`scripts/contracts/extends-map.ts`** — Imports `parseExtendsMap` (validates the `x-extends` shape) and `requireDeclared` (ensures a variant name has a corresponding schema in the fragment).
-- **`scripts/contracts/fragments.ts`** — Imports `readOpenApiFragment` to read the owner's contract for validation in `requireOwner`.
-- **`scripts/contracts/openapi-document.ts`** — Imports the `OpenApiDocument` and `Step` types; the steps returned by this file are composed into the post-bundle pipeline defined there.
-- **`scripts/contracts/openapi-bundle.ts`** — This module runs as a post-bundle step alongside the other `x-` processing steps in the bundle pipeline (referenced in the file's module JSDoc).
-- **`scripts/modules-on-disk.ts`** — Imports `MODULES_ROOT` as the default discovery directory.
-- **`src/infrastructure/object-guards.ts`** — Imports `isPlainObject` for runtime narrowing of parsed YAML values.
-- **`tests/unit/scripts/contracts/openapi-extensions.test.ts`** — Unit tests exercising the exported functions.
-- **`tests/unit/scripts/contracts/analytics-browser-events.test.ts`** — Tests that exercise extension behavior in the context of the analytics-browser-events contract.
+- `./extends-map` — supplies `parseExtendsMap` (parses `x-extends`) and `requireDeclared` (checks that named variant schemas are declared in the fragment).
+- `./fragments` — `readOpenApiFragment` reads the owner module's contract file to confirm it declares each extended schema.
+- `./openapi-document` — supplies the `OpenApiDocument` and `Step` types.
+- `./openapi-bundle` — the bundler that runs these as post-bundle steps, like its other `x-` steps. The `withFilledEnums` step (`./fill-enum`) uses `enumSourcesOf`.
+- `../modules-on-disk` — provides `MODULES_ROOT`.
+- `../../src/infrastructure/object-guards` — provides `isPlainObject`.
+- Tests: `tests/unit/scripts/contracts/openapi-extensions.test.ts` covers this module directly. `analytics-browser-events.test.ts` is also related.
 
 ## Notes
-
-- The file explicitly states it is **not** OpenAPI Overlay 1.0; it is a custom `x-` step that works alongside the bundler's own post-bundle processing.
-- Extension schemas reach the bundle through **redocly `$ref` resolution**, not a hand-written merge — a broken ref in a fragment fails the bundle identically to a broken ref in any module's own contract.
-- The owner module **never names the extension**; removing the extending module's directory automatically reverts the owner's contract to its own values.
-- `withExtensionSchemas` uses the `yaml` package's `parseDocument` API (in-place editing) to preserve the root document's shape; output is serialized with `lineWidth: 0, indent: 4`.
-- Order of schemas in the final map is semantically meaningful: generators emit declarations in map order, so `moveToEnd` ensures extensions appear last.
-- An empty or comment-only fragment file is treated as an error (not silently ignored) to prevent accidental loss of intended extensions.
+- Fragment file names must match `openapi.<owner>.yaml`, with the owner in lowercase kebab-case. A file without `x-extends` is silently skipped as another fragment kind. An empty or comment-only file throws, so a module's additions are never dropped silently.
+- Owners opt in by shape: an enum declares `x-enum-from: <own name>`, and a union is a `oneOf`.
+- Errors are prefixed `[openapi] <file>:` and name the fragment and schema.
+- Output YAML from `withExtensionSchemas` uses a 4-space indent and no line wrapping.

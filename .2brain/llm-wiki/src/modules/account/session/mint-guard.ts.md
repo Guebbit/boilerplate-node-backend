@@ -1,34 +1,30 @@
 ---
 source: src/modules/account/session/mint-guard.ts
-sha256: d64bab2426935e629e7d5624467bcb802f3c293707615a3cad9e65efde83dae4
-generated_at: 2026-11-08T04:29:46.545360+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7f080b48c2ba61f3660ed3ff5e5f859ce47caa766681ef5ef5d3b87b080a1991
+context_sha256: d9c3ed83463f5c2792bc497e665c4f2fff5435e6cbf9f9356c2443e20698cf35
+generated_at: 2026-11-22T03:48:28.493129+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/session/mint-guard.ts
 
 ## Purpose
-
-Enforces the two invariants a **first** (not re-minted) session must satisfy at the moment it is issued: the proof must carry a second factor when one is armed, and the proof must not predate the account's current epoch. Both session modes call these guards inside `issue`; they are the last line of defense against a login path that skipped the challenge or raced an epoch transition.
+Defines the checks a first session must pass at the point it is minted, rather than only where a login flow branches. Both session modes call these guards from `issue` (never from a re-mint), so a login path that skipped the second-factor challenge or raced a password change/logout-everywhere still cannot obtain a session.
 
 ## Key elements
-
-- **`assertSecondFactor(user, amr)`** — Throwing guard. If `user.twoFactorEnabledAt` is set and `amr` lacks the `otp` marker, throws `SecondFactorRequiredError`. Delegates the actual predicate to `firstSessionRefused`.
-- **`assertProofCurrent(user, provedAt)`** — Throwing guard. If the account's `tokensValidAfter` epoch post-dates `provedAt`, throws `StaleProofError`. Delegates to `proofPredatesEpoch`.
-- **`SecondFactorRequiredError`** — Domain error; carries `userId`. Signifies the proof arrived without a second factor despite one being armed.
-- **`StaleProofError`** — Domain error; carries `userId`. Signifies the proof was validated before the account's epoch advanced (password change, global logout).
+- `assertSecondFactor(user, amr)` — throws `SecondFactorRequiredError` if `firstSessionRefused(Boolean(user.twoFactorEnabledAt), amr)` is true, i.e. a second factor is armed but the proof's `amr` carries no `otp`. Takes `user: { id, twoFactorEnabledAt? }`.
+- `SecondFactorRequiredError` — carries `userId`; message "A second factor is armed for this account and the proof carries none".
+- `assertProofCurrent(user, provedAt)` — throws `StaleProofError` if `proofPredatesEpoch(provedAt, user.tokensValidAfter)` is true. `provedAt` is epoch milliseconds from when the proof's check began; `user` is `{ id, tokensValidAfter? }`.
+- `StaleProofError` — carries `userId`; message "The account ended its sessions after this proof was checked".
 
 ## Relationships
-
-- **`src/modules/account/domain/epoch.ts`** — Supplies `proofPredatesEpoch`, the comparison used by `assertProofCurrent`.
-- **`src/modules/account/domain/session-proof.ts`** — Supplies `firstSessionRefused`, the predicate used by `assertSecondFactor`.
-- **`src/modules/account/session/cookie-strategy.ts`** / **`src/modules/account/session/jwt.ts`** — The two session modes that call these guards from their respective `issue` implementations.
-- **`src/modules/account/tests/integration/session-mint-guard.test.ts`** — Direct integration coverage of both guards.
-- **`src/modules/account/tests/integration/session-modes.test.ts`** — Exercises the guards as part of full session-mode flows.
+- `src/modules/account/domain/session-proof.ts` — supplies `firstSessionRefused`, which holds the second-factor decision logic used by `assertSecondFactor`.
+- `src/modules/account/domain/epoch.ts` — supplies `proofPredatesEpoch`, which holds the epoch comparison used by `assertProofCurrent`.
+- `src/modules/account/session/cookie-strategy.ts` and `src/modules/account/session/jwt.ts` — the two session modes' `issue` paths, which per the module docs are the callers of these guards.
+- Tests: `src/modules/account/tests/integration/session-mint-guard.test.ts` (guard behavior at mint), `src/modules/account/tests/integration/session-modes.test.ts`, `src/modules/account/tests/unit/cookie-strategy.test.ts`, and `src/modules/account/tests/unit/session-strategy.test.ts`.
 
 ## Notes
-
-- Guards are invoked **only** from `issue`, never from re-mint paths. A re-mint (e.g. cookie refresh) does not re-check these invariants.
-- `assertProofCurrent` reads `tokensValidAfter` from the account object the mint just loaded, so it catches epoch transitions that committed *between* the original proof check and the mint commit.
-- `amr` is typed `readonly string[]`; callers pass the AMR array extracted from the proof.
-- Both error classes expose `userId` as a public readonly field for downstream error-handling / logging.
+- The guards are a backstop: login paths are expected to branch to the challenge first, so `SecondFactorRequiredError` signals a path that forgot to.
+- `assertProofCurrent` is meant to run against the account the mint has just loaded, so a password change committed between the proof check and the mint is detected.
+- `tokensValidAfter` is optional; it is absent when nothing ever moved the epoch.
+- Re-mints are intentionally not guarded.

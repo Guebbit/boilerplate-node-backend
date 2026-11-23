@@ -1,36 +1,38 @@
 ---
 source: scripts/contracts/prune-unused.ts
-sha256: 2c500fab96fee66dd55feee3f328837c91a3ee609b017659af632277b6a3adc7
-generated_at: 2026-11-14T17:28:30.732846+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d31e0d20f437a79fa0a9d3b04c46fe9716d153a82a970a5c6581e379a8fb6b43
+context_sha256: 9b73929727e3a96facdc5a95b3d80be3f0ad5d726855d25566642d4745ac1921
+generated_at: 2026-11-22T01:59:38.707877+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/prune-unused.ts
 
 ## Purpose
-
-Final pipeline step that removes every OpenAPI component no operation or other component references, plus every tag no operation uses. It exists because deleting an API module orphans its components (security schemes, schemas, responses) in the shared root document, and the published contract must not describe what the deployment no longer has.
+The last step applied to the bundled OpenAPI document. It removes every component that nothing reaches and every tag no operation uses, so the published contract doesn't keep describing parts of the deployment that were deleted (for example, a security scheme or response that only a removed module's routes used).
 
 ## Key elements
-
-- **`pruneUnused`** (exported `Step`) — Entry point. Computes reachability, then deletes unreferenced components and unused tags in-place on the `OpenApiDocument`.
-- **`reachable`** — Splits the document into `components` and everything else, collects external refs, then iteratively (queue-based) follows refs *through* components to find the full transitive closure of used pointers.
-- **`collect`** — Recursive walker over a JSON node; accumulates `$ref` strings under `#/components/`, security-scheme names (from `security` arrays), and operation tag names (from `tags` arrays). Skips `x-tagGroups`.
-- **`collectSchemes`** — Extracts scheme names from a single `security` requirement array.
-- **`pointerOf`** — Builds a `#/components/<kind>/<name>` pointer string.
-- **`Findings`** — Interface holding the three collected `Set`s (`refs`, `schemes`, `tags`).
-- **`ComponentMap`**, **`COMPONENT_PREFIX`** — Type alias and the `#/components/` prefix constant.
+- `pruneUnused` (exported, typed as `Step`): mutates the document in place. It finds what is reachable, deletes unreferenced entries from each `components` section, filters `document.tags` to the used ones, and trims `x-tagGroups`. Groups left with no tags are dropped.
+- `reachable(document, found)`: walks everything outside `components` and records the `$ref` pointers it finds. It then follows those pointers into the components they reach, using a work queue, until no new pointers appear.
+- `collect(node, found, key)`: generic JSON walk. It records:
+  - `$ref` strings that start with `#/components/`.
+  - Scheme names from `security` arrays (via `collectSchemes`).
+  - Tag names from `tags` arrays of strings.
+- `collectSchemes`: adds the keys of each `security` requirement object to `found.schemes`.
+- `pointerOf(kind, name)`: builds `#/components/<kind>/<name>`.
+- `Findings`: the accumulator, holding `refs`, `schemes` and `tags` as sets.
+- `COMPONENT_PREFIX`: `#/components/`.
 
 ## Relationships
-
-- **`openapi-document.ts`** — Supplies the `OpenApiDocument` and `Step` types that `pruneUnused` implements/consumes.
-- **`openapi-bundle.ts`** — Orchestrates the pipeline; `pruneUnused` is registered as the last step it runs.
-- **`object-guards.ts`** — Provides `isPlainObject`, used throughout the walk to distinguish plain JSON objects from arrays and primitives.
-- **`tests/unit/scripts/contracts/prune-unused.test.ts`** — Unit tests exercising reachability, tag pruning, and `x-tagGroups` filtering.
+- `./openapi-document`: supplies the `OpenApiDocument` and `Step` types. `pruneUnused` is a `Step` in the bundling pipeline.
+- `src/infrastructure/object-guards`: provides `isPlainObject`, used to guard every walk.
+- `./openapi-bundle`: a graph neighbor. This file does not import it, and the header comment only says this step runs last.
+- `tests/unit/scripts/contracts/prune-unused.test.ts`: unit tests for this step.
 
 ## Notes
-
-- **Ordering is critical.** This step must run *after* steps that inject new references (e.g. `ETag`, `IfMatchHeader`, `PreconditionFailed`, 413/415 responses). Running `redocly bundle --remove-unused-components` in their place would delete components those later steps still need.
-- **Security schemes are tracked by name, not by `$ref`.** A scheme is kept if any `security` requirement array names it; a plain `#/components/securitySchemes/<name>` ref is not sufficient on its own.
-- **`x-tagGroups` is intentionally excluded from tag collection.** A family *lists* its tags without "using" them in the OpenAPI sense; counting it would keep every tag alive. After pruning, groups whose tags all vanish are removed from `x-tagGroups` as well.
-- The component reachability walk is **iterative** (explicit queue) rather than recursive, to avoid stack overflow on deeply nested component graphs.
+- Ordering matters. The step must run last: `redocly bundle --remove-unused-components` is too early, because earlier steps add references (`ETag`, `IfMatchHeader`, `PreconditionFailed`, the 413 and 415 responses) that an early prune would delete.
+- Security schemes are kept by name, through `security` requirements. They are not kept by `$ref`.
+- `x-tagGroups` is skipped during the walk, so listing a tag there doesn't keep it alive. Its group tag lists are then filtered to the surviving tags.
+- Only in-document `#/components/...` refs are tracked.
+- The `components` cast to `ComponentMap` is a narrowing, not a conversion.
+- Deletion uses `Reflect.deleteProperty` on the existing component maps.

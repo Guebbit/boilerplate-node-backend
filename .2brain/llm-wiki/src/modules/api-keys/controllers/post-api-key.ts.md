@@ -1,31 +1,33 @@
 ---
 source: src/modules/api-keys/controllers/post-api-key.ts
-sha256: 36c785a243bd646f45149c280a4fbdb4d66175ba93f205c9006b039fe37d9286
-generated_at: 2026-11-08T05:02:02.177560+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 36c785a243bd646f45149c280a4fbdb4d66175ba93f205c9006b039fe37d9286
+context_sha256: 12d3625b695e9ac946fe722d31e46149b73a8ac35778557e11c8aa595843b2a6
+generated_at: 2026-11-22T04:20:52.281350+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/api-keys/controllers/post-api-key.ts
 
 ## Purpose
-
-HTTP controller that handles `POST /api-keys`. It validates the request body against a Zod schema, delegates to the api-keys service to mint a new credential, and emits a `201 Created` response with a `Location` header pointing to the new resource.
+Express controller for `POST /api-keys`. It validates the request body, asks the API keys service to mint a credential, and returns a 201 Created response with the new key's location.
 
 ## Key elements
-
-- **`mintApiKey`** (exported) — The sole export. Accepts an Express `Request`/`Response`, parses the body with `CreateApiKeyBody`, calls `apiKeysService.mintApiKey` with the parsed payload and tenant/caller context, then either returns a `201` with the created key or propagates a refusal / error.
+- `mintApiKey(request, response)`: the exported handler.
+  1. Parses `request.body` with the `CreateApiKeyBody` zod schema via `parseBody`. If parsing fails it returns early (`parseBody` is passed `response`).
+  2. Calls `apiKeysService.mintApiKey(body, tenantCallerContextOf(request))`.
+  3. If `refused(response, result)` is true, it returns without further action.
+  4. Otherwise it sends `createdResponse<ApiKeyCreated>(response, result.data, '/api-keys/<id>')`.
+  5. Any promise rejection goes to `catchAs(response, 'createApiKey')`.
 
 ## Relationships
-
-- **`src/modules/api-keys/routes.ts`** — Registers `mintApiKey` as the handler for the `POST /api-keys` route.
-- **`src/modules/api-keys/services/index.ts`** — Provides `apiKeysService.mintApiKey`, the domain operation that actually creates the key and enforces the permission-subset rule (returning a 422 via the `refused` shape when it fails).
-- **`src/infrastructure/http/controller.ts`** — Supplies the `parseBody`, `refused`, and `catchAs` helpers used for validation, error mapping, and exception handling.
-- **`src/infrastructure/http/request.ts`** — Supplies `tenantCallerContextOf`, which extracts tenant and caller identity from the request for the service call.
-- **`src/infrastructure/http/response.ts`** — Supplies `createdResponse`, which builds the `201` + `Location` reply.
-- **`src/types/index.ts`** — Provides the `CreateApiKeyRequest` (body shape) and `ApiKeyCreated` (response payload) types.
+- `src/infrastructure/http/controller.ts`: provides `parseBody` (schema validation), `refused` (turns a service refusal into an HTTP response) and `catchAs` (error handler).
+- `src/infrastructure/http/request.ts`: `tenantCallerContextOf` builds the tenant and caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `createdResponse` builds the success response.
+- `src/modules/api-keys/services/index.ts`: exports `apiKeysService`, which does the minting.
+- `src/types/index.ts` (imported as `@types`): provides the `CreateApiKeyRequest` and `ApiKeyCreated` types.
+- `src/modules/api-keys/routes.ts`: this is the expected place where the handler is mounted. The route wiring is not visible in this file.
 
 ## Notes
-
-- The permission-subset check (a requested key's `permissions` must be ⊆ the caller's own) is enforced **inside the service**, not here. The controller simply forwards the `refused` result from the service back to the client as a 422.
-- The response `Location` header is set to `/api-keys/{id}`; the `id` comes from `result.data.id` returned by the service.
-- Body validation is a short-circuit: if `parseBody` returns a falsy value the function exits without touching the service.
+- Per the doc comment, `permissions` must be a subset of the caller's own permissions. The service enforces this and responds 422 naming the offending keys. The controller does not check it.
+- The error label passed to `catchAs` is `'createApiKey'`, which differs from the handler name `mintApiKey`.
+- The handler returns promises or `undefined` and does not use `async`/`await`.

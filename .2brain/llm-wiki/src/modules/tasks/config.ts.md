@@ -1,30 +1,26 @@
 ---
 source: src/modules/tasks/config.ts
-sha256: a60767343b4367233a3c91af504de350379be85bafbc1a190446ef301c38bdfc
-generated_at: 2026-11-08T08:31:19.819412+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5137097cc3c742d2f94134ea25c941ac7d2412fb47ac26bf2a133d93060ad85b
+context_sha256: da1fa31e4b634ff39d418081d44aade46f22f2dfc666a710dc284a20167989cd
+generated_at: 2026-11-22T07:57:16.053276+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/tasks/config.ts
 
 ## Purpose
-
-Declares the runtime configuration schema for the tasks module. It defines two integer settings — how long a closed task is retained and the SLA window for responding to a contact message — so that operators can override them via environment or config files rather than hard-coding values.
+Declares the configuration for the tasks module: how long closed tasks are retained and how quickly contact-form messages are due (the response SLA). It exists so these two tunables are defined as validated, environment-driven settings in one place.
 
 ## Key elements
-
-- **`tasksConfig`** (exported const) — A `defineConfig` object named `"tasks"` whose `shape` exposes two fields:
-  - `NODE_TASKS_RETENTION_DAYS` — integer, min 1, default 730 (≈ 2 years). Controls how long a closed task is kept.
-  - `NODE_TASKS_CONTACT_SLA_HOURS` — integer, min 1, default 48. Controls how soon a contact message is due.
+- `tasksConfig` — the exported config object, built with `defineConfig` under the name `'tasks'`. Its shape has two integer fields:
+  - `NODE_TASKS_RETENTION_DAYS` — retention of closed tasks, default `730`, minimum `1`.
+  - `NODE_TASKS_CONTACT_SLA_HOURS` — contact-message response SLA, default `48`, minimum `1`.
 
 ## Relationships
-
-- **`src/infrastructure/config/define.ts`** — Supplies the `defineConfig` factory used to build the typed config object.
-- **`src/infrastructure/config/fields.ts`** — Supplies the `int` field descriptor (type, default, min) used for both shape entries.
-- **`src/modules/tasks/model.ts`** / **`service.ts`** / **`module.ts`** — Same-module consumers that read `tasksConfig` at runtime to drive task lifecycle and SLA logic.
+- `src/infrastructure/config/define.ts` — supplies `defineConfig`, which turns the name and shape into the config object.
+- `src/infrastructure/config/fields.ts` — supplies the `int` field helper used for both settings.
+- `src/modules/tasks/model.ts`, `src/modules/tasks/module.ts` and `src/modules/tasks/services/contact.ts` are graph neighbors of this file. This file imports nothing from them, and the file content shows no direct interaction.
 
 ## Notes
-
-- Field names follow the `NODE_TASKS_*` prefix convention (module-scoped env-style keys). The `defineConfig` call likely maps these to the process environment at load time.
-- Defaults are intentionally permissive (730 days, 48 hours); treat them as fallbacks, not targets.
-- See `docs/tools/configuration.md` (referenced in the module docblock) for operator-facing documentation on overriding these values.
+- Both values have a minimum of 1, so a zero or negative value is rejected by the field definition.
+- The file's header carries a `@see` cross-reference about configuration ownership ("who owns what"). Its target path does not match a file in this repository, so check the project's operations docs for the current location.

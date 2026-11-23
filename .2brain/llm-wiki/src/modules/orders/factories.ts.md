@@ -1,39 +1,42 @@
 ---
 source: src/modules/orders/factories.ts
-sha256: 511e61b4b05f65d5ecf37707c1d27ad35cd45dbec0406f4bfe05e0eb7a5b1fdb
-generated_at: 2026-11-14T20:38:09.214142+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 96981659921b892663ae36f0a509c11f28630f59fd5ab814af01ec30fb2973aa
+context_sha256: ca286dccafd1d6267c54085e72fe8c7765fb6c3d49d3ecd322a451490de1e044
+generated_at: 2026-11-22T06:14:45.212696+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/factories.ts
 
 ## Purpose
-
-Factory module for constructing order fixtures ready for `orderRepository.create`. It converts API-contract-shaped data (ids as strings, ISO dates, product references) into a Mongoose `OrderDocument` shape with `ObjectId` fields, real `Date` values, and embedded product **snapshots** (value copies, not references). It exists so test code and other builders can create valid order documents without hand-assembling the nested structure or re-deriving serialization-time fields.
+Test-fixture builder for orders. `makeOrder` turns a caller's partial overrides into an `OrderFixture` ready for `orderRepository.create`. Order items embed a product snapshot (no `ref`), so the builder takes the snapshot as data rather than an id to look up. Stock counts (`onHand`/`reserved`), `deletedAt` on the snapshot and order totals are deliberately not carried, because they are not stored on an order.
 
 ## Key elements
-
-- **`OrderSnapshotInput`** — Type for the product snapshot embedded in an order line. Requires `id`, `title`, `price`; replaces `taxClass` with a resolved `taxRate`; omits `onHand`/`reserved` (no path in the embedded schema).
-- **`OrderLineInput`** — Type for one order line: a snapshot, `quantity`, and an optional `locale`. Derived totals (`current`, `taxAmount`, `netAmount`) are excluded.
-- **`OrderOverrides`** — Type for what a caller may pin on an order. Excludes the three stored-absent totals (`totalItems`, `totalQuantity`, `totalPrice`); replaces `items` with `OrderLineInput[]`.
-- **`OrderFixture`** — Output type: `Partial<OrderDocument> & { _id: ... }`.
-- **`toSnapshot`** (internal) — Maps `OrderSnapshotInput` → `FrozenOrderLineProduct`, converting `id` to `ObjectId`, ISO strings to `Date` via `toDate`, and dropping absent keys via `stripUndefined`.
-- **`nextOrderNumber`** (internal) — Module-level counter producing `1999-000001`-style numbers that cannot collide with real orders on the unique `orderNumber` index.
-- **`makeOrder`** (exported) — The main factory. Fills in identity, defaults (`email`, `currency`, `orderNumber`, `locale`), maps items through `toSnapshot`, and passes optional fields through via `stripUndefined`.
+- `makeOrder(overrides?)` – builds the fixture:
+  - Identity comes from `identityOf({ id, createdAt, updatedAt })`.
+  - `userId` becomes an `ObjectId`.
+  - `email` defaults to `test@example.com`.
+  - `currency` defaults to `shopCurrency()`.
+  - `orderNumber` defaults to a generated one.
+  - `items` default to `[]`.
+- `OrderOverrides` – what a caller may pin, derived from the generated `Order`. It drops `totalItems`, `totalQuantity` and `totalPrice` (derived at serialization). `items` is replaced by `OrderLineInput[]`, and `userId` is added. `status` stays because it is stored.
+- `OrderLineInput` – an `OrderItem` minus the derived `current`, `taxAmount` and `netAmount`. `product` is an `OrderSnapshotInput`, and `locale` is optional.
+- `OrderSnapshotInput` – a `Product` override with `id`, `title` and `price` required. It replaces `taxClass` with a frozen `taxRate` and adds `preorder`.
+- `OrderFixture` – `Partial<OrderDocument>` with a required `_id`.
+- `toSnapshot` (private) – converts the contract product into `FrozenOrderLineProduct`. It maps `id` to an `ObjectId` `_id` and ISO date strings to `Date`s, and it strips undefined fields.
+- `nextOrderNumber` (private) – returns a sequential `1999-000001`-style number. The year 1999 cannot collide with a real order's number on the unique `orderNumber` index.
 
 ## Relationships
-
-- **`@infrastructure/i18n`** — Imports `getDefaultLocale` to default `locale` on each order line when the caller omits it.
-- **`@infrastructure/object-guards`** — Imports `stripUndefined` to guarantee that unspecified optional fields are omitted (not written as `null`/`undefined`) on the resulting document.
-- **`@infrastructure/persistence/factories`** — Imports `identityOf` (id + timestamp defaults), `toDate` (ISO → `Date`), and the `OverridesFor<T>` helper used to derive the override types.
-- **`@types`** — Imports `Id`, `Order`, `OrderItem`, `Product` as the contract types the factory types are derived from.
-- **`./model`** (`src/modules/orders/model.ts`) — Imports `FrozenOrderLineProduct` (the embedded schema shape) and `OrderDocument` (the Mongoose document type).
-- **`@modules/shop`** — Imports `shopCurrency` to supply a sensible default `currency` when the caller does not pin one.
+- `@infrastructure/persistence/factories`: supplies `identityOf`, `toDate` and `OverridesFor`, which are the shared fixture helpers.
+- `@infrastructure/object-guards`: `stripUndefined` keeps unstated fields absent.
+- `@infrastructure/i18n`: `getDefaultLocale()` is the default line `locale`.
+- `@modules/shop`: `shopCurrency()` is the default order currency.
+- `./model`: supplies the `OrderDocument` and `FrozenOrderLineProduct` types the fixture conforms to.
+- `@types`: supplies the contract types `Order`, `OrderItem`, `Product` and `Id`.
 
 ## Notes
-
-- **Module-level mutable state.** `orderNumberSequence` is a plain counter that resets to `0` on module reload (e.g., across separate test files in Jest). Within a single process, two `makeOrder` calls will never share an `orderNumber`; across processes they could, but the `1999-` prefix makes real-collision practically impossible.
-- **`status` is intentionally not defaulted.** The model's own `default: OrderStatus.pending` handles the absent case. Replicating that default here would create two sources of truth.
-- **Shipping/payment fields pass through, never default.** All are optional on the wire; a builder-supplied default would erase the distinction between "not chosen" and "free (pickup)". `stripUndefined` ensures absent stays absent.
-- **Snapshot timestamps are explicit.** Mongoose stamps subdocuments on insert regardless of the parent's `timestamps: false`. Carrying `createdAt`/`updatedAt` explicitly preserves the *product row's* dates rather than silently stamping them with the order's insert time.
-- **No derived totals anywhere.** `totalItems`, `totalQuantity`, `totalPrice`, `taxAmount`, `netAmount`, `current` are all serialization-time derivations (`applyOrderTransform`, `orderTaxBreakdown`). Pinning one in a fixture would be silently dropped on write.
+- `status` is passed through, not defaulted. The model's own `default: OrderStatus.pending` covers "not stated".
+- The shipping columns, addresses, `paymentMethod`, `payBy`, `paidAt`, `termsVersion`, `notes` and `deletedAt` pass through via `stripUndefined`. An unstated column stays absent. This keeps "not chosen" distinct from "free" (`pickup`, priced 0).
+- `makeOrder` destructures its overrides explicitly, so a new `Order` field that is accepted by the type but not added to that list is silently dropped.
+- The snapshot's `createdAt`/`updatedAt` come from the catalogue row. Otherwise subdocument timestamps would stamp the order's placement time.
+- `orderNumberSequence` is module state, so numbers are unique within a test process only.

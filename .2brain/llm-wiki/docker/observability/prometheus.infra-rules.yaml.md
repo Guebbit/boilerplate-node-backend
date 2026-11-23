@@ -1,37 +1,35 @@
 ---
 source: docker/observability/prometheus.infra-rules.yaml
-sha256: 29dd4676d42af9912f2947315374791b2b2a16d68687d75f973c0038e7c2d943
-generated_at: 2026-11-08T02:23:29.881482+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 49c45d54ace83cc1f8fa694bf6f148d21242f84fe0801380eaa7e62cc0c5ad44
+context_sha256: 37482980c0e127adb09003ea756ac7685f0f1bfb8de8e55b802752b84985e0f5
+generated_at: 2026-11-22T01:33:45.734570+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/observability/prometheus.infra-rules.yaml
 
 ## Purpose
-
-Defines Prometheus alert rules for the infrastructure surrounding the application — the alerting pipeline itself, the host filesystem, and the Traefik proxy. It is kept separate from app-level rules (`prometheus.alert-rules.yaml`) because the cross-cutting test `tests/cross-cutting/alert-rules-metrics.test.ts` rejects any `*_total` metric the app does not register, and these rules read Prometheus, Alertmanager, node_exporter, and Traefik metrics instead.
+Prometheus rule file for alerts about the alerting pipeline itself and about the host. These rules read the metrics of Prometheus, Alertmanager and node_exporter, not the app's own metrics. They live apart from the app rules because `tests/cross-cutting/alert-rules-metrics.test.ts` rejects any `*_total` metric the app does not register. The file is mounted next to `prometheus.alert-rules.yaml` in both compose files. Routing is documented in `docs/operate/deployment-hardening.md#alert-routing`.
 
 ## Key elements
-
-- **`alerting.rules` group**
-  - `Watchdog` — `vector(1)`; always firing on purpose. Serves as a heartbeat sent to `ALERT_HEARTBEAT_URL`; the remote service raises the alarm when pings stop.
-  - `AlertmanagerNotificationsFailing` — fires when `alertmanager_notifications_failed_total` increases over 15 min, grouped by integration. Routed to the *other* channel so a broken receiver cannot suppress its own failure alert.
-  - `PrometheusRuleEvaluationFailures` — catches runtime rule-evaluation errors (bad joins, shape changes) that `promtool check rules` in CI would miss.
-
-- **`host.rules` group**
-  - `DiskAlmostFull` — single rule covering both a <10 % free-space threshold and a `predict_linear` trend (full within 24 h at the last 6 h rate). Filters out `tmpfs|ramfs|squashfs|overlay`. `for: 30m` tolerates transient compaction/backup spikes.
-
-- **`proxy.rules` group**
-  - `TlsCertExpiringSoon` — fires when a Traefik-managed certificate (`cn != "TRAEFIK DEFAULT CERT"`) has fewer than 14 days of validity. `for: 1h`.
+- **Group `alerting.rules`**
+  - `Watchdog`: `expr: vector(1)`, severity `none`, always firing on purpose. Alertmanager pushes it to `ALERT_HEARTBEAT_URL` every minute. The external heartbeat service raises the alarm when the pings stop, which is how a dead host, Prometheus, Alertmanager or network gets noticed.
+  - `AlertmanagerNotificationsFailing`: fires when `increase(alertmanager_notifications_failed_total[15m]) > 0`, summed by `integration`. Severity `warning`, `for: 0m`.
+  - `PrometheusRuleEvaluationFailures`: fires when `increase(prometheus_rule_evaluation_failures_total[15m]) > 0`, summed by `rule_group`. Severity `warning`, `for: 0m`. It catches runtime evaluation errors that the static `promtool check rules` in CI cannot see.
+- **Group `host.rules`**
+  - `DiskAlmostFull`: a single rule, severity `warning`, `for: 30m`. It fires when either condition holds on a node_exporter filesystem:
+    - Free space is under 10 %.
+    - `predict_linear` over the last 6 hours says free space reaches 0 within 24 hours.
+    - Filesystems of type `tmpfs`, `ramfs`, `squashfs` and `overlay` are excluded.
 
 ## Relationships
-
-- **`docker/observability/prometheus.production.config.yaml`** — the Prometheus configuration that loads this rules file via `rule_files` in the production compose stack. Without it, none of the groups here are evaluated.
-- **`docker/observability/prometheus.traefik-scrape.yaml`** — defines the scrape job for Traefik's `/metrics` endpoint, which produces the `traefik_tls_certs_not_after` series consumed by the `TlsCertExpiringSoon` alert.
+- `alertmanager.config.template.yaml`: receives these alerts and routes them. `AlertmanagerNotificationsFailing` goes to the other channel, so a failing email goes to the webhook and a failing webhook goes to email. `Watchdog` is pushed to the heartbeat URL.
+- `prometheus.config.yaml`: Prometheus is configured to load this file.
+- `prometheus.infra-rules.test.yaml`: the unit tests for these rules.
+- `gatus.dev.config.yaml`: no interaction is visible in this file's content.
 
 ## Notes
-
-- **Watchdog is not an error.** It is permanently firing by design; the alert fires on the *absence* of the ping at the remote end. Do not "fix" it by changing the expression.
-- **Cross-routing.** `AlertmanagerNotificationsFailing` is delivered on a different receiver than the integration it monitors (see `alertmanager.config.template.yaml`). A failing email alert goes to the webhook and vice-versa.
-- **Let's Encrypt email gap.** Since 2025-06-04 Let's Encrypt no longer sends expiry notification emails; `TlsCertExpiringSoon` is the only remaining expiry signal.
-- **Test constraint.** Because `alert-rules-metrics.test.ts` enforces that only app-registered `*_total` metrics appear in rules, any new infra alert that needs a `*_total` must live in this file, not in `prometheus.alert-rules.yaml`.
+- `Watchdog` is meant to fire constantly. Do not "fix" it.
+- `AlertmanagerNotificationsFailing` is deliberately not routed to the broken receiver.
+- `DiskAlmostFull` combines the percentage and trend conditions in one rule with `or`, so the two never double-alarm. The `for: 30m` rides out compactions and backups that borrow space.
+- Keep non-app metrics in this file, not in the app rules file, so the `*_total` metric test does not reject them.

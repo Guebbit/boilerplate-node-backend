@@ -1,43 +1,41 @@
 ---
 source: shared/contracts/spectral.yaml
-sha256: 78a529d5f151523c9e82384f80ff4309e1704d7585650e5951aefee0b0e58e93
-generated_at: 2026-11-14T17:45:18.881581+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cf392c9c5d4da504fb4c52e79abe52854d1e695922e2266d22a7fd1d903dc0ed
+context_sha256: 32331396b10461038f76d586aaf4b401f62575bfa70c7cf1e26e4c49ff360df6
+generated_at: 2026-11-22T02:24:50.417427+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/contracts/spectral.yaml
 
 ## Purpose
-
-Spectral ruleset (extending `spectral:oas`) that enforces the project's OpenAPI 3.1 house style. Every rule is an **error**-severity gate: it codifies conventions around security declarations, error-response shape, naming (operationIds, schemas, parameters), and field-level bounds so that API contracts are linted consistently before they reach review.
+Spectral lint ruleset for the project's OpenAPI contract. It extends the built-in `spectral:oas` ruleset and adds house rules, all at `error` severity, that enforce API design conventions: declared security, OpenAPI 3.1 idioms, RFC 9457 problem responses, naming, and bounded request strings. It exists so contract drift is caught mechanically rather than in review.
 
 ## Key elements
-
-- **`extends: ['spectral:oas']`** — inherits the standard Spectral OpenAPI rules, then overrides `operation-operationId` and `operation-tags` to error level.
-- **`operation-security-declared`** — every operation must have a `security` field (even `[]` for public), so "forgot the guard" ≠ "deliberately public."
-- **`no-nullable-keyword`** — rejects the OpenAPI 3.0 `nullable: true` keyword (invalid in 3.1 / JSON Schema 2020-12); enforces `type: [X, 'null']` or `oneOf` instead.
-- **`no-refs-typo`** — flags the `$refs` typo.
-- **`error-responses-are-problem-json`** — 4xx/5xx responses must declare only `application/problem+json` (RFC 9457 / Zalando 176); opt-out via `x-not-problem: true`.
-- **`error-responses-have-a-body`** — companion rule: 4xx/5xx must actually declare a `content` block.
-- **`success-body-is-not-an-array`** — 2xx `application/json` schema `type` must not be `array` (Zalando 110).
-- **`verb-replace-is-put` / `verb-update-is-patch`** — operationId prefix must agree with the HTTP method (`replace*` → PUT, `update*` → PATCH).
-- **`operation-id-no-http-verb-prefix` / `operation-id-camel-case`** — operationIds are camelCase and must not begin with a raw HTTP verb.
-- **`request-schema-*` / `response-schema-*`** — PascalCase names for `*Request` / `*Response` schemas; no HTTP-verb prefix.
-- **`parameter-name-camel-case`** — camelCase parameter names, excluding `in: header` (wire headers stay hyphenated).
-- **`string-declares-max-length` / `string-parameter-declares-max-length`** — every request-reachable string must carry `maxLength`; exempts enums, fixed formats (`date`, `uuid`, `binary`, …), and composed schemas. The second rule covers the case where the parameter's schema *is* the string.
-- **US-English naming rule** *(truncated in source)* — enforces American English stems in machine-readable names (operationIds, schema/property names, enum values, error-code keys).
+- **Quality gates**: `operation-operationId` and `operation-tags` are set to `error`.
+- **`operation-security-declared`**: every operation must have `security` (truthy). `[]` marks a public operation, so a forgotten guard is never mistaken for a deliberate one.
+- **`no-nullable-keyword`**: rejects the 3.0 `nullable` keyword (3.1 ignores it silently). Use `type: [X, 'null']` or `oneOf` with `{ type: 'null' }`. A property named `nullable` under `properties` is exempt.
+- **`no-refs-typo`**: flags `$refs` used in place of `$ref`.
+- **`error-responses-are-problem-json`**: 4xx/5xx `content` may only contain `application/problem+json`. `x-not-problem: true` on the response opts out.
+- **`error-responses-have-a-body`**: 4xx/5xx responses must declare `content`, with the same `x-not-problem` opt-out. It is a separate rule so hits are not reported twice.
+- **`success-body-is-not-an-array`**: a 2xx `application/json` schema may not have `type: array`.
+- **`verb-replace-is-put`** and **`verb-update-is-patch`**: an operationId starting with `replace` must be on PUT, and one starting with `update` must be on PATCH.
+- **`operation-id-no-http-verb-prefix`**: operationIds may not start with `post`, `put` or `patch` followed by an uppercase letter.
+- **`operation-id-camel-case`**: operationIds must match `^[a-z][a-zA-Z0-9]*$`.
+- **Schema naming**: `request-schema-*` and `response-schema-*` rules ban `Post/Put/Patch/Get` prefixes on `*Request`/`*Response` component schema names and require PascalCase.
+- **`parameter-name-camel-case`**: component parameter names must be camelCase. `in: header` parameters are excluded because headers are hyphenated on the wire.
+- **`string-declares-max-length`** and **`string-parameter-declares-max-length`**: strings reachable from request bodies and parameters must define `maxLength`.
+  - Exempt: enums, `date`, `date-time`, `uuid`, `time` and `binary` formats, and schemas that use `allOf`, `oneOf` or `anyOf`.
+  - `pattern`, `email` and `uri` do not count as exemptions.
+  - Responses are not checked.
+  - The second rule exists because the recursive selectors in the first never match a bare string parameter schema itself.
+- **US English names section**: a rule block on machine-read names (operationIds, schema names, property names, enum values, error-code keys) built on an explicit stem list, not a suffix regex. The rule definitions are not visible in the excerpt.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — the document this ruleset lints; the rules' `given` JSONPath expressions are written against that spec's structure.
-- **`shared/contracts/spectral.asyncapi.names.yaml`** — sibling ruleset applying analogous naming conventions to AsyncAPI broker contracts.
-- **`shared/contracts/spectral.modules.yaml`** — sibling ruleset with additional module-specific gates; both files are loaded alongside this one in the same Spectral invocation.
+- Applies to the OpenAPI contract rooted at `shared/contracts/openapi.root.yaml`. The `$.paths` selectors target that document's structure.
+- `spectral.asyncapi.names.yaml` and `spectral.modules.yaml` are sibling Spectral rulesets in the same directory. This file's rules are OpenAPI-specific (`paths`, `components`).
 
 ## Notes
-
-- All rules are `severity: error` — there is no warning tier; a violation blocks the lint pass.
-- The two error-body rules (`error-responses-are-problem-json` + `error-responses-have-a-body`) are intentionally separate: merging them into one `given` would double-report every hit (the first selects `.content`, which an empty response never has).
-- `x-not-problem: true` is the **only** opt-out for the problem+json rules; it is checked via a JSONPath negative filter, not a `not` schema.
-- `string-declares-max-length` checks *request*-reachable strings only (request bodies, path/query/header params). Response strings are excluded by design.
-- The `no-nullable-keyword` rule's `given` deliberately excludes properties literally named `nullable` under `properties` (a valid schema field name), using `@parentProperty !== 'properties'`.
-- `parameter-name-camel-case` skips `in: header` because HTTP header names are conventionally hyphenated on the wire.
+- The `maxLength` rules mention a shared `Text` schema (1 to 200) and per-kind limit values documented elsewhere.
+- The comments cite the RFC 9457, Zalando and AIP-190 guidelines as the basis for several rules. The comments call them house rules, not the full Zalando ruleset.
+- `delete*` operationIds and `Delete*` schema names are deliberately allowed.

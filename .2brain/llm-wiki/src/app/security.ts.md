@@ -1,46 +1,48 @@
 ---
 source: src/app/security.ts
-sha256: 06721ea8ada2505c94f31cf759f3784280dcb46d15673d3f252857335bdfb5d7
-generated_at: 2026-11-14T17:49:47.074340+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 212708be0fada1d2bb0a84e5bfc68a4cb660e954b426487b28f97be02f28aeaa
+context_sha256: e825dd80cb07e93b5867ee4beb6de17fe9985d90c1fdff0ad0fc798bf6982bbf
+generated_at: 2026-11-22T02:31:34.588148+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/app/security.ts
 
 ## Purpose
-
-Configures all transport-level protections (secure headers, CORS, rate limiting, body parsing) for the Express application. The ordering is load-bearing and non-obvious, so this file is the single place that decides *which* middleware handlers get installed and *in what sequence*. It is split into two exported install functions so `src/app.ts` can serve static files between them (static files get headers but don't consume rate-limit budget or pay for body parsing).
+Groups the transport-level protections and body parsing for the Express app. Order matters: `trust proxy` comes before the rate limiter (which keys on `request.ip`), the rate limiter before the body parsers (a throttled flood shouldn't pay for parsing), and the parsers before anything reading `request.body`. It is split into two installs so `src/app.ts` can serve static files between them. Infrastructure supplies the handlers. This file chooses which are installed and in what order.
 
 ## Key elements
-
-- **`installSecurity(app)`** — Mounts the first half of the pipeline: ETag policy, `dropUnownedValidators`, `trust proxy` (hop count), `stampClientAddress`, `helmet()`, unconditional `Vary: Origin`, strict CORS (allowed origins via `isAllowedOrigin`, `preflightContinue`, credentials, explicit `allowedHeaders`/`exposedHeaders`), and `answerOptions` as the sole `OPTIONS` responder.
-- **`installRequestParsing(app)`** — Mounts the second half: `rateLimiter` first (a throttled request never pays for parsing), then the JSON body parser with a raw-body exception for webhook paths, plus `requireDeclaredContentType`, `limitJsonDepth`, and `requireJsonObjectBody`.
-- **`applyServerTimeouts(server)`** — Sets Node's `headersTimeout`, `requestTimeout`, and `keepAliveTimeout` from `appConfig()` to defend against Slowloris/slow-POST while leaving handler execution unbounded.
-- **`RAW_BODY_PATHS` / `isRawBodyPath(url)`** — A fixed list (built once at import from each module's `rawBodyPaths` declaration) of URLs whose request body must reach the handler as the original buffer (HMAC webhook verification). Matching is lowercased and done at a segment boundary, not a bare prefix.
+- `RAW_BODY_PATHS` (internal) – lowercased paths, built once at import from each enabled module's `rawBodyPaths`, prefixed with the module's first mount `basePath`. These are paths whose body must survive parsing verbatim (e.g. signed webhooks).
+- `isRawBodyPath(url)` (internal) – case-insensitive match at a segment boundary (exact, `?`, or `/`). `/payments/webhook-test` does not match `/payments/webhook`.
+- `applyServerTimeouts(server)` – sets `headersTimeout`, `requestTimeout` and `keepAliveTimeout` on the Node `Server` from `appConfig()` (`NODE_HTTP_HEADERS_TIMEOUT_MS`, `NODE_HTTP_REQUEST_TIMEOUT_MS`, `NODE_HTTP_KEEP_ALIVE_TIMEOUT_MS`). This bounds how long a client may take to *send* a request (slowloris and slow-POST). It does not bound handlers.
+- `installSecurity(app)` – installs, in order:
+  1. strong ETags (`etag` set to `'strong'`);
+  2. `dropUnownedValidators`;
+  3. `trust proxy` from `NODE_TRUST_PROXY_HOPS` (`false` when 0, otherwise the hop count);
+  4. `stampClientAddress` (OTel span client address);
+  5. `helmet()`;
+  6. a middleware adding `Vary: Origin` to every response;
+  7. strict `cors` using `isAllowedOrigin`, with `credentials: true`, `preflightContinue: true`, an explicit method list, allowed request headers and exposed response headers;
+  8. `answerOptions(OPERATION_ROUTES, servedModuleNames, REQUEST_CONTENT_TYPES)`, the single `OPTIONS` answer.
+- `installRequestParsing(app)` – installs `rateLimiter` first, then the JSON body parsing. The JSON parser also has an exception for raw-body (webhook) paths. The visible part of the file ends partway through this function.
 
 ## Relationships
-
-- **`src/app.ts`** — Calls `installSecurity` and `installRequestParsing` around its static-file mount; the two-function split exists for that call site.
-- **`src/app/config.ts`** — Supplies `appConfig()` for `NODE_HTTP_*` timeout values and `NODE_TRUST_PROXY_HOPS`.
-- **`src/modules.ts`** — Provides `enabledModules` (to build `RAW_BODY_PATHS`) and `servedModuleNames` (passed to `answerOptions`).
-- **`src/infrastructure/http/origins.ts`** — `isAllowedOrigin` is the sole authority for CORS origin acceptance.
-- **`src/infrastructure/http/preconditions.ts`** — `dropUnownedValidators` is mounted by `installSecurity` to reject foreign `If-Match`/`If-None-Match` tags.
-- **`src/infrastructure/http/middlewares/method-not-allowed.ts`** — `answerOptions` is the single `OPTIONS` handler.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — `rateLimiter` is mounted first in `installRequestParsing`; it must run after `trust proxy` is set so it keys rate-limit buckets on the resolved client address.
-- **`src/infrastructure/http/middlewares/content-type.ts`** — `requireDeclaredContentType` rejects bodies without an explicit `Content-Type`.
-- **`src/infrastructure/http/middlewares/json-depth.ts`** — `limitJsonDepth` and `JSON_BODY_TYPES` guard against deeply nested JSON.
-- **`src/infrastructure/http/middlewares/json-object.ts`** — `requireJsonObjectBody` enforces a top-level JSON object.
-- **`src/infrastructure/runtime/otel-sdk.ts`** — `stampClientAddress` records the resolved client address into the OTel span; must run after `trust proxy` is set.
-- **`package.json`** — Declares `helmet`, `cors`, and `cookie-parser` as dependencies consumed here.
-- **`tests/cross-cutting/security-headers-conformance.test.ts`** — Verifies the headers produced by `installSecurity`.
-- **`tests/integration/span-client-address.test.ts`** — Exercises the `trust proxy` → `stampClientAddress` interaction.
-- **`tests/integration/scenarios/demo-routes.test.ts`** — Integration tests that pass through the full security + parsing pipeline.
+- `src/app.ts` calls the two install functions (and presumably `applyServerTimeouts`), serving static files between `installSecurity` and `installRequestParsing`.
+- `src/app/config.ts` supplies `appConfig()` values: trust-proxy hops and the three HTTP timeouts.
+- `src/modules.ts` supplies `enabledModules` (for `rawBodyPaths` and `mounts`) and `servedModuleNames`.
+- `src/infrastructure/http/middlewares/*` supplies the handlers: `rate-limit` (`rateLimiter`), `content-type` (`requireDeclaredContentType`), `json-depth` (`limitJsonDepth`, `JSON_BODY_TYPES`), `json-object` (`requireJsonObjectBody`) and `method-not-allowed` (`answerOptions`).
+- `src/infrastructure/http/origins.ts` supplies `isAllowedOrigin` for CORS.
+- `src/infrastructure/http/preconditions.ts` supplies `dropUnownedValidators`. It is also the source of the `If-Match` header declared in the CORS allow list.
+- `src/infrastructure/runtime/otel-sdk.ts` supplies `stampClientAddress`.
+- `@api/request-content-types` and `@api/operation-routes` feed the `OPTIONS` handler.
+- `package.json` is the source of the `express`, `helmet`, `cors` and `cookie-parser` dependencies.
+- Tests: `tests/cross-cutting/security-headers-conformance.test.ts`, `tests/integration/scenarios/demo-routes.test.ts` and `tests/integration/span-client-address.test.ts` exercise this behaviour.
 
 ## Notes
-
-- **Two-install split is intentional.** `src/app.ts` mounts static files *between* `installSecurity` and `installRequestParsing`. Do not merge them or reorder the call sites.
-- **`trust proxy` is a hop count, never `true`.** A value of `0` is translated to `false` (not `0`) so that `express-rate-limit` correctly detects "no proxy configured" and warns on stray `X-Forwarded-For` headers.
-- **CORS refusal uses `callback(null, false)`, never an `Error`.** Throwing into the Express error chain would turn a valid same-origin request into a 500.
-- **`Vary: Origin` is added unconditionally** (separate middleware) because the `cors` package only adds it for allowed origins; a missing `Vary` lets a shared CDN serve the header-less (refused-origin) variant to the real frontend.
-- **`RAW_BODY_PATHS` is frozen at import time.** It is not rebuilt per request; adding a new raw-body path requires updating the owning module's `rawBodyPaths` declaration.
-- **`isRawBodyPath` matches at a segment boundary** (`/`, `?`) after lowercasing, so `/Payments/webhook` works and `/payments/webhook-test` does not accidentally match `/payments/webhook`.
+- `trust proxy` is `false` rather than `0` when there are no proxies. `express-rate-limit` distinguishes "off" with `=== false`, and only then warns about an unexpected `X-Forwarded-For`. It is never set to `true`, so Express counts hops back from the forgeable end of `X-Forwarded-For`.
+- The CORS origin callback passes `false`, never an `Error`, for a refused origin. An error would turn a valid call into a generic 500. Requests with no `Origin` header (curl, healthchecks) are allowed.
+- `Vary: Origin` is added on every response so shared caches don't serve a header-less variant, which would fail CORS in the browser. This matters for the publicly cached `GET /products/facets`.
+- `preflightContinue: true` means `answerOptions` answers every `OPTIONS` request the same way, whatever the Origin.
+- New custom request or response headers must be added to `allowedHeaders` or `exposedHeaders` in the CORS config, or browsers will fail the preflight or be unable to read them.
+- `keepAliveTimeout` must stay above the reverse proxy's idle-to-app timeout, or the proxy may send requests into closed sockets and return 502.
+- Raw-body path matching is case-insensitive because Express routes regardless of case.

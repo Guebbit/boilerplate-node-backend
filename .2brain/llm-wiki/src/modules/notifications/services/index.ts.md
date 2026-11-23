@@ -1,29 +1,48 @@
 ---
 source: src/modules/notifications/services/index.ts
-sha256: c7858ae39b22269a9251828626c91851f0c8ea4060162e616a14e0075ce98180
-generated_at: 2026-11-08T06:33:22.709263+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c7858ae39b22269a9251828626c91851f0c8ea4060162e616a14e0075ce98180
+context_sha256: f763699ccf8d110097ed0ebb7f45bc03c5b2d30579005ff78270bfd3a4041114
+generated_at: 2026-11-22T05:55:45.490069+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/services/index.ts
 
 ## Purpose
-
-Barrel/facade for the notifications service layer. It aggregates the functions from `inbox`, `staff`, `stream`, and `subscribers` into a single `notificationsService` object so that controllers and sibling modules have exactly one import point, never reaching into the individual files directly.
+Barrel and public facade for the notifications service. It assembles the functions from the sibling files (`inbox`, `staff`, `stream`, `subscribers`) into a single `notificationsService` object. Controllers and other modules call through this object rather than importing the bare functions.
 
 ## Key elements
-
-- **`notificationsService`** (const object) — the sole public API of the service. Maps short keys (`list`, `get`, `create`, `remove`, `readAll`, `dismissAll`, `stream`, `publishToUser`, `onTaskOpened`, etc.) to their implementations in the sibling service files.
-- **Re-exported types** — `StaffLink`, `StaffRoute`, `StaffNoticeBody` (from `../staff-routing`) and `StaffNotice` (from `./staff`). Consumers import these types from this module rather than the original files.
+- **`notificationsService`**: the exported object, grouped by origin:
+  - **Inbox** (from `inbox.ts`):
+    - `list`
+    - `listStaffNotices`
+    - `listVisible`
+    - `get`
+    - `create`
+    - `writeSummary`
+    - `clearSummary`
+    - `remove`
+    - `dismissAll`
+    - `readAll`
+    - `removeByUserId`
+  - **Staff** (from `staff.ts`): `notifyStaff`, `staffRecipients`.
+  - **Stream** (from `stream.ts`): `stream` (aliases `streamNotifications`), `publishToUser`, `openStreamCount`.
+  - **Event subscribers** (from `subscribers.ts`):
+    - `onWebhookSubscriptionAutoDisabled`
+    - `onTaskOpened`
+    - `onTaskOverdue`
+    - `onTaskDueSoon`
+    - `onTaskAssigned`
+    - `onOutboxEventDead`
+- **Type re-exports**: `StaffLink`, `StaffRoute` and `StaffNoticeBody` come from `../staff-routing`. `StaffNotice` comes from `./staff`.
 
 ## Relationships
-
-- **Upstream (consumers):** All controllers in `src/modules/notifications/controllers/` (`get-notifications`, `get-notification`, `delete-notification`, `delete-notifications`, `post-read-all`, `get-notifications-stream`) import `notificationsService` from here. The module's `index.ts` and `module.ts` re-export it further to the rest of the app. Integration and contract tests also resolve the service through this file.
-- **Downstream (dependencies):** Imports and re-exposes functions from `./inbox`, `./staff`, `./stream`, and `./subscribers`. No logic is implemented in this file; it is purely a composition surface.
-- **`staff-routing.ts`** — type-only dependency; the three staff-routing types are re-exported so callers need a single import path.
+- **`src/modules/notifications/services/inbox.ts`, `src/modules/notifications/services/staff.ts`, `src/modules/notifications/services/stream.ts`, `src/modules/notifications/services/subscribers.ts`**: the implementation sources. This file only wires them together and contains no logic of its own.
+- **Controllers** (`src/modules/notifications/controllers/delete-notification.ts`, `delete-notifications.ts`, `get-notification.ts`, `get-notifications-stream.ts`, `get-notifications.ts`, `post-read-all.ts`): per the module doc, the controllers go through this service.
+- **`src/modules/notifications/staff-routing.ts`**: the source of the re-exported staff routing types.
+- **`src/modules/notifications/module.ts` and `src/modules/notifications/index.ts`**: sit in the module's dependency graph alongside this file.
+- **Tests** (`src/modules/notifications/tests/contract/api.contract.test.ts`, `src/modules/notifications/tests/integration/service.test.ts`): related via the dependency graph and likely exercise the service.
 
 ## Notes
-
-- The header comment and the docstring on `notificationsService` both state the convention: **callers must use `notificationsService` and never import the bare functions from `inbox.ts`, `staff.ts`, `stream.ts`, or `subscribers.ts` directly.** Adding a new service function requires adding it to this object to make it reachable.
-- The file is annotated `@module`, signaling it is a namespace-style barrel rather than a utility module.
-- No state, no side effects on import; the object is a plain reference map.
+- The convention is to use `notificationsService.*` and avoid importing the bare functions from the sibling files.
+- Some names differ from the underlying functions. For example, `get` is `notificationGet`, `remove` is `notificationDelete`, and `stream` is `streamNotifications`.

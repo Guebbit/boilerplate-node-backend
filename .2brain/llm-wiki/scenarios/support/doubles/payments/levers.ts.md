@@ -1,41 +1,46 @@
 ---
 source: scenarios/support/doubles/payments/levers.ts
-sha256: fe50132c6205c4dda8a510d8ab9b8abb2374ff3caabf61991ab2dc7b38cf6bc4
-generated_at: 2026-11-14T17:18:20.000973+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4caeb1818d7b3c685d8b48affd990b6ffc79ea51435c5702698b737e87c0f1c3
+context_sha256: 148ce95c9109a08e126e75ce4e5af5f62d38776d5e6f8dfeab106c19ca31b6fe
+generated_at: 2026-11-22T01:48:06.308994+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/support/doubles/payments/levers.ts
 
 ## Purpose
-
-Defines the demo profile's HTTP "levers" for the payments double: two `POST /__test/payments/*` endpoints that let an operator script refund failures and buyer disputes against the fake PSP. The file lives beside (not inside) the payments module folder so that `demo:remove` deletes the module without orphaning the lever; `levers.generated.ts` is rebuilt from whatever folders remain, keeping `demo.ts` free of module names.
+Defines the demo profile's payments "levers": test-only HTTP endpoints that drive the fake PSP (payment service provider) into failure and dispute states. `POST /__test/payments/refund-failure` makes the fake refuse an order's refunds (or stop refusing). `POST /__test/payments/dispute` has the buyer's bank dispute an order's payment, or moves an existing dispute along. The file sits beside `./fake` because `payments` is a `group: shop` module and `demo:remove` deletes the folder with it. A generated levers file is rebuilt from the folders that remain, so the demo's control surface (`scenarios/support/demo.ts`) never names a module.
 
 ## Key elements
-
-- **`installLever(app)`** *(export)* — Mounts both lever endpoints on the Express app. Called by `installModuleLevers` during `installDemo`.
-- **`installDisputeLever(app)`** *(internal)* — Mounts `POST /__test/payments/dispute`. Looks up the order's payment in MongoDB, calls `setFakeDispute` with the caller's dispute state, signs the delivery via `signFakeDelivery`, then routes it through `paymentService.receiveWebhook` (the same signed-webhook door the production route uses).
-- **`REFUND_FAILURE_BODY`** — Zod schema: `orderId` (ObjectId string) + `reason` (nullable `RefundFailureReason`). `null` clears the failure.
-- **`DISPUTE_BODY`** — Zod schema: `orderId` plus optional `disputeId`, `kind`, `status`, `reason`, `amount`, `evidenceInDays` — all with sensible defaults so `{ orderId }` opens a 14-day chargeback for the full amount.
-- **`paymentOf(orderId)`** — Reads a single payment document from the `payments` collection to obtain `providerRef`, `amount`, `currency`.
-- **`providerRefOf(orderId)`** — Convenience wrapper returning just the `providerRef` string.
+- `installLever(app)`: the only export. It mounts both routes on the Express app and is called by `installModuleLevers`, from `installDemo`.
+- `REFUND_FAILURE_BODY`: zod schema with `orderId` (must be an ObjectId string) and `reason`, a `RefundFailureReason` enum value or `null` to clear the failure.
+- `DISPUTE_BODY`: zod schema for the dispute.
+  - `orderId` is required.
+  - Defaults: `disputeId` `'dp_demo'`, `kind` `'chargeback'`, `status` `'needs_response'`, `reason` `'fraudulent'`, `evidenceInDays` 14.
+  - `amount` is optional.
+- `paymentOf(orderId)`: reads the payment straight from the `payments` collection, because the wire shape hides `providerRef`.
+- `providerRefOf(orderId)`: returns the provider id from `paymentOf`.
+- `installDisputeLever(app)`: mounts the dispute route.
+  - It validates the body, then looks up the payment and returns 404 if it has no `providerRef` or `currency`.
+  - It calls `setFakeDispute` with the provider-style report. The amount defaults to the payment's amount.
+  - `fundsWithdrawn` is true for a chargeback that is not `won`. `evidenceDueBy` is now plus `evidenceInDays` (using `DAY_MS`).
+  - It then signs the delivery with `signFakeDelivery` and passes it to `paymentService.receiveWebhook('fake', ...)`. Success returns 204.
+- Refund-failure route (inside `installLever`): validates the body, looks up the `providerRef`, and calls `setFakeRefundFailure(providerRef, reason ?? undefined)`. Success returns 204, a missing payment returns 404.
 
 ## Relationships
-
-- **`scenarios/support/doubles/payments/fake.ts`** — Consumes `setFakeDispute`, `setFakeRefundFailure`, and `signFakeDelivery` to record state in the fake PSP and produce a signed webhook payload.
-- **`src/modules/payments/index.ts`** / **`src/modules/payments/services/index.ts`** — Calls `paymentService.receiveWebhook('fake', …)` so the dispute flows through the real parsing/validation/signature pipeline rather than a shortcut.
-- **`src/infrastructure/runtime/database.ts`** — Uses `connection.collection('payments')` to read the payment document (provider ref, amount, currency).
-- **`src/infrastructure/http/response.ts`** — Uses `rejectResponse` for 400/404/500 replies.
-- **`src/infrastructure/persistence/create-repository.ts`** — Uses `isObjectIdString` in the zod `refine` validators.
-- **`src/infrastructure/adapters/logger.ts`** — Logs a contextual error before returning 500.
-- **`src/domain-primitives/time.ts`** — Uses `DAY_MS` to compute `evidenceDueBy` from the `evidenceInDays` field.
-- **`src/types/index.ts`** — Imports `DisputeKind`, `DisputeReason`, `DisputeStatus`, `RefundFailureReason` enums for the zod schemas.
-- **`tests/unit/scenarios/payments-fake.test.ts`** — Unit-tests the fake's state transitions that the levers drive.
-- **`tests/integration/journeys/the-provider-disagrees.test.ts`** — Integration journey that exercises the dispute lever end-to-end.
+- `./fake`: provides `setFakeDispute`, `setFakeRefundFailure` and `signFakeDelivery`, which hold the double's state and sign deliveries.
+- `@modules/payments` (`paymentService`): the dispute lever feeds the signed webhook through `receiveWebhook`.
+- `@infrastructure/runtime/database` (`connection`): used for the direct `payments` collection read.
+- `@infrastructure/persistence/create-repository`: `isObjectIdString` validates `orderId`.
+- `@infrastructure/http/response`: `rejectResponse` produces the 400, 404 and 500 replies.
+- `@infrastructure/adapters/logger`: logs lever failures.
+- `@types`: supplies the `DisputeKind`, `DisputeReason`, `DisputeStatus` and `RefundFailureReason` enums.
+- `@domain-primitives/time`: supplies `DAY_MS`.
+- Tests: `tests/integration/journeys/the-provider-disagrees.test.ts` and `tests/unit/scenarios/payments-fake.test.ts` are related neighbors.
 
 ## Notes
-
-- **Why a separate file:** `payments` is a `group: shop` module. Placing the lever inside the module folder would cause `demo:remove` to delete it. Keeping it beside the folder and regenerating `levers.generated.ts` avoids hard-coding module names in `demo.ts`.
-- **No webhook shortcut:** The dispute lever signs the delivery with `signFakeDelivery` and delivers via `paymentService.receiveWebhook`, so the signature check and payload parsing run exactly as they would in production.
-- **`null` → `undefined`:** In the refund-failure endpoint, a `null` reason is passed as `undefined` to `setFakeRefundFailure`, which is the fake's "clear the failure" signal.
-- **Amount/currency defaults:** When the caller omits `amount`, the lever reads it from the payment document in the DB; `currency` is always taken from the document (the caller cannot override it).
+- The dispute lever gets no shortcut past the signature check. It signs the delivery and sends it through the same webhook door the real route uses.
+- Repeating a `disputeId` addresses the same dispute, so sending a new `status` advances it.
+- `null` for `reason` is converted to `undefined`, which is how the double clears a failure.
+- Both routes return 404 `no payment with a provider reference` if the order has no payment with a `providerRef`. Unexpected errors are logged and return 500.
+- The logger calls carry `Stryker disable` comments, which exclude them from mutation testing.

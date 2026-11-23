@@ -1,42 +1,34 @@
 ---
 source: src/modules/payments/emails.ts
-sha256: c0adb773882d64ee88454e72a53b9cd9988474f5a5edd160e9fd17923d01b1a0
-generated_at: 2026-11-08T07:20:49.608240+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b9150fb5bb096ae1555d199d0ccee2b940916ee5d0b3f7fc90ef719c33b417e3
+context_sha256: 0ddc47d1be7d5e607e048c25bcb02430a07e1e8b345f0da547d446136f3f531b
+generated_at: 2026-11-22T06:44:56.936279+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/emails.ts
 
 ## Purpose
-
-Pure email-builder functions for the five customer-facing messages the payments module sends: payment received, refund issued, refund undeliverable, bank-transfer instructions, and transfer deadline expired. Each function takes a locale plus domain data and returns a fully translated `EmailContent` object whose `template` field the mailer adapter interpolates — the same "language is an argument, output is finished text" convention as `@modules/orders/emails` and `@modules/account/emails`.
+Builds the content for the five transactional emails the payments module sends. Each builder takes the recipient's locale as an argument and returns an `EmailContent` whose `data` holds fully resolved strings. The queued template only interpolates them. This follows the same rule as `@modules/account/emails`.
 
 ## Key elements
-
-- **`paymentReceivedEmail(locale, name, order, orderId)`** — Builds the "payment settled" confirmation. Maps each order line through a translated item template, includes the order total (via `orderTotal` + `formatMoney`), and a front-end order link.
-- **`refundIssuedEmail(locale, name, orderRef, refund, full)`** — Announces a settled refund (cancel-refund or goodwill refund; return-refunds use the returns module's own notice). Selects a full vs. partial detail string.
-- **`refundUndeliverableEmail(locale, name, orderRef, refund, shopEmail, orderId)`** — Tells the buyer the refund couldn't reach their card, asks (not instructs) how they'd like the money, and includes the shop's contact email and an order link.
-- **`TransferInstructions`** *(interface)* — The bank-transfer details the buyer needs: `beneficiary`, `iban` (grouped in blocks of four), optional `bic`, and the RF creditor `reference`.
-- **`transferInstructionsEmail(locale, name, order, instructions, payBy, orderId)`** — Sends the transfer details plus a formatted deadline. Uses `Intl.DateTimeFormat` with the shop's timezone (`shopTimezone()`) and a named zone so an international buyer reads the shop's wall clock, not their own.
-- **`transferExpiredEmail(locale, order)`** — Sent by the sweep when a bank-transfer order's deadline passes with no payment. No personalization (no `name` param).
+- `paymentReceivedEmail(locale, name, order, orderId)` – sent when `settlePayment` commits the stock. Lists each item (title, quantity, price), the total, and a link to the order page. Template: `payments.payment-received`.
+- `refundIssuedEmail(locale, name, orderRef, refund, full)` – sent when a refund settles outside a return (after a cancel, or an operator's goodwill refund). It uses a "full" or "partial" detail string depending on `full`. Template: `payments.refund-issued`.
+- `refundUndeliverableEmail(locale, name, orderRef, refund, shopEmail, orderId)` – sent when a refund could not reach the card. It asks the buyer how they want the money, shows the shop email as text, and links to the order. It never names a reason. Template: `payments.refund-undeliverable`.
+- `TransferInstructions` – interface with `beneficiary`, `iban` (pre-grouped in blocks of four), optional `bic`, and the RF creditor `reference`.
+- `transferInstructionsEmail(locale, name, order, instructions, payBy, orderId)` – bank-transfer instructions, sent when the transfer payment opens. Includes the deadline, total, and order link. Template: `payments.transfer-instructions`.
+- `transferExpiredEmail(locale, order)` – sent when the sweep cancels a `bank_transfer` order whose deadline passed with no money. It takes no name, so the greeting is a fixed string. Template: `payments.transfer-expired`.
 
 ## Relationships
-
-- **`@infrastructure/adapters/mailer`** — Imports the `EmailContent` type that every builder returns.
-- **`@infrastructure/i18n`** — Imports `translator(locale)` which all five builders call to obtain a translation function `t`.
-- **`@domain-primitives/money`** — Uses `formatMoney` to render amounts in the recipient's locale.
-- **`@modules/orders`** (index → `config.ts`, `domain/totals.ts`) — Imports `orderFrontendLink`, `orderTotal`, and the `OrderLines` type.
-- **`@modules/shop`** (index → `service.ts`) — Imports `shopTimezone()` for the transfer-deadline date formatting.
-- **`@modules/payments/services/notify.ts`** — The service layer that calls these builders and passes the result to the mailer adapter.
-- **`@modules/payments/index.ts`** — Re-exports the builders (and `TransferInstructions`) for external consumers.
-- **`src/modules/payments/tests/unit/emails.test.ts`** — Unit tests for these builders.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Tests the HTML templates (`payments.payment-received`, `payments.refund-issued`, etc.) that these builders reference by name.
-- **`src/modules/orders/emails.ts`** — Referenced in the module docblock as the precedent for the "language-in, finished-text-out" convention.
+- `src/infrastructure/adapters/mailer.ts` supplies the `EmailContent` type that every builder returns.
+- `src/infrastructure/i18n/index.ts` supplies `translator(locale)`, which resolves all the copy.
+- `src/domain-primitives/money.ts` supplies `formatMoney`, used for amounts, line prices and totals.
+- `src/modules/orders/index.ts` supplies `orderFrontendLink`, `orderTotal` and the `OrderLines` type.
+- `src/modules/shop/index.ts` supplies `shopTimezone()`, used for the transfer deadline.
+- `src/modules/payments/services/notify.ts` and `src/modules/payments/index.ts` are the likely consumers, and `src/modules/payments/tests/unit/emails.test.ts` covers these builders. The file's content does not show how they call it.
 
 ## Notes
-
-- **`bic` is passed as `undefined`, not omitted.** The template guards on `typeof bic !== "undefined"`; a conditional spread would change the key's presence and break that check.
-- **Date formatting is field-by-field, not `dateStyle`/`timeStyle`.** Those presets refuse to include `timeZoneName`, so each unit (`year`, `month`, `day`, `hour`, `minute`, `timeZone`, `timeZoneName`) is spelled out explicitly.
-- **`orderRef` (human number or id) is the display reference** in refund emails; the raw `orderId` is only used for the front-end link.
-- **The undeliverable-refund email deliberately omits the provider's refusal reason** (not appropriate for a shopper) and uses imperative-free, ask-oriented language because the shop may change the payment method only with the buyer's express consent.
-- **`transferExpiredEmail` has no greeting name** — it is a generic system notice, not a personal one.
+- The refund builders do not know whether a refund came from a return. A return's refund is announced by `returns`' own closing notice and never reaches `refundIssuedEmail`.
+- `refundUndeliverableEmail` asks rather than decides, because the shop may change the refund means only with the buyer's express agreement.
+- The `payBy` deadline in `transferInstructionsEmail` is formatted with `Intl.DateTimeFormat` in the recipient's locale. It uses the shop's timezone with a short zone name (e.g. "CEST"), so a buyer abroad does not read it as their own time. The fields are spelled out individually because `dateStyle`/`timeStyle` cannot be combined with `timeZoneName`.
+- `bic` is passed through as `undefined` rather than conditionally spread. The template's `typeof bic !== "undefined"` guard relies on the key being present but unset.

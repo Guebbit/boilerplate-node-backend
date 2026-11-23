@@ -1,35 +1,26 @@
 ---
 source: src/modules/products/domain/preorder.ts
-sha256: 796c800bc963851d5fc7041110675347d87f2ca256bf8f270e0372f1b1886499
-generated_at: 2026-11-08T07:43:51.044364+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b51b36b89086cf19ea6cf18a07b89d1fa49f99bc74aa17bad173b0961f86a212
+context_sha256: f12bde890d84e1b141adf061707c86048fbca0e91bdc652a6d60d76d82981d69
+generated_at: 2026-11-22T07:09:18.815663+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/domain/preorder.ts
 
 ## Purpose
-
-Pure domain rules for determining whether a product is a preorder (on sale but not yet released) and what the maximum allowed release date is. The file exists so that preorder logic lives in the products domain as clock-injected, side-effect-free functions that any consumer (cart, presenter, order snapshot) can call without duplicating the rule.
+Pure domain rules for preorders: whether a product counts as a preorder at a given moment, and the furthest-out release date a product may be given. The clock is passed in as an argument, so every case can be tested without waiting.
 
 ## Key elements
-
-- **`PreorderFacts`** (interface) — The minimal read-only slice of a product the rule needs: `active`, `purchasable`, `releaseDate`. All fields are optional; absent flags default to `true`.
-- **`isPreorder(facts, now)`** (exported function) — Returns `true` when the product is active, purchasable, and has a `releaseDate` strictly after `now`. Preorder is a *derived* state; it self-reverts when the date passes.
-- **`latestReleaseDate(now)`** (exported function) — Returns the upper bound for a release date: exactly one UTC calendar year after `now`. Uses `setUTCFullYear` so a leap day cannot shift the result.
+- `PreorderFacts` — the inputs the rule reads from a product: optional `active`, `purchasable` (both default to `true` when absent) and `releaseDate`.
+- `isPreorder(facts, now)` — returns `true` only when the product is not inactive, not unpurchasable, has a `releaseDate`, and that date is strictly after `now`. The result is derived, never stored, so a product stops being a preorder when its date passes, with no job needed.
+- `latestReleaseDate(now)` — returns `now` plus one calendar year, computed in UTC. This follows Google's `availability_date` rule.
 
 ## Relationships
-
-- **`domain/index.ts`** — Barrel file; re-exports `PreorderFacts`, `isPreorder`, and `latestReleaseDate` so consumers import from the module root.
-- **`domain/buyable.ts`** — Sibling domain rule; the `purchasable` flag in `PreorderFacts` mirrors the concept defined there.
-- **`domain/backorder.ts`** — Sibling domain rule covering the complementary "out of stock but orderable" case.
-- **`model.ts`** — The product model that supplies the `active`, `purchasable`, and `releaseDate` fields read by `PreorderFacts`.
-- **`presenter.ts`** — Maps product state (including whether it is a preorder) into a presentable shape for the UI.
-- **`src/modules/cart/services/preorder.ts`** — Downstream consumer that likely calls `isPreorder` / `latestReleaseDate` when building cart validation or line-item logic.
-- **`tests/unit/preorder.test.ts`** — Unit tests exercising both exported functions with injected clocks.
+The graph lists these neighbors, but the file imports nothing and its content shows no direct interaction with any of them. Based on the names alone, `src/modules/products/domain/index.ts` likely re-exports this module, and `src/modules/products/tests/unit/preorder.test.ts` likely tests it. Other neighbors, such as the cart, orders and inventory services and the sibling `availability.ts` and `backorder.ts`, are linked in the graph, but the details aren't visible here.
 
 ## Notes
-
-- **Clock injection is mandatory.** Neither function reads `Date.now()`; the caller always supplies the instant. Tests should never mock the system clock.
-- **Default-true convention.** Omitted `active`/`purchasable` are treated as `true` (the product is visible and on sale). An absent `releaseDate` means the product is *not* a preorder.
-- **UTC calendar-year math.** `latestReleaseDate` deliberately uses UTC to avoid a ±1-day drift around Feb 29. If a consumer does local-time comparisons, the bound may appear one day early or late in non-UTC timezones.
-- **Derived, not persisted.** Preorder status is always computed at read time. There is no database flag, no background job, and no "un-preorder" step—consistent with BigCommerce and WooCommerce behavior noted in the module docblock.
+- `active` and `purchasable` are treated as true unless explicitly `false`. `undefined` does not block a preorder.
+- A `releaseDate` equal to `now` is not a preorder, because the comparison is strictly greater-than.
+- `latestReleaseDate` uses `setUTCFullYear`, so the one-year bound is calendar-based in UTC, not a fixed number of days. The doc comment says this stops a leap day from shifting the bound by a day.
+- `latestReleaseDate` only computes the bound. Enforcing it on writes is up to callers.

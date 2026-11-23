@@ -1,39 +1,35 @@
 ---
 source: src/modules/shop-tasks/staff-routing.ts
-sha256: de18fd07e3d5a8e3a4a579826389eedfe2711eeb2a27a63617a713fe8d03c92d
-generated_at: 2026-11-14T21:55:02.913874+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c9d2b679e9846e570e7e01317e346f521319b1ef3b84ba7d07360aecdc49d4f2
+context_sha256: e4ab7b38c0d76c36c20014ae7ebd21fb7e81b790aaf53dd3cf740c9b02882e30
+generated_at: 2026-11-22T07:44:04.410367+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/staff-routing.ts
 
 ## Purpose
-
-Static routing table for shop-task staff notifications: for each work-notice code, it declares which permission-set holders receive it, whether it triggers an email (`now` / `digest` / `none`), and its severity. The data is passed by value to `notificationsService.notifyStaff` on each call; the notifications module stores no persistent copy.
+Declares who is notified about work notices that only a shop sends: which permission sets receive each notice, whether it is worth an email, its severity, and which admin page the notice points to. The routing is plain data passed to `notificationsService.notifyStaff` with each call. The `notifications` module keeps no table of these routes.
 
 ## Key elements
-
-- **`SHOP_STAFF_ROUTES`** (const, `satisfies Record<ShopStaffCode, StaffRoute>`) — The full mapping of 12 shop-staff codes to their `{ sets, email, severity }`. Adding a new `NotificationCode` that matches the `shop-tasks.staff.*` prefix without an entry here is a compile error.
-- **`SUMMARY_PAGES`** — Subset of 10 codes whose counts are rewritten by the daily digest, each mapped to its admin listing-page path (pulled from `FRONTEND_LINK_RULES.staffPages`).
-- **`SummaryCode`** — Type alias: `keyof typeof SUMMARY_PAGES`.
-- **`summaryLinkOf(code)`** — Returns a `StaffLink` (`{ template, parameters: {} }`) pointing at the admin page for a given summary code.
-- **`ShopStaffCode`** — Local type: `Extract<NotificationCode, 'shop-tasks.staff.${string}'>`.
-- **`PAGES`** — Shorthand for `FRONTEND_LINK_RULES.staffPages`, used inside `SUMMARY_PAGES`.
+- `SHOP_STAFF_ROUTES`: maps every `shop-tasks.staff.*` notification code to a `StaffRoute` (`sets`, `email`, `severity`). It uses `as const satisfies Record<ShopStaffCode, StaffRoute>`, so a code missing from the map fails to compile.
+  - Individual notices: `purchase-hold-placed` (UserBanning, email `now`, warning), `return-requested` (ReturnManagement, `none`, info), `outcome-unknown` (`sets: 'per-notice'`, `now`, error).
+  - Summary rows: `transfers-due`, `preorders-late`, `delivery-holds-open`, `returns-awaiting-goods`, `returns-undecided`, `low-stock`, `unshipped`, `awaiting-tracking`, `undelivered`, `stale-refunds`.
+- `SUMMARY_PAGES`: maps each of the ten summary codes to its staff page template, taken from `FRONTEND_LINK_RULES.staffPages`.
+- `SummaryCode`: the type of the keys of `SUMMARY_PAGES`.
+- `summaryLinkOf(code)`: returns a `StaffLink` with `template` set to the summary's page and empty `parameters`.
 
 ## Relationships
-
-- **`src/modules/notifications/index.ts`** / **`model.ts`** — Source of the `NotificationCode`, `StaffLink`, and `StaffRoute` type contracts this file satisfies.
-- **`src/modules/notifications/staff-routing.ts`** — Sibling routing table for non-shop notification codes; together they form the complete staff-route set.
-- **`src/infrastructure/http/frontend-link.ts`** — Exports `FRONTEND_LINK_RULES`; this file reads its `staffPages` property to build `SUMMARY_PAGES`.
-- **`src/modules/shop-tasks/services/notices.ts`** — Consumes `SHOP_STAFF_ROUTES` when dispatching a notice to the notifications service.
-- **`src/modules/shop-tasks/services/digest.ts`** — Rewrites the counts on the 10 `SUMMARY_PAGES` codes each daily cycle.
-- **`src/modules/shop-tasks/services/outcome-unknown.ts`** — The sole consumer of the `'per-notice'` sets value on the `outcome-unknown` code (determines the actual permission set at send time).
-- **`src/modules/shop-tasks/emails.ts`** — Reads the `email` field to decide whether to enqueue an email.
-- **`src/types/index.ts`** — Source of the `NotificationSeverity` enum.
-- **`src/modules/shop-tasks/tests/unit/staff-routing.test.ts`** — Unit tests asserting route completeness and correctness.
+- Imports `FRONTEND_LINK_RULES` from `src/infrastructure/http/frontend-link.ts` for the shared `staffPages` paths.
+- Imports `NotificationSeverity` from `src/types/index.ts`.
+- Imports the `NotificationCode`, `StaffLink` and `StaffRoute` types from `src/modules/notifications/index.ts`; `src/modules/notifications/model.ts` and `src/modules/notifications/staff-routing.ts` sit alongside it in the graph. The mail rule is the one `notifications` states.
+- Its sibling files in `shop-tasks` (`src/modules/shop-tasks/emails.ts`, `src/modules/shop-tasks/services/digest.ts`, `src/modules/shop-tasks/services/notices.ts`, `src/modules/shop-tasks/services/outcome-unknown.ts`) sit next to it in the graph, and `src/modules/shop-tasks/tests/unit/staff-routing.test.ts` is its unit test. The digest rewrites the summary counts. The file's doc comment says routing is handed to `notifyStaff`, but the call sites are not visible here.
 
 ## Notes
-
-- **`outcome-unknown` special case:** its `sets` value is the string literal `'per-notice'` rather than an array, meaning the actual permission set is chosen at send-time by the `outcome-unknown` service based on which action (refund, ship, stock move) went silent.
-- **Compile-time exhaustiveness:** `satisfies Record<ShopStaffCode, StaffRoute>` on `SHOP_STAFF_ROUTES` means the type system enforces that every shop-staff code has exactly one route entry. Forgetting one breaks the build.
-- **Email policy is binary at the transport level:** only `'now'` sends an immediate email; `'digest'` bundles into the daily digest email; `'none'` is in-app bell only.
+- Email levels:
+  - `now`: someone must act soon.
+  - `digest`: an overdue count is mailed once per run.
+  - `none`: the bell only.
+- Only the overdue summary rows use `digest`. Counts of work in the normal course (`transfers-due`, `low-stock`, `awaiting-tracking`) use `none`.
+- `outcome-unknown` uses `sets: 'per-notice'` instead of a fixed permission list. Its recipients are not fixed in this file.
+- `SUMMARY_PAGES` is typed `satisfies Partial<Record<ShopStaffCode, string>>`, so it needs no entry for `purchase-hold-placed`, `return-requested` or `outcome-unknown`.

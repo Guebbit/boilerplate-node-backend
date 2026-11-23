@@ -1,46 +1,47 @@
 ---
 source: src/modules/orders/tests/integration/outbox.test.ts
-sha256: 6ec75d66fe00470e9b3f8b32deaf10beb9ddfb8248f44eed41d7320840f0c905
-generated_at: 2026-11-14T20:53:14.722324+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3d88f3e1bcdbe0e202e0ad55c99903e15092c63c920e1dbbcd4ee2de7d24dc71
+context_sha256: da4ec4ce1e9af92f2fe370711ee04cad1c3b86205ee63fbfc9105643d368a876
+generated_at: 2026-11-22T06:30:50.980027+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/outbox.test.ts
 
 ## Purpose
-
-Integration tests (real Mongo) proving the transactional-outbox invariant for order events: every status move, creation, or cancellation either commits its outbox row together with the write it announces, or rolls back entirely. Each "door" that mutates an order is tested in both the happy path (event row appears with correct payload) and the failure path (event write fails → the order write is undone).
+Integration tests (real Mongo) proving that order events ride the transactional outbox. For each operation that moves an order, the test checks two things. When the write lands, the matching outbox row appears. When the outbox write fails, the order write is rolled back too.
 
 ## Key elements
-
-- **`failNextOutboxWrite()`** — Spies on `outboxEventModel.create` and makes the next call reject with `'disk full'`, simulating a DB failure mid-transaction.
-- **`rowsNamed(name)`** — Queries outbox rows by event `name`, sorted by `_id` (oldest first).
-- **`place()`** — Creates a real user, product, and order via `orderService.create` with an admin caller context.
-- **`pendingOrderOfBuyer()`** — Seeds a pending order with a fresh buyer who will issue the cancellation.
-- **`describe('a status move reported to orders')`** — Verifies `order.status_changed` is written for `markPaid`, `markProcessing`, `markShipped`, `markDelivered`, and `markFulfillmentComplete`; also confirms no event fires for a lost race (already-canceled order) and that a failed event write rolls back the order status.
-- **`describe('an admin override')`** — Verifies `overrideStatus` writes `order.status_changed` and that a failed event write leaves both status and timeline untouched.
-- **`describe('placing an order')`** — Verifies `order.created` payload; confirms no order row exists if the event write fails.
-- **`describe('cancelling an order')`** — Verifies `order.canceled` payload (including `refund`, `cause`, `informedAt`); confirms the order stays `pending` if the event write fails.
+- `setupTestDb()` – prepares the test database. An `afterEach` calls `jest.restoreAllMocks()`.
+- `failNextOutboxWrite()` – spies on `outboxEventModel.create` and rejects once with `Error('disk full')`, simulating a database failure mid-transaction.
+- `rowsNamed(name)` – returns the outbox rows for one event name, sorted by `_id` ascending.
+- `place()` – creates a user and a product (`onHand: 10`), then places a one-item order via `orderService.create` as an admin caller.
+- `pendingOrderOfBuyer()` – creates a user, a product and a pending order, and returns `{ user, order }`.
+- Test groups:
+  - **Status moves** (`markPaid`, `markProcessing`, `markShipped`, `markDelivered`, `markFulfillmentComplete`):
+    - `markPaid` writes one `ORDER_STATUS_CHANGED` row with `aggregateId`, `orderId`, `from: 'pending'` and `to: 'paid'`.
+    - A move that loses its race (`markPaid` on a canceled order returns a null result) writes no event.
+    - An `it.each` table covers all five moves. When the outbox write fails, each rejects with `disk full`, the order keeps its original status, and no outbox rows exist.
+  - **Admin override** (`overrideStatus`):
+    - Success writes one `ORDER_STATUS_CHANGED` row.
+    - On a failed outbox write, the order status stays `paid` and `timelineOf` is empty.
+  - **Placing an order**:
+    - Success writes one `ORDER_CREATED` row with payload `{ orderId }`.
+    - On a failed outbox write, `countOrders()` is 0 and no outbox rows exist.
+  - **Cancelling an order** (`orderService.cancelOnRequestById` as a customer):
+    - Success writes one `ORDER_CANCELED` row with payload `{ orderId, refund: true, cause: 'customer', informedAt: <string> }`.
+    - On a failed outbox write, the order stays `pending` and no outbox rows exist.
 
 ## Relationships
-
-- **`src/kernel/outbox.ts`** — Source of `outboxEventModel` (the collection under test) and `settleOutboxNudges()` (flushes pending outbox dispatches before assertions).
-- **`src/modules/orders/services/index.ts`** — `orderService` provides `create`, `markProcessing`, and `cancelOnRequestById`.
-- **`src/modules/orders/services/status.ts`** — `markShipped`, `markDelivered`, `markFulfillmentComplete` are the status-move doors under test.
-- **`src/modules/orders/services/override.ts`** — `overrideStatus` is the admin-correction door.
-- **`src/modules/orders/friends/payments.ts`** — `markPaid` is the payment-driven status door.
-- **`src/modules/orders/events.ts`** — Supplies event-name constants (`ORDER_CREATED`, `ORDER_STATUS_CHANGED`, `ORDER_CANCELED`) used in assertions.
-- **`src/modules/orders/tests/factories.ts`** — `seedOrder`, `seedDigitalOrder`, `readOrder`, `countOrders`, `timelineOf`, `createOrder`, `toOrderItem` for setup and teardown assertions.
-- **`src/modules/users/tests/factories.ts`** / **`src/modules/products/tests/factories.ts`** — `createUser`, `createProduct` for realistic fixtures.
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps the `markFulfillmentComplete` call (the only door that explicitly takes a session).
-- **`tests/support/callers.ts`** — `callerContextAs`, `asCustomer` build the auth/role context passed to service methods.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` configures the in-memory or temp Mongo instance before the suite runs.
-- **`src/types/index.ts`** — `OrderStatus` enum used in seeding and assertions.
+- `@kernel/outbox` supplies `outboxEventModel`, which is queried and spied on, and `settleOutboxNudges`, which is awaited before reading rows.
+- `@infrastructure/runtime/database` supplies `withTransaction`, used to call `markFulfillmentComplete` with a session.
+- The units under test are `orderService` (`services/index`), `markPaid` (`friends/payments`), `overrideStatus` (`services/override`), and `markShipped`, `markDelivered` and `markFulfillmentComplete` (`services/status`).
+- `orders/events` provides the event name constants `ORDER_CREATED`, `ORDER_CANCELED` and `ORDER_STATUS_CHANGED`. `OrderStatus` comes from `@types`.
+- Test factories from `orders/tests/factories`, `products/tests/factories` and `users/tests/factories` seed and read data (`seedOrder`, `seedDigitalOrder`, `readOrder`, `countOrders`, `timelineOf`, `createUser`, `createProduct`).
+- `@tests/callers` supplies `callerContextAs` and `asCustomer`. `@tests/setup-test-db` supplies `setupTestDb`.
 
 ## Notes
-
-- `settleOutboxNudges()` must be called after every service mutation and **before** asserting on outbox rows; without it the event may still be in-flight.
-- The `markFulfillmentComplete` case is the only one wrapped in an explicit `withTransaction` call in the test, mirroring its production signature that requires a session parameter.
-- `failNextOutboxWrite` uses `mockRejectedValueOnce`, so only the *next* `create` call fails — subsequent calls in the same test would succeed.
-- The cancel test asserts `informedAt: expect.any(String)` rather than a fixed value; this field marks the day the 14-day refund clock started for the buyer.
-- `afterEach` calls `jest.restoreAllMocks()` to clear the `outboxEventModel.create` spy between tests.
+- Events are only read after `await settleOutboxNudges()` on the success paths.
+- `markFulfillmentComplete` is seeded with `seedDigitalOrder`, while the other moves use `seedOrder`.
+- The failure tests assert both that the domain write is rolled back and that no outbox row exists, which shows the two share one transaction.
+- The `informedAt` comment in the cancel test says it marks the day the buyer's cancel started the 14-day refund clock.

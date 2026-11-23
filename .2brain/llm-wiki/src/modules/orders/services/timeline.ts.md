@@ -1,53 +1,42 @@
 ---
 source: src/modules/orders/services/timeline.ts
-sha256: 85e2ef009c18dbbe063c152aa7efd82fe36d008c838ff46c26828adfbc0cc478
-generated_at: 2026-11-14T20:48:12.273776+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8aaba4df88db2aa8f6275c7659f89219c8ba65b5c187d7a4fec49ef411b45e0d
+context_sha256: dc5536f456c6758d02d3ab9a55a0b1421d657d2ca9c545899286d4f087bbca3a
+generated_at: 2026-11-22T06:24:40.777756+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/timeline.ts
 
 ## Purpose
-
-Implements the order timeline — an append-only, ordered log of everything that happened to an order. It exposes the single write door (`appendTimeline`) that both `orders` itself and dependent modules (payments, delivery, returns, invoicing) use to record events inside their own transactions, plus all read, note-management, and lifecycle functions (GDPR export, erasure, retention scrub, hard delete) for that log.
+Manages an order's timeline: an ordered record of what happened to an order, readable by the buyer and by staff. It is the single entry point for writing timeline rows. `orders` appends its own moves, and modules that depend on `orders` (payments, delivery, returns, invoicing) call `appendTimeline` inside their own transactions, since `orders` cannot listen to them without creating an import cycle.
 
 ## Key elements
-
-- **`appendTimeline`** (exported) — The public write entry-point. Persists one `TimelineEntryInput` row via `insertRow` inside the caller's open transaction. Returns void.
-- **`withTimeline`** (exported) — Higher-order wrapper: runs a conditional write; only if it matched (non-null) does it append the derived rows in the same transaction. Prevents orphan timeline rows on a lost race.
-- **`addNote`** (exported) — Staff adds a note. Own transaction, returns `201` with the presented entry or `404`. Records an audit row with note length (never text).
-- **`deleteNote`** (exported) — Soft-deletes a note (unsets text, row stays). Returns `204` or `404`. Decrypts the text only to read its length for the audit row.
-- **`readTimeline`** (exported) — Paginated read, newest first. Filters to `BUYER_VISIBLE_TYPES` for buyers; staff see all rows and actors.
-- **`collectTimelineOf`** (exported) — Gathers every timeline row across an account's orders for `POST /account/export`. Includes staff text and staff-only rows, but restores `actor` only if it is the exporting user.
-- **`clearTimelineActor`** (exported) — Erases the actor reference for a deleted account (GDPR). Runs in the erasure's transaction.
-- **`scrubTimelineText`** (exported) — Second sweep of `reap:orders`: unsets free text on rows older than the configured retention. Logs via `logger.info` when count > 0.
-- **`deleteTimelineOf`** (exported, `@internal`) — Hard-deletes all rows for a removed order. Only the orders module's own removal path may call it.
-- **`insertRow`** (private) — Persists one row; encrypts `note_added` text with PII encryption (AAD = order id) before writing.
-- **`appendTimelineAll`** (private) — Appends multiple rows **sequentially** (mongoose sessions reject parallel ops; rows must keep given order).
-- **`readsEveryOrder`** (private) — Returns true when the caller holds the `display:Order` ability (staff), as opposed to the shared `read:Order`.
+- `appendTimeline(orderId, entry, session)`: appends one row in the caller's transaction, so the row commits with the fact it describes or not at all.
+- `withTimeline(write, rows)`: wraps a conditional status write. It appends the rows only if the write returned an order, so a lost race writes nothing.
+- `addNote(orderId, text, context)`: staff adds a `note_added` row in its own transaction. Returns 201 with the entry, or 404 if the order is missing. It records an audit row with the note's length, not its text.
+- `deleteNote(orderId, eventId, context)`: withdraws a staff note by unsetting its text (the row stays) via `clearNoteText`. Returns 204, or 404 if nothing matched. It audits the length of the withdrawn text.
+- `readTimeline(orderId, authContext, pagination)`: returns one page of entries, newest first. Staff see all rows and actors. Buyers see only `BUYER_VISIBLE_TYPES` and no actor. `totalItems` counts only rows the caller may read.
+- `collectTimelineOf(userId)`: every timeline row of the account's own orders, for `POST /account/export`. It includes staff text and staff-only rows, and keeps `actor` only when it is the exporting account.
+- `clearTimelineActor(userId, session)`: removes the actor from rows made by an erased staff account.
+- `scrubTimelineText()`: unsets the free text of rows older than the configured retention (`orderEventTextRetentionDays()`). It is the second sweep of `reap:orders`. Returns the number of rows scrubbed.
+- `deleteTimelineOf(orderId)`: removes the timeline of a hard-deleted order. It is `@internal` and not on `orderService`.
+- Non-exported: `insertRow` (encrypts `note_added` text and stores the row), `appendTimelineAll` (sequential appends), `readsEveryOrder` (staff check).
 
 ## Relationships
-
-- **`src/modules/orders/domain/index.ts`** — Provides `BUYER_VISIBLE_TYPES` (buyer-read filter) and the `TimelineEntryInput` union used by every write path.
-- **`src/modules/orders/audit.ts`** — Supplies `ordersAuditActions` constants for the `recordAudit` calls in `addNote`/`deleteNote`.
-- **`src/modules/orders/config.ts`** — Supplies `orderEventTextRetentionDays()` for the retention cutoff in `scrubTimelineText`.
-- **`src/infrastructure/security/pii-encryption.ts`** — `encryptPii` / `decryptPii` protect staff note text at rest and in audit metadata.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape the `addNote` / `deleteNote` HTTP responses.
-- **`src/infrastructure/i18n/index.ts`** — `t()` localises the `404` message in `addNote` / `deleteNote`.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the audit trail for note add/delete.
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps `addNote` in its own transaction.
-- **`src/infrastructure/persistence/create-repository.ts`** — `toObjectId` converts string ids for Mongoose in `insertRow`.
-- **`src/infrastructure/persistence/search.ts`** — `normalizePagination`, `buildPaginatedMeta`, and the `PaginationInput` / `PaginatedMeta` types back `readTimeline`.
-- **`src/kernel/ability.ts`** — `heldRules` powers the staff-vs-buyer reader check.
-- **`src/kernel/permissions.ts`** — `callerForSubject` builds the subject key for the `heldRules` lookup.
-- **`src/domain-primitives/time.ts`** — `DAY_MS` converts the retention-days config into a millisecond cutoff.
+- **Persistence:** uses `orderEventRepository` and `orderRepository` from `../repository`, `toObjectId` from `create-repository`, and `normalizePagination`/`buildPaginatedMeta` from `persistence/search`. `withTransaction` from `runtime/database` wraps `addNote`.
+- **PII:** `encryptPii`/`decryptPii` from `security/pii-encryption`, with `timelineNoteAad` from `../pii`, protect note text.
+- **Authorization:** `callerForSubject` (`kernel/permissions`) and `heldRules` (`kernel/ability`) decide whether the caller is staff.
+- **Responses and i18n:** `generateSuccess`/`generateReject` from `http/response`, and `t` from `i18n` for the not-found message.
+- **Audit and logging:** `recordAudit` (`observability/audit`) with `ordersAuditActions` (`../audit`). `logger` records scrub counts.
+- **Orders module:** `presentTimeline`/`presentTimelineEntry` from `../presenter`, `BUYER_VISIBLE_TYPES` and `TimelineEntryInput` from `../domain`, `orderEventTextRetentionDays` from `../config`, and `ownOrderIds` from `./read`.
+- **Time:** `DAY_MS` from `domain-primitives/time` for the retention cutoff.
 
 ## Notes
-
-- **Two-writer, one-door design.** `orders` writes its own rows inside its own transaction; dependent modules call `appendTimeline` inside *their* transaction. The reverse direction is impossible because they import `orders`, so an event-listener would create a cycle.
-- **`withTimeline` is atomic with the write.** If the conditional write returns `null` (lost race, wrong state), no timeline rows are appended.
-- **Staff note text is PII-encrypted** with the order id as AAD. The presenter decrypts for display; audit rows store only the length.
-- **`readTimeline` uses `display:Order` (ability), not `read:Order` (CASL action)**, because both buyers and staff hold `read:Order`; the distinguishing held key is `display:Order`.
-- **`collectTimelineOf` is an export, not a view.** It includes staff text and staff-only row types (GDPR: the data belongs to the buyer), but the `actor` field is only restored when it matches the exporting user — shop staff identity stays in the audit log.
-- **`deleteTimelineOf` is `@internal`.** It is deliberately not exposed on `orderService`; only the orders module's own hard-delete path may call it.
-- **`scrubTimelineText` unsets text but preserves the row, type, and `data` codes.** It is the second sweep of the `reap:orders` job (first sweep likely deletes the order itself).
+- Staff note text is encrypted at write time in `insertRow`, with the order id as AAD, so no writer can store a plaintext note. The presenter decrypts it.
+- Staff status is determined by holding the `display:Order` rule, not by the CASL action, because `read:Order` shares the action and would admit every buyer.
+- `appendTimelineAll` appends sequentially, because a transaction session does not take parallel operations and row order must be kept.
+- `data` in an entry should hold ids and codes, never a sibling module's free text.
+- `readTimeline` assumes the order was already checked by the controller through `getForCaller`.
+- In `collectTimelineOf`, actors are omitted for privacy (CJEU Pankki S, C-579/21). Only the exporting account's own id is restored, and who wrote a row stays in the audit log.
+- `deleteNote` returns one 404 for an unknown id, a row of another order, another type, or an already-withdrawn note.

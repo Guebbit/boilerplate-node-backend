@@ -1,32 +1,37 @@
 ---
 source: src/modules/payments/controllers/post-payment-refund.ts
-sha256: 0d02cde96a5de4080bc036ff1d59d4d2de5bd654200ccb2061b018865e3a280f
-generated_at: 2026-11-08T07:18:39.202082+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0d02cde96a5de4080bc036ff1d59d4d2de5bd654200ccb2061b018865e3a280f
+context_sha256: 5ce1fd43cc810858f4827ac1f677e2d04a235b0d888cfac4a780d0106f0991ca
+generated_at: 2026-11-22T06:42:23.149660+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/controllers/post-payment-refund.ts
 
 ## Purpose
-
-Handler for `POST /payments/:id/refunds`. Processes a standalone (admin-initiated) full or partial refund on a payment without altering the associated order's status. Returns **201** with the new `Refund` record and a `Location` header identifying it.
+Express controller for `POST /payments/:id/refunds`. It refunds all or part of a payment without changing the status of the payment's order, giving operators a standalone refund. On success it responds 201 with the new `Refund` record and a `Location` header. The route is admin-only. "Cancel and refund" is done by a client sending this request and the order cancel separately, so an operator can do either one alone.
 
 ## Key elements
-
-- **`postPaymentRefund`** (exported) — The sole export. Validates the `:id` param, parses the request body against `CreateRefundBody` (Zod), delegates to `paymentService.refundPayment`, resolves the resulting `Refund` via `paymentService.refundOf`, and replies with `createdResponse`.
+- `postPaymentRefund(request, response)`: the exported handler. Its steps:
+  1. Resolves the payment id with `requireId`, using the `payments.not-found` error key, and returns early if it is missing.
+  2. Validates `request.body` (defaulting to `{}`) against `CreateRefundBody` with `parseBody`, and returns early on failure.
+  3. Calls `paymentService.refundPayment(paymentId, request.authContext, callerContextOf(request), body)`.
+  4. If `refused(response, result)` handles the result, it stops. Otherwise it destructures `{ payment, refundId }` from `result.data`.
+  5. Looks up the new record with `paymentService.refundOf(payment, refundId, request.authContext)`.
+  6. Sends `createdResponse(response, refund, "/payments/${paymentId}/refunds/${refund.id}")`.
+  7. Any rejection goes to `catchAs(response, 'postPaymentRefund')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Supplies `parseBody`, `refused`, and `catchAs`, the shared HTTP validation/error helpers used throughout the handler.
-- **`src/infrastructure/http/ids.ts`** — Supplies `requireId` to extract and validate the `:id` route parameter.
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf` to build the caller context passed into the service call.
-- **`src/infrastructure/http/response.ts`** — Supplies `createdResponse` for the 201 reply.
-- **`src/modules/payments/services/index.ts`** — Provides `paymentService`, whose `refundPayment` and `refundOf` methods perform the actual business logic.
-- **`src/modules/payments/routes.ts`** — Registers `postPaymentRefund` at the `POST /payments/:id/refunds` route (and enforces admin-only auth there).
+- `src/infrastructure/http/ids.ts`: `requireId` parses and validates the `:id` path parameter.
+- `src/infrastructure/http/controller.ts`: provides `parseBody` (schema validation), `refused` (turns a refused service result into a response) and `catchAs` (the error handler for the promise chain).
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `createdResponse` writes the 201 response and `Location`.
+- `src/modules/payments/services/index.ts`: exports `paymentService`, which performs the refund (`refundPayment`) and returns the public refund view (`refundOf`).
+- `src/modules/payments/routes.ts`: this is where the handler is mounted. The file's doc comment says the admin-only restriction is applied there.
+- `src/modules/payments/providers/index.ts`: the file does not import it directly, so there is no visible interaction.
 
 ## Notes
-
-- **Separation of concerns with order cancel:** The doc comment explicitly states that "cancel and refund" is modeled as two independent client calls (this refund + a separate order-cancel). This controller must never touch order status.
-- **Defensive unreachable check:** After a successful `refundPayment`, the code looks up the `Refund` on the payment and throws if it is missing. The comment marks this path as unreachable; it exists purely as a safety net.
-- **Auth is route-level, not controller-level:** Admin-only enforcement lives in `routes.ts`, not here. The handler receives `request.authContext` and forwards it to the service but does no permission check itself.
-- **No direct provider dependency:** Although `src/modules/payments/providers/index.ts` appears in the dependency graph, this file does not import or reference it; any provider usage is internal to the service layer.
+- The handler returns a promise, but the early `return;` branches return nothing.
+- The `if (!refund) throw ...` branch is commented as unreachable on success. If it were hit, the thrown error would be handled by `catchAs`.
+- The `Location` path is built from the request's `paymentId` and the new `refund.id`.
+- The request body schema `CreateRefundBody` is imported from `@api/schemas.zod`.

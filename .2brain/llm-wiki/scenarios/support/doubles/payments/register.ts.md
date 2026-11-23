@@ -1,30 +1,24 @@
 ---
 source: scenarios/support/doubles/payments/register.ts
-sha256: 9f5ddb3504a59ff6f47177f2e86d8e837984c9e091e975e738154cf5da40e03c
-generated_at: 2026-11-08T02:34:30.365901+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T01:48:17.235725+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/support/doubles/payments/register.ts
 
 ## Purpose
-
-Registers a lazy "fake" payment provider into the payments registry so that scenario tests can exercise the payments flow without a real PSP. Registration itself is a no-op cost: the fake implementation is only loaded (dynamic `import('./fake')`) the first time a method is actually called.
+Registers the fake payment service provider (PSP) in the payments registry as a lazy stand-in. Registering loads nothing. The real fake in `./fake` is imported only when something first opens an intent. It sits in its own folder alongside `./fake` because `payments` is a `group: shop` module and `demo:remove` deletes the folder with it. A generated modules file (`../modules.generated.ts`, per the file's own doc comment) is then rebuilt from the folders that remain.
 
 ## Key elements
-
-- **`registerDouble`** (exported) — Entry point. Calls `registerPaymentProvider` with the `lazyFakePaymentProvider` so the registry resolves the name `"fake"` to the lazy stand-in.
-- **`lazyFakePaymentProvider`** (module-private) — An object satisfying the `PaymentProvider` interface. Every method (`prepare`, `confirm`, `retrieve`, `refund`, `retrieveRefund`, `listRefunds`, `cancel`, `parseWebhook`) dynamically imports `./fake` and delegates the call to the loaded real fake provider.
-- **`loadFakePaymentProvider`** (module-private) — Wraps the dynamic `import('./fake')` and extracts `.fakePaymentProvider` from the module.
+- `registerDouble()` (exported): calls `registerPaymentProvider` with the lazy provider, so the fake is registered under the name `fake`.
+- `lazyFakePaymentProvider` (module-private): a `PaymentProvider` named `'fake'`. Each method forwards to the real fake provider once it has loaded. The methods are `prepare`, `confirm`, `retrieve`, `refund`, `retrieveRefund`, `listRefunds`, `cancel` and `parseWebhook`. Each returns a promise.
+- `loadFakePaymentProvider()` (module-private): runs `import('./fake')` and resolves to its `fakePaymentProvider` export.
 
 ## Relationships
-
-- **`scenarios/support/doubles/payments/fake.ts`** — The actual fake PSP implementation. Imported lazily at call time via `import('./fake')`; this file is its registration shim.
-- **`src/modules/payments/providers/registry.ts`** — Source of `registerPaymentProvider`, which this file calls to insert the fake into the global registry.
-- **`src/modules/payments/providers/index.ts`** — Source of the `PaymentProvider` type that both `lazyFakePaymentProvider` and the imported fake conform to.
+- `./fake` (`scenarios/support/doubles/payments/fake.ts`): the real fake PSP. It is loaded dynamically and only on first use. This file never imports it statically.
+- `src/modules/payments/providers/registry.ts`: provides `registerPaymentProvider`, which `registerDouble` uses to add the provider.
+- `src/modules/payments/providers/index.ts`: provides the `PaymentProvider` type that the lazy wrapper implements. It is a type-only import.
 
 ## Notes
-
-- The file lives in `scenarios/support/doubles/payments/` (its own folder, not directly under `doubles/`) so that the `demo:remove` script can delete the folder along with the `payments` group module. After deletion, `../modules.generated.ts` is rebuilt from the remaining folders and the double disappears cleanly.
-- Each forwarded method reads the target method off the *loaded* object at call time (`provider.refund(...)`), rather than capturing a reference upfront. This means `jest.spyOn(fakePaymentProvider, 'refund')` on the real object in `./fake` still intercepts the call.
-- The dynamic import is repeated on every call (not memoized in this file); caching is the responsibility of the module system.
+- Each forwarding method reads the method off the loaded provider at call time. A test's `jest.spyOn(fakePaymentProvider, 'refund')` on the real object therefore still intercepts calls made through the registry.
+- `loadFakePaymentProvider()` calls `import('./fake')` on every method call and does not cache the provider itself. This relies on the module system to cache the module after the first load.

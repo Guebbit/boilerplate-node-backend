@@ -1,37 +1,34 @@
 ---
 source: src/modules/delivery/controllers/post-mark-shipment-lost.ts
-sha256: 9a43caf501b288b85316dbd7790b56524a549e7040125720e1391164881ea25f
-generated_at: 2026-11-14T19:38:10.490244+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 9a43caf501b288b85316dbd7790b56524a549e7040125720e1391164881ea25f
+context_sha256: d20ed8776531d90a15f5260e7dd361e9130b85be2227e7c2a00943e38ea0b723
+generated_at: 2026-11-22T04:46:49.516502+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/controllers/post-mark-shipment-lost.ts
 
 ## Purpose
-
-HTTP controller for `POST /delivery/shipments/:id/mark-lost`. It validates the route parameter and request body, then delegates the actual "mark shipment lost" operation to the delivery service. It exists to keep route-handling logic (parsing, auth, error formatting) separate from domain logic in the service layer.
+Express controller for `POST /delivery/shipments/:id/mark-lost`. It lets staff report a parcel as lost or damaged in transit by validating the request and delegating to the delivery service.
 
 ## Key elements
-
-- **`postMarkShipmentLost(request, response)`** – The sole export. Accepts an Express `Request` with an optional `id` route param and a `Response`. Steps:
-  1. Extracts and validates the shipment `id` via `requireId`.
-  2. Parses and validates the request body against the `MarkShipmentLostBody` Zod schema.
-  3. Calls `deliveryService.markShipmentLost(id, body, authContext, callerContext)`.
-  4. On success, sends a `successResponse<Shipment>`; on refusal, delegates to `refused`; on unhandled error, delegates to `catchAs`.
+- `postMarkShipmentLost(request, response)`: the exported handler. It runs these steps in order:
+  1. Reads the shipment id with `requireId`, using the not-found key `delivery.shipment-not-found`. If the id is missing or invalid, it stops, since `requireId` has already handled the response.
+  2. Validates `request.body` against the `MarkShipmentLostBody` zod schema (from `@api/schemas.zod`) with `parseBody`. If validation fails, it stops.
+  3. Calls `deliveryService.markShipmentLost(id, body, request.authContext, callerContextOf(request))`.
+  4. If `refused(response, result)` reports a refusal, it returns without sending a success response. Otherwise it sends `successResponse<Shipment>(response, result.data)`.
+  5. Any rejection is passed to `catchAs(response, 'postMarkShipmentLost')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** – Provides the `parseBody`, `refused`, and `catchAs` helpers that standardise validation, refusal, and error-capture patterns used by every controller in the codebase.
-- **`src/infrastructure/http/ids.ts`** – Supplies `requireId`, which extracts the `:id` route param and short-circuits with a 404 if missing.
-- **`src/infrastructure/http/request.ts`** – Supplies `callerContextOf`, which pulls the authenticated caller's context from the request to pass alongside `authContext` to the service.
-- **`src/infrastructure/http/response.ts`** – Supplies `successResponse`, the standard envelope for 2xx JSON replies.
-- **`src/modules/delivery/services/index.ts`** – Exports `deliveryService`; this controller calls `deliveryService.markShipmentLost` on it as the domain operation.
-- **`src/modules/delivery/routes.ts`** – Registers this handler for the `POST /delivery/shipments/:id/mark-lost` route.
-- **`src/types/index.ts`** – Exports the `Shipment` interface used to type the success response payload.
+- `src/infrastructure/http/controller.ts`: provides `parseBody`, `refused` and `catchAs`, which handle validation, refused service results and error responses.
+- `src/infrastructure/http/ids.ts`: `requireId` extracts the `:id` param and responds with the not-found key when it is absent.
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `successResponse` formats the success payload.
+- `src/modules/delivery/services/index.ts`: supplies `deliveryService`, which holds the actual business logic in `markShipmentLost`.
+- `src/types/index.ts`: supplies the `Shipment` type for the response payload.
+- `src/modules/delivery/routes.ts`: the route table, which presumably registers this handler for the path above. The file itself doesn't show the wiring.
 
 ## Notes
-
-- The controller is deliberately thin: no business rules live here. All mutation logic is in the service.
-- Early returns use `Promise.resolve()` (not a bare `return`) so the function's return type stays `Promise<void>` and callers can safely `.then()` it.
-- `request.authContext` and `callerContextOf(request)` are passed as *separate* arguments to the service — do not conflate them.
-- The route param `id` is typed `string | undefined` in the handler signature; `requireId` narrows it. If you add a new optional param, follow the same pattern.
+- The handler never throws and always returns a Promise. Early exits return `Promise.resolve()`.
+- Errors and refusals are written to the response by the helpers rather than thrown. The controller itself contains no business rules.
+- `request.authContext` is passed straight through. This file does no authorization checks of its own.

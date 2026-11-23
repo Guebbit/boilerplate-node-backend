@@ -1,35 +1,28 @@
 ---
 source: src/modules/payments/providers/errors.ts
-sha256: c99d0bb0c36a733f02d06d348ef8bcadcef04548ffbd94caeaed6c22290a9a56
-generated_at: 2026-11-08T07:23:12.797280+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c99d0bb0c36a733f02d06d348ef8bcadcef04548ffbd94caeaed6c22290a9a56
+context_sha256: ea39c1004ffc8a207d41cf240f568d68378f3b5103560aa0bb54c780a8bd31f6
+generated_at: 2026-11-22T06:47:13.777669+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/providers/errors.ts
 
 ## Purpose
-
-Defines the error types that payment provider implementations can throw. Split out of `providers/index.ts` so that an adapter (real or fake) can import and throw these errors without pulling in the port interface file, which itself imports the config and the registry the implementation is registered in — avoiding a circular dependency.
+Defines the error types of the payment provider port. They live in their own file, separate from `index.ts`, so an implementation (a real adapter or the fake double) can throw them without importing the port interface file. That file in turn imports the config and the registry the implementation is registered in.
 
 ## Key elements
-
-- **`PaymentInFlightError`** — Thrown exclusively by `PaymentProvider.cancel` when the intent has already succeeded or is still mid-flight at the provider, leaving nothing open to close. Carries only a free-form `message` describing the provider's state.
-- **`PaymentProviderError`** — Thrown by an adapter when a refund is refused. Carries a `code: RefundFailureReason` (the closed classification surfaced to staff) and a `message` (the provider's own wording, intended for logs only, never sent to the wire).
+- `PaymentInFlightError` (extends `Error`): a provider's refusal to cancel because the intent already succeeded or is still mid-flight. Only a refund could move the money back. Takes a `message` describing the intent's state. Thrown by `PaymentProvider.cancel` and nowhere else in the port.
+- `PaymentProviderError` (extends `Error`): a provider refusing a refund, with the reason already classified. Carries a `readonly code: RefundFailureReason` (the closed reason staff see) and a `message` (the provider's own wording, for the log).
 
 ## Relationships
-
-- **`src/modules/payments/providers/index.ts`** — The port interface file from which these errors were extracted. The interface's `cancel` contract references `PaymentInFlightError`; adapters implement against the interface while importing only this file for the error types.
-- **`scenarios/support/doubles/payments/fake.ts`** — The fake payment provider; throws these same error types to exercise downstream error-handling paths.
-- **`src/modules/payments/services/refunds.ts`** — Catches `PaymentProviderError` to surface the classified `code` to callers.
-- **`src/modules/payments/services/intent.ts`** — Catches `PaymentInFlightError` during cancel flows.
-- **`src/modules/payments/services/offline.ts`** — Consumes provider errors in offline/queue contexts.
-- **`src/types/index.ts`** — Source of the `RefundFailureReason` type used as `PaymentProviderError`'s `code`.
-- **`src/modules/payments/tests/integration/refunds.test.ts`**, **`timeline.test.ts`** — Integration tests that assert on these error types being thrown with expected codes/messages.
-- **`tests/unit/scenarios/payments-fake.test.ts`** — Verifies the fake double throws these errors with correct payloads.
+- `src/types/index.ts`: supplies the `RefundFailureReason` type used for the `code` field of `PaymentProviderError`. It is imported with `import type`.
+- `src/modules/payments/providers/index.ts`: the port file. This file is split out so implementations don't need to import it.
+- `scenarios/support/doubles/payments/fake.ts`: the fake provider double. It is one of the implementations these errors are split out for.
+- `src/modules/payments/services/intent.ts`, `offline.ts` and `refunds.ts`: the payment services in the graph that sit alongside this file.
+- Tests (`refunds.test.ts`, `timeline.test.ts`, `payments-fake.test.ts`): the integration and unit tests linked to this file in the graph.
 
 ## Notes
-
-- The module docstring states the split exists specifically to break the import cycle: adapter → errors file (leaf) vs. adapter → port interface → config + registry → adapter.
-- `PaymentInFlightError` is documented as thrown "nowhere else in this port" — only `cancel` may raise it.
-- `PaymentProviderError.code` is typed as the closed `RefundFailureReason` union; anything an adapter throws *outside* this class is treated as `unknown` downstream (per the docstring).
-- The `message` on `PaymentProviderError` is explicitly log-only, not wire-safe.
+- An adapter maps its own error vocabulary onto `RefundFailureReason` and throws `PaymentProviderError`. Anything else an adapter throws is stored as `unknown`.
+- The `PaymentProviderError` message goes to the log, never the wire. Only the classified `code` is meant to be surfaced.
+- Both classes set `this.name` explicitly to their class name.

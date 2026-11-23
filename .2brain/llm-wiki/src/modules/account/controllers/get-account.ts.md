@@ -1,41 +1,35 @@
 ---
 source: src/modules/account/controllers/get-account.ts
-sha256: 9d653feaa50c6592394fbfc28751a1af6d7fe256f6ae39e4540d52496cd0ed19
-generated_at: 2026-11-14T18:31:17.678212+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 17a94e651c2f73ab9c7cda2d551a74b33976c6ecb0fc6235a816ba884a1769a5
+context_sha256: 5a36d0f5e612c268c8035dd95a9951736cde524e1e10917ea8ec46f84b55e766
+generated_at: 2026-11-22T03:21:18.807022+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/get-account.ts
 
 ## Purpose
-
-Thin HTTP adapter for `GET /account`. It fetches the authenticated user's full profile fresh from the database (via `accountService.getOwnProfile`) and returns a complete `AccountView`, rather than echoing the JWT payload which would silently omit fields like `verifiedAt` and `locale` that the client's verify banner and saved-language flow depend on.
+Express controller for `GET /account`. It is a thin HTTP adapter that returns the authenticated user's full profile, read fresh from the users collection via `accountService.getOwnProfile`. The JWT carries only id/email/username/admin, so echoing it would drop `verifiedAt` and `locale`, which the client needs. The response also includes the caller's abilities and idle clock, so a signed-in reload needs no second call.
 
 ## Key elements
-
-- **`getAccount(request, response)`** — the sole export. Express-style handler that:
-  - Rejects with **401** if `request.authContext` is missing or the user row no longer exists (dead session, not a server fault).
-  - Calls `accountService.getOwnProfile(authContext.id, callerContextOf(request))` to read the user document.
-  - Shapes the result with `accountViewOf(user, authContext)` into an `AccountView`.
-  - Sets an ETag via `setEtag` before sending the success response.
-  - Routes promise rejections through `catchAs(response, 'getAccount')`.
+- `getAccount(request, response): void` — the exported handler.
+  - Responds 401 if `request.authContext` is missing.
+  - Otherwise calls `accountService.getOwnProfile(authContext.id, callerContextOf(request))`.
+  - Responds 401 if no user is returned (a valid token whose row is gone is treated as a dead session, not a server fault).
+  - On success, calls `setEtag(response, user)` and sends `successResponse<AccountView>(response, accountViewOf(user, authContext))`.
+  - Promise rejections go to `catchAs(response, 'getAccount')`.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/infrastructure/http/controller.ts` | Supplies `catchAs`, the error-handling wrapper this controller passes to its promise rejection handler. |
-| `src/infrastructure/http/preconditions.ts` | Supplies `setEtag` to stamp the response with the user document's revision. |
-| `src/infrastructure/http/request.ts` | Supplies `callerContextOf` to extract per-request caller metadata passed down to the service. |
-| `src/infrastructure/http/response.ts` | Supplies `rejectResponse` (401 path) and `successResponse` (200 path). |
-| `src/modules/account/routes.ts` | Registers `getAccount` as the handler for the `GET /account` route. |
-| `src/modules/account/services/index.ts` | Exports `accountService`, which this controller imports and invokes to fetch the user document. |
-| `src/modules/account/session/account-view.ts` | Provides `accountViewOf` to project the user document + auth context into the `AccountView` shape. |
-| `src/types/index.ts` | Defines the `AccountView` type used as the response body. |
+- `src/infrastructure/http/response.ts` — supplies `rejectResponse` (401s) and `successResponse` (the success body).
+- `src/infrastructure/http/request.ts` — `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/controller.ts` — `catchAs` is the shared error handler for the promise chain.
+- `src/infrastructure/http/preconditions.ts` — `setEtag` sets the ETag header on the response.
+- `src/modules/account/services/index.ts` — provides `accountService`, which does the profile lookup.
+- `src/modules/account/session/account-view.ts` — `accountViewOf(user, authContext)` builds the response body.
+- `src/types/index.ts` — provides the `AccountView` type.
+- `src/modules/account/routes.ts` — the neighbor that registers this handler for the route. The route wiring is not visible in this file.
 
 ## Notes
-
-- **Why not echo the JWT?** The token only carries `id / email / username / admin`. Returning it directly would drop `verifiedAt` and `locale`, breaking client-side verify-banner and language-persistence flows. A fresh DB read also folds in the caller's abilities and idle clock, so a signed-in page reload needs no second call.
-- **Role is free here.** `authContext` was already resolved at token-verification time (membership store read), so no additional lookup occurs in this controller.
-- **ETag semantics.** The ETag is derived from the stored document (a role change bumps it), but the body shifts on every read because `lastActiveAt` updates — the intended caching hint is effectively `no-store` for the body.
-- **401 vs 500.** A valid token whose user row has been deleted is treated as a dead session (401), not a server error.
+- The role comes from the already-resolved `authContext`, which was read from the membership store at token verification. The handler does no second lookup.
+- The ETag has two parts. The edit part is the stored document's revision, which a role change moves (see `src/modules/users/services/update.ts`). The body part changes on every read because of `lastActiveAt`, which `no-store` makes harmless.
+- The handler returns `void` and writes to the response directly, so each early `return` after `rejectResponse` is needed to stop the flow.

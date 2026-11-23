@@ -1,33 +1,38 @@
 ---
 source: src/modules/cart/controllers/patch-cart-item.ts
-sha256: 355c8370af8f81a660d690290960dd27d00070d11fb3feb94f5fadb418ce7c65
-generated_at: 2026-11-14T19:27:35.547305+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 70b99c0d0316ec8790d0e19089c2b0e76e28801d10063e9d460f6e8476d809ed
+context_sha256: d4ddd006ddf877c1e8aaa621699678461a7b1244f89ab068a3ac075a5e840057
+generated_at: 2026-11-22T04:30:46.846170+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/controllers/patch-cart-item.ts
 
 ## Purpose
-
-Thin HTTP adapter for `PATCH /cart/items/:productId`. Extracts the product ID from the path and the quantity from the body, then delegates to `cartService.updateItemQuantity` and serialises the result (or an error) back to the client.
+Controller for `PATCH /cart/items/:productId`. It is a thin HTTP adapter over `cartService.updateItemQuantity`. It sets the quantity of a line the cart already holds and returns the updated cart.
 
 ## Key elements
-
-- **`patchCartItem`** (exported) — Express handler. Validates the `:productId` path param and the JSON body (quantity), calls `cartService.updateItemQuantity(userId, productId, quantity, callerContext)`, and responds with either the updated `CartResponse` or a structured error.
+- `patchCartItem(request, response)`: the Express handler, and the file's only export.
+  - Reads the user id from `request.authContext!.id`.
+  - Validates the `productId` path segment with `requireId`. A malformed id answers `products.not-found` (surface `path`).
+  - Parses the body with `parseBody(UpdateCartItemByProductIdBody, ...)`. The body carries only `quantity`.
+  - Calls `cartService.updateItemQuantity(userId, productId, quantity, callerContextOf(request))`.
+  - If `refused(response, result)` is true, it stops, because the refusal has already been written to the response. Otherwise it sends `successResponse<CartResponse>(response, result.data)`.
+  - Unexpected errors are handled by `catchAs(response, 'updateCartItemByProductId')`.
 
 ## Relationships
-
-- **`src/modules/cart/routes.ts`** — registers `patchCartItem` as the handler for the `PATCH /cart/items/:productId` route.
-- **`src/modules/cart/services/index.ts`** — source of `cartService`, the cart service this controller delegates to.
-- **`src/infrastructure/http/controller.ts`** — supplies `catchAs`, `parseBody`, and `refused` (the shared error/validation/short-circuit helpers used by every controller in this project).
-- **`src/infrastructure/http/ids.ts`** — supplies `requireId`, which validates the `:productId` path segment and short-circuits with a 404 if it is malformed or missing.
-- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf`, extracted from the request and forwarded to the service for audit/permission context.
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse`, the standard success envelope wrapper.
-- **`src/types/index.ts`** — provides the `CartResponse` and `UpdateCartItemByProductIdRequest` types used for the response payload and the generic body parameter.
+- `src/infrastructure/http/controller.ts`: supplies `parseBody`, `refused` and `catchAs`.
+- `src/infrastructure/http/ids.ts`: supplies `requireId`, which validates the path id.
+- `src/infrastructure/http/request.ts`: supplies `callerContextOf`, which builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: supplies `successResponse`.
+- `src/modules/cart/services/index.ts`: provides `cartService`, whose `updateItemQuantity` holds the business logic.
+- `src/types/index.ts`: provides the `CartResponse` and `UpdateCartItemByProductIdRequest` types.
+- `src/modules/cart/routes.ts`: the route module that wires this handler to the path (the file itself doesn't show the wiring).
 
 ## Notes
-
-- **No `If-Match` / ETag concurrency control.** There is no `GET` on this URL; the cart enforces its own line-item rules instead of optimistic locking.
-- **404 semantics are dual:** a product the storefront wouldn't display (unknown product) and a line the cart does not hold (`cart.item-not-found`) both surface as 404. Both originate inside the service layer (`upsertCartItem` / `updateItemQuantity`), not in this controller.
-- **Malformed `productId` is deliberately mapped to the same 404** the service would return for an unknown product, rather than a 400 — the controller calls `requireId` with a `notFound` code so the client sees one consistent error.
-- **Body carries only `quantity`.** The product identity is exclusively the path segment; the body schema (`UpdateCartItemByProductIdBody`) contains no product field.
+- This is an update only. A line the cart does not hold returns 404 `cart.item-not-found`.
+- A product the storefront wouldn't show returns the same 404 as `POST /cart/items`, and it comes from the same place, `upsertCartItem`.
+- There is no `If-Match` handling. The doc comment gives two reasons: there is no GET on this URL, and the cart has its own line rules.
+- The handler uses early `return` after `requireId` and `parseBody` fail, and relies on those helpers to have already written the error response.
+- `request.authContext!` is a non-null assertion, so it assumes auth middleware runs before this handler.
+- The request body is validated with the `UpdateCartItemByProductIdBody` zod schema, imported from `@api/schemas.zod`.

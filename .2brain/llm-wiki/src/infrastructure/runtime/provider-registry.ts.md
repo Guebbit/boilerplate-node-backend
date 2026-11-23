@@ -1,35 +1,27 @@
 ---
 source: src/infrastructure/runtime/provider-registry.ts
-sha256: 919b7cfbd15ea5b23a8ef87d6d7e034b52eb9b8013a3987fae05cbd4a09a3db2
-generated_at: 2026-11-14T18:17:11.342141+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 383e7b35ad45e417e868aeac057cacf58437fb33f38dd4102b81cd7816c1d53c
+context_sha256: dac6e1f6ea3ae7d98667d5ba241327dae6b8acf62cfb8eeb565d2064e717c3c5
+generated_at: 2026-11-22T03:06:57.748344+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/runtime/provider-registry.ts
 
 ## Purpose
-
-Defines the generic named-lookup seam shared by every provider family in this build (antibot, analytics, payments, OAuth, mail, etc.). It supplies the `ProviderRegistry<T>` interface, two factory functions (private and process-shared), and a `requireProvider` helper. Resolution *policy* (throw vs. return `undefined`) is deliberately left to each caller.
+A generic named table of interchangeable implementations ("name in, implementation out"), written once and shared by the antibot, analytics, payments and OAuth seams. It only stores and looks up; whether an unknown name throws or yields `undefined` is left to each caller.
 
 ## Key elements
-
-- **`ProviderRegistry<T>`** — Interface: `register(name, provider)`, `names()`, `resolve(name): T | undefined`.
-- **`registryOver`** (internal) — Wraps a `Map<string, T>` into a `ProviderRegistry<T>` object.
-- **`createProviderRegistry<T>(initial?)`** — Creates a private, module-scoped registry seeded with the given `Record<string, T>`.
-- **`createSharedProviderRegistry<T>(name, initial?)`** — Creates (or retrieves) a process-wide registry keyed by a `Symbol.for` slot on `globalThis`, so it survives `jest.resetModules` / `isolateModules`.
-- **`requireProvider<T>(registry, variable, name)`** — Resolves `name` or throws an `Error` listing all registered names; intended for ports where an unknown name is a bug (antibot, analytics, payments).
+- `ProviderRegistry<T>` — interface with `register(name, provider)` (also used to override in tests), `names()` (insertion order) and `resolve(name)` (returns `T | undefined`).
+- `createProviderRegistry(initial?)` — builds a private registry backed by a fresh `Map`, seeded from a record. `T` is unconstrained: it can be a plain implementation or a lazy factory (e.g. `() => OAuthProvider | undefined`); the registry never invokes `T`.
+- `createSharedProviderRegistry(name, initial?)` — registry whose backing map lives on `globalThis` under `Symbol.for("boilerplate-node-backend.provider-registry.<name>")`. Same `name` yields the same map across module instances. `initial` only applies to the call that creates the map.
+- `requireProvider(registry, variable, name, developmentNames?)` — strict resolution: returns the provider or throws `Error`. The message is `Unknown <variable>: "<name>". Allowed: ...` listing registered names; if `name` is in `developmentNames`, the message instead says it is a development double loaded only when `NODE_ENV=development`.
+- `registryOver` (private) — wraps a `Map` in the `ProviderRegistry` interface for both factories.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/antibot-providers/index.ts`**, **`src/infrastructure/observability/analytics/index.ts`**, **`src/modules/payments/providers/index.ts`**, **`src/modules/payments/providers/registry.ts`** — Each of these ports creates a registry (typically via `createSharedProviderRegistry`) and calls `requireProvider` at boot to fail fast on a misnamed selector.
-- **`src/modules/account/oauth/providers/index.ts`** — Registers OAuth provider factories (`() => OAuthProvider | undefined`) and resolves them with a plain `resolve()` call, treating `undefined` as "not configured."
-- **`src/infrastructure/adapters/mail-transports.ts`**, **`src/infrastructure/adapters/pdf.ts`**, **`src/infrastructure/adapters/pinned-https.ts`** — Consume or register implementations through the same `ProviderRegistry<T>` shape.
-- **`src/infrastructure/runtime/settle.ts`** — Part of the same runtime layer; may resolve providers during the settle/shutdown phase.
-- **`src/modules/invoicing/providers/index.ts`** — Follows the same register/resolve pattern for invoicing implementations.
+The neighbor files are the adapter and module provider registries (`src/infrastructure/adapters/antibot-providers/index.ts`, `mail-transports.ts`, `pdf.ts`, `pinned-https.ts`, `src/infrastructure/observability/analytics/index.ts`, `src/modules/invoicing/providers/index.ts`, `src/modules/payments/providers/index.ts`, `src/modules/payments/providers/registry.ts`, `src/modules/account/oauth/providers/index.ts`) and `src/infrastructure/runtime/settle.ts`. They sit on the dependency graph with this file, and the header comment names antibot, analytics, payments and OAuth as the ports that use it. The file's content does not show which of them import it. `tests/unit/infrastructure/runtime/provider-registry.test.ts` is its unit test.
 
 ## Notes
-
-- `T` is intentionally unconstrained. For OAuth it holds a *factory* (`() => OAuthProvider | undefined`); the registry stores and returns values but **never invokes** them.
-- `createSharedProviderRegistry` seeds `initial` only on first creation (`??=`). Subsequent calls in the same process with the same `name` return the existing map unchanged.
-- The `globalThis` + `Symbol.for` pattern mirrors the config store in `config/store.ts`; both exist so test doubles registered in `setupFiles` or a dev preload survive Jest module isolation.
-- `names()` returns insertion order (Map semantics), which is what appears in `requireProvider`'s error message.
+- Fail-fast policy lives in callers: `requireProvider` is for ports where a typo must not silently downgrade a control (antibot, analytics, payments). The comment says the app tier probes it at boot so errors surface there rather than on the first request. OAuth callers use plain `resolve()` because "not configured" is routine.
+- Use the shared variant for doubles registered before app load (development doubles, jest `setupFiles`). A private map would come back empty after `jest.resetModules` or `isolateModules` re-evaluates the module. It follows the same `globalThis` pattern as `src/infrastructure/config/store.ts`.
+- `register` overwrites silently, since it calls `Map.set`.

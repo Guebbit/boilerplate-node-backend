@@ -1,34 +1,34 @@
 ---
 source: scripts/testing/run-prism-smoke-test.ts
-sha256: a90c68ce118c7feda31943d71b80313dbc881f3e32ae1ba00a3a59d8d98a1fdf
-generated_at: 2026-11-14T17:43:19.709360+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6409f1305e2127700ae7a9fa28de87a5bdd7bedd25462aafc86c768b0b4c7231
+context_sha256: 11bfc73b07b11f84ad93f441b27715a64fa979fec9ffb529f78301beaba353fb
+generated_at: 2026-11-22T02:19:30.907293+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/testing/run-prism-smoke-test.ts
 
 ## Purpose
-
-A one-shot contract smoke test (run via `npm run test:prism`) that spawns a Prism mock server against the repo's `openapi.yaml`, polls until it accepts connections, and issues a single GET to prove the spec is complete enough for Prism to generate a 2xx response. It verifies the *document*, not application logic. It deliberately owns the child process it starts so a failed run never leaves a stray server listening.
+A smoke test of the OpenAPI contract, run via `npm run test:prism`. It boots Prism (`prism mock openapi.yaml`), probes one route, and passes if Prism answers with a 2xx. Because Prism serves the spec's own examples, a green run means the document is complete enough to mock. It is kept out of the pre-commit gate because it binds a real port.
 
 ## Key elements
-
-- **`PORT` / `PROBE`** — Env-overridable listening port (default `4010`) and probe path (default `/`), allowing the test to shift off a busy port or target a different route.
-- **`BOOT_TIMEOUT_MS`** (30 s) — Deadline for the mock to become reachable before the run is declared a failure.
-- **`prism`** — The `child_process.spawn` handle for `prism mock openapi.yaml --errors --port <PORT>`. `--errors` makes Prism reject spec-violating requests instead of answering. `stdio` is piped (not inherited) so output is buffered and only printed on failure.
-- **`stop()`** — Sends `SIGTERM` to the Prism process if it is still running. Wired to both `process.on('exit')` and a `SIGINT` handler (exit code 130) so cleanup happens on every exit path.
-- **`finish(code, message)`** — Terminates the script: kills Prism, prints the one-line outcome (and Prism's captured output on failure), then calls `process.exit`.
-- **`waitForBoot()`** — Polls `http://127.0.0.1:<PORT><PROBE>` every 250 ms until a response arrives or the deadline passes. Returns the first `Response` (which *is* the test's assertion subject) rather than discarding it.
-- **`main()`** — Async wrapper around `waitForBoot` + status check. Wrapped in a function (not top-level `await`) because the package is CommonJS and esbuild rejects top-level await.
+- `PORT`: from `PRISM_PORT`, default `4010`.
+- `PROBE`: route requested, from `PRISM_PROBE`, default `/`. `/` belongs to no module, so it survives `demo:remove`. It is also the route whose body Prism generates from a `$ref`'d schema.
+- `BOOT_TIMEOUT_MS`: 30 seconds for Prism to become answerable.
+- `prism`: child process spawned with `mock openapi.yaml --errors --port <PORT>`. It runs with `cwd: REPO_ROOT` and piped stdout/stderr. `--errors` makes Prism refuse requests that break the spec.
+- `output`: buffer of everything Prism printed. It is shown only on failure.
+- `stop()`: sends `SIGTERM` to Prism if it is still running. It is registered on the process `exit` event. `SIGINT` exits with code 130, which triggers that hook.
+- `finish(code, message)`: stops Prism, logs the outcome (`info` on success, `error` on failure, plus Prism's output on failure), and exits.
+- `waitForBoot()`: polls `fetch` against `http://127.0.0.1:<PORT><PROBE>` every 250 ms until it gets a response. It returns that first response instead of probing again. It calls `finish(1, …)` if the deadline passes.
+- `main()`: awaits `waitForBoot()`, then calls `finish(1, …)` for a non-2xx response or `finish(0, …)` for a 2xx.
 
 ## Relationships
-
-- **`scripts/fail-script.ts`** — Provides `failScript`, used as the `.catch()` handler on `main()` to convert an unhandled rejection into a clean non-zero exit with the error message.
-- **`scripts/modules-on-disk.ts`** — Provides `REPO_ROOT`, used as the `cwd` for the Prism spawn so the spec file resolves regardless of where the script is invoked from.
+- `scripts/modules-on-disk.ts`: supplies `REPO_ROOT`, used as the spawned Prism process's working directory.
+- `scripts/fail-script.ts`: supplies `failScript`, attached as the `.catch` handler on `main()` for unexpected errors.
 
 ## Notes
-
-- **Not in the pre-commit gate** — It binds a real TCP port, which would make pre-commit flaky in CI or on a crowded dev machine.
-- **Probe route choice** — `/` is selected because it belongs to no API module (survives a `demo:remove` step) and its response body is generated from a `$ref`'d schema, which is the specific spec-completeness property this test claims to validate.
-- **Output suppression** — Prism's stdout/stderr are accumulated silently and only flushed when the run fails, keeping the success path to a single line.
-- **Exit codes** — `0` on success, `1` on any failure (spawn error, early exit, timeout, non-2xx), `130` on Ctrl-C.
+- Failure paths: a spawn error (it suggests checking that `@stoplight/prism-cli` is installed), Prism exiting with a non-zero code before the probe answers, a boot timeout, or a non-2xx probe response.
+- The `exit` handler on `prism` only treats a non-zero exit code as failure.
+- `main` is wrapped in a function rather than using top-level await, because the package is CommonJS and esbuild rejects top-level await there.
+- The script owns the Prism process, so a failed probe cannot leave a server running.
+- The timeout message hardcodes "30s" rather than using `BOOT_TIMEOUT_MS`.

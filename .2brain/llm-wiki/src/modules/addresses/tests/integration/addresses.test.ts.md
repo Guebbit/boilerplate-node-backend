@@ -1,43 +1,53 @@
 ---
 source: src/modules/addresses/tests/integration/addresses.test.ts
-sha256: 8cdccc86a83536ad87e99305bc5011e005af4016527592b367e106e81c4464b2
-generated_at: 2026-11-08T04:57:23.968317+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 77e202b4a827a30a2fc1c50d1dec4ab4c3574da61bd2973fbfd59d8205d48f81
+context_sha256: df9821d1677a6744771d5be8f74457d78628b63a43423598cee47ffcb4e71b50
+generated_at: 2026-11-22T04:16:26.303987+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/tests/integration/addresses.test.ts
 
 ## Purpose
-
-Integration tests for the address-book service. They verify three core invariants end-to-end against a real database: a non-empty book always holds exactly one default, foreign entries are indistinguishable from invented ones (404), and the book cap is enforced even under concurrent writes. A secondary block confirms PII fields are stored encrypted (not plaintext) yet round-trip correctly through the repository.
+Integration tests for the address book, run against a real test database through `addressService`. The file is organised around one invariant, that a non-empty book has exactly one default entry however it got there. It also covers ownership (someone else's entry answers like a nonexistent one), the per-book size cap, and PII encryption at rest.
 
 ## Key elements
-
-- **`setupTestDb()`** — called at module level to create/isolate the test database before any `describe` runs.
-- **`labelsOf(userId)`** — helper that lists the caller's book and maps entries to their labels.
-- **`withCap(body)`** — wraps a test body with `NODE_ADDRESS_BOOK_MAX = '3'` via `withEnvironmentOverrides`, so cap tests never need many rows.
-- **`defaults(userId)`** — helper that filters the caller's book to entries where `default` is `true`.
-- **`describe('the one-default invariant')`** — seven cases covering: first-entry auto-default, explicit reassignment, idempotent re-set, foreign 404, default-on-create demotion, ordinary-edit neutrality, and removal promotion.
-- **`describe('adding an entry that claims the default')`** — covers demotion-in-same-write, `$literal` escaping of `$`-prefixed user text, and timestamp stamping on first entry.
-- **`describe('the address-book cap')`** — 409 + `ADDRESS_BOOK_LIMIT_REACHED` on overflow, slot freed after removal, and two concurrency-burst cases (12 parallel adds → exactly 3 succeed; 6 parallel default-claims → still one default).
-- **`describe('ownership')`** — stranger's `update`/`remove` on a foreign entry both return 404 and leave the owner's data untouched.
-- **`describe('PII at rest')`** — raw `addressBookModel` read confirms fields are ciphertext (matching `^v\d+(?::[\da-f]+){3}$`), repository read returns original plaintext, and AAD binding prevents cross-entry/cross-field ciphertext replay.
+- **`setupTestDb()`**: called at module level to set up the test database.
+- **`labelsOf(userId)`**: returns the labels of a user's book in stored order.
+- **`withCap(body)`**: runs `body` with `NODE_ADDRESS_BOOK_MAX=3` via `withEnvironmentOverrides`, so cap tests don't write many entries.
+- **`defaults(userId)`**: lists the book through the service and returns only entries flagged `default`.
+- **`describe('the one-default invariant')`**:
+  - The first entry becomes default whether or not it asked.
+  - `setDefault` promotes the target and demotes the holder, is idempotent, and returns 404 for another user's entry.
+  - Creating with `default: true` demotes the holder.
+  - An ordinary `update` leaves the default alone.
+  - Removing the default promotes the oldest remaining entry.
+- **`describe('adding an entry that claims the default')`**:
+  - Exactly one default remains after the write.
+  - A label like `$items` is stored as plain text, because the pipeline wraps entries in `$literal`.
+  - Both `createdAt` and `updatedAt` are stamped on a book created by its first entry.
+- **`describe('the address-book cap')`**:
+  - The entry past the cap is refused with a 409 and code `ADDRESS_BOOK_LIMIT_REACHED`, and nothing is written.
+  - Removing an entry lets a new one in again.
+  - A burst of 12 concurrent adds yields exactly 3 successes and 9 failures.
+  - A burst of concurrent `default: true` adds still leaves one default.
+- **`describe('ownership')`**: another user's `update` and `remove` both return 404, and the owner's entry stays unchanged (city still `Modena`).
+- **`describe('PII at rest')`**:
+  - Reads the raw document through `addressBookModel`, bypassing the repository's decrypt, and asserts the fields are not plaintext.
+  - `fullName` matches the versioned-secret format `/^v\d+(?::[\da-f]+){3}$/`.
+  - A round trip through the service returns the submitted plaintext.
+  - A further case asserts that a field copied onto another entry or field is refused because the entry id is in the AAD. The visible content cuts off partway through it.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/addresses/service.ts` | The system under test; all service methods (`create`, `list`, `update`, `remove`, `setDefault`) are exercised here. |
-| `src/modules/addresses/model.ts` | Imported as `addressBookModel`; used in PII tests for raw `.lean()` reads that bypass the repository's decrypt, simulating a stolen-disk scenario. |
-| `src/modules/addresses/tests/integration/fixtures.ts` | Provides the `HOME` and `OFFICE` address fixtures used throughout. |
-| `src/modules/users/tests/factories.ts` | Provides `createUser` to mint isolated test users (with distinct emails/usernames for ownership cases). |
-| `tests/support/environment.ts` | Provides `withEnvironmentOverrides`, used by `withCap` to set the book-size limit. |
-| `tests/support/response.ts` | Provides `asReject` to assert on the typed rejection shape (status, errors array). |
-| `tests/support/setup-test-db.ts` | Provides `setupTestDb`, called once at the top of the module to prepare the test database. |
+- `../../service` (`addressService`): the system under test, with `list`, `create`, `setDefault`, `update` and `remove`.
+- `../../model` (`addressBookModel`): used directly for raw reads, to check timestamps and the stored ciphertext.
+- `./fixtures`: provides the `HOME` and `OFFICE` address payloads.
+- `@modules/users/tests/factories` (`createUser`): creates owners and strangers.
+- `@tests/setup-test-db`: provides `setupTestDb`.
+- `@tests/environment`: provides `withEnvironmentOverrides`, used for the cap.
+- `@tests/response`: provides `asReject`, which narrows a failed result so `.status` and `.errors` can be read.
 
 ## Notes
-
-- **Barrel bypass:** The file imports `../../service` and `../../model` directly rather than the module's `index.ts` barrel. A project rule (CLAUDE.md) forbids a module's own tests from re-exporting through its barrel; this is called out in a comment above the imports.
-- **PII raw-read pattern:** The encryption assertions deliberately use `addressBookModel.findOne(...).lean()` to skip the repository's built-in decryption. The expected ciphertext format is the `versioned-secret` wire format (`v1:…`), not an ad-hoc scheme.
-- **Cap under concurrency:** The cap is enforced inside the MongoDB update filter (atomic), so the 12-way `Promise.all` burst test is meaningful without extra locking.
-- **`$`-prefix guard:** One test pins down that a label like `$items` is stored as literal text because the service wraps user-provided strings in `$literal` before they reach Mongo update pipelines.
+- The file imports the service and model by relative path, not through the module's `index.ts`, because the repo's barrel rules apply to tests too.
+- Tests that create several users pass distinct `email` and `username` values, such as `owner2`/`ownerb`.
+- The cap tests assert the cap holds under concurrency, since the limit is enforced in the update filter.

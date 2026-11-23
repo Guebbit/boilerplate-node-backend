@@ -1,31 +1,25 @@
 ---
 source: src/modules/account/session/key-ring.ts
-sha256: 77f71b691dc1f317f773caf9eed3eab00fc3593e23a98e88731d0c7bc4c40277
-generated_at: 2026-11-08T04:29:09.588409+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 30df339b7bac62e3d3171c3ec770e00e047ad4c3a26cbd16e55a05ba690536ac
+context_sha256: 405ec1e34f864bbd5912b6921dd1746982993985f9b0c36181031aa79731c4e1
+generated_at: 2026-11-22T03:47:44.163297+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/session/key-ring.ts
 
 ## Purpose
-
-Pure utility module that maps secrets to stable identifiers (`kid`) and resolves a `kid` back to its ring member. It exists so `./jwt` can locate the correct signing key from a token's header without importing any crypto signing logic, keeping the "ring math" independently testable.
+Defines how a signing secret gets a stable identifier (`kid`) and how a token's `kid` is resolved back to a ring member. It is pure (no signing calls), so the ring math can be tested without signing anything. The module doc points to a further write-up under the heading "the signing key is a ring, not a single secret".
 
 ## Key elements
-
-- **`keyId(secret: string): string`** — Derives a 16-character hex identifier from a secret (first 16 hex chars of its SHA-256 digest). The identifier is content-derived, not position-derived, so ring rotation (dropping oldest entries) never silently remaps an existing `kid`.
-- **`keyForId(ring: readonly string[], kid: string | undefined): string | undefined`** — Returns the ring member whose `keyId` matches `kid`, or `undefined` if no member matches (retired key, missing header, etc.). Caller is responsible for turning `undefined` into a rejection.
+- `keyId(secret)`: returns the first 16 hex characters of the SHA-256 digest of the secret. This value is stamped into a signed token's `kid` header so a verifier can find the right key without trying every one.
+- `keyForId(ring, kid)`: searches the ring (ordered newest first) for the secret whose `keyId` equals `kid`. It returns `undefined` if none matches, including when `kid` is `undefined`.
 
 ## Relationships
-
-- **`src/modules/account/session/jwt.ts`** — Primary consumer. Calls `keyId` when issuing tokens (to stamp the header) and `keyForId` when verifying (to pick the right secret before verifying the signature).
-- **`src/infrastructure/config/fields.ts`** — Supplies the ordered ring (array of secrets, newest first) that `keyForId` searches.
-- **`src/modules/account/tests/unit/key-ring.test.ts`** — Unit tests for both exports in isolation (no signing involved).
-- **`src/modules/account/tests/unit/session-jwt.test.ts`** / **`src/modules/account/tests/integration/session-modes.test.ts`** / **`src/modules/account/tests/integration/jwt.test.ts`** — Exercise `keyId` / `keyForId` indirectly through the JWT sign/verify flow.
+- `src/modules/account/session/jwt.ts` is the consumer described in the module doc. It uses this file to find the ring member that a token's header names. The caller turns an `undefined` result into a rejection.
+- Tests: `src/modules/account/tests/unit/key-ring.test.ts` covers this file directly. `src/modules/account/tests/unit/session-jwt.test.ts`, `src/modules/account/tests/integration/jwt.test.ts` and `src/modules/account/tests/integration/session-modes.test.ts` are graph neighbors that exercise it indirectly through JWT and session behavior.
 
 ## Notes
-
-- The module is intentionally **pure**: it performs hash computation and array lookup only. No `sign`, `verify`, or `JWS` calls live here.
-- `keyForId` returns `undefined` rather than throwing; the contract is that the *caller* (jwt.ts) decides how to handle a missing key (e.g., "log in again").
-- `kid` is 16 hex chars (64 bits of a 256-bit SHA-256). Collisions between distinct secrets in the same ring are assumed negligible for the deployment scale.
-- Ring order is newest-first (per the JSDoc), but `keyForId` is an equality scan, so order does not affect correctness—only the configuration convention.
+- The `kid` is derived from the secret's content, never its position in the ring. Dropping the oldest entry on rotation therefore cannot repoint an existing token's `kid` at a different key.
+- An `undefined` result means the key was retired or the token carried no `kid`. The documented intent is "log in again", not a crash.
+- `keyForId` recomputes `keyId` for each ring member on every lookup. It does a linear scan and no caching.

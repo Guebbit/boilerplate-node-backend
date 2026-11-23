@@ -1,34 +1,54 @@
 ---
 source: shared/contracts/openapi.root.yaml
-sha256: 25e54ba895055b3b1fdb0c467c5ba8e15a8f8c2d7463c337801d86a8ae51ae15
-generated_at: 2026-11-14T17:44:55.048389+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2029cb65b658cac0c0b11b0338add1685629b6cc68231449ffb7a2959f045f75
+context_sha256: dcb2b863c8afe42da05a03b500cf3bb692cd5d483c5193b3cb2d056fdd8cf00a
+generated_at: 2026-11-22T02:23:57.635271+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/contracts/openapi.root.yaml
 
 ## Purpose
 
-The root OpenAPI 3.1.0 document for the Boilerplate API. It declares the API's identity, server list, and global conventions (language negotiation, response shape, error envelope) that every module inherits. It also holds the module-agnostic `x-error-codes` catalogue and shared vendor extensions (`x-image-upload-types`) that a bundler merges into the final published spec. Modules under `src/modules/` build on this rather than re-declaring these concerns.
+The root OpenAPI 3.1.0 document for the "Boilerplate API" (version `0.1.0`, AGPL-3.0-or-later). It holds the contract-wide metadata and the error codes that belong to no single module. Its `info.description` serves as the written contract for cross-cutting behavior: language negotiation, success shapes, and error shapes. The API is described as codegen-oriented and meant for multi-project, multi-language use (client/server stubs, DTOs, SDKs).
 
 ## Key elements
 
-- **`info`** – Title, license (AGPL-3.0-or-later), version `0.1.0` (initial development per SemVer §4), and a long `description` that serves as the normative contract for `Accept-Language` handling, success-response shape, and RFC 9457 error format.
-- **`x-error-codes`** – Top-level vendor extension listing every error code that belongs to no single module (HTTP-status defaults, multer limits, idempotency, rate-limit, re-auth, etc.). Each entry carries `scope`, `status`, and a human-readable `description`. A bundler collects this plus every module's own `x-error-codes` into one catalogue in the published document; it is deliberately *not* an `enum` on `errors[].code` so adding a code is additive.
-- **`servers`** – Local (`http://localhost:3000`) and Production (`https://api.example.com`) endpoints.
-- **`x-image-upload-types`** – Canonical MIME types accepted by every `imageUpload` multipart part. The bundler copies these onto each operation's `encoding.imageUpload.contentType` and then removes the key; `gen:api` reads them back from the encoding.
-- **`contact`** – API Team (placeholder name).
+- **`info`**: title, license, alpha version `0.1.0` (the first real version is to be `1.0.0`), and contact (`API Team`).
+- **`info.description`**: the cross-cutting contract, covering:
+  - **Language (`Accept-Language`)**:
+    - One language is picked per request, from the languages switched on in `GET /locales`.
+    - It affects user-facing copy, translated entity fields and `errors[].message`. It never changes the response shape, the status code, or `errors[].code`.
+    - Missing wording falls back to the default language, one message at a time.
+    - `Content-Language` and `Vary: Accept-Language` are set on translated answers.
+    - Reads with no language-dependent words (`/config`, `/shop`, `/payments/methods`, `/delivery/methods`, `/products/facets`, the `/locales` reads) set neither header. The two dictionary reads name the path's language in `Content-Language`.
+    - Staff holding `display:Locale` can preview draft languages on the product reads and the example read. Those answers are `Cache-Control: private, no-store`.
+  - **Successes**:
+    - A 2xx returns the resource with no wrapper.
+    - Lists are objects (`{ items, meta }` with `PaginationMeta`, or a named key).
+    - `204` has no body, and a create returns `201` with `Location`.
+  - **Errors**:
+    - Every application-level 4xx/5xx is RFC 9457 `application/problem+json`, with `type: about:blank`, `title`, `status`, `detail`, `instance` (`urn:uuid:…`) and an `errors` extension whose `code` is the machine key.
+    - This covers unmatched paths (404) and wrong methods (405 with `Allow`).
+    - Some statuses (400, 431, 408, 413) can be answered by the HTTP server layer with no body.
+  - **Header policy**: `Accept-Language` is deliberately not declared per operation, so generated functions don't gain a redundant argument.
+- **`x-error-codes`**: the catalogue of module-less error codes. Each entry has `status` and `description`, and most have `scope: app`. Groups visible:
+  - **HTTP-status defaults**: `BAD_REQUEST`, `UNAUTHORIZED`, `FORBIDDEN`, `NOT_FOUND`, `CONFLICT`, `PRECONDITION_FAILED`, `VALIDATION_ERROR`, `UNPROCESSABLE_CONTENT`, `CLIENT_ERROR`, `INTERNAL_SERVER_ERROR`, `METHOD_NOT_ALLOWED`, `CONTENT_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`.
+  - **Multipart limits (multer)**: `LIMIT_PART_COUNT`, `LIMIT_FILE_SIZE`, `LIMIT_FILE_COUNT`, `LIMIT_FIELD_KEY`, `LIMIT_FIELD_VALUE`, `LIMIT_FIELD_COUNT`, `LIMIT_UNEXPECTED_FILE`, `MISSING_FIELD_NAME`.
+  - **Availability and rate limiting**: `SERVICE_UNAVAILABLE`, `QUERY_TIMEOUT` (both 503 with `Retry-After`), `RATE_LIMITED` and `TOO_MANY_REQUESTS` (429).
+  - **Idempotency**: `IDEMPOTENCY_KEY_REQUIRED`, `IDEMPOTENCY_IN_FLIGHT`, `IDEMPOTENCY_OUTCOME_UNKNOWN`, `IDEMPOTENCY_KEY_MISMATCH`.
+  - **Auth and role**: `ROLE_MANAGEMENT_REQUIRED`, `REAUTH_REQUIRED`, `SECOND_FACTOR_ENROLLMENT_REQUIRED`.
+  - More entries follow in the file.
 
 ## Relationships
 
-- **`src/modules/account/openapi.yaml`, `src/modules/addresses/openapi.yaml`, `src/modules/analytics/openapi.yaml`, `src/modules/antibot/openapi.yaml`, `src/modules/api-keys/openapi.yaml`, `src/modules/audit-logs/openapi.yaml`, `src/modules/cart/openapi.yaml`, `src/modules/example/openapi.yaml`, `src/modules/inventory/openapi.yaml`** – Each is a fragment that the bundler merges under this root. Modules declare their *own* `x-error-codes`; the root provides the shared, cross-cutting ones (idempotency, rate-limiting, multer limits, re-auth).
-- **`shared/contracts/spectral.yaml` / `shared/contracts/spectral.modules.yaml`** – Spectral rule sets that lint module fragments and the merged document against the conventions documented in this file's `info.description` (RFC 9457 shape, `x-error-codes` structure, response-envelope rules).
-- **`shared/rules/images.yaml`** – Reusable OpenAPI fragment that pairs with `x-image-upload-types` here to keep upload-part typing consistent across operations.
-- **`shared/rules/defaults.yaml`, `shared/rules/cookies.yaml`, `shared/rules/audit-actions.yaml`** – Reusable OpenAPI fragments (parameters, responses, schemas) that module specs import; they inherit the global response and error conventions defined in this root.
+- Per the file's own comments, a bundler collects `x-error-codes` from every module's own fragment. It merges them with this file's entries into one catalogue, published as the bundled document's top-level `x-error-codes`.
+- `shared/contracts/spectral.yaml`, `shared/contracts/spectral.modules.yaml` and `scripts/audit/api-standards.yaml` are linked to this file in the dependency graph. The visible content does not show how, and it does not reference them directly. They are presumably lint and audit configuration for this contract.
 
 ## Notes
 
-- The `Accept-Language` header is intentionally **not** declared per operation. The paragraph in `info.description` is its contract; generated clients set it once in an interceptor.
-- `x-error-codes` entries use `scope: app` to distinguish them from module-scoped codes. A missing `scope` (e.g. `ROLE_MANAGEMENT_REQUIRED`, `IDEMPOTENCY_*`, `REAUTH_REQUIRED`) implies a module-specific code that happens to be declared here for convenience.
-- The version is `0.1.0`, not `1.0.0`; the file explicitly notes the first stable release will be `1.0.0`.
-- The description block is normative, not just informational—several sentences state hard rules (2xx has no wrapper, lists are objects, 204 has no body) that linting and codegen rely on.
+- **Error codes as a vendor extension.** The catalogue is deliberately *not* an `enum` on `errors[].code`. A new code is therefore additive rather than a breaking response change (Zalando guideline #112).
+- **Scope.** Codes here are "module-less": status-derived defaults, or checks that run before any route. A module's own codes are declared in its own fragment.
+- **`scope: app` is partial.** Only some entries carry it. The idempotency and role/reauth codes omit it.
+- **Status-only fallbacks.** `UNPROCESSABLE_CONTENT` (422), `CLIENT_ERROR` (4xx) and `TOO_MANY_REQUESTS` (429) are derived codes for status-only responses. The file says nothing sends `TOO_MANY_REQUESTS` today.
+- **`Accept-Language` contract.** The header is documented only in `info.description`, not on each operation. Treat that paragraph as authoritative when generating clients.

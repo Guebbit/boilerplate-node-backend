@@ -1,37 +1,37 @@
 ---
 source: src/modules/returns/services/cancel.ts
-sha256: 778b05585563fa638e640eeb0cbe4fe8bb076ccfc7d281a435a13592e5c22b47
-generated_at: 2026-11-14T21:37:17.518426+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fa4edb20d8abc078ccc02fe1d82b641fdbd31eb860d5dd462a4d8175241e6cd9
+context_sha256: da443529cb50c1ac227734923e27007118709e9b6d5b91c6d37992dd8432c9fe
+generated_at: 2026-11-22T07:28:15.064189+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/cancel.ts
 
 ## Purpose
-
-Implements the `approved → canceled` lifecycle transition for an approved return whose goods were never sent. It is a staff-only, bookkeeping-only action (no money movement, no stock adjustment, no outbound event, no mail) that releases the return's held units so the order can progress past `in_progress`.
+Implements staff cancellation of an approved return whose goods never arrived (`approved → canceled`). Without it, a return nobody will send would hold its units and keep the order at `in_progress` forever. It is bookkeeping only: no money, no stock, no event, no mail.
 
 ## Key elements
-
-- **`cancelReturn(id, note, context)`** — The sole export. Within a single transaction it (1) atomically claims the `approved → canceled` transition via `returnRepository.claimStatus`, (2) appends a `return_canceled` row to the order timeline. After the transaction it records an audit entry, syncs the return status projection, and returns a 200 with the updated `ReturnDocument`, or a 404/409 rejection.
-- **`notCancelable(id)`** (internal) — Builds the rejection response: 404 if the return doesn't exist, 409 with `RETURN_REFUND_OPEN` if a proof-of-sending refund is owed, 409 with `RETURN_NOT_CANCELABLE` otherwise.
+- `cancelReturn(id, note, context)` — the only export. Inside one `withTransaction`, it does a conditional `returnRepository.claimStatus` from `returnLifecycle.fromOf('cancel')` to `toOf('cancel')`, setting `canceledAt`. On success it appends a `return_canceled` timeline row to the order (ids only, actor = `context.caller.id`) in the same transaction. After the transaction it records an audit entry (action `ADMIN_RETURN_CANCELED`, with `orderId` and the optional `note`), calls `syncReturnStatus` for the order, and returns `generateSuccess(canceled, 200)`.
+- `notCancelable(id)` — private. Builds the refusal when the claim matched nothing:
+  - 404 `returns.not-found` if the return does not exist.
+  - 409 `RETURN_REFUND_OPEN` if it is still `approved` and `proofOpenedRefund(existing)` is true.
+  - 409 `RETURN_NOT_CANCELABLE` otherwise.
 
 ## Relationships
-
-- **`src/modules/returns/repository.ts`** — `findById` (rejection path) and `claimStatus` (atomic state write with the `$nor` refund guard).
-- **`src/modules/orders/index.ts`** — the order service used to append the `return_canceled` timeline row inside the same transaction.
-- **`src/modules/returns/domain/index.ts`** (re-exports from `lifecycle.ts` / `refund-due.ts`) — provides `returnLifecycle` (the `from`/`to` states for the claim), `proofOpenedRefund`, and `PROOF_OPENS_REFUND_FOR` (the refund-owed guard).
-- **`src/modules/returns/services/projection.ts`** — `syncReturnStatus` recomputes the order's aggregate status after cancellation.
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` wraps the claim + timeline write so a lost race produces no partial row.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape the HTTP payload.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` logs the admin action.
-- **`src/infrastructure/i18n/index.ts`** — `t()` localizes user-facing error messages.
-- **`src/modules/returns/audit.ts`** — provides the audit action constant used when recording the cancel event.
-- **`src/modules/returns/model.ts`** — `ReturnDocument` return type.
+- `../repository` (`returnRepository`): `claimStatus` performs the atomic status change; `findById` is used to build the refusal.
+- `../domain`: `returnLifecycle` supplies the from/to statuses. `PROOF_OPENS_REFUND_FOR` and `proofOpenedRefund` define the refund-owed condition.
+- `src/modules/orders/index.ts`: supplies `orderService`, used to write the order timeline row in the same session.
+- `./projection` (`syncReturnStatus`): re-syncs the order's return status after a successful cancel.
+- `@infrastructure/runtime/database` (`withTransaction`): provides the transaction session.
+- `@infrastructure/observability/audit` (`recordAudit`) and `../audit`: the audit action constant for the cancel entry.
+- `@infrastructure/http/response`: `generateSuccess` and `generateReject` build the responses.
+- `@infrastructure/i18n` (`t`): supplies the message strings.
+- `../model` (`ReturnDocument`): the return type.
 
 ## Notes
-
-- `canceled` is **not** `closed`: a canceled return holds no units and counts as no goods returned, so the same order lines remain returnable.
-- A parcel lost in transit must **not** be canceled; the shop bears that risk and the return is instead received with a restock count of 0.
-- The `$nor` filter inside `claimStatus` makes the "refund already owed by proof of sending" check part of the atomic write — a concurrent refund-opening cannot be cancelled out.
-- The `note` (free-text reason) lives only in the audit metadata; the order timeline row carries ids only.
+- The refund guard is part of the claim filter, as a `$nor` on `proofOfSendingAt` existing and `reason` being in `PROOF_OPENS_REFUND_FOR`. This makes it atomic with the status change, so a refund opened by proof of sending cannot be canceled out from under it. `notCancelable` repeats the check only to pick the error code.
+- If the claim loses a race, no timeline row is written, because the append runs in the same transaction and only when the claim succeeded.
+- `canceled` is not `closed`. It holds no units and counts as no goods back, so the same lines can be returned again.
+- A parcel lost in transit is not canceled. The shop bears that risk and a refund may be owed, so it should be received with a restock count of 0.
+- The audit entry (including `note`) and `syncReturnStatus` run after the transaction commits, so they are not atomic with the cancel.

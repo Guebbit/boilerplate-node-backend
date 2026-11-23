@@ -1,36 +1,36 @@
 ---
 source: src/infrastructure/http/middlewares/locale.ts
-sha256: 92a31c6b358f7d6d3c6a7ebde12f4d1ce5aa6f95a2db4d5e907eb93af337f9e8
-generated_at: 2026-11-14T18:02:30.961374+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ffcacd35b475d3766a9956168415f37bcc34dd41bd98af7cdaea1c0847ab3759
+context_sha256: ca767a5ae43b694143b3909d86e15d1f78f1cee53b0d52755171829b9a05ae0c
+generated_at: 2026-11-22T02:50:40.160743+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/http/middlewares/locale.ts
 
 ## Purpose
-
-Express middleware that resolves a request's language via `Accept-Language` negotiation and makes the resulting locale and translation function (`t`) available both explicitly on the request object and ambiently through `AsyncLocalStorage`, so that downstream handlers, services, and Zod thunks can all produce user-facing copy in the right language without threading the locale through every call.
+Express middleware that negotiates the request's language once, before routing, and exposes it both explicitly (`request.locale`, `request.t`) and ambiently via AsyncLocalStorage (so services, repositories and Zod thunks can import `t` from `@infrastructure/i18n`). It also sets `Content-Language` and `Vary: Accept-Language` on responses, except for language-neutral reads.
 
 ## Key elements
-
-- **`attachLocale`** (exported) — The middleware. Negotiates a locale, sets `request.locale` and `request.t`, writes `Content-Language` and `Vary: Accept-Language` on the response, then wraps the rest of the chain in `runWithLocaleContext`.
-- **`negotiateLocale`** (internal) — Reads `request.acceptsLanguages(...listServedLocales())`; returns the negotiated string or falls back to `getFallbackLocale()`.
-- Imports from `@infrastructure/i18n`: `createLocaleContext`, `getFallbackLocale`, `listServedLocales`, `runWithLocaleContext`.
+- `attachLocale(request, response, next)`: the middleware. Negotiates a locale, builds a context with `createLocaleContext`, sets `request.locale`/`request.t`, labels the response (or records it for later if the route is language-neutral), then calls `next` inside `runWithLocaleContext`.
+- `negotiateLocale` (private): uses Express `request.acceptsLanguages(...listServedLocales())`. Returns the match, or `getFallbackLocale()` when nothing matches, the header is missing, or it refuses everything.
+- `LANGUAGE_NEUTRAL_READS`: exported list of OpenAPI-style path templates (`/config`, `/shop`, `/payments/methods`, `/delivery/methods`, `/products/facets`, `/locales`, `/locales/apps`, `/locales/{locale}`, `/locales/{locale}/messages`, `/locales/{locale}/dictionary`) whose successful body doesn't depend on language.
+- `isLanguageNeutral(request)`: true for GET/HEAD on a listed path. It strips one trailing slash and matches against regexes compiled once at load (`{name}` matches one segment).
+- `labelNeutralRefusal(response)`: exported. For a response recorded as language-neutral, it sets `Content-Language` and `Vary` so a translated refusal is labelled. It does nothing for other responses.
+- `labelWithLocale` (private): sets `Content-Language` and `Vary: Accept-Language`.
+- `unlabelledLocales`: a `WeakMap<Response, string>` holding the negotiated locale for unlabelled neutral responses.
 
 ## Relationships
-
-- **`src/app.ts`** — Mounts `attachLocale` in the middleware chain before routes, so all user-facing handlers run inside the locale context.
-- **`src/infrastructure/i18n/index.ts`** — Re-exports the four functions this middleware imports (`createLocaleContext`, `getFallbackLocale`, `listServedLocales`, `runWithLocaleContext`).
-- **`src/infrastructure/i18n/catalog.ts`** — Provides `listServedLocales` and `getFallbackLocale` used during negotiation.
-- **`src/infrastructure/i18n/context.ts`** — Provides `createLocaleContext` and `runWithLocaleContext`, which produce the `{ locale, t }` object and the `AsyncLocalStorage` binding respectively.
-- **`src/infrastructure/i18n/served.ts`** — Supplies the registered/served locale list that `listServedLocales` returns (the candidate list passed to `acceptsLanguages`).
-- **`tests/unit/infrastructure/http/middlewares/locale.test.ts`** — Unit tests for `attachLocale` and the negotiation logic.
-- **`src/modules/payments/tests/integration/webhook-no-body.test.ts`** — Integration test that exercises the middleware in context (webhook endpoints still go through the locale chain).
-- **`src/modules/payments/tests/integration/webhook-rate-limit.test.ts`** — Integration test that exercises the middleware in context (webhook endpoints still go through the locale chain).
+- `@infrastructure/i18n` (`index.ts`, with `context.ts`, `catalog.ts` and `served.ts` behind it): supplies `createLocaleContext`, `runWithLocaleContext`, `listServedLocales` and `getFallbackLocale`.
+- `src/infrastructure/http/response.ts`: `rejectResponse` calls `labelNeutralRefusal`. The WeakMap choice mirrors `doNotRetryResponses` there.
+- `src/app.ts`: mounts `attachLocale` before the routes.
+- `tests/unit/infrastructure/http/middlewares/locale.test.ts`: unit tests for the middleware.
+- `tests/integration/language-neutral-routes.test.ts`: keeps `LANGUAGE_NEUTRAL_READS` in sync with the routes that are actually `languageNeutral`.
+- `src/modules/payments/tests/integration/webhook-no-body.test.ts` and `webhook-rate-limit.test.ts`: integration tests that exercise requests passing through this middleware.
 
 ## Notes
-
-- The fallback locale is deliberately placed **first** in `listServedLocales()`. `negotiator` answers a bare `*` or missing header with the first candidate offered, so this ordering is what makes both cases resolve to the fallback rather than an arbitrary served locale.
-- `negotiateLocale` accepts `Pick<Request, 'acceptsLanguages'>` — a test stub only needs to implement that one method.
-- The `Vary: Accept-Language` header mirrors the `Vary: Authorization` convention in `cache.ts`: it tells upstream caches that this header selects the response body.
-- A switched-off or unknown language tag falls back exactly like a missing header — there is no error path in negotiation.
+- The neutral list is kept here rather than as a route flag because the middleware runs before routing and can't know which route will match. A header set too early couldn't be stripped later.
+- The fallback locale is offered first in `listServedLocales()`. `negotiator` resolves `*` or a missing header to the first candidate, so that ordering makes both cases resolve to the fallback.
+- A `WeakMap` is used instead of `response.locals` because `rejectResponse` is called with hand-built response stubs that have no `locals`.
+- Language-neutral reads get no `Content-Language` or `Vary` on success. A refusal on them does get both, because the refusal is translated.
+- `negotiateLocale` takes `Pick<Request, 'acceptsLanguages'>` and `isLanguageNeutral` takes `Pick<Request, 'method' | 'path'>`, so tests can pass minimal stubs.

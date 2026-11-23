@@ -1,24 +1,23 @@
 ---
 source: src/modules/invoicing/domain/tax-items.ts
-sha256: 50ed6d35910db5c69c5c60de070439c30be7c9c1f592827bd023fe52ebf7c892
-generated_at: 2026-11-08T06:10:43.813841+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 50ed6d35910db5c69c5c60de070439c30be7c9c1f592827bd023fe52ebf7c892
+context_sha256: 8cc032a2d48c7686fbcb67dd3cb376ff47f09fa132749341e8b7b666bfa6cf69
+generated_at: 2026-11-22T05:31:08.141051+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/domain/tax-items.ts
 
 ## Purpose
-Defines the single canonical line-item shape that the shared tax functions (`orderTaxBreakdown`, `lineTaxFromRateTotals`) expect. By funneling every document's lines through one mapper, it guarantees that the invoice email, credit-note totals, and VAT breakdown all interpret a "priced, taxed line" identically rather than each spelling the shape their own way.
+Provides a single mapping from an issued document's frozen lines to the "priced, taxed item" shape the tax functions expect. Using one spelling of this conversion means the invoice email, a credit note's totals, and its VAT breakdown all read a line the same way.
 
 ## Key elements
-- **`asTaxItems(lines)`** — Pure mapping function. Takes an array of flat `{ quantity, unitPrice, taxRate }` records and returns an array of `{ quantity, product: { price, taxRate } }` objects, which is the argument shape the tax-calculation helpers consume.
+- `asTaxItems(lines)`: maps each line `{ quantity, unitPrice, taxRate }` to `{ quantity, product: { price, taxRate } }`. `unitPrice` (a string, gross) becomes `product.price`, and `quantity` and `taxRate` are copied unchanged. The output shape is the one `orderTaxBreakdown` and `lineTaxFromRateTotals` take.
 
 ## Relationships
-- **`domain/index.ts`** — Barrel file that re-exports `asTaxItems` so callers can import from the module root.
-- **`emails.ts`** — Calls `asTaxItems` to reshape invoice lines before passing them into the tax functions for the invoice email body.
-- **`services/credit-breakdown.ts`** — Calls `asTaxItems` to produce the input shape for `orderTaxBreakdown` when computing the VAT breakdown on a credit note.
-- **`services/issue-credit-note.ts`** — Calls `asTaxItems` to reshape credit-note lines before computing taxed totals.
+- Its graph neighbors are `src/modules/invoicing/domain/index.ts`, `src/modules/invoicing/emails.ts`, `src/modules/invoicing/services/credit-breakdown.ts` and `src/modules/invoicing/services/figures.ts`. The file's own doc comment names the invoice email, credit note totals and credit note VAT breakdown as the consumers it unifies. The file itself imports nothing, so those links run toward it.
+- `orderTaxBreakdown` and `lineTaxFromRateTotals` are the tax functions whose input shape it produces. They are referenced only in the doc comment and are not imported here.
 
 ## Notes
-- `unitPrice` is a **string** (currency amount as a decimal string), not a number. The mapped `product.price` preserves that type. Any caller that passes a numeric price will get a runtime shape mismatch against what the tax helpers expect.
-- The function is intentionally a one-way flatten→nest mapping with no validation or rounding; it is not a domain model, just an adapter for the tax API surface.
+- The function is pure: it takes a readonly array and returns a new one, with no rounding or arithmetic.
+- `unitPrice` is documented as the gross unit price, and it stays a string in the output as `product.price`.

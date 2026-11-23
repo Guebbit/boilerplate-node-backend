@@ -1,30 +1,27 @@
 ---
 source: src/modules/account/controllers/get-sessions.ts
-sha256: 6bec8749074b9fff91aa7e7a83a72ea3d5e575b09865c3cbe855e8b44b95eedd
-generated_at: 2026-11-08T04:02:53.249541+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6bec8749074b9fff91aa7e7a83a72ea3d5e575b09865c3cbe855e8b44b95eedd
+context_sha256: 2762aeede3e8901f4483dadde9ed0f1d5d261dd9322497b5c7a57d0b67c2b5a7
+generated_at: 2026-11-22T03:22:37.106791+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/get-sessions.ts
 
 ## Purpose
-
-Thin Express controller that handles `GET /account/sessions`. It extracts the authenticated user's ID from the request context, delegates to `accountService.sessionsList`, and writes the result through the shared response helpers. All session semantics (which rows qualify, how `current` is flagged, credential hygiene) live in the service layer, not here.
+Controller for `GET /account/sessions`. It is a thin HTTP adapter that returns the caller's live sessions by delegating to `accountService.sessionsList`.
 
 ## Key elements
-
-- **`getSessions(request, response)`** — The sole export. Reads `request.authContext!.id`, calls `accountService.sessionsList(id, request)`, and either sends a `successResponse<SessionsResponse>` with `{ sessions }` or routes the error to `catchAs(response, 'listSessions')`.
+- `getSessions(request, response)` — the only export. It reads `id` from `request.authContext!` and calls `accountService.sessionsList(id, request)`. On success it sends `{ sessions }` via `successResponse<SessionsResponse>`. On failure it uses `catchAs(response, 'listSessions')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to format the JSON envelope.
-- **`src/infrastructure/http/controller.ts`** — Imports `catchAs` for uniform error handling (tags the failure as `'listSessions'`).
-- **`src/modules/account/services/index.ts`** — Imports `accountService`; the only business-logic call in this file is `accountService.sessionsList`.
-- **`src/types/index.ts`** — Imports `SessionsResponse` as the response payload type.
-- **`src/modules/account/routes.ts`** — Consumes `getSessions` as the route handler for `GET /account/sessions` (implied by the module docstring and naming convention).
+- `src/infrastructure/http/response.ts` — supplies `successResponse`, which writes the typed `SessionsResponse` payload.
+- `src/infrastructure/http/controller.ts` — supplies `catchAs`, which handles errors from the promise chain. `'listSessions'` is the label passed to it.
+- `src/modules/account/services/index.ts` — exports `accountService`. The controller calls its `sessionsList` method.
+- `src/types/index.ts` — provides the `SessionsResponse` type, imported through the `@types` alias.
+- `src/modules/account/routes.ts` — the route wiring for the account module. It is the expected place where this handler is mounted; the controller file does not reference it.
 
 ## Notes
-
-- `request.authContext!` uses a non-null assertion on the premise that an `isAuth` middleware has already run; the controller has no defensive check.
-- The full `request` object is forwarded to the service (not just the `id`), so the service can inspect headers, IP, etc. to mark the `current` session.
-- Error handling is delegated entirely to `catchAs`; there is no local `try/catch` or status-code branching in this file.
+- `request.authContext!` is a non-null assertion. It relies on the `isAuth` middleware having run before this handler.
+- The full `request` is passed to the service so it can mark which session is `current`. According to the file's comments, deciding which rows count as sessions and keeping credentials out of the response are handled in `src/modules/account/services/sessions.ts`, not here.
+- The handler returns a promise chain rather than using `async/await`.

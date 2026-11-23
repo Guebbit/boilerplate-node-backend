@@ -1,29 +1,26 @@
 ---
 source: docker/mongo-init.js
-sha256: 30e216f7b46704cadee88501433df3d00b09675d1054ea6d8e73fb1675e37ebe
-generated_at: 2026-11-08T02:20:44.231504+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 30e216f7b46704cadee88501433df3d00b09675d1054ea6d8e73fb1675e37ebe
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T01:30:40.526254+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/mongo-init.js
 
 ## Purpose
-
-A MongoDB first-boot initialization script (executed via `docker-entrypoint-initdb.d`) that creates application-scoped users with minimal privileges, so the app and backup containers never authenticate as the instance root. It runs exactly once against an empty data directory.
+MongoDB first-run initialization script, placed under `docker-entrypoint-initdb.d`. It creates least-privilege database users so the application and the backup container never authenticate as the instance's root account. It runs through `mongosh`, already authenticated as `MONGO_INITDB_ROOT_*`.
 
 ## Key elements
-
-- **App user creation** — Reads `MONGO_APP_PASSWORD_FILE`, then calls `db.createUser` with the `readWrite` role scoped to `MONGO_INITDB_DATABASE` (set via `MONGO_INITDB_ROOT_DATABASE` by the image). User name comes from `MONGO_APP_USER`.
-- **Backup user creation (conditional)** — If `MONGO_BACKUP_PASSWORD_FILE` is set, creates a user in the `admin` database with the built-in `backup` role (read-only, oplog-capable, no write/delete). Password read from the file the backup container mounts.
-- **Password loading** — Uses `require('fs').readFileSync` (mongosh's own `require`) to read each password from its `_FILE` path, since the official image's `_FILE` support covers only `MONGO_INITDB_ROOT_*`.
+- **App user creation**: reads the password from the file at `MONGO_APP_PASSWORD_FILE`, switches to the database named by `MONGO_INITDB_DATABASE`, and creates `MONGO_APP_USER` with the `readWrite` role on that database only.
+- **Backup user creation** (conditional): if `MONGO_BACKUP_PASSWORD_FILE` is set, it reads that password and creates `MONGO_BACKUP_USER` in the `admin` database with the built-in `backup` role. The role is enough for a full `mongodump --oplog` but cannot write or delete.
 
 ## Relationships
-
-- **docker-compose.production.yml** — Declares the environment variables this script consumes (`MONGO_INITDB_DATABASE`, `MONGO_APP_USER`, `MONGO_APP_PASSWORD_FILE`, and optionally `MONGO_BACKUP_USER` / `MONGO_BACKUP_PASSWORD_FILE`) and mounts the corresponding secret files into the `mongo` container. The script is the consumer; the compose file is the producer of its configuration.
+- No graph neighbors and no code-level dependencies. It is configured entirely through environment variables and password files.
+- The password files are the same secret files that the app and the `backup` service mount, so each password lives in a single file shared by the data service and its client.
 
 ## Notes
-
-- **First-run only.** Changing a password file later does *not* re-run this script on an existing volume. Reset requires dropping the volume or manually updating the password via `mongosh`.
-- **Not idempotent by design.** It relies on the empty-directory guarantee of `docker-entrypoint-initdb.d`; re-running against a populated database would fail on `createUser` duplicates.
-- **No fallback for missing `MONGO_APP_PASSWORD_FILE`.** If the file or env var is absent the script throws; there is no default or warning path.
-- **`db` reassignment.** The script switches `db` to `getSiblingDB(MONGO_INITDB_DATABASE)` mid-file; all subsequent `db` references target that database, not whatever was default.
+- **First run only.** Mongo executes init scripts only against an empty data directory. Changing a password file later does not update an existing volume. Drop the volume or update the user from `mongosh`.
+- The official image's `_FILE` support covers only `MONGO_INITDB_ROOT_*`, so this script reads its own password files with `require('fs')`, which is mongosh's own `require`.
+- The backup user is skipped when `MONGO_BACKUP_PASSWORD_FILE` is unset, so stacks without the backup profile still start.
+- The app password is read unconditionally. A missing `MONGO_APP_PASSWORD_FILE` makes the script throw.

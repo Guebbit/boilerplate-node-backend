@@ -1,40 +1,48 @@
 ---
 source: src/modules/observability/tests/contract/api.contract.test.ts
-sha256: 8a258a0c011219918fb8fb5959b582532969c59d4981f1c43160c030e2bf2d10
-generated_at: 2026-11-14T20:30:24.392274+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T06:04:17.299053+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/tests/contract/api.contract.test.ts
 
 ## Purpose
-
-Contract tests for the three JSON `/observability` endpoints (`/health`, `/metrics/overview`, `/audit`) plus the first-event shape of the `/events` SSE stream. They verify that each response matches the OpenAPI schema registered by `@tests/contract` and that the *values* carry the invariants a client codes against (status vocabulary, error-body shape, pagination meta), rather than merely checking that a 200 was returned.
+Contract tests for the `/observability` module's three JSON endpoints (`/health`, `/metrics/overview`, `/audit`). These responses are assembled field by field, with no shared serializer constraining them, so they can drift from the spec unnoticed. The file also checks each route's 401/403 refusal bodies. `GET /events` (an endless SSE stream) is only read up to its first event. `stream.test.ts` owns the frame contents.
 
 ## Key elements
-
-- **`pollUntilAudited(bearer, query)`** — polls `GET /observability/audit` until at least one item appears, then returns the final response. Exists because the audit sink is fire-and-forget (`record()` returns `void`); a single read would race on a fast machine.
-- **`describe('GET /observability/health')`** — asserts schema conformance, that `dependencies.*.status` uses the four-word vocabulary (`ready`/`connecting`/`unavailable`/`disabled`), that `status` is the honest fold, that `analytics` names *and* reports deliverability, that `queues` is an array (empty here), and that a seeded lease document is reflected in `jobs`.
-- **`describe('GET /observability/metrics/overview')`** — asserts the full counter shape is present even for rows no module in this build owns (e.g. `business.checkoutSuccess` is `0`, not missing), and that `auth.loginSuccess` is > 0 after the suite's logins.
-- **`describe('GET /observability/audit')`** — asserts empty-log and filtered-log shapes, pagination meta (`totalItems`, `totalPages`, `pageSize`), and the 422 contract for out-of-range `pageSize`, unparseable `since`, date-only `since`, and invalid `outcome`.
-- **Truncated SSE block** — reads `GET /events` up to the first event to assert its frame shape; full stream semantics live in `stream.test.ts`.
+- `setupTestDb()` is called at module level to provide a connected test database.
+- `pollUntilAudited(bearer, query)` polls `GET /observability/audit` via `eventually` until `items` is non-empty, then returns a fresh read. It is needed because the audit sink's `record()` is fire-and-forget by design (returns `void`, swallows failures), so there is nothing to await.
+- `describe('GET /observability/health')` covers:
+  - 200 for an admin.
+  - `dependencies.database.status` is `'ready'`, backed by `connection.readyState === 1`.
+  - database, cache and queue all use the vocabulary `ready | connecting | unavailable | disabled`. Top-level `status` is `'ok'` only if every dependency is `ready` or `disabled`, otherwise `'degraded'`.
+  - `telemetry.analytics` has a string `provider` and a boolean `configured`.
+  - `queues` is an empty array, because RabbitMQ is disabled in the test environment.
+  - a seeded `leaseModel` document shows up in `jobs` with an ISO `lastSuccessAt` and its `lastError`. This proves `jobHealth()` really reads the collection.
+- `describe('GET /observability/metrics/overview')` covers:
+  - 200 for an admin.
+  - a full shape even when no module owns a counter: `http.totalRequests` is a number, `auth.loginSuccess > 0`, and `business.checkoutSuccess` is `0` (reported, not omitted).
+- `describe('GET /observability/audit')` covers:
+  - 200 on an empty log.
+  - a real failed `POST /account/login`, then filtering with `?outcome=failure&pageSize=10`. It checks that all items are failures and that `meta.totalItems > 0` and `meta.pageSize === 10`.
+  - 422 for `pageSize=5000` (maximum is 100).
+  - 422 for an unparseable `since` (`yesterday`) and for a date-only `since` (`2026-01-01`).
+  - 422 for an `outcome` outside success/failure.
+  - The remaining cases, including the refusal checks, fall past the visible part of the file.
 
 ## Relationships
-
-- **`tests/support/contract.ts`** — side-effect import (`@tests/contract`) that registers schema assertions into the `api()` helper so every response is automatically validated against the OpenAPI spec.
-- **`tests/support/http.ts`** — provides `api()` (supertest wrapper), `authenticateAs()`, and `loginCompleting()` used for every request in this file.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module top-level to guarantee a live Mongo connection before any test runs.
-- **`tests/support/eventually.ts`** — provides `eventually()`, which powers the `pollUntilAudited` helper to tolerate the fire-and-forget audit write.
-- **`tests/support/cookies.ts`** — provides `setCookie`, used in the SSE/auth section.
-- **`src/modules/users/tests/factories.ts`** — provides `createAdminUser`, `createUser`, `PLAIN_PASSWORD` to seed the users the auth setup references.
-- **`src/infrastructure/persistence/lease.ts`** — this file imports `leaseModel` from it; the health test calls `leaseModel.create(...)` to write a real document so it can confirm `jobs` reads the collection rather than returning a hard-coded `[]`.
-- **`src/infrastructure/runtime/database.ts`** — this file imports `connection` from it; the health test asserts `connection.readyState === 1` to prove the snapshot reads a live connection.
-- **`src/infrastructure/config/store.ts`** — this file imports `currentEnvironment` from it for environment-conditional assertions.
+- `tests/support/http.ts`: `api()`, `authenticateAs('admin')` and `loginCompleting` drive requests and supply the bearer token.
+- `tests/support/setup-test-db.ts`: `setupTestDb()` sets up and tears down the DB.
+- `tests/support/eventually.ts`: `eventually` powers the audit polling.
+- `tests/support/contract.ts`: imported for its side effects (`import '@tests/contract'`), which presumably register the contract matchers.
+- `tests/support/cookies.ts`: `setCookie` is imported.
+- `src/modules/users/tests/factories.ts`: `createAdminUser`, `createUser` and `PLAIN_PASSWORD` are imported.
+- `src/infrastructure/runtime/database.ts`: its `connection` export is imported, and `connection.readyState` is asserted to be live (`1`).
+- `src/infrastructure/persistence/lease.ts`: its `leaseModel` export is imported and used to seed a lease document for the `jobs` assertion.
+- `src/infrastructure/config/store.ts`: `currentEnvironment` is imported.
 
 ## Notes
-
-- The audit sink is **fire-and-forget by contract** (`record()` → `void`); the test polls rather than awaiting. This is a deliberate trade-off: making the sink awaitable would change a production property (a Mongo hiccup must not turn a rejected login into a 500) for test convenience.
-- Cache and queue `status` values are **not** pinned to a specific state — they depend on whoever's `.env` is running the suite. Only the vocabulary and the `status` fold are asserted.
-- `pageSize` has a hard maximum of **100**; exceeding it yields 422, not a silently truncated page.
-- `since` must be a full ISO datetime; date-only strings are rejected with 422 to prevent `Invalid Date` from reaching Mongo as a no-op filter.
-- The `@tests/contract` import is a **side-effect module** — it has no named exports used here; its job is to monkey-patch the `api()` response handler with schema validation.
+- Cache and queue statuses are deliberately not pinned to a specific value, because they depend on the runner's `.env`. `dependency-health.test.ts` pins the status mapping, and `queue.test.ts` covers non-empty `queues` with a mocked broker.
+- The audit test drives a real login failure (`src/modules/account/audit.ts` owns `auth.login`) instead of writing a synthetic row.
+- `auth.loginSuccess > 0` depends on `authenticateAs` having logged in earlier in the same suite.
+- A single read after emitting an audit entry would be a race. Polling is the intended cost of the fire-and-forget sink.

@@ -1,52 +1,49 @@
 ---
 source: src/modules/inventory/services/holds.ts
-sha256: 0c2421a4fd18d70fce95ed46619cdba70e5dff844aad63342ff2f7c9074c7f37
-generated_at: 2026-11-14T20:06:35.730706+00:00
-model: ollama:qwen3.8:27b
+source_sha256: aacec3e3a0deaab99c81df24b3fa19d9d100a846b379f39bee0aff76ebe87624
+context_sha256: ad1f5c8a3d5b3b7a0f8ba4fff7cd670a826538b28d1e1db659c732ed0fc2a9b6
+generated_at: 2026-11-22T05:22:14.498576+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/services/holds.ts
 
 ## Purpose
-
-Manages the post-creation lifecycle of inventory holds (reservations): committing at payment, shipping, releasing, extending, and retaking released units. It ensures every status transition is a single atomic claim-plus-counter-movement, and that the paid-buyer queue is served first whenever shelf units become free.
+Handles what happens to an order's stock hold after it is taken: commit at payment, ship, release, extend, and the availability-cache refresh. Each state change claims the hold with a conditional status write and moves per-line counters in the same transaction, so the move is both at-most-once and all-or-nothing.
 
 ## Key elements
-
-- **`retakeReleasedForOrder`** (exported) — Re-claims a `released` hold's units inside the payment's transaction. Returns `RetakeOutcome` (`'none' | 'retaken' | 'short'`). On `short`, rolls back partial lines and restores `released` status; never throws.
-- **`commitForOrder`** (exported, truncated) — Settles `held → committed` at payment. No counter movement (units stay reserved). Serves any backorder/preorder lines via `allocateWithin`. On a missed claim, distinguishes benign replay from a true orphan and raises the orphan alarm.
-- **`shipForOrder`** (exported, truncated) — Dispatch transition; the counter-movement that actually frees shelf units.
-- **`serveQueueAfter`** (internal) — After a `release` or `expire`, calls `allocateWithin` so waiting paid buyers grab the freed shelf units in the same transaction. Skips backorder lines.
-- **`claimAndApply`** (internal) — Generic helper: conditional status claim + per-line counter movement + optional queue service, wrapped in `withTransaction` when no caller session is supplied.
-- **`raiseOrphanAlarm`** (internal) — Logs, audits as system caller, increments `inventoryCommitOrphanedTotal`, and enqueues `HOLD_ORPHANED`. Used when a paid/shipping order has no active hold.
-- **`RetakeOutcome`** (exported type) — Union discriminant for the retake result.
+- `serveQueueAfter` (internal): after a `release` or `expire` movement, calls `allocateWithin` for the freed non-backorder products so paid buyers waiting for stock are served first. It returns the number of orders served, and the caller must `nudgeOutbox` after its commit. Other movement reasons, and backorder lines, free no shelf units, so it returns 0.
+- `claimAndApply` (internal): claims a hold (`from → to`) with a conditional status write, then applies the movement to every line and serves the queue. If no session is passed, it opens its own with `withTransaction`. It then nudges the outbox if orders were served and calls `forgetAvailabilityForOrder`. It returns whether this call made the claim.
+- `raiseOrphanAlarm` (internal): called when an order is paid or shipping but its hold is missing or already given up. It logs an error, records a system-caller audit entry (`ADMIN_COMMIT_ORPHANED`, outcome `failure`), and increments `inventoryCommitOrphanedTotal{stage}` (`commit` or `ship`).
+- `RetakeOutcome` (exported type): `'none' | 'retaken' | 'short'`.
+- `retakeReleasedForOrder(orderId, session)` (exported): in the payment's transaction, claims `released → held` and takes each line's units again.
+  - Lines are processed in product-id order, to avoid mutual refusals between orders.
+  - If a line refuses, it undoes the lines already taken, puts the hold back to `released` and returns `short`. It never throws.
+  - On success it enqueues a `STOCK_RETAKEN` outbox event.
+- `commitWithin` (internal): the body of `commitForOrder`, run in the caller's transaction.
+  - It claims `held → committed` and allocates any preorder (`backorder`) lines.
+  - If the claim misses, it reads the reservation. `committed` or `shipped` is treated as a benign replay.
+  - If the hold was `released`, it tries a retake and then recurses to commit, returning `retook: true`.
+  - Otherwise it raises the orphan alarm, enqueues `HOLD_ORPHANED` and returns `orphaned: true`.
+- `commitForOrder`, `shipForOrder`, `forgetAvailabilityForOrder` are referenced in the visible code and docs. Their definitions are not shown in the visible portion.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/inventory/repository.ts` | Every hold state transition is a conditional write through this module's repository (claim, find-by-order). |
-| `src/modules/inventory/services/allocate.ts` | `allocateWithin` serves the paid-buyer queue within the same transaction after a release/expire or at commit. |
-| `src/modules/inventory/domain/index.ts` | Provides `takeFromHold` for domain-level hold arithmetic during transitions. |
-| `src/modules/inventory/domain/hold-lines.ts` | Part of the domain barrel consumed above; defines the line-level structures this module iterates over. |
-| `src/modules/inventory/model.ts` | `ReservationStatus` type and `OPEN_RESERVATION_STATUSES` constant for status validation. |
-| `src/modules/inventory/events.ts` | `HOLD_ORPHANED` and `STOCK_RETAKEN` — outbox event names enqueued by this module. |
-| `src/modules/inventory/audit.ts` | Supplies the audit-action identifiers (e.g. `ADMIN_COMMIT_ORPHANED`) used in `recordAudit` calls. |
-| `src/kernel/outbox.ts` | `enqueueOutboxEvent` and `nudgeOutbox` to publish and flush domain announcements. |
-| `src/kernel/permissions.ts` | `systemCallerContext` fabricates a caller identity for audit rows on system-driven paths. |
-| `src/infrastructure/observability/audit.ts` | `recordAudit` persists audit entries for orphan alarms. |
-| `src/infrastructure/runtime/database.ts` | `withTransaction` opens a Mongoose session when the caller does not supply one. |
-| `src/infrastructure/adapters/logger.ts` | Error-level logging on the orphan-alarm path. |
-| `src/domain-primitives/time.ts` | `HOUR_MS` constant used in hold-expiry / extension calculations. |
-| `src/modules/inventory/services/index.ts` | Barrel that re-exports this module's public API (`retakeReleasedForOrder`, `commitForOrder`, etc.). |
-| `src/modules/delivery/tests/unit/fulfillment.test.ts` | Unit tests that exercise the hold-commit and ship paths through this module. |
+- **`../repository`**: the reservation repository supplies the conditional status claim and the lookup by order id.
+- **`./transition`**: `applyToEveryLine` and `applyTransition` write the per-line counter movements.
+- **`./allocate`**: `allocateWithin` serves waiting or preorder orders from freed or arrived stock.
+- **`./availability`**: `forgetAvailability` clears cached availability entries after commit.
+- **`@infrastructure/runtime/database`**: `withTransaction` opens the transaction when the caller supplies none.
+- **`@kernel/outbox`**: `enqueueOutboxEvent` (`STOCK_RETAKEN`, `HOLD_ORPHANED`, from `../events`) and `nudgeOutbox`.
+- **`@infrastructure/observability/audit`, `@kernel/permissions`, `../audit`**: `recordAudit`, `systemCallerContext('Order')` and `inventoryAuditActions` produce the system-attributed audit row.
+- **`@infrastructure/adapters/logger`**: error logging for orphan alarms.
+- **`./orphan-counter`**: the `inventoryCommitOrphanedTotal` metric.
+- **`../model`**: `OPEN_RESERVATION_STATUSES` and the `ReservationStatus` type.
+- **`../domain`** (`takeFromHold`) and **`@domain-primitives/time`** (`HOUR_MS`) are imported. Their use is not visible in the shown portion.
+- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** is listed as a graph neighbor, but no interaction is visible in the shown code.
 
 ## Notes
-
-- **Deadlock-safe ordering:** `retakeReleasedForOrder` sorts lines by `productId` (locale `en`) before writing so two orders listing the same products in opposite order cannot deadlock on conditional counter updates.
-- **`short` is a value, not an error:** `retakeReleasedForOrder` returns `'short'` rather than throwing, because the caller must still execute a refund within the *same* transaction; a throw would abort the refund.
-- **`serveQueueAfter` is intentionally narrow:** it only fires on `StockMovementReason.release` and `StockMovementReason.expire`. A shipment frees nothing; a payment frees nothing.
-- **Backorder lines are excluded from queue service:** they consume preorder *allowance*, not shelf units, so releasing them does not make physical stock available to the FIFO queue.
-- **Orphan alarm is always audited as system:** there is no human `CallerContext` on the settlement or status-move paths; `systemCallerContext('Order')` is used so the audit trail is never silently skipped.
-- **Stryker annotations** wrap the `logger.error` call to suppress mutation testing on the formatted message string.
-- **`claimAndApply` without a session** opens its own transaction and calls `refreshStockCacheForOrder` post-commit; callers that pass a session must handle their own cache refresh.
+- Orphan alarms are audited as the system because no `CallerContext` exists on payment or status-move paths.
+- A missing hold at shipping is only logged, audited and counted. At commit, the orphan case also enqueues `HOLD_ORPHANED`.
+- `retakeReleasedForOrder` must run inside the caller's transaction. It decides from the conditional claim, never from a prior read.
+- Without a caller session, `claimAndApply` clears availability entries itself after commit. With a caller session, clearing is left to the caller.
+- Committing a hold moves no counters and writes no ledger row. The payment date is the hold's `committedAt`.

@@ -1,33 +1,35 @@
 ---
 source: src/kernel/config.ts
-sha256: c1328e70b16f4cf0406183a2666b315e8196acfa15a48beb2b3335d1351a3591
-generated_at: 2026-11-08T03:52:58.123900+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fd5d9c616cfa30a3befcb1ed03cd022d4027c50122004ca179efe632aacd0939
+context_sha256: d6a8587a4e68d88f4dcf1684560f1fb95ac038ab69fd873b65a149e4a60563d4
+generated_at: 2026-11-22T03:12:23.974792+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/kernel/config.ts
 
 ## Purpose
-
-Defines the kernel-level runtime configuration for two cross-cutting concerns: the step-up reauthentication freshness windows (`reauthConfig`) and the transactional outbox relay policy (`outboxConfig`). It lives in the kernel rather than any module so that every module mounting `requireFreshAuth` or reading outbox rules gets its values from a single, module-agnostic source.
+Defines the kernel-level configuration: the step-up (re-authentication) freshness windows that `requireFreshAuth` enforces, and the transactional outbox relay's retry/retention policy. It lives in the kernel rather than in `account` because any module with a money or identity route mounts `requireFreshAuth`, and modules may not reach into a sibling's config.
 
 ## Key elements
-
-- **`reauthConfig`** — A `defineConfig` instance named `"reauthentication"` exposing two integer settings: `NODE_REAUTH_TIME_CRITICAL` and `NODE_REAUTH_TIME_SENSITIVE` (both `min: 0`). Defaults come from `step-up.generated`.
-- **`reauthWindowSeconds(tier)`** — Given a `StepUpTier` (`"critical"` | `"sensitive"`), returns the corresponding freshness window in seconds by reading `reauthConfig()` at call time, so the value is always live.
-- **`outboxConfig`** — A `defineConfig` instance named `"outbox"` exposing `NODE_OUTBOX_RETENTION_DAYS`, `NODE_OUTBOX_MAX_ATTEMPTS`, and `NODE_OUTBOX_LEASE_SECONDS` (all `min: 1`). Defaults come from `outbox.generated`.
+- `reauthConfig` — `defineConfig` block named `reauthentication` with two integer fields (min 0):
+  - `NODE_REAUTH_TIME_CRITICAL`, default `stepUpWindowData.critical`
+  - `NODE_REAUTH_TIME_SENSITIVE`, default `stepUpWindowData.sensitive`
+- `reauthWindowSeconds(tier)` — returns the allowed seconds since the caller last proved themselves for a `StepUpTier`: `critical` (money, destructive) uses the critical value; any other tier uses the sensitive value. Reads config on each call, so guards built at router-load time see live settings.
+- `outboxConfig` — `defineConfig` block named `outbox` with integer fields (min 1):
+  - `NODE_OUTBOX_RETENTION_DAYS`, default `outboxRuleData.retentionDays`
+  - `NODE_OUTBOX_MAX_ATTEMPTS`, default `outboxRuleData.maxAttempts`
+  - `NODE_OUTBOX_LEASE_SECONDS`, default `outboxRuleData.leaseSeconds`
 
 ## Relationships
-
-- **`src/infrastructure/config/define.ts`** / **`src/infrastructure/config/fields.ts`** — Provides the `defineConfig` factory and the `int` field descriptor used to declare both config shapes.
-- **`src/kernel/permissions.ts`** — Exports the `StepUpTier` type that `reauthWindowSeconds` accepts.
-- **`src/kernel/middlewares/authorizations.ts`** — The `requireFreshAuth` middleware reads `reauthWindowSeconds` to decide whether a caller's session is still fresh enough for the requested tier.
-- **`src/kernel/outbox.ts`** — Consumes `outboxConfig` for the relay's retention, max-attempt, and lease-seconds behavior.
-- **`src/app/config.ts`** — The app-level config layer that can override or layer on top of these kernel defaults.
-- **`tests/support/http.ts`** and the module contract/integration test files — Exercise the behaviors governed by these settings (reauth windows, outbox retry limits) through the public HTTP surface.
+- Built on `defineConfig` from `src/infrastructure/config/define.ts` and the `int` field helper from `src/infrastructure/config/fields.ts`.
+- Imports the `StepUpTier` type from `src/kernel/permissions.ts`.
+- `src/kernel/middlewares/authorizations.ts` is the natural consumer of `reauthWindowSeconds` (the `requireFreshAuth` guard).
+- `src/kernel/outbox.ts` is the outbox implementation that corresponds to `outboxConfig`.
+- `src/app/config.ts` is a sibling config entry point in the app layer.
+- Contract and integration tests (account, api-keys, delivery, orders, users) and `tests/support/http.ts` are linked in the graph, likely setting or relying on the reauth windows.
 
 ## Notes
-
-- Defaults are sourced from generated files (`step-up.generated`, `outbox.generated`), not hard-coded. Change the generated source, not the literals here.
-- `reauthWindowSeconds` calls `reauthConfig()` on every invocation, so the value reflects the current environment/runtime setting rather than a value captured at router-build time. Do not "optimize" this into a module-level constant.
-- Both configs use `name` strings (`"reauthentication"`, `"outbox"`) that must match any external config-store or override mechanism keyed by those names.
+- Defaults are not hard-coded here; they come from the generated data modules `./outbox.generated` and `./step-up.generated`, so change the source data rather than this file.
+- The reauth window is resolved per call via `reauthConfig()`, not captured at module load.
+- Unlike the outbox fields, reauth values allow `0` (min 0), while outbox values must be at least 1.

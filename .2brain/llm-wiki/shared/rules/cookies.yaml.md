@@ -1,34 +1,35 @@
 ---
 source: shared/rules/cookies.yaml
-sha256: 409779dfae82901fa9fb4b3fad7a79fa9a860c050b7ae39792e1f90ca13036d9
-generated_at: 2026-11-14T17:45:40.134232+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 332e6d05a5186e863fca775dea7b20b8350ad031d24c97e95ff7efcb69a33da7
+context_sha256: 0c95844c03af7e2bb807e99f0749eb3d86ac3c2fe5ae589f772b2d352b59cdfd
+generated_at: 2026-11-22T02:25:30.039914+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/cookies.yaml
 
 ## Purpose
-
-Single registry of every cookie the backend sets. It exists so that the code that writes each cookie, the log-scrubbing pipeline, and the documentation all agree on the same name, secrecy flag, and lifetime from one place. The paired frontend's `browser-storage.yaml` mirrors this format for client-side storage.
+Single source of truth for every cookie the backend sets. The code that sets each cookie reads its name and lifetime from here, and the log scrubber reads the `secret: true` entries to know what to redact. The file's header comment says a data-protection doc links here and that the paired frontend has its own browser-storage file in the same format for what it stores itself.
 
 ## Key elements
+Each entry under `cookies:` is keyed by a camelCase id, which is also the frontend's translation key for the purpose text. Fields per entry: `name`, `setter` (all `backend`), `kind` (all `cookie`), `purpose`, `necessity` (all `necessary`), `secret`, and a lifetime.
 
-- **`cookies`** — the top-level map. Keys are camelCase identifiers that double as the frontend's i18n translation keys for the purpose text.
-- **`session`** — the credential cookie (`__Host-session`). Carries the refresh token in `jwt` mode or the session id in `cookie` mode. `secret: true`, `lifetime: sessionTier`.
-- **`isAuth`** — non-secret signed-in flag set beside `session`; frontend reads/clears it, no credential value.
-- **`device`** — up to five HMAC tokens bound to account emails (`__Host-device`); 180-day `maxAgeMs`, renewed on each login.
-- **`oauthState` / `oauthVerifier` / `oauthContinue` / `oauthLocale` / `oauthLink`** — the five cookies for a sign-in-with-provider attempt. `secret` ones are 5-minute `maxAgeMs`; `oauthContinue` and `oauthLocale` are intentionally non-secret.
-- **`oauthMfaChallenge` / `oauthDeletionChallenge`** — carry the second-factor or restore-pending-deletion challenge across a redirect; `lifetime: challenge` (duration read from the challenge itself, not this file).
-- **Per-entry fields** — `name`, `setter`, `kind`, `purpose`, `necessity`, `secret`, and either `lifetime` (named tier) or `maxAgeMs` (explicit milliseconds).
+- `session` (`__Host-session`, secret): the httpOnly credential. It holds the refresh token in `jwt` mode and the session id in `cookie` mode. Its name equals the contract's `cookieAuth.name`. Lifetime: `sessionTier`.
+- `isAuth` (`isAuth`, not secret): a signed-in flag for the client, not a credential. Same lifetime as the session cookie (`sessionTier`).
+- `device` (`__Host-device`, secret): up to five HMAC tokens, one per account. Max age is 15552000000 ms (180 days), renewed on each successful login.
+- OAuth sign-in cookies, all `__Host-` prefixed with `maxAgeMs: 300000` (5 minutes):
+  - `oauthState` (secret): CSRF state.
+  - `oauthVerifier` (secret): PKCE verifier.
+  - `oauthContinue` (not secret): return page.
+  - `oauthLocale` (not secret): language.
+  - `oauthLink` (secret): link attempt, set only when a signed-in account connects a provider.
+- `oauthMfaChallenge` and `oauthDeletionChallenge` (both secret): carry the second-factor challenge and the restore-a-pending-deletion claim check across the provider redirect. Lifetime is `challenge`.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — the `session` entry's `name` value must match the `cookieAuth.name` field defined in that contract file; a cross-cutting test asserts the two are equal, so renaming one without the other will fail CI.
+- `shared/rules/log-redaction.yaml`: log redaction is that file's rules UNION the `secret: true` names in this file. The twin implementation must do the same.
 
 ## Notes
-
-- **Log redaction rule:** the effective redaction set is `log-redaction.yaml` **UNION** every cookie here marked `secret: true`. The twin (frontend `browser-storage.yaml`) must apply the same union to its own entries.
-- **`__Host-` prefix:** all backend cookie names use the `__Host-` secure prefix (enforces `Secure` + `HostOnly` + no `Domain` attribute). The `isAuth` cookie is the one exception.
-- **`lifetime` vs `maxAgeMs`:** `lifetime` is a named tier resolved elsewhere (e.g. `sessionTier`, `challenge`); `maxAgeMs` is a literal millisecond value. Don't confuse the two.
-- **Key = i18n key:** the map key (e.g. `oauthState`) is what the frontend uses to look up a human-readable purpose string; renaming it is a breaking i18n change.
-- Referenced by `docs/theory/data-protection.md` as the canonical cookie inventory.
+- Lifetime is expressed in one of three ways: `maxAgeMs` (fixed), `lifetime: sessionTier`, or `lifetime: challenge`. The comments say challenge cookies last as long as the challenge they carry, read off the challenge rather than from this file.
+- `oauthContinue` and `oauthLocale` are deliberately not secret (a path and a language code), so they stay readable in logs.
+- A cross-cutting test keeps `session.name` equal to the contract's `cookieAuth.name`.
+- The `__Host-` prefix is on every cookie except `isAuth`.

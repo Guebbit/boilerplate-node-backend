@@ -1,30 +1,26 @@
 ---
 source: src/modules/account/controllers/post-session-touch.ts
-sha256: a7510e6e08c645c3bda6e9033432080fb32f77d944183dc4925122907641fa9d
-generated_at: 2026-11-08T04:07:35.643642+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a7510e6e08c645c3bda6e9033432080fb32f77d944183dc4925122907641fa9d
+context_sha256: 7b33e8d0f3f2d65b3bb918a7da66d5110961e77a572ed7ef1b4d3ee19ed8d97b
+generated_at: 2026-11-22T03:27:09.906673+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-session-touch.ts
 
 ## Purpose
-
-Handler for `POST /account/sessions/current/touch`. It does **not** write anything — the auth middleware has already counted the request as activity. It simply reads the session's current activity clock from the authenticated context and returns it, so a client can display a "still there?" prompt from server-side numbers.
+Express controller for `POST /account/sessions/current/touch`. It counts the caller's session as active and returns its idle clock, so a client can show a "still there?" prompt based on server-side numbers.
 
 ## Key elements
-
-- **`postSessionTouch(request, response)`** — The sole export. Resolves a no-op promise, calls `activityOf(request.authContext!)` to extract the current `SessionActivity`, and sends it back via `successResponse` with status 200. Errors are funneled through `catchAs`.
+- `postSessionTouch(request, response)` — the only export. It wraps the work in a promise chain and responds with `successResponse<SessionActivity>(response, activityOf(request.authContext!), 200)`. Errors are routed to `catchAs(response, 'postSessionTouch')`.
 
 ## Relationships
-
-- **`@infrastructure/http/response`** — `successResponse` wraps the `SessionActivity` payload in the standard success envelope.
-- **`@infrastructure/http/controller`** — `catchAs` provides the uniform error-catch → error-response mapping for this handler.
-- **`../session/account-view`** — `activityOf` reads the activity fields (last-active timestamp, idle duration, etc.) from the auth context object.
-- **`../routes`** — Registers `postSessionTouch` as the terminal handler for the `POST /account/sessions/current/touch` route.
-- **`@types`** — Supplies the `SessionActivity` type used as the response payload.
+- `src/infrastructure/http/response.ts` — supplies `successResponse`, which sends the 200 payload.
+- `src/infrastructure/http/controller.ts` — supplies `catchAs`, the error handler tagged with the controller name.
+- `src/modules/account/session/account-view.ts` — supplies `activityOf`, which turns the auth context into the activity data that is returned.
+- `src/types/index.ts` — supplies the `SessionActivity` type used as the response payload type (imported through the `@types` alias).
+- `src/modules/account/routes.ts` — the neighbor most likely to mount this handler on the route. That wiring is not visible in this file.
 
 ## Notes
-
-- Despite the route name saying "touch," this handler performs **no write**. The JSDoc is explicit: `getAuth` has already marked the session active before the controller runs, so the only work left is to read and echo back the clock state.
-- The `Promise.resolve().then(…)` idiom (rather than `async/await`) is the convention for these controllers so that `catchAs` can intercept synchronous throws as well.
-- `request.authContext!` is asserted non-null; the route is expected to sit behind the `getAuth` guard, so the auth context is always present at this point.
+- The controller writes nothing. The `getAuth` step, which runs before it, already counts the request as activity because the route is not marked passive. The handler only reports the clock as it now stands.
+- It relies on `request.authContext` being populated by that earlier step. The non-null assertion (`!`) means a missing context would throw, and `catchAs` would handle the error.

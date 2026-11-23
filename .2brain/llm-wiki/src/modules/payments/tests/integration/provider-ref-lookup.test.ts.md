@@ -1,29 +1,25 @@
 ---
 source: src/modules/payments/tests/integration/provider-ref-lookup.test.ts
-sha256: e680e000c819772442b8aa0561f55e8a90127e91a7f49e25ba3d6b7305d7f51b
-generated_at: 2026-11-08T07:33:36.270106+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e680e000c819772442b8aa0561f55e8a90127e91a7f49e25ba3d6b7305d7f51b
+context_sha256: 1383bd181cd686f0e668b832743ba55d963c32c9a6e60e8cbe7cc647630a7745
+generated_at: 2026-11-22T06:58:11.057890+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/provider-ref-lookup.test.ts
 
 ## Purpose
-
-Integration test that guards against MongoDB operator-injection (e.g. `{"$ne": null}`) reaching the provider-reference lookup. It asserts that `findByProviderRef` rejects a non-string operator object rather than silently matching every payment, covering the case where a caller bypasses the webhook port's type parsing and passes a `JSON.parse`-derived `any` cast to `string`.
+Integration test guarding `paymentRepository.findByProviderRef` against NoSQL-operator injection. It verifies that if an operator object (e.g. `{"$ne": null}`) reaches the lookup in place of a provider-reference string, the lookup throws a cast error rather than matching every payment. It covers the case where a caller bypasses the webhook port's parsing.
 
 ## Key elements
-
-- **`describe('paymentRepository.findByProviderRef')`** — single test block scoped to the repository method under test.
-- **`it('fails the cast on an operator instead of matching every payment')`** — constructs `JSON.parse('{"$ne": null}') as string` (deliberate type lie simulating an untrusted boundary), calls `paymentRepository.findByProviderRef`, and asserts the promise rejects with a message matching `/Cast to string failed/u`.
-- **`setupTestDb()`** — called at module level before the suite runs to provision a clean test database.
+- `setupTestDb()` — called at module level to prepare the test database for the suite.
+- `describe('paymentRepository.findByProviderRef')` — contains the single test, "fails the cast on an operator instead of matching every payment".
+- The test builds `operator` with `JSON.parse('{"$ne": null}') as string`. The `as string` cast is deliberate, to get past the type system. It then asserts that `findByProviderRef(operator)` rejects with an error matching `/Cast to string failed/u`.
 
 ## Relationships
-
-- **`src/modules/payments/repository.ts`** — imports `paymentRepository`; this file is the sole consumer under test. The repository is expected to perform a runtime string-cast guard and throw if the value is not a genuine string.
-- **`tests/support/setup-test-db.ts`** — imports and invokes `setupTestDb()` once at the top of the module to initialize the test database before any assertions execute.
+- `src/modules/payments/repository.ts` — supplies `paymentRepository`, whose `findByProviderRef` is the method under test.
+- `tests/support/setup-test-db.ts` — supplies `setupTestDb`, imported via the `@tests/setup-test-db` alias, which handles test DB setup.
 
 ## Notes
-
-- The `as string` cast is an intentional, documented type lie that reproduces the exact shape an attacker could produce at a `JSON.parse` boundary. Do not "fix" it by removing the cast — that would weaken the test.
-- The test runs at the **integration** level (real repository + real DB), not the unit level; it depends on `setupTestDb` providing a reachable database.
-- The regex `/Cast to string failed/u` is the contract: any change to the repository's error wording must keep this pattern in sync.
+- The test passes only if the lookup rejects with a "Cast to string failed" error. The assertion therefore relies on that error message, so a change in how the repository or its driver words the cast error could break it.
+- The `as string` cast is intentional, as the inline comment notes, because `JSON.parse` returns `any`.

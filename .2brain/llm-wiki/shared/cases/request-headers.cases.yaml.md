@@ -1,34 +1,32 @@
 ---
 source: shared/cases/request-headers.cases.yaml
-sha256: ef1c6c0b5444ec5315cb01ff9e81334acc7a29c219d5e908751cd771dde1928c
-generated_at: 2026-11-08T03:06:16.835408+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ef1c6c0b5444ec5315cb01ff9e81334acc7a29c219d5e908751cd771dde1928c
+context_sha256: 239ccb99bbbe781a1cbfb21e104f378a1a11d6a124062e5a27ceb3b8d3429fd4
+generated_at: 2026-11-22T02:22:13.534300+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/cases/request-headers.cases.yaml
 
 ## Purpose
-
-Test-case catalogue for two inbound HTTP header parsers: `If-Match` (RFC 9110 §13.1.1) and `x-request-id`. It encodes the expected parse outcome for a range of valid, malformed, and edge-case header values so the parsing logic can be verified against a single declarative source of truth.
+A declarative table of test cases that pins down how two HTTP request headers are read: `If-Match` (RFC 9110 §13.1.1) and `x-request-id`. Each case gives an input header and the expected parsed outcome, so implementations can be checked against one shared spec.
 
 ## Key elements
-
-- **`if-match` cases** — Each case supplies a raw header string and asserts one of three outcomes:
-  - `unconditional` — no header present; the write proceeds without a precondition check.
-  - `any` — header is `*` (surrounding whitespace tolerated); any current version matches.
-  - `tags` — header is a comma-separated list of entity-tags (strong or weak). The expected `tags` array preserves quotes and `W/` prefixes. An unparseable header also yields `tags` but with an **empty list**, causing the write to be refused (412) rather than run unconditionally.
-- **`request-id` cases** — Each case supplies a header value (or absence), a `trustedIngress` flag, and asserts:
-  - `clientRequestId: kept | dropped` — whether the value is accepted as a canonical UUID (any version, either case) or rejected.
-  - `requestId: generated | client` — the id returned to the caller; `client` only when `trustedIngress` is true **and** the header was kept.
-- **Edge cases covered** — trailing newline after a valid UUID, trailing text, missing hyphens, non-hex digit, unquoted tag, star mixed with a tag, trailing comma, empty string.
+- `cases:` – the single top-level list. Every entry has a `name`, a `kind`, an optional `header`, and expectation fields that depend on the kind.
+- `kind: if-match` – expectation fields are `expect` and, for `tags`, a `tags` list:
+  - `unconditional`: no header, so the write runs without a check.
+  - `any`: header is `*` (surrounding spaces are tolerated).
+  - `tags`: exactly the listed entity-tags, with quotes and any `W/` prefix kept. A list is split on commas and trimmed.
+  - An unparseable header also gives `tags` with `tags: []`. Nothing matches, so the write is refused with 412 rather than running unconditionally. The unparseable cases are an unquoted tag, `*` mixed with a tag, a trailing comma, and an empty header. An empty quoted tag `""` is valid.
+- `kind: request-id` – fields are `header`, `trustedIngress` (true/false), `clientRequestId` (`kept` or `dropped`) and `requestId` (`generated` or `client`).
+  - A canonical hyphenated UUID, in any version and either case, is kept as the client id.
+  - Anything else is dropped. This covers a non-UUID, trailing text, a trailing newline, no hyphens, a non-hex digit, and a missing header.
+  - The service's own `requestId` is `generated`. The exception is a valid UUID behind a trusted ingress, where it is `client`.
 
 ## Relationships
-
-- **`shared/cases/security-headers.cases.yaml`** — Sibling test-case file in the same `shared/cases/` directory. Both define declarative cases for HTTP header handling (request headers vs. security headers) and are consumed by the same test runner harness; they are expected to stay in lock-step for conventions (field names like `kind`, `header`, `expect`).
+- `scripts/audit/api-standards.yaml` is the only graph neighbor. The two files are linked in the dependency graph, but this file does not show how.
 
 ## Notes
-
-- A **weak tag** (`W/"a"`) is kept verbatim in the `tags` array; the test suite explicitly asserts it never equals a strong tag (`"a"`). Do not normalise away the `W/` prefix.
-- The `*` wildcard is **not** combinable with other tags (`*, "a"` is unparseable). Only a lone `*` (with optional surrounding spaces) maps to `any`.
-- The `$` anchor in the UUID regex must not match before a trailing newline — the `"…\n"` case is the regression guard for this.
-- When a header is present but unparseable, the outcome is `tags: []` (refuse), **not** `unconditional` (allow). This is a deliberate safety choice documented in the file header.
+- A weak tag (`W/"a"`) keeps its prefix, so it never equals a strong tag.
+- The trailing-newline case (`"...000\n"`) is there because `$` must not match before a trailing newline. A naive regex would wrongly accept it.
+- A malformed id is dropped even when `trustedIngress` is true.

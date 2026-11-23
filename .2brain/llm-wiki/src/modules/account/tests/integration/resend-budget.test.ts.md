@@ -1,34 +1,30 @@
 ---
 source: src/modules/account/tests/integration/resend-budget.test.ts
-sha256: 4b41f2f213f53174d596ff6b908b7c0db27878f73a3e08b90ce2106626195085
-generated_at: 2026-11-14T19:07:37.271231+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0fb36aad18f8b1b45625b858ba4ed5e7dccfccbe55a46db881d3adb7914150be
+context_sha256: 05669ef78efabcc4a8bc11cfd0df59daf00e4d28740ab3d615dea2fd3b484f01
+generated_at: 2026-11-22T03:59:26.027988+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/resend-budget.test.ts
 
 ## Purpose
-
-Integration test that verifies a **refused** email-verification resend (cooldown / 429) does **not** consume the signed-in credential budget — the budget should only be spent by wrong passwords on `/reauth` and `/password`. It asserts this by reading the `RateLimit` header the real app writes, rather than inspecting an internal limiter.
+Integration test asserting that a refused email-verification resend (cooldown, HTTP 429) does not spend the "signed-in credential budget". That budget is meant to be consumed only by wrong passwords on `/reauth` and `/password`, since a resend takes no secret. It runs against the real app and reads the budget from the `RateLimit` response header.
 
 ## Key elements
-
-- **`signedInRemaining(response)`** – Parses the `RateLimit` header with the regex `"credentials-signed-in";r=(\d+)` and returns the remaining count. Throws if the budget identifier is absent.
-- **Test: "leaves the budget /reauth spends untouched"** –
-  1. Creates an *unverified* user, logs in to obtain a bearer token.
-  2. Fires a wrong-password `/reauth` to establish a baseline (`before`).
-  3. Sends a valid resend (`200`), then a second resend that hits the cooldown (`429`).
-  4. Fires another wrong `/reauth` and asserts the budget dropped by exactly **1** (only the two wrong reauths), confirming the refused resend spent nothing.
-  5. Also asserts the `429` response's `RateLimit` header does **not** carry the `credentials-signed-in` entry (it's a different limiter).
+- `signedInRemaining(response)` — parses the `RateLimit` header with the regex `"credentials-signed-in";r=(\d+)` and returns the remaining count as a number. Throws an `Error` if the header has no signed-in budget.
+- `describe('a refused resend and the signed-in credential budget')` with one test, `leaves the budget /reauth spends untouched`:
+  1. Creates an `unverified` user and logs in via `POST /account/login` to get a bearer token.
+  2. Sends a wrong-password `POST /account/reauth` and records the remaining budget (`before`).
+  3. Calls `POST /account/email-verification/resend` twice: the first returns 200, the second 429.
+  4. Asserts the refused response's `ratelimit` header does not contain `credentials-signed-in`.
+  5. Sends another wrong `/reauth` and expects `remaining` to equal `before - 1`, so only that reauth spent budget.
 
 ## Relationships
-
-- **`tests/support/http.ts`** – Provides the `api()` helper used to issue all HTTP requests in the test.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called once to initialise/reset the test database before the suite runs.
-- **`src/modules/users/tests/factories.ts`** – Supplies `createUser` (with `'unverified'` status) and the shared `PLAIN_PASSWORD` constant for deterministic logins.
+- `src/modules/users/tests/factories.ts` — supplies `createUser` (used with the `'unverified'` state) and `PLAIN_PASSWORD` for logging in.
+- `tests/support/http.ts` — supplies `api()`, the request helper used for all HTTP calls (imported as `@tests/http`).
+- `tests/support/setup-test-db.ts` — `setupTestDb()` is called at module top level to prepare the test database (imported as `@tests/setup-test-db`).
 
 ## Notes
-
-- The budget is read **through the wire** (the `RateLimit` response header) rather than by querying a rate-limiter service; this is intentional so the test exercises the real app's header-writing logic.
-- The `429` resend response is expected to have its own (different) `RateLimit` entry; the test explicitly asserts the signed-in budget identifier is *absent* from that header to guard against accidental coupling of the two limiters.
-- The test depends on call ordering (wrong-reauth → resend → resend → wrong-reauth); reordering would change which budget decrements are attributed to which request.
+- The test depends on the second resend being refused by the cooldown, so it relies on the first resend having just succeeded.
+- The `/password` endpoint is mentioned in the header comment as another budget spender, but only `/reauth` is exercised here.

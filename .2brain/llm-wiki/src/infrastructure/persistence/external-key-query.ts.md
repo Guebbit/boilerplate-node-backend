@@ -1,27 +1,23 @@
 ---
 source: src/infrastructure/persistence/external-key-query.ts
-sha256: 6704500e914e5864f3d6bf22c75b9e5134a5428bea70059cfad28df0f7bf343a
-generated_at: 2026-11-08T03:42:35.216914+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6704500e914e5864f3d6bf22c75b9e5134a5428bea70059cfad28df0f7bf343a
+context_sha256: d9bf7ee6bc257586982b0a30b38b1a65c87dd353185cd39fa625b46690740316
+generated_at: 2026-11-22T03:02:16.905418+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/external-key-query.ts
 
 ## Purpose
-
-Defines a single reusable Mongoose query option that enables `sanitizeFilter` for any lookup keyed by an externally-supplied value (provider reference, email, federated identity). It acts as a second, per-query guard—behind Zod validation at the edge—against filter-injection where a `$`-prefixed key in a nested object would be misread as a MongoDB operator (e.g. `{ "$ne": null }` matching everything instead of a literal string).
+Exports a single Mongoose query option that turns on `sanitizeFilter` for lookups keyed by a value supplied by an outsider (a provider reference, an email, or a federated identity). It acts as a second line of defense against NoSQL operator injection; Zod validation at the edge remains the main guard.
 
 ## Key elements
-
-- **`EXTERNAL_KEY_QUERY`** (`{ sanitizeFilter: true } as const`) — The only export. Spread or passed into any Mongoose query options object to activate `sanitizeFilter` for that single query.
+- `EXTERNAL_KEY_QUERY` — `{ sanitizeFilter: true } as const`. When passed as a query option, any nested object in the filter whose key starts with `$` is wrapped in `$eq`. A payload like `{ "$ne": null }` standing where a string belongs then matches nothing instead of everything.
 
 ## Relationships
-
-- **`src/modules/payments/repository.ts`** — Consumes `EXTERNAL_KEY_QUERY` when querying payments by an externally-supplied key (e.g. provider reference).
-- **`src/modules/users/repository.ts`** — Consumes `EXTERNAL_KEY_QUERY` when querying users by an externally-supplied key (e.g. email or federated identity).
+- `src/modules/payments/repository.ts` and `src/modules/users/repository.ts` are the graph neighbors. They are the expected consumers: lookups by provider reference, email or federated identity. The file itself contains no imports or references to them, so this is inferred from its documented purpose.
 
 ## Notes
-
-- This is **per-query**, not a global Mongoose setting. Every query that matches on an outsider-supplied value must include it explicitly; forgetting it re-opens the injection path.
-- A filter that legitimately needs MongoDB operators (e.g. `$in`, `$regex`) will have them neutralized by `sanitizeFilter`. Such operators must be wrapped with Mongoose's `trusted()` helper to retain their meaning.
-- Zod schema validation at the API boundary remains the primary defense; this option is the safety net at the persistence layer.
+- The option is applied per query, not globally.
+- A filter that legitimately carries its own `$` operators must wrap them with `trusted()` from mongoose. Otherwise they are neutralized too and stop working.
+- Zod validation at the edge is still the primary defense. This option is a backstop.

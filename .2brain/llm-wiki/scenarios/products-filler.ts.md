@@ -1,38 +1,39 @@
 ---
 source: scenarios/products-filler.ts
-sha256: df3218ac1c1e6e2c985035d6ba4127ae233706a2b7e147fea9c477db74a837a9
-generated_at: 2026-11-08T02:30:56.503364+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3f8486a7739a6ec7c20524244a27fbd85e10026895c288148d0c7ef463477c8d
+context_sha256: e0af5f47777d4b8506a93289c85855d444260ae2d822d773b4d37ab79bccc684
+generated_at: 2026-11-22T01:44:34.521681+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/products-filler.ts
 
 ## Purpose
-
-Produces the deterministic, combinatorial portion of the demo pet-supply catalogue: a fixed 6-animal × 7-product-type × 3-tier grid (126 rows) plus two digital PDF guides, all with bilingual (EN/IT) copy. It exists so `scenarios/products.ts` can attach stable ids and image URLs without this file needing to know about either, and so every boot and every restore yields byte-identical rows (no randomness, no `@faker-js/faker`).
+Generates the catalogue's "filler" products for a pet-supply retailer demo shop. It does this with plain nested loops over hand-picked words, not randomness or `@faker-js/faker`, so the same rows come out on every boot and restore. It only produces words, prices, stock and metadata. `./products` attaches ids and images to each row.
 
 ## Key elements
-
-- **`FILLER_PRODUCTS: FillerProduct[]`** — The main export. 126 grid rows followed by 2 digital rows. Consumed by `scenarios/products.ts`.
-- **`FillerProduct`** (interface) — Shape of one row: title, description, price, `openingStock`, categories, tags, optional `weight`/`taxClass`/`rateType`/`requiresShipping`, and a `translations` object holding both locales' copy.
-- **`FILLER_IMAGE_ROLE_KEYS: string[]`** — 20 fixed keys (`filler-00`…`filler-19`) that `scenarios/tools/generate-seed-images.ts` populates. `scenarios/products.ts` cycles through them by index regardless of grid size.
-- **`ANIMALS`, `PRODUCT_TYPES`, `TIERS`** (const arrays) — The three axes. Each carries EN + IT copy fragments (names, slugs, blurbs, qualifiers, multipliers).
-- **`GRID_PRODUCTS`** (const) — The `flatMap`/`map` combination producing the 126 rows. Price = `basePrice × multiplier + animalIndex * 2`. Weight = `type.weight + tierIndex * 100`.
-- **`DIGITAL_GUIDES`** (const) — Two `requiresShipping: false` rows (Dog/Cat Care Guide PDF). Appended after the grid so grid indices (and thus derived ids/images) are stable.
-- **`fillerId(index)`** (exported function, truncated) — Deterministic 24-hex id for row `index`; avoids `new Types.ObjectId()` whose time-based default would break `scenario:apply` idempotency.
+- `FILLER_IMAGE_ROLE_KEYS`: a fixed pool of 20 image role keys (`filler-00` … `filler-19`). Its size does not depend on how many products exist, so adding rows never needs new photos.
+- `FillerProduct` (exported interface): one filler row. It holds title, description, decimal-string price, `openingStock`, category slugs, tags and optional `weight`. It also has optional `taxClass`, `rateType` and `requiresShipping: false` (digital goods). `translations` carries `en` and `it` copy.
+- `ANIMALS`, `PRODUCT_TYPES`, `TIERS` (module-private): the three axes of the grid.
+  - `ANIMALS`: 6 species, each with an Italian plural name.
+  - `PRODUCT_TYPES`: 7 product lines, each with a blurb, base price, weight, optional non-standard `tax` and Italian copy.
+  - `TIERS`: Standard, Premium (×1.6) and Heavy-Duty (×1.3), with English and Italian qualifiers.
+- `GRID_PRODUCTS`: every animal × type × tier combination (6 × 7 × 3).
+  - Titles and descriptions are built from the English and Italian templates. The flat `title` and `description` come from the same `en` object as `translations.en`, so they cannot drift apart.
+  - Price is `round(basePrice × multiplier) + animalIndex × 2`, formatted with two decimals.
+  - `openingStock` is `max(5, 60 − tierIndex×15 − typeIndex×3 + animalIndex×2)`.
+  - Weight is `type.weight + tierIndex × 100`.
+  - The type's `tax` is spread into the row.
+- `DIGITAL_GUIDES`: two downloadable PDF care guides, for Dog and Cat. They are priced at `'9.00'` with `openingStock` 100, tagged `digital` and `guide`, and marked with `requiresShipping`. They are appended after the grid.
 
 ## Relationships
-
-- **`scenarios/products.ts`** — Primary consumer. Iterates `FILLER_PRODUCTS`, assigns `fillerId(i)` as the `_id`, pairs each row with `FILLER_IMAGE_ROLE_KEYS[i % 20]`, and writes the combined catalogue (named rows + filler) to the DB.
-- **`scenarios/flows/shop-history.ts`** — Reads each filler row's `openingStock` and calls `POST /inventory/levels/{productId}/receive` to place that quantity on the shelf, so the shop's stock originates from an in-app receipt rather than a pre-seeded column.
-- **`scenarios/tools/generate-seed-images.ts`** — Reads `FILLER_IMAGE_ROLE_KEYS` to know which image slots to fetch/generate into `products-images.generated.json`.
-- **`src/types/index.ts`** — Supplies the `RateType` and `TaxClass` types used in `FillerProduct`'s optional tax fields.
+- `scenarios/products.ts` consumes this file's rows and `FILLER_IMAGE_ROLE_KEYS`. It adds the id and image, cycling through the role keys by index. It also writes the translation batch from `translations`, and it holds the six named rows for the soft-deleted, inactive and out-of-stock states.
+- `scenarios/flows/shop-history.ts` stocks the products. `openingStock` is not a seeded column. The flow receives it through `POST /inventory/levels/{productId}/receive`.
+- `scenarios/tools/generate-seed-images.ts` (`npm run scenario:images`) populates the images behind the role keys.
+- `src/types/index.ts` provides the `RateType` and `TaxClass` types used by `FillerProduct`.
 
 ## Notes
-
-- **No randomness by design.** The file header explicitly documents that the repo avoids `@faker-js/faker` (ESM-only, breaks ts-jest) and that a demo catalogue has even less reason for non-determinism than a test file.
-- **Grid rows are always active, non-deleted, in-stock.** Soft-deleted / inactive / out-of-stock states are reserved for the six hand-written named rows in `scenarios/products.ts`, preventing confusion.
-- **`openingStock` is not a DB column.** It is a one-time input to the shop-history flow; the seeded `onHand` value is always `0`.
-- **Digital guides are appended last** so that `gridRow[i]` always maps to the same id and image slot, even if guides are added or removed.
-- **Italian "Heavy-Duty" tier** is rendered as "Extra Resistente" (a noun phrase) rather than an inflected adjective, avoiding gender agreement across mixed-gender product nouns (cuccia, trasportino, ciotola, …).
-- **`translations` is a convenience batch** for the write surface's translation endpoint. The flat `title`/`description` fields are guaranteed identical to `translations.en` because they come from the same template call.
+- The grid uses array order for ids and pictures. Digital guides are appended after the grid so existing rows keep their index, and with it their id and image. Insert new rows at the end of the arrays.
+- Every grid row is active and non-deleted, and gets an opening receipt. The special states (soft-deleted, inactive, out-of-stock) are never produced here.
+- Tax is set per product type. Feeding Bowl is `zero` with `zero_rated`, Water Dispenser is `zero` with `exempt`, Health Supplement is `reduced`, and the rest use the standard rate.
+- The Italian Heavy-Duty tier is named "Extra Resistente" because it is invariant across the grammatical genders of the type nouns.

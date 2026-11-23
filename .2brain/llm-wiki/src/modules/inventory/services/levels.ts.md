@@ -1,47 +1,46 @@
 ---
 source: src/modules/inventory/services/levels.ts
-sha256: 01aae45627297b32ae56c64f182e2cb16d2fe0d2f14db8589cd0580a0090ed5e
-generated_at: 2026-11-08T06:02:49.568930+00:00
-model: ollama:qwen3.8:27b
+source_sha256: db3d9b0158893984196da97c9d8a96fcc4b964690b9cb426e0b6be8851d333d1
+context_sha256: f35a6fb2eaa166ba8aedea3528850cbe47ebbe6d2bd0517609f73d1a5165bb3f
+generated_at: 2026-11-22T05:22:51.319048+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/services/levels.ts
 
 ## Purpose
-
-Read-side and lifecycle functions for stock level rows: the stock board, the preorder board, the low-stock gauge, the sellable-quantity lookup for checkout, and the movement ledger. It sits between the repositories (raw counters) and the HTTP layer (presented, paginated responses), and also exposes two `@internal` helpers that `module.ts`'s event listeners call to create or erase a level row.
+Holds the level rows (per-product stock counters) of the inventory module and the reads built on them: the stock board, the preorder board, the low-stock gauge, per-product availability for checkout, and the stock-movement ledger. It also holds the two lifecycle writes that create and erase a level row in response to product events.
 
 ## Key elements
-
-- **`openLevel(productId)`** – Insert-if-absent a zero-stock level row. Called by the `PRODUCT_CREATED` listener in `module.ts`; idempotent under at-least-once delivery.
-- **`removeLevel(productId)`** – Delete the level row. Called only by the `PRODUCT_DELETED` listener when `hardDelete: true`; soft-delete/restore must leave counters intact.
-- **`availableFor(productIds, preorderIds?, backorderIds?)`** – Returns a `Map<productId, StockPosition>` of what is sellable right now, read from the ledger (not cache). Preorder products sell against `roomOn` (backorder allowance); backorder products sell against shelf + room; plain products sell against shelf alone.
-- **`listPreorders(filters?)`** – Paginated preorder board (most outstanding first). Fetches product metadata via `productService` after the page is settled; uses `presentPreorderLevel` and `sellsAgainstCap` logic.
-- **`listLevels(filters?)`** – Paginated stock board, scarcest-first. Supports `lowOnly` filter (delegates to `lowStockThreshold()`). Falls back to the product id as title if the product lookup misses.
-- **`getLevel(productId)`** – Single-level lookup returning `ResponseSuccess<InventoryLevel>` or a 404 `ResponseReject`. Validates the product exists first.
-- **`lowStockCount()`** – Count of publicly visible, non-preorder products at or under the low-stock threshold. Consumed by `metrics.ts`.
-- **`listMovements(filters?)`** – Paginated ledger (newest first). Relies on `search`'s `DEFAULT_SORT` for stable ordering.
+- `openLevel(productId)`: inserts a zero-stock level row if absent (`insertIfAbsent`). It is idempotent, so it is safe under at-least-once outbox delivery. It books no units; units enter only through `receive`. Marked `@internal`; it is the `product.created` listener's job.
+- `removeLevel(productId)`: deletes the level row via `deleteByProductId`. It is meant only for hard deletes; soft deletes and restores must leave the counters alone. Marked `@internal`; it is the `product.deleted` listener's job.
+- `availableFor(productIds, preorderIds, backorderIds)`: returns a `Map<string, StockPosition>` of what can be sold, as `{ available, shelf }`.
+  - Preorder products: `available` is `roomOn(level)`, the room left under the allowance.
+  - Backorder products: `available` is the shelf count plus `roomOn(level)`.
+  - Other products: `available` is the shelf count.
+  - Products with no level row are absent from the map. Room can be `Infinity`, never `null`.
+- `listPreorders(filters)`: a paginated preorder board. It reads `preorderBoard` from the repository, then enriches rows with title and release date from `productService.findManyByIds`. `sellsAgainstCap` is true when the product is a preorder (`isPreorder`) or has `allowBackorder === true`.
+- `listLevels(filters)`: a paginated stock board, scarcest first. `lowOnly` adds `maxAvailable: lowStockThreshold()`. Titles come from `productService`, falling back to the product id if the product is not found.
+- `getLevel(productId)`: returns one product's level as `ResponseSuccess<InventoryLevel>`, or a 404 `ResponseReject` (`inventory.product-not-found`). The 404 applies both when the product is missing and when it has no level row.
+- `lowStockCount()`: counts publicly visible products at or under the low-stock threshold. It takes candidate ids from `lowAvailabilityProductIds`, then calls `productService.countPublic(ids, { excludePreorders: true })`.
+- `listMovements(filters)`: a paginated ledger, newest first, with no sort argument. It reports `totalItems`.
 
 ## Relationships
-
-- **`../repository.ts`** – All data access goes through `stockLevelRepository` and `stockMovementRepository`; this file performs no direct queries.
-- **`../presenter.ts`** – `presentInventoryLevel` and `presentPreorderLevel` shape raw rows into the API response types.
-- **`../domain/index.ts`** – `roomOn` computes the remaining backorder allowance from a level row.
-- **`../config.ts`** – `lowStockThreshold()` supplies the "low stock" boundary used by `listLevels` and `lowStockCount`.
-- **`../module.ts`** – Owns the `PRODUCT_CREATED` / `PRODUCT_DELETED` event listeners that call `openLevel` / `removeLevel`.
-- **`@infrastructure/http/response.ts`** – `generateSuccess` / `generateReject` wrap `getLevel`'s return.
-- **`@infrastructure/i18n`** – `t` localises the 404 message in `getLevel`.
-- **`@infrastructure/persistence/search.ts`** – `normalizePagination`, `buildPaginatedMeta`, and `PaginationInput` drive all paged endpoints; `listMovements` delegates sorting to this module's default.
-- **`@modules/products`** – `productService` provides titles, release dates, backorder flags, and `countPublic`; `isPreorder` gates the `sellsAgainstCap` flag.
-- **`./types.ts`** – `LevelFilters`, `MovementFilters`, and `StockPosition` are the shared input/output contracts for this file.
-- **`./index.ts`** – Barrel re-export so consumers import from the services entry point.
-- **`tests/integration/top-up.test.ts`** and **`tests/factories.ts`** – Integration coverage for level reads and movement writes.
-- **`../cart/tests/integration/stock.test.ts`** – Exercises `availableFor` as the checkout pre-flight path.
+- **`src/modules/inventory/repository.ts`**: `stockLevelRepository` (`insertIfAbsent`, `deleteByProductId`, `findManyByProductIds`, `findByProductId`, `preorderBoard`, `stockBoard`, `lowAvailabilityProductIds`) and `stockMovementRepository`, which `listMovements` delegates to.
+- **`src/modules/inventory/domain/index.ts`**: `roomOn` computes the room under the backorder or preorder cap.
+- **`src/modules/inventory/presenter.ts`**: `presentInventoryLevel` and `presentPreorderLevel` shape the rows returned by the boards and `getLevel`.
+- **`src/modules/inventory/config.ts`**: `lowStockThreshold()` supplies the threshold for `listLevels` and `lowStockCount`.
+- **`src/modules/inventory/services/types.ts`**: `LevelFilters`, `MovementFilters` and `StockPosition`.
+- **`@modules/products`** (not in the neighbor list): `productService` (`findManyByIds`, `findByIdRaw`, `countPublic`) and `isPreorder`.
+- **`src/infrastructure/persistence/search.ts`**: `normalizePagination`, `buildPaginatedMeta`, and the `PaginationInput` and `PaginatedMeta` types.
+- **`src/infrastructure/http/response.ts`**: `generateSuccess` and `generateReject` in `getLevel`.
+- **`src/infrastructure/i18n/index.ts`**: `t` for the 404 message.
+- **`src/modules/inventory/module.ts`**: its `PRODUCT_CREATED` and `PRODUCT_DELETED` listeners call `openLevel` and `removeLevel`, per the doc comments.
+- **`src/modules/inventory/services/index.ts`**: not imported by this file, but the comments refer to `inventoryService`, which the two listener-only functions are kept off.
 
 ## Notes
-
-- `openLevel` and `removeLevel` are deliberately **not** on the inventory service facade; they are listener-only helpers marked `@internal`.
-- The "API composition" pattern is intentional: product titles are fetched **after** the page is settled from `stocklevels`, never via a cross-module DB join. A missing product falls back to the raw id rather than dropping the row.
-- `availableFor` reads the live ledger, not the catalogue's cached copy, so a missed sync can never cause a spurious refusal that no stock movement would heal.
-- `listMovements` passes **no** sort argument; stability depends on `search`'s `DEFAULT_SORT` being the canonical newest-first order.
-- `lowStockCount` explicitly excludes preorders (`excludePreorders: true`) because a preorder is waiting for units that do not yet exist—it is not "running low."
+- The level is the only source of stock; the product holds no count. The catalogue, not this module, decides which ids are preorders or backorders, and callers pass them in.
+- Boards are paged inside the database on `stocklevels` alone. Product titles are composed afterwards through `productService` (API composition) instead of a cross-module join.
+- A level row missing its product still appears on the stock board, with the product id as its title, so a counter holding units is never hidden.
+- Preorders are excluded from `lowStockCount`, since they wait for stock that does not exist yet.
+- The doc comments also mention `receive`, `adjust` and `PATCH` as other ways the level is used; their implementations are not in this file.

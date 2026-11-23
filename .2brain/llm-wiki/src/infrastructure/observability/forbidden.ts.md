@@ -1,29 +1,33 @@
 ---
 source: src/infrastructure/observability/forbidden.ts
-sha256: b3682569fcf394e872425a64d24ad846334c59da8a4287808dc7ba32567ad92d
-generated_at: 2026-11-08T03:39:30.370874+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b3682569fcf394e872425a64d24ad846334c59da8a4287808dc7ba32567ad92d
+context_sha256: 77d542f1f39b606f5db2dbb9e488aa3dd8478dcc8b170c7fae4abb70725762d9
+generated_at: 2026-11-22T02:58:34.177878+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/observability/forbidden.ts
 
 ## Purpose
-
-Records a `security.forbidden` audit row for refusals a service makes on its own authority—situations where the caller passed the route-level guard but lacks a field-level, step-level, or target-specific rule. It exists as a separate module so that tests which mock the audit port (`recordAudit`) intercept these rows through the same seam as every other audit write.
+Provides a single helper that writes a `security.forbidden` audit row when a service refuses an action on its own authority. This covers the case where the caller passed the route's rule but lacked the rule a specific field, step or target required. The route guard already audits a missing route rule, so this helper ensures these other refusals are not silent 403s.
 
 ## Key elements
-
-- **`auditForbidden(context, refusal)`** — The sole export. Calls `recordAudit` with `action: coreAuditActions.SECURITY_FORBIDDEN`, `outcome: 'failure'`, the caller's `targetType`, an optional `targetId`, and a free-form `metadata` object describing the reason. `context` may be `undefined` on non-request paths. `targetId` is omitted from the row when not provided.
+- `auditForbidden(context, refusal)`: returns `void`. Calls `recordAudit` with:
+  - `action`: `coreAuditActions.SECURITY_FORBIDDEN`
+  - `outcome`: `'failure'`
+  - `targetType`: taken from `refusal.targetType`
+  - `targetId`: included only when `refusal.targetId` is not `undefined`
+  - `metadata`: taken from `refusal.metadata`
+- Parameters:
+  - `context`: a `CallerContext`, or `undefined` on a path with no request behind it.
+  - `refusal`: `{ targetType: string; targetId?: string; metadata: Record<string, unknown> }`. The metadata holds the reason and anything that explains it, such as the missing rule.
 
 ## Relationships
-
-- **`./audit`** — Source of `recordAudit` and `coreAuditActions`. This file is a thin adapter that funnels its single action through that port.
-- **`@types` (→ `src/types/auth-context.ts`)** — Imports the `CallerContext` type used to identify the actor in the audit row.
-- **Module callers** (`protection.ts`, `ship-gate.ts`, `for-caller.ts`, `refunds.ts`, `outcome.ts`) — Each calls `auditForbidden` at its own refusal point before returning its domain-specific 403 response. The shared contract is only the audit row; the HTTP response shape stays local to each caller.
-- **`tests/unit/infrastructure/infrastructure/observability/forbidden.test.ts`** — Unit tests that replace the `recordAudit` port and assert the row shape produced by `auditForbidden`.
+- `src/infrastructure/observability/audit.ts`: imports `recordAudit` and `coreAuditActions` from it. This file only builds the row. Writing it is left to `recordAudit`.
+- `src/types/index.ts` and `src/types/auth-context.ts`: the `CallerContext` type is imported from `@types`.
+- Service callers in `src/modules/access/services/protection.ts`, `src/modules/delivery/services/ship-gate.ts`, `src/modules/invoicing/services/for-caller.ts`, `src/modules/payments/services/return-refunds.ts` and `src/modules/returns/services/outcome.ts` are graph neighbors. They are the services that use this helper to audit their own refusals.
+- `tests/unit/infrastructure/observability/forbidden.test.ts`: unit tests for this helper.
 
 ## Notes
-
-- This file deliberately does **not** throw or return a response. Each caller keeps its own `reject`/`403` construction; the only shared artifact is the audit row.
-- `targetId` is conditionally spread into the audit payload, so rows without a known target carry no empty key.
-- The module is intentionally tiny and side-effect-free beyond the single `recordAudit` call, which is what makes port-mocking in tests straightforward.
+- It is a separate file from `audit.ts` on purpose. Importing `recordAudit` from `./audit` means a test that replaces the audit port also captures these rows, the same as every other audit row.
+- It only shares the audit row. Each call site keeps its own reject, because the response differs between sites.

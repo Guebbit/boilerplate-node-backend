@@ -1,27 +1,29 @@
 ---
 source: src/modules/example/index.ts
-sha256: 014ffcb80b42401e0f930f3664dc65b6ff005d30e06e9f7cce8f35943d67e089
-generated_at: 2026-11-08T05:50:27.092304+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7d8a1a117bfae846e3f8b7af11b054b7682e3ab53de72d02b542915b09ad916a
+context_sha256: 3cc0d5ac501e6f26bbf30eaba9bb3c41a46c6d4ee6ac0e6519ed860b0ebaab1d
+generated_at: 2026-11-22T05:09:03.975022+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/index.ts
 
 ## Purpose
-Public barrel file for the `example` module. It is the **only** import surface a sibling module is allowed to use. It re-exports the module's services, domain rules, events, emails, and the model's types — and nothing else.
+The public barrel of the `example` module. It is the only surface sibling modules may import, re-exporting the module's services, domain rules, events, emails and model types (the example service, its domain rules and the publish event).
 
 ## Key elements
-- `export * from './services'` — re-exports the example service interface and implementation.
-- `export * from './domain'` — re-exports domain rules (use-cases / domain services).
-- `export * from './events'` — re-exports the domain event definitions (e.g. the publish event).
-- `export * from './emails'` — re-exports email template / payload types.
-- `export type * from './model'` — re-exports **types only** from the model (no runtime values, no repository, no factories).
+- `export * from './services'` — the example service(s).
+- `export * from './domain'` — domain rules.
+- `export * from './events'` — events, including the publish event.
+- `export * from './emails'` — email definitions.
+- `export type * from './model'` — model **types only**, no runtime value.
 
 ## Relationships
-- **Downstream (re-exported):** `services/index.ts`, `domain/index.ts`, `events.ts`, `emails.ts`, `model.ts`. This file adds no logic; it is a pure re-export facade.
-- **Upstream (importers):** Sibling modules and tests consume this barrel. The test files `tests/cross-cutting/webhook-event-producers.test.ts` and `tests/unit/infrastructure/adapters/mailer-templates.test.ts` import through this path rather than reaching into sub-files directly.
+- Re-exports `src/modules/example/domain/index.ts`, `src/modules/example/emails.ts`, `src/modules/example/events.ts` and `src/modules/example/services/index.ts` in full.
+- Re-exports only the types of `src/modules/example/model.ts`, so the model's runtime value stays private.
+- `tests/cross-cutting/webhook-event-producers.test.ts` and `tests/unit/infrastructure/adapters/mailer-templates.test.ts` are linked to this file in the dependency graph. Their specific interactions are not visible in this file.
 
 ## Notes
-- The model is exported with `export type *` — importing a value from `./model` via this barrel will fail at compile time. Access the model directly (e.g. `./model`) only inside this module's own internal files.
-- This barrel must **never** re-export repositories, the model's runtime value, `factories.ts`, or wiring files. Adding any of these violates the module boundary described in `docs/theory/strategic-ddd.md`.
-- Because it is the sole cross-module entry point, any new public symbol in a sub-file automatically becomes part of the module's API. Audit sub-file exports before expecting a name here.
+- Never export a repository, the model's runtime value, a wiring file or `factories.ts` from this barrel. The module doc comment states this rule.
+- It contains no logic. Changing what the module exposes means editing these re-exports.
+- The file's doc comment points to a "published language — the barrel" section of the project's strategic DDD documentation.

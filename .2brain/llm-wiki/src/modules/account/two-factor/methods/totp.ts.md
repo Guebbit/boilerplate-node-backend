@@ -1,32 +1,39 @@
 ---
 source: src/modules/account/two-factor/methods/totp.ts
-sha256: 5a3f230e77cbb7a5e10328f3461a184162fab8cb37c2c9910da081315f8aee37
-generated_at: 2026-11-14T19:18:14.172556+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6be4773e2700d03a76ab74aee68d6fcccb0f7134dcddb9f77067a0ed1058cd81
+context_sha256: 898ba0a98d04bbd1d64dd5fec6e7047b20c46ed9dd3b85b575ceaf70142ad1e9
+generated_at: 2026-11-22T04:11:39.749423+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/two-factor/methods/totp.ts
 
 ## Purpose
-
-Registry adapter for the TOTP two-factor method. It exposes a `TwoFactorMethodHandler` object whose `setup` mints an encrypted TOTP secret and whose `verify` checks a six-digit code against it. All cryptographic work is delegated to the sibling `../totp.ts`; this file only wires the handler into the registry contract.
+Registry adapter that exposes TOTP (authenticator-app) two-factor as a `TwoFactorMethodHandler`. It is a "device" method: nothing is delivered to the user. Its job is to mint a secret at setup and verify the six-digit codes derived from it. The actual crypto lives in the sibling module `src/modules/account/two-factor/totp.ts`.
 
 ## Key elements
-
-- **`totpMethod`** (exported const) — the sole export; a `TwoFactorMethodHandler` object:
-  - `setup(user, entry)` — generates a base32 secret via `otplib`, encrypts it with the entry's `_id`, resets `lastUsedStep` to `undefined`, and returns the plaintext secret plus an `otpauthUri` for the user's authenticator app.
-  - `verify(user, entry, code)` — decrypts the stored secret, calls `verifyTotpCode`, then calls `accountUserService.claimTotpStep` to record the winning time-step and returns the boolean result.
-  - `delivers: false`, `available: () => true`, `eligibility: () => ({ enrollable: true })`, `target: () => undefined` — TOTP is universally available, requires no delivery channel, and needs no account property to prove.
+- `totpMethod` (export): the handler, with `name: 'totp'` and `delivers: false`.
+  - `available()` always returns `true`, and `eligibility()` always returns `{ enrollable: true }`. No channel or account property is required.
+  - `target()` returns `undefined`, since there is nothing to send to.
+  - `setup(user, entry)`:
+    - Generates a fresh base32 secret with otplib's `generateSecret`.
+    - Stores it encrypted on `entry.secret`, with the entry's `_id` (as a string) passed to `encryptTotpSecret`.
+    - Clears `entry.lastUsedStep` to reset the replay window.
+    - Resolves with `{ method: 'totp', delivers: false, secret, otpauthUri }`, where the URI is built from the secret and the user's email.
+  - `verify(user, entry, code)`:
+    - Returns `false` if the entry has no secret.
+    - Decrypts the secret and calls `verifyTotpCode` with the code and `entry.lastUsedStep`.
+    - On a valid result, claims the time step through `accountUserService.claimTotpStep`.
+    - If the claim succeeds, it updates `entry.lastUsedStep` in memory and returns `true`.
 
 ## Relationships
-
-- **`../registry`** (`src/modules/account/two-factor/registry.ts`) — provides the `TwoFactorMethodHandler` type that `totpMethod` structurally satisfies.
-- **`../totp`** (`src/modules/account/two-factor/totp.ts`) — supplies the four helpers (`buildOtpauthUri`, `decryptTotpSecret`, `encryptTotpSecret`, `verifyTotpCode`) used by both `setup` and `verify`.
-- **`src/modules/users/friends/account.ts`** — this file imports `accountUserService` from it and calls `claimTotpStep(user.id, entry.method, timeStep)` during verification; the returned boolean gates whether the code is accepted.
+- `src/modules/account/two-factor/registry.ts`: supplies the `TwoFactorMethodHandler` type that `totpMethod` implements.
+- `src/modules/account/two-factor/totp.ts`: provides `buildOtpauthUri`, `encryptTotpSecret`, `decryptTotpSecret` and `verifyTotpCode`. All crypto and code-checking is delegated there.
+- `src/modules/users/friends/account.ts` (`accountUserService`): `claimTotpStep` does the persistent replay-protection write.
 
 ## Notes
-
-- The encryption key is `String(entry._id)`, so the subdocument's `_id` must exist before `setup` runs; the comment notes that `two-factor-enrollment.ts` pushes it first.
-- `lastUsedStep` is intentionally cleared on every new enrollment because the old high-water mark belongs to a discarded secret; keeping it would reject the first valid code.
-- The replay guard relies on `claimTotpStep` as a conditional write (per the in-code comment, only a later step wins), so two concurrent requests carrying the same code cannot both pass; the loser is treated as an invalid code.
-- `result.timeStep` is asserted non-`undefined` only when `result.valid` is true; the type does not encode that invariant, so the explicit check is required.
+- Replay protection is a conditional write: only a later time step wins. If two requests carry the same code, one claim fails and is treated as a wrong code.
+- The encryption call is keyed to the entry's `_id`, and decryption must use the same id.
+- `setup` resets `lastUsedStep` because the old high-water mark belongs to a replaced secret. Keeping it would reject the first valid code.
+- `verifyTotpCode` is expected to return `timeStep` whenever `valid` is true. The code checks for `undefined` only because the type does not guarantee it.
+- A comment states that the entry's `_id` already exists when `setup` runs, because the enrollment code pushes the entry first.

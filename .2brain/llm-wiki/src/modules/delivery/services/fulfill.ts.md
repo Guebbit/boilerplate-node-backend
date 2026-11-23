@@ -1,41 +1,49 @@
 ---
 source: src/modules/delivery/services/fulfill.ts
-sha256: 995b609d38c8456f8a211d72e68057b7d9911016f4a4e410a52847eee8ddd770
-generated_at: 2026-11-14T19:46:44.942283+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e68eeaf0d0d64b16d2acbc3b1cf0b35eabc75270d5b4b61f7e1741a833a72e68
+context_sha256: 4566edc010a1245c13a879d248b7a32b280f33f67238d26bbd3a96e0c936f6ca
+generated_at: 2026-11-22T04:55:02.582607+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/fulfill.ts
 
 ## Purpose
-
-Implements the digital-fulfilment act: fulfilling a `digital` fulfillment order with no physical parcel. The shipment is cut and marked delivered in the same atomic write (mirroring Shopify's digital-line behaviour), the order is settled, and all announcements fire within one Mongoose transaction.
+Implements the "digital act": fulfilling a `digital` fulfillment order that has no parcel to carry. It cuts a tracking-less shipment that is created and delivered in the same write, and, when nothing else remains or is still out, completes the order in the same transaction. The order's withdrawal clock is counted from payment (digital content, Art. 9(2)(c)).
 
 ## Key elements
+- `fulfillFulfillmentOrder(fulfillmentOrderId, authContext, context)` (exported): the public entry point. It returns `ResponseSuccess<Shipment>` with the already-delivered shipment, or a `ResponseReject` naming the refusal.
+- `fulfillAct` (internal): the transactional body. Its steps run in this order:
+  - Read the fulfillment order together with its order.
+  - Check the preconditions.
+  - Cut the shipment.
+  - Start fulfillment.
+  - Report progress.
+  - Settle the order.
+  - Announce shipped and delivered.
+- `Fulfilled` (internal interface): `{ shipment, order }`, the result a committed act hands to the steps that follow.
 
-- **`Fulfilled`** (interface) — the tuple the act returns: the newly cut `ShipmentDocument` and the `OrderDocument`.
-- **`fulfillAct`** (internal) — the transactional core. Validates the order (must be `digital`, `isFulfillable`, open for shipment, caller permitted to start), then in sequence: `cutShipment` (with `delivered: true`, `takeStock: true`), `startFulfillment`, `reportProgress`, `settleOrder`, `announceShipped`, `announceDelivered`.
-- **`fulfillFulfillmentOrder`** (exported) — public entry point. Decides `mayStartFulfillment` *before* opening the transaction (retry-safe), runs the act via `runAct`, and on success refreshes the product shelf, records an audit entry, and wraps the result in `generateSuccess(viewShipment(…))`. On refusal, calls `auditUnearnedStart` and returns the reject.
+Refusals, all with status 409 except the unearned-start case handled by `refuseUnearnedStart`:
+- `ORDER_NOT_PROCESSING`: the order is not open for shipment.
+- `DELIVERY_NOT_DIGITAL`: the fulfillment order's kind is not `digital`.
+- `DELIVERY_NOT_SHIPPABLE`: `isFulfillable` is false.
 
 ## Relationships
-
-- **`src/modules/delivery/services/act.ts`** — provides `runAct` (transaction wrapper), `readWithOrder` (loads fulfillment order + parent order), and `refuse` (structured 4xx rejection).
-- **`src/modules/delivery/services/cut.ts`** — `cutShipment` creates the shipment document; called with `delivered: true` so the shipment is born final.
-- **`src/modules/delivery/services/ship-gate.ts`** — permission and state gates: `mayStartFulfillment`, `refuseUnearnedStart`, `isOpenForShipment`, and `auditUnearnedStart` (logs a denied start attempt).
-- **`src/modules/delivery/services/progress.ts`** — `startFulfillment`, `reportProgress`, `settleOrder` advance the order's lifecycle state within the same transaction.
-- **`src/modules/delivery/services/announce.ts`** — `announceShipped` and `announceDelivered` emit domain events after the shipment is cut.
-- **`src/modules/delivery/services/actions.ts`** — `viewShipment` serialises the shipment (with order context and caller's `actions`) into the API response shape.
-- **`src/modules/delivery/domain/fulfillment.ts`** — `isFulfillable` and `remainderLines` validate and select lines to ship.
-- **`src/modules/delivery/audit.ts`** — supplies `deliveryAuditActions` constants used in the audit log.
-- **`src/modules/orders/index.ts`** — `orderService.refreshShelf` updates product shelf counts post-fulfilment; also provides the `OrderDocument` type.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `ResponseSuccess` / `ResponseReject` shape the HTTP payload.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` writes the structured audit log entry.
-- **`src/modules/delivery/tests/unit/lost.test.ts`** — unit tests exercising the digital-fulfilment path.
+- **`./act`**: `runAct` wraps the transaction and yields either a refusal or a value. `readWithOrder` and `refuse` are used inside `fulfillAct`.
+- **`./cut`**: `cutShipment` creates the shipment. It is called with `delivered: true`, `forced: false`, `takeStock: true` and the remainder lines.
+- **`./progress`**: `startFulfillment`, `reportProgress` and `settleOrder` move the order's state forward and complete it.
+- **`./announce`**: `announceShipped` and `announceDelivered` emit both events for the one shipment.
+- **`./ship-gate`**: `mayStartFulfillment`, `isOpenForShipment`, `refuseUnearnedStart` and `auditUnearnedStart` gate the `start:Shipment` permission and audit refused unearned starts.
+- **`./actions`**: `viewShipment` builds the response, including the caller's `actions`.
+- **`../domain`**: `isFulfillable` and `remainderLines`.
+- **`../model`**: provides the `ShipmentDocument` type.
+- **`../audit`**: provides the delivery audit action constants used for the success audit entry.
+- **`@infrastructure/observability/audit`**: `recordAudit` writes the success audit entry.
+- **`@infrastructure/http/response`**: `generateSuccess` and the response types.
+- **`@modules/orders`** (`src/modules/orders/index.ts`): supplies the `OrderDocument` type and the order service used after the commit to refresh the shelf with the shipment's product ids.
 
 ## Notes
-
-- **Atomicity:** the shipment is created already-delivered; there is no intermediate "shipped" state persisted. `announceShipped` and `announceDelivered` are sequential calls *within* the same transaction, not separate writes.
-- **`mayStart` is pre-transaction:** the permission verdict is computed before `runAct` opens the session so that a retried transaction cannot flip the answer.
-- **`takeStock: true`:** even though no parcel moves, inventory is decremented (matches Shopify's digital-line semantics).
-- **Two gate checks:** `refuseUnearnedStart` guards the caller's permission; `isOpenForShipment` guards the order's state. Both must pass before any mutation.
-- **Shelf refresh is post-transaction:** `orderService.refreshShelf` runs *after* `runAct` resolves, so it is not part of the atomic unit.
+- `mayStart` is computed once, before the transaction opens, so a retried transaction cannot change the verdict.
+- From `paid`, the act itself makes the `start` move (`startFulfillment`), and it does so before `reportProgress` and `settleOrder` read the state.
+- The shelf refresh and the success audit run after the transaction, only on the success path. A refusal instead triggers `auditUnearnedStart` and returns the reject.
+- Refusals are not thrown out to the caller. `refuse` is called inside the transaction and `runAct` surfaces it as `result.refused`.

@@ -1,36 +1,35 @@
 ---
 source: scripts/eslint/controller-chain-must-catch.ts
-sha256: 9d19c3720059eb89f6bc7c50418720a9e118bce0448828ac6e9e81387ab47a9e
-generated_at: 2026-11-08T02:50:33.935036+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e4d2d2c99b12b16e9c950274264c74972add97b1f716eb62dcee53a1b61609d4
+context_sha256: 374891e5a2c6da5ee314aaa3ff97c193e60744f1ead2f21afd248453d42cfd60
+generated_at: 2026-11-22T02:05:51.401946+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/eslint/controller-chain-must-catch.ts
 
 ## Purpose
-
-A custom ESLint rule that flags promise chains in exported controller functions which call `.then()` but never terminate with `.catch()`. It exists because the global error handler in `app.ts` converts unhandled rejections into generic 500s, masking client errors as server faults, and because that net cannot perform per-domain cleanup (orphaned uploads) or record domain-specific metrics (failed checkouts).
+A custom ESLint rule, `controllerChainMustCatch`, that requires a promise chain started in a controller to end in `.catch()`. The global handler in `app.ts` hides a missing `.catch()` by answering a client-shaped status, but it can't do cleanup (e.g. orphaned uploads) or record domain metrics. It can also misreport errors: a malformed `productId` on `POST /orders` came back as 500 instead of a bad request.
 
 ## Key elements
-
-- **`controllerChainMustCatch`** — The exported rule (created via `RuleCreator.withoutDocs`). Reports a single message (`missing`) on the outermost call of a chain that includes `.then` but not `.catch`, is inside an exported function, and is not already governed by an outer handler.
-- **`chainMethods(call)`** — Walks inward from an outermost `CallExpression` collecting member-access names (e.g. `['then','then']`), stopping when the callee is no longer a `MemberExpression`.
-- **`HANDLER_METHODS`** — `Set` of `'then' | 'catch' | 'finally'`; used to identify promise-handler callback boundaries.
-- **`isPromiseCallbackFunction(node)`** — Type guard: node is an `ArrowFunctionExpression` or `FunctionExpression`.
-- **`insidePromiseHandler(node, parentOf)`** — Walks up ancestors; returns `true` if the chain sits inside a callback passed to any of the handler methods, meaning its rejection is already caught by the owning chain.
-- **`isEnclosingFunction(node)`** — Type guard covering `ArrowFunctionExpression`, `FunctionExpression`, and `FunctionDeclaration`.
-- **`grandparentOf(node, parentOf)`** — Two-level parent lookup (used to resolve a `VariableDeclarator` up to its `VariableDeclaration`).
-- **`insideExportedFunction(node, parentOf)`** — Walks up to find the outermost enclosing function, then checks whether that function is the target of an `ExportNamedDeclaration` or `ExportDefaultDeclaration`. Only exported (controller) functions are required to catch; private helpers delegate to their caller.
-- **`ParentOf`** — Type alias for `(node) => node | undefined`; a per-visit parent resolver built from `context.sourceCode.getAncestors()` because TSESTree does not type a `.parent` link.
+- `controllerChainMustCatch` (export): rule built with `ESLintUtils.RuleCreator.withoutDocs`. It has type `problem`, no options and a single message id, `missing`. On each `CallExpression` it builds a child-to-parent map from `context.sourceCode.getAncestors(node)`, then applies these checks in order:
+  1. Skip if the call is the `object` of a parent `MemberExpression`. Only the outermost call of a chain is judged.
+  2. Skip unless the chain's methods include `then` and do not include `catch`.
+  3. Skip if `insidePromiseHandler`.
+  4. Skip unless `insideExportedFunction`.
+  5. Otherwise report `missing` on the call.
+- `chainMethods`: collects method names of a call chain, from the outermost call inwards.
+- `insidePromiseHandler`: true if the node sits inside a function expression or arrow function passed to `.then`, `.catch` or `.finally`. That inner chain rejects into the owning chain, so it is not reported.
+- `insideExportedFunction`: finds the outermost enclosing function and checks that it is exported. It accepts a named or default export, or a `const` arrow or function expression held in an export. Only the exported handler is judged, because Express ignores a returned promise.
+- Helpers: `isPromiseCallbackFunction`, `isEnclosingFunction`, `grandparentOf`, the `HANDLER_METHODS` set, and the `ParentOf` type.
 
 ## Relationships
-
-- **`scripts/eslint/index.ts`** — Registers this rule in the project's custom ESLint plugin so it can be enabled in `.eslintrc` / flat config.
-- **`tests/unit/scripts/eslint/controller-chain-must-catch.test.ts`** — Unit tests that exercise the rule's `valid` / `invalid` cases against representative controller and helper code.
+- `scripts/eslint/index.ts`: a neighbor in the dependency graph. The rule is presumably registered there; the file's content doesn't show this.
+- `tests/unit/scripts/eslint/controller-chain-must-catch.test.ts`: a neighbor in the dependency graph, presumably the unit test for this rule.
 
 ## Notes
-
-- **Outermost-call guard:** The rule skips any `CallExpression` whose parent is a `MemberExpression` with `object === node`, so an inner `.then` within the same chain is not reported a second time.
-- **Exported-function scope:** Private helper functions that return a chain (e.g. in `post-reset-request.ts`) are deliberately exempt; their caller owns the `.catch`.
-- **Parent resolution:** A `Map` of parent links is built once per visited `CallExpression` from `getAncestors()` (which returns nodes from `Program` down to the node's immediate parent). This avoids repeated ancestor walks and works around TSESTree's missing typed `.parent`.
-- **No options:** `Options` is `[]`; the rule has a single fixed message and no tunable configuration.
+- The rule does not rely on a typed `.parent` link, because TSESTree does not type one. Parents are rebuilt per visited call from `getAncestors`.
+- Private helpers that return their chain are deliberately not flagged. The comments cite `post-reset-request.ts`, where the caller's `.catch` intentionally swallows the error so the response is identical for known and unknown emails.
+- Chains inside `.then`, `.catch` or `.finally` callbacks are exempt. Reporting them would ask for a `.catch()` on something already covered, which teaches people to silence the rule.
+- Only chains that contain `.then` are checked. A bare `.catch`-less call with no `.then` is not reported.
+- The rule itself does not decide which files count as controllers. That scoping must come from elsewhere, such as the ESLint config.

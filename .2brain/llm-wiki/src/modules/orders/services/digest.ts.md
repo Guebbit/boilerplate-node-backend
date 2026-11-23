@@ -1,32 +1,30 @@
 ---
 source: src/modules/orders/services/digest.ts
-sha256: 2c7d0d236bae63a2911d3774b0e2ea53ed81bd482b4eea96b58bcceab07d3702
-generated_at: 2026-11-14T20:42:42.237908+00:00
-model: ollama:qwen3.8:27b
+source_sha256: dfa5db7cb61b326ace6402a96b346947dc725861af5459b2a8a7bd369707a9c9
+context_sha256: e96b416dad3f97db60464ce310c5acecfd94f25ea2a15f69b5b0cd677f943893
+generated_at: 2026-11-22T06:20:01.623588+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/digest.ts
 
 ## Purpose
-
-Provides the order-side counts for the daily staff digest: bank-transfer orders approaching or past their `payBy` deadline, and paid orders still awaiting shipment beyond a configurable allowance. Also exposes a small lookup for the shipping method each order froze at checkout. The digest holds counts only—no order records are returned.
+Computes the two order-side figures for the daily staff digest: bank transfers about to lapse and paid orders that have not shipped. It returns counts only, so the digest holds no order data. It also provides a helper to look up the shipping method each order froze at checkout.
 
 ## Key elements
-
-- **`OrdersDigest`** (interface) — the two-count shape: `transfersDue` (bank-transfer, pending, `payBy` within window or overdue) and `unshipped` (awaiting shipment longer than the allowance).
-- **`ordersDigest(now, { transferHours, unshippedDays })`** — fires two `orderRepository.count` queries in parallel via `Promise.all` and returns an `OrdersDigest`. The transfer window is measured forward from `now`; the unshipped window is measured backward from `now`.
-- **`shippingMethodsOf(orderIds)`** — resolves a `Map<string, string | undefined>` of order ID → frozen shipping-method ID. Returns an empty map immediately for an empty input array.
+- `OrdersDigest` – interface with `transfersDue` and `unshipped` counts.
+- `ordersDigest(now, { transferHours, unshippedDays })` – runs two `orderRepository.count` queries in parallel and resolves to an `OrdersDigest`:
+  - `transfersDue`: orders with status `pending`, payment method `bank_transfer`, `deletedAt: null`, and `payBy` at or before `now + transferHours`. This includes `payBy` dates already past.
+  - `unshipped`: orders matching `fulfillmentStatusFilter('awaiting_shipment')`, not deleted, with `paidAt` at or before `now - unshippedDays`.
+- `shippingMethodsOf(orderIds)` – returns a `Map` from order id (as a string) to the order's `shippingMethod`. The method is `undefined` if the order froze none. An empty input returns an empty map without querying.
 
 ## Relationships
-
-- **`src/domain-primitives/time.ts`** — imports `DAY_MS` and `HOUR_MS` to convert the hour/day allowances into millisecond offsets for the Mongo queries.
-- **`src/modules/orders/domain/fulfillment.ts`** — imports `fulfillmentStatusFilter('awaiting_shipment')` to build the compound `$and` filter for the unshipped count; this is the same predicate the digest's "awaiting shipment" link uses.
-- **`src/modules/orders/repository.ts`** — imports `orderRepository` and calls its `count` (twice) and `findByIds` methods.
-- **`src/modules/orders/services/index.ts`** — barrel file for the orders services; this module is re-exported through it.
+- `src/domain-primitives/time.ts` – supplies `HOUR_MS` and `DAY_MS` for the window arithmetic.
+- `src/modules/orders/domain/fulfillment.ts` – supplies `fulfillmentStatusFilter`. The `unshipped` count uses it so it matches the set opened by the digest link (`fulfillmentStatus=awaiting_shipment`).
+- `src/modules/orders/repository.ts` – supplies `orderRepository`, which is used for `count` and `findByIds`.
+- `src/modules/orders/services/index.ts` – a sibling in the services directory. The file content does not show how it uses this module.
 
 ## Notes
-
-- Both `count` queries explicitly include `deletedAt: null` to exclude soft-deleted orders.
-- `transfersDue` uses `payBy <= now + transferHours` (i.e., the deadline has arrived *or* is within the window), while `unshipped` uses `paidAt <= now - unshippedDays` (i.e., the order is *older* than the allowance). The asymmetry (forward vs. backward from `now`) is intentional.
-- `shippingMethodsOf` may map an order to `undefined` if no shipping method was frozen at checkout; callers must handle the optional value.
-- The transfer query hard-codes `status: 'pending'` and `paymentMethod: 'bank_transfer'` rather than deriving them from the domain layer—intentional, since these are literal digest criteria, not a general fulfillment status.
+- `now` is passed in rather than read from the clock, so the windows are measured from a caller-supplied instant.
+- Both counts exclude soft-deleted orders (`deletedAt: null`).
+- The module header points to the staff-digest section of the shop-tasks documentation; the related code lives in `src/modules/shop-tasks/module.ts`.

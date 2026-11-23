@@ -1,32 +1,34 @@
 ---
 source: src/modules/cart/domain/merge.ts
-sha256: 58159e66d9ad1b02587b7f211e57ee567df73174ee39cad2970694a8b5d6cba6
-generated_at: 2026-11-14T19:28:34.203489+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b0bbe987a19d5ab11945d6348a7a79ceebe102c78041302cad094ef4e57e09bd
+context_sha256: 30991d58a72d979bef67e8da0d21dd7b836944562ced01c26ad5488c86cc3536
+generated_at: 2026-11-22T04:32:20.840849+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/domain/merge.ts
 
 ## Purpose
-
-Pure domain rule that decides how many units a single guest line adds to a cart, given the current cart state and the product's listing status. It exists to keep the merge calculation free of I/O—no catalogue lookups, no model access—so the cap and listing flag are supplied by the caller.
+Pure cart-merge rule: decides what a single guest cart line becomes, given what the cart already holds and whether the product is listed. The per-line cap and line limit are passed in as data, so this layer touches neither the catalogue nor the model.
 
 ## Key elements
-
-- **`MergeLineFacts`** (interface) — Input bundle: `requested`, `held`, `listed`, `lineMax`, `lines`, `maxLines`.
-- **`MergePlan`** (interface) — Output: `add` (units to write, `0` = write nothing) and optional `reason` (`MergeLineReason`).
-- **`planMergeLine(facts): MergePlan`** — The sole function. Evaluates, in order: unlisted → `removed`; new line with no slot → `cart_full`; over-cap → `capped`; already-held increase → `summed`; otherwise no reason. Returns the computed `add` count.
+- `MergeLineFacts` (interface): input for one line. It carries `requested`, `held`, `listed`, `lineMax`, `lines` (current line count) and `maxLines`.
+- `MergePlan` (interface): the verdict. `add` is the units to add (`0` writes nothing). `reason` is optional and absent when the line lands exactly as asked.
+- `planMergeLine(facts)`: the only function. It returns a `MergePlan`. The rule runs in this order:
+  1. Product not `listed`: `{ add: 0, reason: 'removed' }`.
+  2. New product (`held === 0`) and `lines >= maxLines`: `{ add: 0, reason: 'cart_full' }`.
+  3. Otherwise `wanted = held + requested` and `target = min(wanted, lineMax)`, so `add = target - held`.
+  4. If `target < wanted`, the reason is `capped`. Else if `held > 0`, it is `summed`. Else there is no reason.
 
 ## Relationships
-
-- **`src/types/index.ts`** — Source of the `MergeLineReason` type imported for `MergePlan`.
-- **`src/modules/cart/domain/index.ts`** — Barrel file; re-exports this module so the rest of the domain can import `planMergeLine` and its interfaces.
-- **`src/modules/cart/services/merge.ts`** — Service-layer caller that assembles the `MergeLineFacts` (fetching listing status, cart state, catalogue cap) and invokes `planMergeLine`, then performs the side-effects (persistence, stock flagging via `fitsStock`).
-- **`src/modules/cart/tests/unit/merge-rule.test.ts`** — Unit tests exercising `planMergeLine` across all reason branches.
+- `src/types/index.ts`: supplies the `MergeLineReason` type (imported as `@types`) for the optional reason on a plan.
+- `src/modules/cart/domain/index.ts`: the domain layer's index, a neighbor of this file.
+- `src/modules/cart/services/merge.ts`: a neighbor in the dependency graph. By the module doc, the caller supplies the facts and the cap, and flags stock through `fitsStock`.
+- `src/modules/cart/tests/unit/merge-rule.test.ts`: unit tests for the rule.
 
 ## Notes
-
-- **Stock is intentionally absent.** A sold-out line is added the same as any other; the caller is expected to flag inventory separately. The doc comment explicitly warns against lowering the line to available stock, as that would enable an exact-stock read via a large `requested` value (see `docs/theory/defences/authorization.md`).
-- **Reason priority is fixed and ordered:** `removed` > `cart_full` > `capped` > `summed`. Only one reason is ever reported.
-- **`summed` is informational, not an error.** It simply indicates the line merged into an existing holding. `capped` signals the shopper received fewer units than asked.
-- **`add` can be `0` without a `reason`** only in the theoretical case where `requested` is `0`; the two `0`-add branches (`removed`, `cart_full`) always carry a reason.
+- Stock is deliberately ignored. A sold-out or short product is added like any other and flagged by the caller via `fitsStock`. Lowering the line to what is for sale would let a caller read exact stock by merging 999.
+- Only deleted or hidden products count as unlisted. A product that is merely off sale is listed and takes a line.
+- When several reasons apply, the first in this order is reported: `removed`, `cart_full`, `capped`, `summed`. `capped` means the shopper got less than they asked for. `summed` is only context.
+- The `cart_full` check applies only to new products (`held === 0`). Adding to an existing line never hits it.
+- The merge mirrors what `POST /cart/items` would add, no more.

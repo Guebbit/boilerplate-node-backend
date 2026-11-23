@@ -1,33 +1,31 @@
 ---
 source: src/modules/products/tests/unit/factories.test.ts
-sha256: c21b25232c08f6a5e6c573a00aea150d48afaead8027b858e985317a8c73a9c8
-generated_at: 2026-11-08T07:54:00.999843+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d8c4f2cd057d9071968a54090e0071e82ec3af38c890407c0f04bd8733a0c78f
+context_sha256: a772ac7910a9abb0f860d20e31133a11adcf909f97811e661d02987aebe47ab7
+generated_at: 2026-11-22T07:19:14.657397+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/unit/factories.test.ts
 
 ## Purpose
-
-Unit tests for the `makeProduct` catalogue fixture builder. They pin down the override/defaults contract: which fields are required, how `stripUndefined` interacts with Mongoose `default:` values, how falsy overrides are preserved, and how soft-delete dates are coerced. Because `scenarios/products.ts` reuses `makeProduct` to seed the shipped demo catalogue, these tests also guard the live seed path.
+Unit tests for `makeProduct`, the catalogue fixture builder in `src/modules/products/factories.ts`. The builder is not test-only: `scenarios/products.ts` also uses it to seed the shipped demo catalogue, so a defect in it reaches every seeded product. The tests pin down the rule that any field a record doesn't state is left to the schema's `default:`.
 
 ## Key elements
-
-- **`describe('makeProduct')`** — the sole suite; every case calls `makeProduct` (imported from `@modules/products/factories`) with various override shapes and asserts on the resulting document.
-- **Bare-fixture test** — verifies the two schema-required fields (`title`, `price`) are present and an `_id` is generated, so *any* downstream `makeProduct()` call yields a valid document.
-- **`id` override test** — confirms a supplied hex string becomes the document's real `ObjectId`.
-- **Override-replaces-default test** — `title` and `price` can be swapped to arbitrary values.
-- **`stripUndefined` / omitted-field test** — asserts that keys a caller did *not* supply (`active`, `onHand`, `reserved`, `categories`, `tags`, `description`) are **not present** on the object, so Mongoose defaults still fire.
-- **Falsy-override test** — `active: false` and `onHand: 0` survive; the stripping logic keys on `undefined`, not falsiness.
-- **`deletedAt` coercion test** — an ISO-string input is stored as a `Date` instance.
-- **Timestamp derivation test** — when no explicit `createdAt` is given, the fixture back-fills it from the `ObjectId`'s embedded 32-bit timestamp.
+- `HEX` — a fixed valid ObjectId string (`65dc8a99604c307b702b5ccc`) so expectations can name the id.
+- `describe('makeProduct')` cases:
+  - **No overrides:** `_id` is a `Types.ObjectId`, `title` is `'Test Product'` and `price` is `'9.99'`. These are the schema's two required fields.
+  - **Id handling:** a given `id` string becomes a real ObjectId whose string form equals the input.
+  - **Overrides:** `title` and `price` overrides replace the defaults.
+  - **Omitted fields:** `active`, `onHand`, `reserved`, `categories`, `tags` and `description` are absent as keys (`Object.hasOwn` is false). This is the behavior `stripUndefined` provides, because a key present as `undefined` blocks Mongoose's schema default (e.g. `active: true`).
+  - **Falsy overrides:** `active: false` and `purchasable: false` are kept rather than dropped, so the stripping must test for `undefined` and not falsiness.
+  - **Soft-delete conversion:** a `deletedAt` ISO string becomes a `Date` with the same ISO value (the `toDate` conversion).
+  - **Timestamps:** with no timestamps stated, `createdAt` equals the timestamp embedded in the record's own ObjectId.
 
 ## Relationships
-
-- **`src/modules/products/factories.ts`** — the single production dependency. This file imports `makeProduct` and asserts its output shape; it does not import anything else from the factory module.
+- Imports `makeProduct` from `@modules/products/factories` (`src/modules/products/factories.ts`), the only unit under test.
+- Imports `Types` from `mongoose` for the `ObjectId` and `Date` assertions.
 
 ## Notes
-
-- The stripping rule is the most load-bearing behavior: a key present as `undefined` would block Mongoose's `default:` from applying. Tests explicitly verify the key is *absent*, not merely `undefined`.
-- The `HEX` constant (`65dc8a99604c307b702b5ccc`) is a fixed `ObjectId` used across three tests; its 32-bit timestamp prefix is what the "dates from its own id" test depends on.
-- The file's module doc comment warns that a defect in `makeProduct` propagates into the shipped demo catalogue via `scenarios/products.ts`—these tests are therefore a guard for production seed data, not just unit-level assertions.
+- The tests assert on the returned plain object's keys, so adding a default for a field the schema already defaults would fail the "omits unspecified fields" test.
+- Seed files state dates as ISO strings, while the schema stores `Date`. The conversion test covers that mismatch.

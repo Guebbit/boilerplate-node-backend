@@ -1,40 +1,47 @@
 ---
 source: src/modules/api-keys/services/resolver.ts
-sha256: 11cc02568d30a368780881f6a6b1dceaf64210bfd9f6cd3a6738d61086d19964
-generated_at: 2026-11-08T05:04:45.039997+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4329a98f57aa8a182846e51cebf26d80ab5d55d176a9abd9ea4fc7c5c06bb82d
+context_sha256: edc5ff2a45e3bde2c907abf0dac97451b975120659c15c1954d27dd1342520aa
+generated_at: 2026-11-22T04:23:43.434412+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/api-keys/services/resolver.ts
 
 ## Purpose
-
-The credential-resolution path for `sk_...` API key bearer tokens. It turns a presented token into a `Caller` by verifying the key against the repository and re-deriving the minter's **current** permissions on every request. Registered into `kernel/authentication.ts` by `module.ts` at import time; this file contains the actual resolution logic.
+Implements the `CredentialResolver` that the api-keys module installs into `src/kernel/authentication.ts`. It turns a presented `sk_...` bearer token into the `Caller` it names. The caller is re-floored against the minter's *current* permissions on every request. `module.ts` only registers the result (from `onRegistered`); the resolution logic lives here.
 
 ## Key elements
+- **`fromBearerToken(token)`** (exported): the verify path. It runs these steps in order:
+  1. Parse the token. If it is malformed, it returns `{ miss: 'malformed' }`.
+  2. Look up the active key by public prefix.
+  3. Verify the hash.
+  4. Re-derive the minter's current caller.
+  5. Stamp last-used times.
+  6. Intersect the key's stored permissions with the minter's currently held rules.
+  7. Return `{ ok: { caller, credentialId } }`.
 
-- **`fromBearerToken(token)`** *(exported)* — Entry point. Parses the token, looks up the active key by public prefix, verifies the hash, re-floors permissions against the minter's live state, and returns `Resolution<ResolvedCredential>`. Every failure mode (malformed, unknown prefix, wrong secret, revoked, expired, minter gone) resolves to a `{ miss }` object; it never throws.
-- **`currentCallerOf(apiKey)`** *(internal)* — Re-derives the minter's current `Caller` by calling `userService.findAuthenticatableById` → `accessService.rolesOf` → `keysInScope` → `assembleCaller`. Returns `undefined` if the minter no longer exists in an authenticatable state.
-- **`missFor(token, publicPrefix)`** *(internal)* — Distinguishes `invalid_signature` (no row or wrong hash) from `revoked`/`expired` (a matching secret on a retired row), so an unknown prefix is indistinguishable from a never-minted one.
+  Every refusal resolves a `{ miss }` and none throws.
+- **`currentCallerOf(apiKey)`** (private): looks up the minter through the users service. It returns `undefined` if the minter is deactivated, soft-deleted or gone. Otherwise it reads the minter's roles through the access service. The staff `roles.tenant` counts only if `authenticatorEnabledAt` is set. It then builds the caller with `keysInScope` and `assembleCaller`.
+- **`missFor(token, prefix)`** (private): runs when no *active* key matches. It uses `findAnyByPrefix` and returns `revoked` or `expired` only if the presented secret matches the retired row's hash. Otherwise it returns `invalid_signature`, so a guessed prefix looks the same as a never-minted one.
 
 ## Relationships
-
-- **`src/kernel/authentication.ts`** — This file is the resolver that module invokes; it imports `Resolution` and `ResolvedCredential` types from it.
-- **`src/kernel/permissions.ts`** — Uses `keysInScope` (permission derivation), `isRuleId` (filtering stored permission strings), and `assembleCaller` (building the final `Caller`).
-- **`src/kernel/ability.ts`** — Uses `heldRules` to read the rule set the CASL ability was constructed from, then intersects it with the key's stored permissions.
-- **`src/modules/api-keys/repository.ts`** — Calls `apiKeyRepository.findActiveByPrefix`, `findAnyByPrefix`, and `touchLastUsed`.
-- **`src/modules/api-keys/credentials.ts`** — Calls `parseApiKeyToken`, `verifyApiKey`, and `displayIdOf`.
-- **`src/modules/api-keys/model.ts`** — Imports `ApiKeyDocument` type.
-- **`src/modules/users/index.ts` / `src/modules/users/services/index.ts`** — Calls `userService.findAuthenticatableById` and `touchApiKeyUse`.
-- **`src/modules/access/index.ts` / `src/modules/access/services/index.ts`** — Calls `accessService.rolesOf` to get the minter's current roles.
-- **`src/infrastructure/adapters/logger.ts`** — Logs warnings for fire-and-forget stamp failures.
-- **`src/types/auth-context.ts` / `src/types/index.ts`** — Imports the `Caller` type.
+- **`src/kernel/authentication.ts`**: supplies the `Resolution` and `ResolvedCredential` types. `resolveCredential` there consumes the `{ miss }` / `{ ok }` outcomes.
+- **`src/kernel/permissions.ts`**: provides `isRuleId`, `keysInScope` and `assembleCaller`.
+- **`src/kernel/ability.ts`**: `heldRules` reads the rules the minter's CASL ability was built from.
+- **`src/modules/access/index.ts`**: provides `accessService`, used to read the minter's roles.
+- **`src/modules/users/index.ts`**: provides `userService`, used to load the minter and to mark the minter active (which the inactivity reaper reads).
+- **`src/modules/api-keys/repository.ts`**: `findActiveByPrefix`, `findAnyByPrefix` and `touchLastUsed`.
+- **`src/modules/api-keys/credentials.ts`**: `verifyApiKey`, `parseApiKeyToken` and `displayIdOf`.
+- **`src/modules/api-keys/model.ts`**: provides the `ApiKeyDocument` type.
+- **`src/infrastructure/adapters/logger.ts`**: logs a warning when a last-used stamp fails.
+- **`src/types/index.ts`**: provides the `Caller` type.
+- **`src/modules/api-keys/module.ts`**: registers `fromBearerToken` as the resolver.
 
 ## Notes
-
-- **Never trusts the key's stored permission snapshot.** Permissions are re-derived from the minter's live roles on every request; a demoted minter immediately loses the delta on the next call.
-- **`findAuthenticatableById`, not `findById`.** A deactivated or soft-deleted minter stops granting access on their very next request, not at next login. An unban/restore revives the key without touching the document.
-- **Staff role is conditional.** The minter's tenant staff permissions only apply if `authenticatorEnabledAt` is set — a key never exceeds what the person holds in their own session.
-- **Floor against stranger baseline.** The final permission set is unioned with `keysInScope(null, 'tenant')` so a key can never see *less* than the public storefront.
-- **Fire-and-forget stamps.** `touchLastUsed` and `touchApiKeyUse` are `void`-ed with a `.catch` that logs via `logger.warn`; a lost stamp costs only a stale reading, never a failed request.
-- **No thrown errors.** All refusal paths resolve to a discriminated `{ miss }` union member, matching the contract `kernel/authentication.ts#resolveCredential` expects.
+- **Subset rule:** a key never holds more than its minter does. The key's stored permission snapshot is never trusted as-is. It is filtered through `heldRules(currentCaller)`, using the literal rules. For example, a minter who is now only a customer holds `read:Order`, not `display:Order`.
+- **Baseline permissions:** the final permission set is the held rules unioned with `keysInScope(null, 'tenant')`, the stranger baseline. This keeps public-storefront read scopes working for keys minted for something else.
+- **Minter removal:** a missing minter (banned, soft-deleted, erased) yields `revoked`. It does so before any stamping, and an unban or restore brings the keys back untouched.
+- **Fire-and-forget stamps:** the last-used stamp on the key and the minter's activity stamp are not awaited. Rejections are caught and logged as warnings so they never surface as unhandled rejections.
+- **Deliberate lookup choice:** the minter is loaded with `findAuthenticatableById` instead of `findById`, so a deactivated minter loses access on their next request rather than at their next login.
+- **Mint-time counterpart:** a comment points to the mint-time half of the subset rule in a separate api-keys service file; it is not imported here.

@@ -1,37 +1,56 @@
 ---
 source: src/modules/products/openapi.yaml
-sha256: 429375a36eb855cbfea9f588f85fce30694e55d5aa6bec5dbbb73ffc0bfbc92a
-generated_at: 2026-11-14T21:25:05.140078+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:11:06.546963+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 contract for the **Products** module (tag `Products`, family `Catalogue`). It defines the HTTP surface for browsing, filtering, creating, reading, replacing, patching, and soft-deleting products and their catalogue facets. It is the single source of truth that clients, gateway docs, and the bundler middleware all consume.
+OpenAPI 3.1 contract for the `products` module (version `0.1.0`). It defines the catalogue's HTTP surface: listing, searching, creating and reading products, and replacing them. It also covers per-operation security, caching behavior and error codes. Shared parameters, responses, headers and schemas are `$ref`'d from `shared/contracts/openapi.root.yaml`.
 
 ## Key elements
-
-- **`tags[Products]`** – names the module under `x-family: Catalogue`; every operation in this file files itself under this tag.
-- **`x-error-codes.PRODUCT_NOT_DELETED`** – module-level 409 sentinel for the restore/undo path.
-- **`GET /products`** – paginated listing. Accepts `sort` (JSON:API grammar), `category`, `tag`, `priceMin/Max`, `title`, `active`, `purchasable`, `deleted`. Cache-Control varies by caller privilege level (public 1 h cache → private no-store for draft preview).
-- **`POST /products`** – create with `Idempotency-Key` header; accepts `application/json` *or* `multipart/form-data` (image upload). Requires `create:Product` + `update:Translation`. A new product starts with **zero stock**; units enter only via the inventory module's receive endpoint.
-- **`GET /products/facets`** – returns every public category and tag with product counts, sorted by count desc. Fully public, `max-age: 3600`.
-- **`GET /products/{id}`** – single-product detail. Body is caller-shaped: `read:Translation` adds the `translations` array; `display:Locale` enables draft-language preview. Equivalent to `GET /products?id={id}`.
-- **`PUT /products/{id}`** – full-replace (RFC 9110 §9.3.4). Omitted optional scalars are *cleared*, not preserved. Image is outside the representation.
-- **`x-versioned`** on `/products` (POST) and `/products/{id}` (GET/PUT/PATCH/DELETE) – signals the bundler to inject `ETag`/`Content-Location` on responses and `If-Match` + 412 on writes.
-- **Shared `$ref`s** – pagination, text search, id, idempotency-key, standard 401/403/404/409/422/429 responses, `NonNegativeDecimalAmount`, `Location` header all resolve from `../../../shared/contracts/openapi.root.yaml`.
+- **Tag `Products`** (`x-family: Catalogue`) is the single tag all operations file under.
+- **`x-error-codes`** at the top level declares `PRODUCT_NOT_DELETED` (409), which is returned when a restore targets a product that is not soft-deleted. Individual operations also carry their own `x-error-codes`, e.g. `createProduct` lists `IDEMPOTENCY_IN_FLIGHT` (409) and `IDEMPOTENCY_KEY_MISMATCH` (422).
+- **`GET /products`** (`listProducts`)
+  - Paginated and public, and also accepts bearer or API key auth.
+  - Uses the shared `PageParam`, `PageSizeParam`, `TextParam` and `IdParam` parameters.
+  - Adds a `sort` query (`ProductSort`, JSON:API style `-price,title`, comma-separated, `form`/`explode: false`).
+  - Adds filters `category`, `tag`, `priceMin`, `priceMax`, `title`, `active`, `purchasable` and `deleted`.
+  - Returns `ProductsResponse`.
+- **`POST /products`** (`createProduct`)
+  - Requires `create:Product` and `update:Translation`, via bearer or API key.
+  - Takes an `Idempotency-Key` header.
+  - Accepts `application/json` (`CreateProductRequest`) or `multipart/form-data` (`CreateProductRequestMultipart`).
+  - Returns 201 with a `Location` header and a `Product` body.
+  - Also documents 401, 403, 409, 422 and 429.
+- **`GET /products/facets`** (`getCatalogFacets`)
+  - Public, with no security requirement.
+  - Returns categories and tags with visible-product counts (`CatalogFacetsResponse`), sorted by count descending and then by name.
+  - Counts are catalogue-wide and do not follow the filters already chosen.
+- **`/products/{id}`**
+  - `GET` (`getProductById`) is public, with optional bearer or API key auth, and returns `Product`.
+  - `PUT` ("Replace product") appears in the visible part of the file, where it is described as a full replacement.
+- **`components/schemas`** are referenced locally, e.g. `ProductSort`, `ProductsResponse`, `Product`, `CreateProductRequest`, `CreateProductRequestMultipart` and `CatalogFacetsResponse`.
 
 ## Relationships
-
-- **`src/modules/products/authorization.yaml`** – defines the scope/permission names (`create:Product`, `update:Translation`, `read:Translation`, `display:Locale`, `create:StockMovement`, etc.) that this spec's `security` blocks and per-operation descriptions reference. Changes to scope names in that file must be mirrored here or authorization checks will break.
+- **`authorization.yaml`** sits beside this file in the module. The `security` blocks here use permission scopes such as `create:Product`, `update:Translation`, `read:Translation` and `display:Locale`, which authorization rules would govern.
+- **`openapi.browser-events.yaml`** is a sibling contract for the same module. This file does not reference it in the visible portion.
 
 ## Notes
-
-- **Caller-shaped bodies vs. caching.** The spec deliberately ties `Cache-Control` to privilege: a guest-level body is shared-cacheable (`public, max-age=3600`); any caller who sees extra fields (inactive products, stock, translations) gets `private, no-cache`; a draft-language preview gets `private, no-store`. Tooling that assumes a single cache policy per route will be wrong.
-- **`deleted` filter is admin-effective.** Passing `deleted=true` without the right to see soft-deleted rows yields an empty page, not a 403.
-- **`category` / `tag` appear twice** – as query params on `GET /products` *and* inside `SearchProductsRequest`. The controller merges both sources, so they are intentionally redundant.
-- **Sort syntax is JSON:API, not OpenAPI default.** `?sort=-price,title` (comma-separated, `-` prefix = descending). A client that emits OpenAPI-style sort arrays will be rejected.
-- **Image is never in the PUT/patch representation.** It is handled exclusively by the multipart create path and (presumably) a dedicated upload endpoint.
-- **Stock is out of scope.** This spec does not expose inventory endpoints; it only documents the invariant that a product's stock is always 0 at creation and enters via the inventory module.
+- **Bundler extensions.** `x-versioned` on a path lists the methods that a bundler augments. On `/products` it covers `post`. On `/products/{id}` it covers `get`, `put`, `patch` and `delete`, adding `If-Match`, a 412 response and `ETag`. `x-cache` (`revalidate`, `max-age: 3600`) is a custom caching hint.
+- **Shared components.** Parameters, responses (`Unauthorized`, `Forbidden`, `Conflict`, `ValidationError`, `TooManyRequests`, `NotFound`), the `Location` header and the `NonNegativeDecimalAmount` schema come from `shared/contracts/openapi.root.yaml`.
+- **Caller-dependent bodies and caching.**
+  - On `GET /products`, `Cache-Control` is `public, no-cache` for guest-equivalent callers.
+  - It is `private, no-cache` for staff who see more, and `private, no-store` for a draft-language preview.
+  - A body that differs by caller is never stored in the shared cache.
+  - Per-row `actions` are all `false` for callers answered from the shared cache.
+- **Duplicate filters.** `category`, `tag` and the price filters are declared both here as query parameters and in `SearchProductsRequest`. The controller merges query and body, so `GET /products?category=x` and `POST /products/search {category}` are the same filter.
+- **Creation rules.**
+  - The fallback locale (`NODE_FALLBACK_LOCALE`) must be present and non-null in `translations`.
+  - New products start with no stock. Units are added only through `POST /inventory/levels/{productId}/receive`, which needs `create:StockMovement`.
+- **Query semantics.**
+  - `deleted=true` returns an empty page for callers who cannot see deleted rows.
+  - `purchasable` is open to every caller.
+- **Upload limiting.** `POST /products` sits behind `uploadLimiter`, which is defined in `routes.ts`.
+- **PUT semantics.** `PUT` requires every writable scalar field except `taxClass`, `rateType`, `sku`, `weight`, `releaseDate` and `restockDate`. Omitting one of those six clears it.

@@ -1,34 +1,29 @@
 ---
 source: src/modules/account/tests/unit/session-id.test.ts
-sha256: febf66d6eaab269dba1fddbebd01fbf0a3c2e17bc6990478dc81c9622ca04f68
-generated_at: 2026-11-08T04:49:37.240500+00:00
-model: ollama:qwen3.8:27b
+source_sha256: febf66d6eaab269dba1fddbebd01fbf0a3c2e17bc6990478dc81c9622ca04f68
+context_sha256: c3a81b0e773073beff1bac51e2aede31c846fd37b08c07f252e0e9f997be5811
+generated_at: 2026-11-22T04:08:18.322486+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/session-id.test.ts
 
 ## Purpose
-
-Unit tests for the cookie-mode session ID primitives (`newSessionId`, `looksLikeSessionId`). Because the kernel dispatches on the token's shape and 256 bits of entropy underpin its security, the tests assert both structural invariants (prefix, length, alphabet) and behavioral ones (uniqueness, non-collision with JWTs/machine keys, at-rest hashing) rather than relying on implementation details.
+Unit tests for the opaque session id used by `cookie` mode authentication. They verify the id's shape (which the kernel dispatches on) and its entropy, asserting both explicitly instead of assuming them.
 
 ## Key elements
-
-- **`describe('newSessionId')`** — four assertions against `newSessionId()`:
-  - Shape: starts with `SESSION_TOKEN_PREFIX`; remainder matches `^[\w-]{43}$` (32 random bytes, base64url).
-  - Uniqueness: 500 consecutive calls yield 500 distinct values (practical, not cryptographic, check).
-  - Non-collision: output never starts with `eyJ` (JWT) or `sk_` (machine key), preserving the kernel's prefix-based dispatch.
-  - At-rest safety: `hashToken(id)` ≠ `id` and matches `^[\da-f]{64}$` (SHA-256 hex), confirming a database read cannot be replayed.
-- **`describe('looksLikeSessionId')`** — table-driven (`it.each`) checks that the discriminator returns `true` only for the valid `ses_` prefix, and `false` for JWTs, API keys, empty strings, and a prefix embedded mid-string (`x_ses_abc`).
+- `describe('newSessionId')`:
+  - Id is `SESSION_TOKEN_PREFIX` followed by 43 base64url characters (32 random bytes), so no signing secret is needed.
+  - 500 generated ids are all distinct.
+  - Id never starts with `eyJ` (JWT) or `sk_` (machine key), so the guard can dispatch on it.
+  - `hashToken(id)` differs from the id and is a 64-char lowercase hex digest, so a database read cannot be replayed as a session.
+- `describe('looksLikeSessionId')`: a table-driven (`it.each`) check that `ses_abc` is accepted, while a JWT, an API key, an empty string, and a value with the prefix in the wrong place (`x_ses_abc`) are rejected.
 
 ## Relationships
-
-- **`src/modules/account/session/session-id.ts`** — the system under test; provides `newSessionId` and `looksLikeSessionId`.
-- **`src/kernel/authentication.ts`** — supplies `SESSION_TOKEN_PREFIX`, the constant the tests use to validate the leading segment.
-- **`src/infrastructure/security/hash-token.ts`** — supplies `hashToken`, used to verify the at-rest digest property and its hex-64 output shape.
+- `src/modules/account/session/session-id.ts`: the unit under test (`newSessionId`, `looksLikeSessionId`).
+- `src/kernel/authentication.ts`: supplies `SESSION_TOKEN_PREFIX`, which the tests use to check the id's prefix.
+- `src/infrastructure/security/hash-token.ts`: supplies `hashToken`, used to check that the stored form is a digest rather than the raw id.
 
 ## Notes
-
-- The 43-character base64url assertion encodes a 32-byte (256-bit) entropy contract; a regression in `crypto.getRandomValues` length would be caught here.
-- The uniqueness test (500 calls) is a practical smoke check, not a birthday-bound proof — it catches accidental deterministic output.
-- The collision guards are prefix-based (`eyJ`, `sk_`), matching the kernel's dispatch strategy; they do not prove cryptographic separation.
-- `looksLikeSessionId` is expected to be a *shape check only* (prefix + length), not a validity/revocation check — the table cases confirm it rejects structurally similar tokens without parsing them.
+- The uniqueness test is a probabilistic sanity check over 500 samples, not a proof of entropy.
+- The `looksLikeSessionId` cases use the literal `ses_` prefix, which implies `SESSION_TOKEN_PREFIX` is `ses_`. That test does not import the constant.

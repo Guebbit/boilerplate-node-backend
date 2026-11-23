@@ -1,33 +1,53 @@
 ---
 source: src/modules/account/tests/unit/routes.test.ts
-sha256: 90f07880cf5434428b9a60976b9ff06eaf729354802094c1c8114031d1e8fc1e
-generated_at: 2026-11-14T19:16:19.013206+00:00
-model: ollama:qwen3.8:27b
+source_sha256: abd0778bb46d5cfd829e62942151fced879b4f65cc04bfe8efd2d5a149553210
+context_sha256: 6ea2c6abeda5b58f1f55b679ea2718dddaa9f38c5e53f3b6f5e8e3a5144f7691
+generated_at: 2026-11-22T04:08:06.368260+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/routes.test.ts
 
 ## Purpose
-Locks in the security-relevant invariants of the account Express router: exact endpoint order, per-route middleware placement (`noStore`, `isAuth`, rate-limit budgets, mail budget, human-challenge gate), and the deliberate public exposure of token-bearing credential routes. It exists because these arrangements are invisible to TypeScript and a silent reordering would be an account-takeover vector.
+Unit tests that pin the structure of the account module's Express router (`src/modules/account/routes.ts`). The file's header states that three arrangements matter most and are invisible to the type checker: `router.use(noStore)` must cover every route, credential routes must carry all of their rate-limit budgets, and token-bearing routes must stay public because the token is the credential. The tests inspect the router's mounted routes and middleware chains rather than making HTTP requests.
 
 ## Key elements
-- **`TOKEN_BEARING`** – list of routes whose credential is a URL/cookie token, not an access token; asserted public (no `isAuth`).
-- **`RATE_LIMITED`** – routes that must carry all four `credentials-*` budget limiters; the expected order is identity (or signed-in) → device → address → block.
-- **`SESSION_KEYED`** – subset of `RATE_LIMITED` where the first budget is `credentials-signed-in`; asserted that `isAuth` runs *before* that limiter.
-- **`AUTHENTICATED`** – routes that act on the caller's own record; asserted to require `isAuth`.
-- **`describe('account routes — what is mounted')`** – pins the full ordered route signature list, verifies `getAuth` + `noStore` are router-level middleware, and checks `noStore` on every individual route.
-- **`describe('account routes — authorization')`** – enforces `isAuth` presence/absence per group, asserts no route uses `requirePermissionGuard`, and confirms no cross-account token-sweep route exists.
-- **`describe('account routes — credential rate limiting')`** – verifies exact limiter chain and ordering for `RATE_LIMITED`; confirms non-credential routes carry no `credentials-*` entry.
-- **`describe('account routes — signup and reset rate limiting')`** – `POST /signup` and `POST /password/reset` carry their own three-dimension budget (`signup-*` / `reset-*`) and must NOT carry `credentialLimiters`.
-- **`describe('account routes — the per-mailbox mail budget')`** – `mailRecipientLimiter` sits after the last self-budget and before `humanChallengeGate` on those two routes; absent everywhere else.
-- **`describe('account routes — human-challenge gate (rung 3)')`** – `humanChallengeGate` present and correctly ordered on signup/reset; absent elsewhere.
+- **Imports from `@tests/routes`**: `routeSignatures` (lists `"METHOD /path"` strings), `routerMiddleware` (router-level `use` middleware), `guardsOn` (guards on a route) and `chainOf` (the full ordered middleware chain for a route).
+- **`jest.mock` calls**: the cache, rate-limit and upload middleware modules are replaced with `cacheMock()`, `securityMock()` and `storageMock()` from `@tests/routes`. The tests read middleware labels such as `credentials-identity`, `signup-block` and `humanChallengeGate` from these mocks.
+- **Route lists**:
+  - `TOKEN_BEARING`: routes that are public because a URL or cookie token is the credential.
+  - `RATE_LIMITED`: routes that must carry all `credentialLimiters` budgets.
+  - `SESSION_KEYED`: routes where `isAuth` runs first, so the per-account budget is keyed on the signed-in account.
+  - `AUTHENTICATED`: routes that must include `isAuth`.
+- **Test groups (`describe`)**:
+  - *What is mounted*:
+    - The exact endpoint list and order.
+    - Router-level middleware equals `['getAuth', 'noStore']`.
+    - Every route is checked for `noStore`.
+  - *Authorization*:
+    - `AUTHENTICATED` routes contain `isAuth`.
+    - `TOKEN_BEARING` routes, plus `POST /login`, `POST /signup` and `POST /password/reset`, do not.
+    - No route uses `requirePermissionGuard`.
+    - `DELETE /tokens/expired` is not mounted.
+  - *Credential rate limiting*:
+    - Each `RATE_LIMITED` route carries `credentials-identity` (or `credentials-signed-in` for `SESSION_KEYED` routes), then `credentials-device`, `credentials-address` and `credentials-block`, in that order.
+    - `isAuth` precedes `credentials-signed-in`.
+    - No other route has `credentials-*` limiters.
+  - *Signup and reset rate limiting*:
+    - `POST /signup` carries the three `signup-*` budgets.
+    - `POST /password/reset` carries the three `reset-*` budgets.
+    - Neither carries any `credentials-*` limiter.
+  - *Per-mailbox mail budget*:
+    - `mailRecipientLimiter` appears only on `POST /signup` and `POST /password/reset`.
+    - It sits after the route's last budget label and before `humanChallengeGate`.
+  - *Human-challenge gate*: `POST /signup` and `POST /password/reset` carry `humanChallengeGate` after their own rate-limit budget. The file content continues past this point.
 
 ## Relationships
-- **`src/modules/account/routes.ts`** – the sole system under test; this file imports its `router` export and inspects its middleware chain, guard set, and mounted route table.
-- **`tests/support/routes.ts`** – provides the inspection helpers (`routeSignatures`, `routerMiddleware`, `guardsOn`, `chainOf`) and the factory mocks (`cacheMock`, `securityMock`, `storageMock`) used to stub the three infrastructure middleware modules.
+- **`src/modules/account/routes.ts`**: the unit under test. The file imports its `router` and asserts on the route table and middleware order.
+- **`tests/support/routes.ts`** (aliased `@tests/routes`): supplies the introspection helpers and the three middleware mocks. The mocks make limiters and guards appear as readable labels in the chains.
 
 ## Notes
-- The three `jest.mock` calls intercept `@infrastructure/http/middlewares/{cache,rate-limit,upload}` and delegate to helpers in `tests/support/routes.ts`, so the real middleware logic is never exercised here — only its *label* in the chain.
-- `SESSION_KEYED` routes use `credentials-signed-in` rather than `credentials-identity` as the first budget; the test asserts the relative index of `isAuth` < `credentials-signed-in` to catch a swap.
-- `POST /signup` and `POST /password/reset` are explicitly excluded from `RATE_LIMITED`; they use a separate `signup-*` / `reset-*` budget family. Mixing them would be a security regression (successful abuse spends nothing on `credentialLimiters` due to `skipSuccessfulRequests`).
-- Route ordering is asserted as a full array equality (`toEqual`), not a set — a reordering of endpoints is treated as a breaking change.
+- The `jest.mock` factories use `jest.requireActual` on `@tests/routes`. The mocks are therefore set up before `@modules/account/routes` is imported.
+- The endpoint-order test is strict. Adding, removing or reordering a route in `routes.ts` requires updating the expected list here.
+- `POST /signup` and `POST /password/reset` are intentionally excluded from `RATE_LIMITED`. The file's comments say `credentialLimiters`' `skipSuccessfulRequests` would not charge the 200/201 responses these routes give to abuse, so they use `signupLimiters` and `resetRequestLimiters` instead.
+- Operational levers across all accounts, such as the inactive-account reaper, are meant to be nightly jobs (`reap:inactive-accounts`) and not routes. The tests enforce this by asserting that no route uses a permission guard.

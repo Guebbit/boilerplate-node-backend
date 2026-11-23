@@ -1,32 +1,30 @@
 ---
 source: src/modules/invoicing/domain/index.ts
-sha256: 268f422a4696ef491e50653e3be87bfc7e4e57b6f42e8cb675333782877ba5c4
-generated_at: 2026-11-08T06:10:27.372966+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 17647ceda70405d27cf44306869195be67801bf7391fe38980bb6172e45d5e29
+context_sha256: 9deed5386f4ed39f734ca07650dd081418859558008f8d2000110b248acb08c0
+generated_at: 2026-11-22T05:30:35.583404+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/domain/index.ts
 
 ## Purpose
-
-Barrel (re-export) file for the invoicing **domain layer**. It gives external consumers a single import path for the pure business rules defined in sibling files, while the JSDoc contract guarantees the module contains no framework or persistence imports (no Express, Mongoose, or "tier" code).
+Barrel file for the invoicing module's domain layer. It re-exports the layer's pure business rules from one entry point. Its module doc says the layer holds pure rules only and is lint-guaranteed free of Express, Mongoose and every tier.
 
 ## Key elements
+- `creditShares`: re-exported from `./credit-shares`.
+- Types `CreditableInvoice`, `RefundedGoods`, `CreditLine`: re-exported from `./credit-shares`.
+- `remainderLines`: re-exported from `./remainder`.
+- `asTaxItems`: re-exported from `./tax-items`.
+- `buyerRetentionEnd`, `isBuyerRetentionOver`, `buyerRetentionScanBound`: re-exported from `./retention`.
 
-- **`creditShares`** (from `./credit-shares`) — computes credit allocation across invoices.
-- **`CreditableInvoice`, `RefundedGoods`, `CreditLine`** (types, from `./credit-shares`) — structural types describing the inputs/outputs of credit sharing.
-- **`asTaxItems`** (from `./tax-items`) — converts a raw representation into tax-item structures.
-- **`buyerRetentionEnd`** (from `./retention`) — returns the retention end-date for a buyer.
-- **`isBuyerRetentionOver`** (from `./retention`) — boolean check whether the buyer's retention period has elapsed.
-- **`buyerRetentionScanBound`** (from `./retention`) — returns the boundary value used when scanning for retention-eligible records.
+The file defines no logic of its own.
 
 ## Relationships
-
-- **Re-exports from:** `credit-shares.ts`, `tax-items.ts`, `retention.ts` — the three domain rule files this barrel surfaces.
-- **Imported by:** `../index.ts` (module root), `emails.ts`, `services/credit-breakdown.ts`, `services/issue-credit-note.ts`, `services/retention.ts`, and the unit tests (`tests/unit/credit-breakdown.test.ts`, `tests/unit/credit-shares.test.ts`, `tests/unit/retention.test.ts`). These consumers import the domain rules through this single entry point rather than reaching into the individual rule files.
+- **Sources:** it re-exports from the sibling files `credit-shares.ts`, `remainder.ts`, `tax-items.ts` and `retention.ts`.
+- **Consumers:** the graph links it to `src/modules/invoicing/index.ts`, `emails.ts` and the services `credit-breakdown.ts`, `figures.ts`, `issue-credit-note.ts` and `retention.ts`. These presumably import domain rules through this barrel.
+- **Tests:** the unit tests `credit-breakdown.test.ts`, `credit-shares.test.ts`, `remainder.test.ts` and `retention.test.ts` are also linked neighbors.
 
 ## Notes
-
-- This file defines **no logic of its own**; it is purely a re-export surface. All behavior lives in the three sibling files.
-- The purity guarantee ("lint-guaranteed free of Express, Mongoose and every tier") is enforced by lint rules, not by convention. Do not add framework imports here or in the re-exported modules without updating the lint configuration.
-- When adding a new domain rule file, export it from here to keep the public surface consistent for the consumers listed above.
+- Add new domain rules by exporting them here, and keep them free of Express, Mongoose and tier dependencies, because lint enforces that.
+- The type exports use `export type`, so they are erased at runtime.

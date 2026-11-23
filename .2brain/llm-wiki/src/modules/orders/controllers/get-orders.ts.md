@@ -1,35 +1,31 @@
 ---
 source: src/modules/orders/controllers/get-orders.ts
-sha256: c6722f6b27f489138c46878a53a50075ea5cd9f5d5257645b6cfccfd6e9dfd1f
-generated_at: 2026-11-08T06:46:31.678697+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cddef5a868f9511c978f81ea639331cd7244ffb8f3dca0642e760add1e515ab2
+context_sha256: 7e5e1c208376cc18491a55c00d3687d08d21ecd81ea318a1e59b14307322178f
+generated_at: 2026-11-22T06:09:02.782606+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/controllers/get-orders.ts
 
 ## Purpose
-
-Thin search/list controller for orders. Wires the shared `createSearchController` factory to the orders domain service, scoping results to the caller's own visibility via `orderService.callerScope`. Exists so the HTTP layer stays declarative while permission enforcement and pagination normalization live in the shared infrastructure and kernel.
+Controller for `GET /orders` (list/search). It is thin wiring onto the shared `createSearchController` factory: it defines the query schema, a rule for honouring the `userId` filter, and the search call scoped to the caller's own visibility.
 
 ## Key elements
-
-- **`searchOrdersQuerySchema`** – Extends the orval-generated `SearchOrdersBody` with `page`, `pageSize`, and a text-coerced `deleted` boolean. All three coercion helpers come from `@infrastructure/http/schemas` so every search endpoint agrees on what's legal; absent values stay absent for downstream `normalizePagination` to default.
-- **`honourUserIdFilter(input, request)`** – Returns `{ userId }` only when the caller holds the `display:Order` rule (checked against held KEYS via `heldRules`, *not* a CASL `can` check, because `read:Order` would also satisfy a generic `read` on `Order`). Otherwise the `userId` key is dropped. Shared with the export endpoint for consistent scoping.
-- **`getOrders`** – The exported controller (`GET /orders`). Built with `createSearchController({ entity, schema, extendInput, runSearch })`. `runSearch` delegates to `orderService.search(…)` then enriches the page with `orderService.withListActions(…)`.
+- **`searchOrdersQuerySchema`**: the orval-generated `SearchOrdersBody` extended with `page` and `pageSize` (from `pageSchema`/`pageSizeSchema`, coerced from query-string text; absent values stay absent so `normalizePagination` can default them) and `deleted` (`optionalBooleanSchema`, since query strings carry booleans as text).
+- **`honourUserIdFilter(input, request)`**: the `extendInput` hook. Returns `{ userId }`, passing `input.userId` through only if the caller holds `display:Order`. Otherwise `userId` is `undefined`. It checks the held rule keys via `heldRules(callerForSubject(authContext, 'Order'))` rather than CASL, because CASL's `holds` also answers true for `read:Order` (both are `read` on `Order`). Exported so the export controller can reuse it.
+- **`getOrders`**: the exported controller, built with `createSearchController({ entity: 'orders', schema, extendInput, runSearch })`. `runSearch` calls `orderService.search(parsed, orderService.callerScope(request.authContext), callerContextOf(request))`, then `orderService.withListActions(page, request.authContext)`.
 
 ## Relationships
-
-- **`src/infrastructure/surfaces/create-search-controller.ts`** – Provides the `createSearchController` factory that `getOrders` is built from; handles parsing, pagination defaults, and response shaping.
-- **`src/infrastructure/http/schemas.ts`** – Source of `pageSchema`, `pageSizeSchema`, and `optionalBooleanSchema` used to build `searchOrdersQuerySchema`.
-- **`src/infrastructure/http/request.ts`** – Exports `callerContextOf`, passed into `orderService.search` as the third argument.
-- **`src/kernel/ability.ts`** – `heldRules` is called on the caller's subject to retrieve the set of permission keys for the `display:Order` check.
-- **`src/kernel/permissions.ts`** – `callerForSubject` resolves the auth context to a subject/ability pair used by `heldRules`.
-- **`src/modules/orders/services/index.ts`** – Provides `orderService`; the controller calls `search` and `withListActions` on it.
-- **`src/modules/orders/routes.ts`** – Registers `getOrders` as the handler for the `GET /orders` route.
-- **`src/modules/orders/controllers/get-orders-export.ts`** – Sibling export controller; the comment in `honourUserIdFilter` notes the same rule is shared so both endpoints filter identically.
+- **`@infrastructure/surfaces/create-search-controller`**: supplies the factory that does the actual controller work. This file only provides the entity name, schema, input extension, and search function.
+- **`@infrastructure/http/schemas`**: provides `pageSchema`, `pageSizeSchema` and `optionalBooleanSchema`, shared so all search endpoints agree on what is legal.
+- **`@infrastructure/http/request`**: `callerContextOf(request)` builds the caller context passed to the service.
+- **`@kernel/permissions`** and **`@kernel/ability`**: `callerForSubject` and `heldRules` are used to decide whether the caller has `display:Order`.
+- **`../services`**: `orderService` provides `search`, `callerScope` and `withListActions`.
+- **`get-orders-export.ts`**: shares `honourUserIdFilter`, because it filters by the same rule.
+- **`routes.ts`**: the module's route definitions, a neighbor in the graph. The file itself does not reference it.
 
 ## Notes
-
-- `honourUserIdFilter` deliberately checks `heldRules(…).has('display:Order')` against the held *keys* rather than asking CASL `can('read', …)`. This is because both `read:Order` and `display:Order` map to `read` on `Order` in the ability model, so a CASL check would pass for read-only callers who should **not** see other users' orders.
-- The `deleted` field is coerced from query-string text (`"true"`/`"false"`) via `optionalBooleanSchema`; the body-boolean path (from a POST body) passes through unchanged.
-- `page`/`pageSize` are optional by design—absence is meaningful and handled downstream by `normalizePagination`, not by a default in the schema.
+- Visibility is enforced in two layers. `honourUserIdFilter` drops the client's `userId` unless `display:Order` is held, and `orderService.callerScope` supplies the caller's own scope. A caller with only `read:Order` sees their own orders, and `display:Order` reads all.
+- If `request.authContext` is missing, `userId` is `undefined`.
+- Per the doc comment, the endpoint accepts parameters from either the query string or the request body.

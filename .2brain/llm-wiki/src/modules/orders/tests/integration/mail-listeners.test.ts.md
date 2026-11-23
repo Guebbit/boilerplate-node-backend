@@ -1,48 +1,55 @@
 ---
 source: src/modules/orders/tests/integration/mail-listeners.test.ts
-sha256: a9695f413a4b5e6f55365d28f9812763c0d932bc3fee882262034bd5a366daa2
-generated_at: 2026-11-14T20:52:12.612044+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 15a76acc5b5032db1e285e7fc26f38526058cb95ea586ae9beb69449f1b851a5
+context_sha256: bd78d3e4de4a737c528f442005b71277feb1d3badd80ca99d22072c1325c9e00
+generated_at: 2026-11-22T06:29:17.298603+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/mail-listeners.test.ts
 
 ## Purpose
-
-Integration tests for the buyer-mail listeners on `ORDER_CREATED` and `ORDER_CANCELED`. Verifies three invariants: the correct template is queued for each (cause × payment-method) combination, a mail failure never rejects the calling act, and every cancel path writes its `CancelCause` into the outbox event row.
+Integration tests for the orders module's buyer-mail listeners on `order.created` and `order.canceled`. They check that the event alone is enough to send the mail, that the cancel cause picks which mail goes out, that a failing mail never fails the act, and that every cancel entry point records its cause on the outbox row it writes.
 
 ## Key elements
+- `mockEnqueueEmail`: a mocked `enqueueEmail`. `@infrastructure/adapters/mailer` is replaced via `jest.mock`, so the tests assert the queued template rather than the mail copy.
+- `seedOrder(paymentMethod)`: creates a user, a product and an order with one item. The method is `'card'`, `'bank_transfer'` or `'unset'`. `'unset'` writes no method, like a staff-created order. It returns `{ user, order, orderId }`.
+- `templates()`: the template names queued so far, in order.
+- `describe('order.created ...')`:
+  - `ORDER_CREATED` emitted with only `{ orderId }` enqueues `orders.order-confirm`, addressed to `order.email`.
+  - `orderService.mailOrderPlaced` resolves without sending for a missing order (`MISSING_ID`).
+  - `mailOrderPlaced` resolves when the queue throws, and the logger's `error` is called with `'mailBuyer: sending the buyer mail failed.'`.
+- `describe('order.canceled ...')`:
+  - A table-driven `it.each` over cause and payment method gives these results:
 
-- **`seedOrder(paymentMethod?)`** — creates a user, a product, and a one-item order; returns `{ user, order, orderId }`. Payment method is `'card'`, `'bank_transfer'`, or `'unset'` (no method field, as in staff-created orders).
-- **`templates()`** — reads the queued template names from the mocked `enqueueEmail` call arguments.
-- **`jest.mock('@infrastructure/adapters/mailer')`** — replaces `enqueueEmail` with a `jest.fn()` so the test asserts *what was queued*, not what was sent.
-- **`describe('order.created …')`** — three cases: happy-path template, missing-order no-op, and queue-down logs an error but resolves.
-- **`describe('order.canceled …')`** — `it.each` table of 8 (cause, paymentMethod) → expected template(s) pairs; plus queue-down and "act completes despite mail failure" cases.
-- **`describe('every cancel door names its cause …')`** — `it.each` over all six cancel service methods, asserting the persisted outbox row's `payload.cause` matches the expected `CancelCause`.
+    | Cause | Payment method | Template queued |
+    |---|---|---|
+    | `customer` | card | `orders.order-canceled` |
+    | `operator` | bank_transfer | `orders.order-canceled` |
+    | `reservation_expired` | card or unset | `orders.order-hold-expired` |
+    | `reservation_expired` | bank_transfer | none (a transfer nobody sent is answered by `payments`) |
+    | `withdrawal`, `erasure`, `payment_mismatch` | card | none |
+
+  - `mailOrderCanceled` resolves when the queue throws.
+  - `cancelOnRequestById` still succeeds when the mailer throws. After `settleOutboxNudges()`, exactly one `ORDER_CANCELED` outbox row exists.
+- `describe('every cancel door ...')`: runs each cancel path and checks the stored `ORDER_CANCELED` outbox payload contains `{ orderId, cause }`. The paths are:
+  - `cancelOnRequestById` as a customer (cause `customer`) and as an admin (cause `operator`).
+  - `withdrawById`.
+  - `expireReservationById`.
+  - `cancelForErasureById`.
+  - `cancelForPaymentMismatchById`.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/infrastructure/adapters/logger.ts` | Imported as `logger`; the test spies on its `error` method to suppress and assert failure-path logging. |
-| `src/infrastructure/adapters/mailer.ts` | Mocked — `enqueueEmail` is replaced by a `jest.fn()`; the test asserts which templates were queued. |
-| `src/kernel/events.ts` | `emitDomainEvent` fires `ORDER_CREATED` / `ORDER_CANCELED`; `resetDomainEvents` called in `afterEach`. |
-| `src/kernel/outbox.ts` | `outboxEventModel` reads persisted event rows; `settleOutboxNudges` flushes pending writes before assertions. |
-| `src/kernel/registry.ts` | `registerModules([ordersModule])` wires listeners before each test. |
-| `src/modules/orders/events.ts` | `ORDER_CREATED`, `ORDER_CANCELED` event-name constants. |
-| `src/modules/orders/module.ts` | `ordersModule` passed to `registerModules`. |
-| `src/modules/orders/services/index.ts` | Provides `orderService`, whose methods (`cancelOnRequestById`, `withdrawById`, `expireReservationById`, `cancelForPaymentMismatchById`, `mailOrderPlaced`, `mailOrderCanceled`) are exercised by the tests. |
-| `src/modules/orders/services/cancel.ts` | `CancelCause` type import; `cancelForErasureById` called directly in the cause-naming table. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem` build the order fixture. |
-| `src/modules/products/tests/factories.ts` | `createProduct()` seeds the line-item product. |
-| `src/modules/users/tests/factories.ts` | `createUser()` seeds the buyer. |
-| `tests/support/callers.ts` | `asAdmin`, `asCustomer`, `testCallerContext` supply caller identity for cancel calls. |
-| `tests/support/ids.ts` | `MISSING_ID` used to exercise the not-found path. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` provisions the in-memory DB before all tests. |
+- `src/kernel/events.ts`: `emitDomainEvent` fires the events, and `resetDomainEvents` runs in `afterEach`.
+- `src/kernel/registry.ts`: `registerModules([ordersModule])` in `beforeEach` wires up `src/modules/orders/module.ts` so its listeners are live.
+- `src/kernel/outbox.ts`: `outboxEventModel` is queried for the persisted cancel rows, and `settleOutboxNudges` waits for the outbox to settle.
+- `src/modules/orders/services/index.ts` (`orderService`) and `src/modules/orders/services/cancel.ts`: the code under test. These are the mail handlers, the cancel entry points, `cancelForErasureById` and the `CancelCause` type.
+- `src/modules/orders/events.ts`: provides the `ORDER_CREATED` and `ORDER_CANCELED` constants.
+- `src/infrastructure/adapters/mailer.ts`: mocked.
+- `src/infrastructure/adapters/logger.ts`: its `logger` is spied on, to silence output and to assert the failure log.
+- Test support: `tests/support/setup-test-db.ts` (`setupTestDb`), the user, product and order factories (`createUser`, `createProduct`, `createOrder`/`toOrderItem`), `tests/support/callers.ts` (`asAdmin`/`asCustomer`/`testCallerContext`), and `tests/support/ids.ts` (`MISSING_ID`).
 
 ## Notes
-
-- The `it.each` table encodes the full business matrix. Notable "no-mail" rows: `reservation_expired` + `bank_transfer` (handled by the `payments` module), and all of `withdrawal`, `erasure`, `payment_mismatch`.
-- Mail is fire-and-forget: tests assert the service call **resolves** even when `enqueueEmail` throws, and that a subsequent outbox row is still written.
-- `settleOutboxNudges()` is required after cancel calls before asserting on `outboxEventModel` — the outbox write is async/nudged, not synchronous.
-- The mock targets `enqueueEmail` (the queue adapter), not the mail-rendering layer, per the "The queue, not the copy" comment.
+- `jest.restoreAllMocks()` runs in `afterEach` and `mockClear()` runs in `beforeEach`. Tests that call `mockImplementation` (not `Once`) on the mailer therefore depend on that reset.
+- Mail suppression for `reservation_expired` depends on the payment method. Bank-transfer orders get no hold-expired mail here, and a missing method counts as notifiable.
+- Only `customer` and `operator` causes send the canceled mail, and only for non-`reservation_expired` causes listed in the table. The other causes send nothing from this listener.

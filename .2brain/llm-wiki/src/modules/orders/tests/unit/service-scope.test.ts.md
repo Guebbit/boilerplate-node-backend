@@ -1,33 +1,34 @@
 ---
 source: src/modules/orders/tests/unit/service-scope.test.ts
-sha256: d87de39b311d510f7915306308da43f71145cc5d0e253545e624c7921c4cc336
-generated_at: 2026-11-08T07:14:14.617864+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0604057245c1f3a5560f9de821679d1dde6efccc3824a59a6dbebc3d19b8f21e
+context_sha256: 903d84dde7f5a9ac610c76bf3588ac8f8a5df785d823c0ace85a465bcd47be82
+generated_at: 2026-11-22T06:38:10.969112+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/service-scope.test.ts
 
 ## Purpose
-
-Unit tests for the order-read authorization boundary: `orderService.callerScope`, `orderService.actorOf`, and `orderService.ownLiveScope`. They pin the two critical shapes (unrestricted `{}` vs. fail-closed "matches nothing"), verify that `userId` is a real BSON `ObjectId` (not a string), and lock down how each caller role and edge-case (no auth, empty identity) maps to a concrete query filter.
+Unit tests for the order service's read-authorization helpers. They pin `orderService.callerScope`, the boundary that decides which orders a caller may read, and two related helpers, `actorOf` and `ownLiveScope`. The tests assert the exact shapes returned, so a gap in identity or rules can never widen a read.
 
 ## Key elements
-
-- **`MATCHES_NOTHING`** — local constant `{ $expr: { $eq: [0, 1] } }`, the canonical CASL `EMPTY_RESULT_QUERY` shape used in assertions.
-- **`describe('orderService.callerScope')`** — six tests covering: unrestricted role → `{}`; customer → `{ userId: ObjectId, deletedAt: null }`; soft-delete exclusion; admin seeing soft-deleted rows; `undefined` caller → `MATCHES_NOTHING`; empty-string identity → `MATCHES_NOTHING`.
-- **`describe('actorOf')`** — four tests asserting the actor string (`'customer'` | `'admin'`) derived from the caller, including the moderator→`'admin'` case and the no-auth default of `'customer'`.
-- **`describe('orderService.ownLiveScope')`** — one test confirming it equals `ownerScope(userId)` spread with `deletedAt: null`.
-- **`USER_ID`** — fixed hex string (`'507f1f77bcf86cd799439011'`) shared across all tests.
+- **`USER_ID` / `MATCHES_NOTHING`**: test constants. `USER_ID` is a 24-hex id string. `MATCHES_NOTHING` is `{ $expr: { $eq: [0, 1] } }`, which is what CASL compiles a caller with no matching rule to.
+- **`describe('orderService.callerScope')`**:
+  - A role that reads everything (admin) gets exactly `{}`, not `undefined`, and the result has no `deletedAt` key, so soft-deleted orders stay visible.
+  - A customer gets `{ userId: new Types.ObjectId(USER_ID), deletedAt: null }`. The scope hides soft-deleted orders even from their owner.
+  - An `undefined` auth context, or a customer with an empty id (`asCustomer('')`), gets `MATCHES_NOTHING`.
+- **`describe('actorOf')`**: maps a caller to the lifecycle column they act on.
+  - Customer gives `'customer'`.
+  - Admin gives `'admin'`.
+  - Moderator gives `'admin'`. This is a regression pin: `update:Order` is held by name, not through the wildcard, so a moderator was once treated as a customer.
+  - `undefined` gives `'customer'`.
+- **`describe('orderService.ownLiveScope')`**: asserts it equals `{ ...orderService.ownerScope(USER_ID), deletedAt: null }`.
 
 ## Relationships
-
-- **`src/modules/orders/services/index.ts`** — the module under test; `orderService` (with `callerScope`, `actorOf`, `ownLiveScope`, `ownerScope`) is imported directly.
-- **`tests/support/callers.ts`** — provides the `asCustomer`, `asAdmin`, and `asModerator` fixture factories that construct typed caller objects for each test case.
+- **`src/modules/orders/services/index.ts`**: provides `orderService`, the object under test (`callerScope`, `actorOf`, `ownLiveScope`, `ownerScope`).
+- **`tests/support/callers.ts`**: imported via the `@tests/callers` alias. Supplies the caller fixtures `asCustomer`, `asAdmin` and `asModerator`, which take a user id.
 
 ## Notes
-
-- **`userId` must be `Types.ObjectId`, not a string.** The file header and the customer-scope test both assert this; `$match` in an aggregation pipeline skips Mongoose schema casting, so a string id silently reads as "no orders" rather than erroring.
-- **Unrestricted is `{}`, not `undefined`.** Both spread harmlessly into a query, but the test pins the literal shape so a refactor to `undefined` is caught.
-- **Fail-closed on missing identity.** Both `undefined` caller and `asCustomer('')` (empty id) compile to `MATCHES_NOTHING`, not `{}`. The test for empty-string identity explicitly documents that the rule is dropped rather than resolving to `{ userId: null }`, which would match unowned rows.
-- **`deletedAt` is a separate axis from `userId`.** The customer scope carries both; the "soft-delete hidden" and "admin sees deleted" tests treat them independently.
-- **`actorOf` moderator case is bug-pinning.** The comment notes that `update:Order` is held by name (not via a wildcard), so asking for the wildcard alone would have silently classified a moderator as a customer.
+- The filter's `userId` must be a real `Types.ObjectId`. `$match` inside an aggregation skips schema casting, so a string id would match no orders instead of raising an error.
+- An unresolvable identity placeholder drops the whole rule. It does not resolve to `{ userId: null }`, which would match unowned rows.
+- Missing identity fails closed: the request gets an empty list rather than a raise (a 500) or a wider read.

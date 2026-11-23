@@ -1,35 +1,28 @@
 ---
 source: src/infrastructure/http/read-capped-body.ts
-sha256: 3b1f7fc6c70267b6037b96dfdacdcd0ef766e1141d69ce223d4e802e92eca976
-generated_at: 2026-11-08T03:33:55.735865+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3b1f7fc6c70267b6037b96dfdacdcd0ef766e1141d69ce223d4e802e92eca976
+context_sha256: 2cdbc13885a7d78e5e9c4c373b9382f27efc6e045e90a5d4c27b1e474ac6b767
+generated_at: 2026-11-22T02:53:22.259737+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/http/read-capped-body.ts
 
 ## Purpose
-
-Safe body-reading helpers that cap how many bytes are consumed from a `Response` or any `AsyncIterable` before returning. They exist so that a compromised, misconfigured, or redirected upstream host cannot force the process to buffer unbounded data; every call-out site in the app uses them instead of raw `response.json()` / `response.text()`.
+Reads a third party's HTTP answer without trusting its size. The built-in body readers on `Response` (the `json()` and `text()` methods) buffer whatever arrives, so a compromised, misconfigured or redirected provider could make the process hold gigabytes before parsing. These helpers stop reading once a byte cap is exceeded. They are used wherever the app calls out and reads the answer (OAuth providers, the breached-password range lookup, the antibot siteverify), always alongside `redirect: 'error'`.
 
 ## Key elements
-
-- **`DEFAULT_BODY_CAP_BYTES`** — `1_048_576` (1 MiB). The single cap constant shared by all callers; real payloads (OAuth tokens, user records, breached-password ranges) are kilobytes, so 1 MiB is generous but still a hard ceiling.
-- **`readCappedBytes(stream, maxBytes)`** — Core primitive. Async-iterates a byte stream, accumulates `Uint8Array` chunks, and throws the instant the running total exceeds `maxBytes`. Also rejects non-`Uint8Array` chunks with a `TypeError`. Returns a single `Buffer`.
-- **`readCappedText(response, maxBytes)`** — Thin wrapper: if `response.body` is null (204, HEAD) resolves `''`; otherwise delegates to `readCappedBytes` and decodes UTF-8.
-- **`readCappedJson(response, maxBytes)`** — Reads via `readCappedText`, then `JSON.parse`s. Returns `unknown`; the caller is responsible for narrowing.
+- `DEFAULT_BODY_CAP_BYTES` — the cap every caller uses: 1 MiB (`1_048_576`).
+- `readCappedBytes(stream, maxBytes)` — collects any `AsyncIterable<unknown>` (a fetch body or an `IncomingMessage`) into a `Buffer`. It throws an `Error` once the running size passes `maxBytes`, and a `TypeError` if a chunk is not a `Uint8Array`. Leaving the loop early cancels or destroys the stream.
+- `readCappedText(response, maxBytes)` — reads a `Response` body as UTF-8 text through `readCappedBytes`. A null body (204, HEAD) returns `''` instead of throwing.
+- `readCappedJson(response, maxBytes)` — `readCappedText` followed by `JSON.parse`. It returns `unknown`, so the caller must narrow the result. It throws if the body is too long or is not JSON.
 
 ## Relationships
-
-- **`src/modules/account/oauth/providers/client.ts`** and **`github.ts`** — OAuth token/user responses are read through `readCappedJson` / `readCappedText` so a hostile redirect cannot flood memory.
-- **`src/infrastructure/security/breached-passwords/index.ts`** — Range-lookup HTTP responses are read with the capped helpers.
-- **`src/infrastructure/adapters/antibot-providers/turnstile.ts`** — Cloudflare siteverify responses are read with the capped helpers.
-- **`src/infrastructure/adapters/remote-image.ts`** — Consumes `readCappedBytes` directly on an `IncomingMessage` stream (no `Response` wrapper).
-- **`src/infrastructure/config/fields.ts`** — Provides configuration fields that callers combine with `DEFAULT_BODY_CAP_BYTES` when constructing requests (e.g. endpoint URLs) alongside these helpers.
-- **`tests/unit/infrastructure/http/read-capped-body.test.ts`** — Unit tests covering the cap-enforcement, non-byte rejection, and bodiless-response paths.
+- Called by the OAuth provider code (`src/modules/account/oauth/providers/client.ts`, `github.ts`), the breached-password lookup (`src/infrastructure/security/breached-passwords/index.ts`) and the antibot Turnstile adapter (`src/infrastructure/adapters/antibot-providers/turnstile.ts`), per the module doc.
+- `src/infrastructure/adapters/remote-image.ts` and `src/infrastructure/config/fields.ts` are graph neighbors. Their exact use of this file isn't visible here.
+- Covered by `tests/unit/infrastructure/http/read-capped-body.test.ts`.
 
 ## Notes
-
-- The module doc states these helpers are *always* paired with `redirect: 'error'` at the call site — the cap handles size, but redirect-avoidance is the caller's responsibility.
-- `readCappedBytes` accepts any `AsyncIterable<unknown>`; the `Uint8Array` type-guard is the only shape check. Passing a `ReadableStream` (browser) or `IncomingMessage` (Node) both work because both are async-iterable.
-- The throw inside the `for await` loop cancels/destroys the underlying stream (per the MDN async-iteration semantics noted in the code), so no further data is pulled.
-- `readCappedJson` returns `unknown` intentionally — the caller must validate the shape; the helper does no schema checking.
+- The size check runs per chunk, after the chunk is received, and before it is stored. The throw ends iteration, which cancels the stream.
+- The cap is on bytes, not characters.
+- Callers are expected to pair these helpers with `redirect: 'error'`.

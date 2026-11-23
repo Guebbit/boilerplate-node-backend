@@ -1,44 +1,39 @@
 ---
 source: src/modules/inventory/tests/unit/schema-contract.test.ts
-sha256: 47eae68963a443ff2321dcda03b560d90043ed53f51dc75360cc209be1ffb712
-generated_at: 2026-11-14T20:10:45.302639+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 9aecc80c9f438d2dbb62de66d19c50c5ae5d5e6a07ffccea944f290b452b2903
+context_sha256: 0b7b694f8f000ffc17799c2ec228bd1c41e1c30c0ca226cf2e2f04a16880c633
+generated_at: 2026-11-22T05:28:47.950258+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/tests/unit/schema-contract.test.ts
 
 ## Purpose
-
-Contract tests for the two inventory Mongoose schemas (`stockMovementSchema` and `reservationSchema`). They pin down database-level invariants—defaults, required fields, enum values, index definitions—that no application code path enforces. Weakening any of these wouldn't crash a request; the guarantee would simply stop existing silently. The tests exist so that "silently" becomes "this test fails."
+Unit tests that pin the contracts of the inventory module's two Mongoose schemas: the stock ledger (`stockMovementSchema`) and the reservation hold (`reservationSchema`). The rules asserted here are enforced by the database (unique indexes, defaults, required paths), not by any code path. If one is weakened, nothing else fails, and the guarantee silently disappears. These tests are the only guard.
 
 ## Key elements
-
-- **`describe('stockMovementSchema — the ledger')`** — Six assertions:
-  - Required paths are exactly `['productId', 'reason']`.
-  - `reason` enum matches `Object.values(StockMovementReason)` (avoids a fourth hardcoded copy).
-  - `productId` is an `ObjectId` referencing `Product`.
-  - `onHandDelta` and `reservedDelta` both default to `0` (replayability: `$sum` over rows must reproduce the counter).
-  - `timestamps: true`.
-  - Index specs are exactly two, both ending `createdAt-1`.
-
-- **`describe('reservationSchema — the hold')`** — Six assertions:
-  - `orderId` has a `unique` index (the exactly-once insertion gate).
-  - Required paths are `['expiresAt', 'items', 'orderId', 'status']`.
-  - `status` enum is `['held', 'committed', 'shipped', 'released']`; defaults to `'held'`.
-  - `items` sub-schema requires `productId` + `quantity` (min 1), and disables `_id`.
-  - Index specs are exactly three (unique orderId, sweep query, allocation queue).
-  - No index carries `expireAfterSeconds` (TTL would delete documents and leak stock).
-
-- **Schema-inspection helpers** (all from `@tests/schema`): `defaultOf`, `enumOf`, `indexBehaviour`, `indexOptionSpecs`, `indexSpecs`, `optionsOf`, `pathOptions`, `refOf`, `requiredPaths`, `subSchema`, `typeOf`.
+- **`describe('stockMovementSchema — the ledger')`** asserts:
+  - Only `productId` and `reason` are required.
+  - `reason` enum equals `Object.values(StockMovementReason)`, so no fourth copy of the list exists.
+  - `productId` is an `ObjectId` with `ref: 'Product'`.
+  - `onHandDelta` and `reservedDelta` both default to `0`, so a sum over rows reproduces the counters.
+  - `timestamps` is enabled.
+  - Exactly two indexes exist, both `createdAt: -1`: `stockmovements_createdAt` and `stockmovements_productId_createdAt`.
+- **`describe('reservationSchema — the hold')`** asserts:
+  - `orderId` has a unique index (`orderId_1: unique=true`), which makes reserving exactly-once.
+  - Required paths are `expiresAt`, `items`, `orderId` and `status`.
+  - `status` enum is `held`, `committed`, `shipped`, `released`, and defaults to `held`.
+  - The `items` sub-schema requires `productId` and `quantity`, has `quantity.min === 1`, and has `_id: false`.
+  - Exactly three indexes exist: `orderId_1`, `reservations_status_expiresAt` (for the expiry sweep), and `reservations_status_itemsProductId_committedAt` (for the preorder allocation queue).
+  - No index has `expireAfterSeconds`. Expiry is deliberately a sweep, because a TTL index would delete documents and leak stock.
 
 ## Relationships
-
-- **`src/modules/inventory/model.ts`** — source of the two schemas under test (`stockMovementSchema`, `reservationSchema`).
-- **`src/types/index.ts`** — source of the `StockMovementReason` enum used in the reason-enum assertion.
-- **`tests/support/schema.ts`** — provides every inspection helper; the test's entire vocabulary for reading a compiled Mongoose schema without instantiating it.
+- **`src/modules/inventory/model.ts`**: supplies `stockMovementSchema` and `reservationSchema`, the objects under test.
+- **`src/types/index.ts`** (imported as `@types`): supplies the generated `StockMovementReason` enum, used as the expected source of truth for the ledger's `reason` values.
+- **`tests/support/schema.ts`** (imported as `@tests/schema`): provides the schema-introspection helpers used throughout: `defaultOf`, `enumOf`, `indexBehaviour`, `indexOptionSpecs`, `indexSpecs`, `optionsOf`, `pathOptions`, `refOf`, `requiredPaths`, `subSchema` and `typeOf`.
 
 ## Notes
-
-- Index assertions use `toEqual` on the full array, so adding *or* removing an index breaks the test even if existing indexes are unchanged.
-- The "no TTL index" check iterates `Object.values(indexBehaviour(...))` and asserts none has `expireAfterSeconds`. This is a deliberate guard against a well-intentioned "cleanup" index that would silently delete holds and strand reserved stock.
-- The zero-default assertion on deltas is not a style preference: an `undefined` delta is not zero to MongoDB's `$sum`, so omitting the default breaks replayability at the database level with no code-path failure.
+- The tests inspect the schema definitions only. They do not exercise a database or any operation code.
+- Index assertions compare full ordered lists, so adding, removing or reordering an index (or flipping a direction) fails the test. This is intentional: a `+1` on the ledger's `createdAt` would force in-memory sorting.
+- Index specs are compared as formatted strings, such as `'orderId_1: orderId+1'` and `'productId+1, createdAt-1'`. The format comes from the helpers in `tests/support/schema.ts`.
+- Changing the allowed `status` values here means every lifecycle operation must handle the new state. `shipped` and `released` are terminal, and `committed` can still move to `released`.

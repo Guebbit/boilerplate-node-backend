@@ -1,43 +1,34 @@
 ---
 source: src/modules/invoicing/services/for-caller.ts
-sha256: 2c1aeabf916a3b5623e559cc0f7080c7f63c07edca47091cee7218b28251e006
-generated_at: 2026-11-14T20:13:03.959220+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:35:07.427181+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/services/for-caller.ts
 
 ## Purpose
-
-Provides the three caller-scoped read operations behind the invoice and credit-note routes. Each function resolves the order through the caller's own scope first (so an unauthorized caller simply receives a 404), then layers the credit-note-specific permission check on top. The controller is left to handle only what requires the raw request (staff-read audit, PDF streaming).
+Provides the three reads behind the invoice and credit-note routes, each answering "for a caller" rather than "by id". The order is first read through the caller's own scope, so a caller who cannot see the order gets the order's own 404. The rule for who may see credit notes lives here, next to the lookups it guards. The controller keeps only request-bound work: the staff-read audit and the PDF bytes.
 
 ## Key elements
-
-- **`ReadFor<TDocument>`** — generic interface pairing a document with its parent `OrderDocument`; used by the single-invoice and single-credit-note reads.
-- **`invoiceForCaller(orderId, authContext)`** — returns the order's invoice or a 404 (unknown order / no invoice yet).
-- **`creditNotesForCaller(orderId, authContext, context)`** — returns the order's credit-note list, or an empty array when the caller lacks `display:Payment`. Never reveals existence.
-- **`creditNoteForCaller(orderId, creditNoteId, authContext, context)`** — returns a single credit note; malformed `creditNoteId` or missing permission both yield the shared "not issued" 404.
-- **`mayReadCreditNotes`** *(private)* — buyer check → `display:Payment` ability check → audit-forbidden fallback. Returns `boolean`.
-- **`creditNoteNotIssued`** *(private)* — shared 404 response with the `ORDER_CREDIT_NOTE_NOT_ISSUED` code and i18n message.
+- `ReadFor<TDocument>`: interface pairing a `document` with its `order` (`OrderDocument`). The order is returned so the staff-read audit can name the buyer.
+- `invoiceForCaller(orderId, authContext)`: reads the order through the caller's scope, then the invoice via `findInvoiceForOrder`. Returns `ReadFor<InvoiceDocument>`, or a 404 if the order is unknown or unreadable, or if no invoice has been issued (`ORDER_INVOICE_NOT_ISSUED`).
+- `creditNotesForCaller(orderId, authContext, context)`: returns the order's credit notes via `findCreditNotesForOrder`. If the caller may not see credit notes, it returns an empty success list. It returns a 404 only when the order is not found.
+- `creditNoteForCaller(orderId, creditNoteId, authContext, context)`: returns one credit note with its order. The result is a 404 `ORDER_CREDIT_NOTE_NOT_ISSUED` if the id is missing or malformed, the caller may not see credit notes, or the note does not exist.
+- `mayReadCreditNotes` (private): allows the buyer (`isBuyer`) or any caller holding `display:Payment`. Otherwise it records an `auditForbidden` entry (`reason: missing_permission`, `permission: display:Payment`) and returns `false`. It also returns `false` when there is no `authContext`.
+- `creditNoteNotIssued` (private): builds the 404 `ResponseReject` with the localized `invoicing.credit-note-not-issued` message.
 
 ## Relationships
-
-- **`src/modules/orders/index.ts`** — every read begins with `orderService.getForCaller`, which enforces the caller's own scope; `isBuyer` is the first gate in `mayReadCreditNotes`.
-- **`src/modules/orders/model.ts`** — source of the `OrderDocument` type used throughout.
-- **`src/modules/orders/services/index.ts`** — provides `orderService`, the scoped order read.
-- **`src/modules/invoicing/services/issue-invoice.ts`** — supplies `findInvoiceForOrder`, the actual DB lookup for the invoice.
-- **`src/modules/invoicing/services/issue-credit-note.ts`** — supplies `findCreditNotesForOrder` and `findCreditNoteForOrderById`.
-- **`src/modules/invoicing/services/index.ts`** — re-exports these three functions for controller consumption.
-- **`src/kernel/ability.ts`** — `holds` evaluates the `display:Payment` ability for staff callers.
-- **`src/kernel/permissions.ts`** — `callerForSubject` resolves the ability subject for the caller.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape every return value.
-- **`src/infrastructure/observability/forbidden.ts`** — `auditForbidden` records a denied credit-note read (no route guard covers this case).
-- **`src/infrastructure/i18n/index.ts`** — `t` localizes error messages.
-- **`src/infrastructure/persistence/create-repository.ts`** — `isObjectIdString` guards `creditNoteId` before it reaches the DB layer.
-- **`src/modules/invoicing/model.ts`** — `InvoiceDocument`, `CreditNoteDocument` type definitions.
+- **Orders** (`@modules/orders`, i.e. `orders/index.ts`): supplies the order service used for the scoped order read, plus `isBuyer` and the `OrderDocument` type.
+- **`issue-invoice.ts` / `issue-credit-note.ts`**: supplies the underlying lookups `findInvoiceForOrder`, `findCreditNotesForOrder` and `findCreditNoteForOrderById`.
+- **`@kernel/ability` and `@kernel/permissions`**: `holds` and `callerForSubject` perform the `display:Payment` check.
+- **`@infrastructure/http/response`**: `generateSuccess` and `generateReject` build the return values.
+- **`@infrastructure/i18n`**: `t` provides the localized messages.
+- **`@infrastructure/observability/forbidden`**: `auditForbidden` records refused credit-note reads.
+- **`@infrastructure/persistence/create-repository`**: `isObjectIdString` validates the credit-note id.
+- **`../model`**: supplies the `InvoiceDocument` and `CreditNoteDocument` types.
 
 ## Notes
-
-- Permission refusals on credit notes are **silent** (empty array or "not issued" 404) so a caller cannot probe whether notes exist. The only trace is the `auditForbidden` entry.
-- `creditNoteId` is **not** validated as a valid ObjectId before the permission check; a malformed id is deliberately indistinguishable from a missing one.
-- The `context: CallerContext` parameter on the credit-note functions exists solely to populate the audit log entry; the two credit-note functions require it while `invoiceForCaller` does not.
+- Being able to read the order is not enough to see credit notes. They carry the refund amount and billing address, so staff need `display:Payment`. The warehouse can read orders but is refused.
+- A refused caller gets no indication that credit notes exist: the list is empty and the single-note lookup answers "not issued".
+- A malformed `creditNoteId` is deliberately left unchecked by the caller. It answers "not issued", but only after the caller has passed the order read.
+- The refusal audit is written here, in the service. Route guards do not catch it because the same route serves buyers and staff.

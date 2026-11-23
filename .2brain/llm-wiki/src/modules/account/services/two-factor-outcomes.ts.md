@@ -1,49 +1,44 @@
 ---
 source: src/modules/account/services/two-factor-outcomes.ts
-sha256: 38df6b169d24ac8375ebb2a3b2c998abcf3c90bdc2568c6aa60bc8fdd490b789
-generated_at: 2026-11-14T18:54:13.932599+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b167437f63cb8844f6ae4e715b8433466fb35680a49019e8a2c9db6c2ea5af3d
+context_sha256: 739ea975b4e36ece0b25a58ce2a71633b384b3e516e91f7511176e1526da9e89
+generated_at: 2026-11-22T03:43:57.856863+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/two-factor-outcomes.ts
 
 ## Purpose
-
-A leaf helper module that builds the **responses** (success, rejection, rate-limit) and **out-of-band side effects** (audit records, notification emails) shared by every two-factor flow. It owns no orchestration logic itself; the challenge, enrollment, and lockout services call into it to produce consistent user-facing outcomes and to keep their refusal/cooldown behaviour in one place.
+Internal helper module holding what the two-factor flows say back to callers: audited outcomes, refusal responses, out-of-band email notices, and a method's public summary. It has no flow of its own; the challenge, enrollment, lockout and reauth services share it so their refusals, cooldowns and notices stay consistent.
 
 ## Key elements
-
-- **`notifyChange`** – Fire-and-forget email telling the user a factor was added, replaced, or removed. Catches and logs send failures; never throws.
-- **`audited`** – Wraps a `Promise<ResponseSuccess | ResponseReject>` so that `recordAudit` fires for both success and failure before the result is returned.
-- **`rejectWrongCode`** – Builds the 422 "wrong code" rejection. Persists the user document **only if** `isModified()` (i.e. a delivered code's attempt budget was actually spent); otherwise skips the write to avoid collision between concurrent wrong-code submissions.
-- **`rejectLocked`** – Builds a 429 `RATE_LIMITED` response with a `retryAfter` header derived from `mfaLockedUntil`. Falls back to the full lock duration if the timestamp isn't yet visible on the loaded document.
-- **`notifyLocked`** – Fire-and-forget email informing the user their 2FA is locked; same pattern as `notifyChange`.
-- **`summarize`** – Produces a `TwoFactorMethodSummary` (name, delivery mode, optional target, optional `resendAfter`) suitable for a caller who has only proved a password. Deliberately omits `enrolledAt`.
-- **`tooSoon`** – Delegates to the shared `resendTooSoon` builder with this module's private error code and i18n key.
-- **`armedEntries`** – Returns the user's enrolled 2FA method entries in registry (not enrollment) order.
-- **`deliverArmedCode`** – Shared code-delivery path: validates the method is armed and delivered, enforces per-method cooldown, sends via the handler, persists, and returns a success. Unarmed and unknown methods both yield the same 422 to prevent enumeration.
+- `notifyChange(user, change, method, context)` — fire-and-forget email that an account's second factors changed. Queue failures are only logged as warnings.
+- `audited(outcome, context, action, method)` — wraps a response promise, calls `recordAudit` with `success` or `failure` plus `{ method }`, and returns the result unchanged.
+- `rejectWrongCode(user)` — returns a 422 "wrong code" rejection. If the user document `isModified()`, it first persists the two-factor methods via `accountUserService.persistTwoFactorMethods`, so spent delivered-code attempts are saved. A lost race (account gone) is logged and swallowed; other errors are rethrown.
+- `rejectLocked(user, now = new Date())` — returns a 429 via `generateRateLimited`. The retry-after is the remaining time on `user.mfaLockedUntil` (at least 1 second). If the lock is missing or expired on the loaded document, it falls back to the full `MFA_LOCK_MS`.
+- `notifyLocked(user, context)` — fire-and-forget email telling the holder that wrong codes locked their 2FA checks. It states the lock length in minutes (`MFA_LOCK_MS / MINUTE_MS`).
+- `summarize(handler, user)` — builds a `TwoFactorMethodSummary`: `method`, `delivers`, optional `target`, and `resendAfter` (`DELIVERED_CODE_RESEND_SECONDS`) for delivered methods. It deliberately omits `enrolledAt`.
+- `tooSoon(seconds)` — binds this flow's error code (`TWO_FACTOR_RESEND_TOO_SOON`) and copy onto `resendTooSoon`, so clients can render a resend countdown.
+- `armedEntries(user)` — the user's enrolled factors (those with `enrolledAt`), in the registry's order from `orderedEntries`.
+- `deliverArmedCode(user, method, context)` — shared send path for the login challenge and signed-in endpoints:
+  - An unarmed or unknown method, or one with no `send`, gives a 422.
+  - A method still in its cooldown gives `tooSoon`.
+  - Otherwise it sends the code, persists the methods, and returns a success carrying the delivery.
 
 ## Relationships
-
-- **`@infrastructure/http/response`** – All user-facing responses are built via `generateSuccess`, `generateReject`, and `generateRateLimited`.
-- **`@infrastructure/i18n`** – Every user-facing message string goes through `t()` for locale resolution.
-- **`@infrastructure/observability/audit`** – `audited` calls `recordAudit` to log the method, action, and outcome.
-- **`@infrastructure/persistence/versioning`** – `isLostRace` is used in `rejectWrongCode` to distinguish a lost optimistic-concurrency write from a real error.
-- **`@infrastructure/adapters/logger`** – Warn-level logs for swallowed email failures and lost-race writes.
-- **`src/modules/account/cooldown.ts`** – `resendTooSoon` provides the shared 429 cooldown builder that `tooSoon` wraps.
-- **`src/modules/account/emails.ts`** – Supplies the email body builders (`twoFactorChangedEmail`, `twoFactorLockedEmail`) and locale/greeting helpers.
-- **`src/modules/account/services/mail.ts`** – `sendAccountMail` is the transport for both fire-and-forget notifications.
-- **`src/domain-primitives/time.ts`** – `MINUTE_MS` converts the lock constant into minutes for email copy.
-- **`src/modules/account/services/two-factor-challenge.ts`** – Primary caller of `rejectWrongCode`, `summarize`, `deliverArmedCode`, and `tooSoon` during the login challenge step.
-- **`src/modules/account/services/two-factor-enrollment.ts`** – Calls `notifyChange`, `audited`, and `summarize` around add/remove/replace operations.
-- **`src/modules/account/services/two-factor-lockout.ts`** – Calls `rejectLocked`, `notifyLocked`, and `rejectWrongCode` when the per-account budget is exhausted.
-- **`src/modules/account/tests/unit/two-factor-outcomes.test.ts`** – Unit tests covering all exports above.
+- `../two-factor` (the registry, not in the neighbor list) supplies `orderedEntries`, `deliveryCooldownRemaining`, `TwoFactorMethodHandler` and the constants `DELIVERED_CODE_RESEND_SECONDS` and `MFA_LOCK_MS`.
+- `../emails` builds the notice content (`twoFactorChangedEmail`, `twoFactorLockedEmail`) and the locale and name helpers. `./mail` (`sendAccountMail`) queues the messages.
+- `../cooldown` supplies `resendTooSoon`.
+- `@infrastructure/http/response` provides `generateReject`, `generateRateLimited` and `generateSuccess`, plus the response types.
+- `@infrastructure/observability/audit` provides `recordAudit`. `@infrastructure/persistence/versioning` provides `isLostRace`. `@infrastructure/adapters/logger` provides `logger`.
+- `@infrastructure/i18n` provides `t` for the localized messages.
+- `@domain-primitives/time` provides `MINUTE_MS`.
+- `@modules/users/friends/account` (`accountUserService`) persists the two-factor methods.
+- The sibling services (`two-factor-challenge`, `two-factor-enrollment`, `two-factor-lockout`, `reauth`) are the likely callers. The file itself only states that it is shared by the two-factor flows. The unit tests are in `src/modules/account/tests/unit/two-factor-outcomes.test.ts`.
 
 ## Notes
-
-- The module is explicitly **internal**; no HTTP route imports it directly. Flows compose it.
-- `RESEND_TOO_SOON_CODE` is module-private (`const`, not `export`). Clients read the code off the response body; they never import this constant.
-- `rejectWrongCode` is async even in the no-write path because the persist branch is; callers must `await` or chain.
-- `rejectLocked` accepts an optional `now` parameter (defaults to `new Date()`) purely so tests can pin the clock.
-- `deliverArmedCode` intentionally does **not** return 404 for an unknown method—it returns the same 422 as an unarmed one, so a probe cannot distinguish "wrong name" from "not enrolled."
-- Both notification helpers use `void promise.catch(log)`—a mail-queue outage degrades to a warning, never a user-visible error, because the underlying state change has already committed.
+- Persisting in `rejectWrongCode` only when the document is modified is intentional. Dropping the write would turn the attempt ceiling into no ceiling, while writing on every miss would let bursts of wrong TOTPs collide with the one right code.
+- `rejectLocked` takes `now` as a parameter so tests can pin the clock.
+- Unarmed and unknown methods return the same 422 in `deliverArmedCode`, so a wrong guess reveals nothing. An armed method in its cooldown does reveal that it is armed.
+- The cooldown is enforced here, not only by the route limiter, because these endpoints send mail on the caller's say-so.
+- `RESEND_TOO_SOON_CODE` is deliberately module-private.

@@ -1,37 +1,43 @@
 ---
 source: src/modules/delivery/controllers/get-date-impact.ts
-sha256: 2c54d788d63b9ee7f43627d582d8f7742ca4a96f832229ad53e8e7fbee7e743d
-generated_at: 2026-11-08T05:26:17.728071+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 587a5d33b82aa0b55624b43f306bd91fae28351a158709475d7a5e2cfada24ca
+context_sha256: 032bcd9523e0d40a8e3ae6db452381239947c51fa24c186ce957763fb4a0a787
+generated_at: 2026-11-22T04:45:21.894389+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/controllers/get-date-impact.ts
 
 ## Purpose
-
-Defines the two staff-facing preview endpoints (`GET /delivery/fulfillment-orders/release-date-impact` and `…/restock-date-impact`) that let a user see what would change before actually committing a date move. Both handlers are produced by a single factory so the only differences are the query field, the business cause, and the Zod schema.
+Express controllers for the staff-facing preview of moving a product's release or restock date: `GET /delivery/fulfillment-orders/release-date-impact` and `.../restock-date-impact`. Input comes only from the query string, and an absent or blank date means the date is being cleared. Both handlers share one factory and return a `ReleaseDateImpact`.
 
 ## Key elements
+- `dateImpactController(field, cause, schema, name)` (module-private): a factory that returns an Express `(request, response)` handler.
+  - `field` is `'releaseDate'` or `'restockDate'`, the query and product field that carries the date.
+  - `cause` is `'preorder'` or `'backorder'`, which tells the impact preview what the date gates.
+  - `schema` is the generated zod query schema for the endpoint.
+  - `name` is the handler name used in the error log.
+- `getReleaseDateImpact`: the factory bound to `releaseDate`, `'preorder'`, `PreviewReleaseDateImpactQueryParams`.
+- `getRestockDateImpact`: the factory bound to `restockDate`, `'backorder'`, `PreviewRestockDateImpactQueryParams`.
 
-- **`dateImpactController`** (internal factory) — takes a field name (`releaseDate` | `restockDate`), a cause (`preorder` | `backorder`), a Zod query schema, and a log name; returns an Express handler.
-- **`getReleaseDateImpact`** — exported handler for the release-date preview; binds the factory to `releaseDate` / `preorder` / `PreviewReleaseDateImpactQueryParams`.
-- **`getRestockDateImpact`** — exported handler for the restock-date preview; binds the factory to `restockDate` / `backorder` / `PreviewRestockDateImpactQueryParams`.
+Handler flow:
+1. Read the query with `readInput(request, { surface: 'list' })`.
+2. Turn a blank date into `undefined` with `blankToUndefined`, then validate with the generated schema through `parseBody`.
+3. Validate the date again with the products module's `productService.zodProductUpdateSchema`, so the preview applies the same date rules as a save.
+4. Call the delivery service's `previewDateImpact(productId, cause, date)`. The date goes through `startOfShopDay`, or stays `undefined` if it was cleared.
+5. If `refused(response, result)` is true, stop. Otherwise reply with `successResponse<ReleaseDateImpact>(response, result.data)`.
+6. Rejections go to `catchAs(response, name)`.
 
 ## Relationships
-
-- **`src/infrastructure/http/request.ts`** — calls `readInput(request, { surface: 'list' })` to extract query params.
-- **`src/infrastructure/http/schemas.ts`** — calls `blankToUndefined` to treat an empty date string as absent before validation.
-- **`src/infrastructure/http/controller.ts`** — uses `parseBody` for schema validation, `refused` to short-circuit a rejected service result, and `catchAs` for error serialization.
-- **`src/infrastructure/http/response.ts`** — calls `successResponse` to send the typed `ReleaseDateImpact` payload.
-- **`src/modules/delivery/services/index.ts`** — delegates the actual impact calculation to `deliveryService.previewDateImpact`.
-- **`src/modules/products/index.ts` / `src/modules/products/services/index.ts`** — reads `productService.zodProductUpdateSchema` to re-validate the candidate date against the same rules the save endpoint enforces.
-- **`src/modules/shop/index.ts` / `src/modules/shop/service.ts`** — calls `startOfShopDay` to normalise the date into the shop's local day boundary before passing it to the service.
-- **`src/types/index.ts`** — imports the `ReleaseDateImpact` response type.
-- **`src/modules/delivery/routes.ts`** — registers `getReleaseDateImpact` and `getRestockDateImpact` on the delivery router.
+- `src/infrastructure/http/request.ts` (`readInput`), `src/infrastructure/http/schemas.ts` (`blankToUndefined`), `src/infrastructure/http/response.ts` (`successResponse`) and `src/infrastructure/http/controller.ts` (`parseBody`, `refused`, `catchAs`) provide the shared HTTP plumbing.
+- `src/modules/products/index.ts` exports `productService`, used for the save-equivalent date validation. `src/modules/products/services/index.ts` is a related neighbor in the products module.
+- `src/modules/shop/index.ts` exports `startOfShopDay`, which converts the date string to the shop's start-of-day value. `src/modules/shop/service.ts` is a related neighbor in the shop module.
+- `src/modules/delivery/services/index.ts` (imported as `../services`) exports `deliveryService`, which does the actual impact computation.
+- `src/types/index.ts` supplies the `ReleaseDateImpact` response type (imported as `@types`).
+- `src/modules/delivery/routes.ts` is the likely consumer, wiring these exports to the two routes. This file doesn't import it.
 
 ## Notes
-
-- **Blank ≠ missing:** a query param present but empty (e.g. `?releaseDate=`) is coerced to `undefined` via `blankToUndefined`, meaning "clear the date." Truly absent params are also `undefined`. Both paths reach the service as `undefined`.
-- **Double validation:** the date is validated twice — first by the endpoint's own query schema, then against `productService.zodProductUpdateSchema` so the preview rejects exactly what the save would reject (format, max one-year-ahead, etc.).
-- **Shop-day boundary:** `startOfShopDay` is applied to a concrete date but is bypassed for `undefined`, so a "clear" request never gets a fabricated boundary.
-- **No body:** the handler reads only query params (`surface: 'list'`); a JSON body on these GETs is ignored.
+- Both handlers return `Promise.resolve()` early when validation fails. `parseBody` has already written the error response by then.
+- A cleared date is valid input. `undefined` is passed to `zodProductUpdateSchema` and to the service, meaning "no date".
+- The `schema` type is `z.ZodType<{ productId: string } & Partial<Record<TField, string>>>`, so `productId` is required and the date is optional.
+- Both handlers also return `ReleaseDateImpact`, even the restock one.

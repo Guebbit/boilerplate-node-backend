@@ -1,30 +1,28 @@
 ---
 source: shared/rules/schemas/audit-actions.generated.schema.json
-sha256: f0402e9554689eb70e19ea22cd7290efeb83849604f934a9915ac8c2f50573e0
-generated_at: 2026-11-14T17:46:42.238885+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f0402e9554689eb70e19ea22cd7290efeb83849604f934a9915ac8c2f50573e0
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:26:58.995436+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/schemas/audit-actions.generated.schema.json
 
 ## Purpose
-
-A generated JSON Schema (draft 2020-12) that validates the shape of an "audit actions" payload. It enforces that the payload is a single object containing a non-empty `actions` array, where each entry pairs a namespaced security action identifier with a human-readable description.
+A JSON Schema (draft 2020-12) describing the shape of a generated list of audit actions. The filename's `.generated` marker suggests it is produced by tooling rather than hand-edited. It validates that each action has a namespaced identifier and a human-readable description.
 
 ## Key elements
-
-- **Top-level object** — requires exactly one key, `actions`; no other properties allowed.
-- **`actions` (array)** — `minItems: 1`; each element must conform to the item schema below.
-- **`actions[].value`** — string constrained by the regex `^security(\.[a-z][\d_a-z]*){1,3}$`. This forces a `security.` prefix followed by 1–3 dot-separated segments, each beginning with a lowercase letter and continuing with lowercase alphanumerics or underscores.
-- **`actions[].description`** — non-empty string (`minLength: 1`).
-- **`actions[]` item** — both `value` and `description` are required; `additionalProperties: false` prevents unknown fields.
+- **Root object**: requires a single `actions` property; no additional properties are allowed.
+- **`actions`**: an array with at least one item (`minItems: 1`).
+- **Action item**: an object with exactly two required fields, `value` and `description`; `additionalProperties` is `false`.
+  - **`value`**: a string matching `^security(\.[a-z][\d_a-z]*){1,3}$`. It must start with `security`, followed by 1–3 dot-separated segments. Each segment starts with a lowercase letter and may then contain lowercase letters, digits, or underscores.
+  - **`description`**: a non-empty string (`minLength: 1`).
 
 ## Relationships
-
-No graph neighbors are recorded for this file. It is a standalone schema artifact with no in-repo dependencies.
+No graph neighbors are recorded, so no dependencies on or from other files are visible here.
 
 ## Notes
-
-- The `.generated.` segment in the filename indicates this schema is produced by a tool rather than hand-edited. Manual changes will be overwritten on the next generation run.
-- The `value` pattern caps the hierarchy at three segments below `security.`. Adding a fourth segment (e.g. `security.a.b.c.d`) will fail validation.
-- Both the top-level object and each array item set `additionalProperties: false`, so any extra keys are rejected — consumers must not include metadata fields outside the two defined properties.
+- Every action must be under the `security.` namespace. Values like `audit.foo` or `security` alone fail validation.
+- Segment depth is capped at 3 below `security`, so `security.a.b.c.d` is invalid.
+- Uppercase letters and hyphens are not allowed in segments.
+- Since the file appears to be generated, changes should be made in the generator rather than here.

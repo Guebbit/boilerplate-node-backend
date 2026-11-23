@@ -1,34 +1,27 @@
 ---
 source: src/infrastructure/persistence/mongo-errors.ts
-sha256: fc649ae0ad37e7faaf685d8b978820a4a5f947b19f22a987fc7775d5e313e920
-generated_at: 2026-11-14T18:14:08.098631+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fc649ae0ad37e7faaf685d8b978820a4a5f947b19f22a987fc7775d5e313e920
+context_sha256: f093df71e7c12a9d44882573e54e76fe04394e0386c35296c63023c3d29679a2
+generated_at: 2026-11-22T03:03:21.775073+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/mongo-errors.ts
 
 ## Purpose
-
-Pure predicate functions that classify a caught Mongo/Mongoose rejection by its driver-level code or name. They exist so that repositories and the HTTP error interpreter can make driver-fact decisions (duplicate key, query timeout, server unreachable) without importing Mongo error classes or reaching into the response layer.
+Centralizes driver-level checks on Mongo write/query failures, so repositories and the HTTP error interpreter can classify a caught error without duplicating the logic or treating a driver fact as an HTTP concern. Every check takes an `unknown` (a caught rejection can be any value) and returns a boolean.
 
 ## Key elements
-
-- **`isDuplicateKey(error: unknown): boolean`** — Returns `true` when the error carries `code === 11000` (E11000, unique-index violation). Used as a retry signal in upserts and as a "409 already-taken" trigger in the HTTP interpreter.
-- **`isQueryTimeout(error: unknown): boolean`** — Returns `true` when `code === 50` (`MaxTimeMSExpired`). Mapped to a 503 `QUERY_TIMEOUT` response by the HTTP layer.
-- **`isConnectionError(error: unknown): boolean`** — Returns `true` when the error's `.name` is one of the known server-selection / network / not-connected names, or when it is a bare `MongooseError` whose message contains `"buffering timed out"`. Mapped to a 503 by the HTTP layer.
-- **`CONNECTION_ERROR_NAMES`** (module-private) — `Set<string>` of the five driver/Mongoose error names that indicate no server was reachable.
-- **`MAX_TIME_MS_EXPIRED`** (module-private) — Constant `50`.
-- **`BUFFERING_TIMEOUT_MESSAGE`** (module-private) — The literal string Mongoose ships with its buffering-timeout error.
+- `isDuplicateKey(error)`: true when `error.code === 11000` (E11000, a unique index refused the write). It checks the code, not the message, because the message names the index and would break if the index is renamed.
+- `isQueryTimeout(error)`: true when `error.code === 50` (`MaxTimeMSExpired`, a query killed at its `maxTimeMS`). It uses the private constant `MAX_TIME_MS_EXPIRED`.
+- `isConnectionError(error)`: true when no database server was reachable. This means `name` is one of `MongoServerSelectionError`, `MongooseServerSelectionError`, `MongoNetworkError`, `MongoNotConnectedError` or `MongoNetworkTimeoutError`. It is also true for a bare `MongooseError` whose message contains `"buffering timed out"`. It returns `false` if `name` is not a string.
+- `CONNECTION_ERROR_NAMES` and `BUFFERING_TIMEOUT_MESSAGE` (private): the lookup set and message string used by `isConnectionError`.
 
 ## Relationships
-
-- **`src/infrastructure/http/errors.ts`** — The HTTP error interpreter calls all three predicates to decide between 409, 503 (`QUERY_TIMEOUT`), and 503 (unavailable) responses. The `isConnectionError` doc comment explicitly points to `databaseErrorInterpreter` in that file.
-- **Repository modules** (`src/modules/account/repository.ts`, `src/modules/addresses/repository.ts`, `src/modules/cart/repository.ts`, `src/modules/inventory/repository.ts`, `src/modules/notifications/repository.ts`, `src/modules/payments/repository.ts`) — The module doc describes `isDuplicateKey` as the signal a repository checks to treat a racing upsert as a retry rather than a hard failure.
-- **Service modules** (`src/modules/account/services/export.ts`, `src/modules/account/services/oauth.ts`, `src/modules/invoicing/services/numbering.ts`, `src/modules/tasks/services/system.ts`, `src/modules/tasks/services/workflow.ts`) — Listed as graph neighbors; likely call the same predicates to classify failures at the service boundary before delegating to the HTTP interpreter.
+- `src/infrastructure/http/errors.ts`: its interpreters consume these predicates. `isDuplicateKey` maps to "already taken" (409). `isQueryTimeout` maps to 503 with its own `QUERY_TIMEOUT` code. `isConnectionError` maps to 503 in place of a generic 500 (see `databaseErrorInterpreter`).
+- Repositories and services (for example, the `account`, `cart`, `payments` and `inventory` repositories) are listed as graph neighbors. The file's comments say repositories use `isDuplicateKey` as a retry signal on racing upserts. The source does not say which neighbor uses which predicate.
 
 ## Notes
-
-- **Never `instanceof`.** All three predicates check `.code` or `.name` on a plain object. The `mongodb` package is a transitive dependency of more than one workspace package; an `instanceof` against the wrong copy silently returns `false`.
-- **Code over message (for E11000).** The error message names the offending index; checking the code keeps the check stable across index renames.
-- **Mongoose buffering timeout has no dedicated class.** It surfaces as a generic `MongooseError`; the only distinguishing signal is the fixed `"buffering timed out"` substring, which is why `isConnectionError` falls through to a message check only in that one case.
-- All three functions accept `unknown` and are safe to call on any caught value (including `null`/`undefined` or non-object throws).
+- All checks match on error `code` or `name` rather than `instanceof`. `mongodb` is a transitive dependency of more than one package, so an `instanceof` against the wrong copy would silently miss.
+- Mongoose's buffering-timeout error has no dedicated class. It is a plain `MongooseError`, the same base used for programmer errors, so the message substring is the only way to identify it.
+- The numeric code `11_000` uses a numeric separator and equals 11000.

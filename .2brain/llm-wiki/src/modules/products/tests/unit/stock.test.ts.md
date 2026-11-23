@@ -1,29 +1,29 @@
 ---
 source: src/modules/products/tests/unit/stock.test.ts
-sha256: 90d6bd6711b741b272448eeadf93c26b0d1fa3f81586406decab649a6c550f23
-generated_at: 2026-11-14T21:31:43.896983+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1ef7e43fa59a9e6bb55d3d99d651b64c91c8a30f65448e550877ce298755abbb
+context_sha256: dc2ab5cc12765188b85778e25dc9def62c30e2f59202deb3a2c7f32e3ba2db95
+generated_at: 2026-11-22T07:19:58.045483+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/unit/stock.test.ts
 
 ## Purpose
-
-Unit tests for the three pure stock-calculation functions exported from `domain/stock.ts`. Exercises every input shape the inventory and cart modules can pass, with no database or I/O involved.
+Unit tests for the two pure stock helpers in `src/modules/products/domain/stock.ts`: `availableStock` and `preorderAllowanceLeft`. No database is involved. The tests cover the cases that callers (`@modules/inventory`, `@modules/cart`) can pass in.
 
 ## Key elements
-
-- **`describe('availableStock')`** — Parameterized (`it.each`) cases covering normal on-hand/reserved pairs, `undefined` counters, and a negative-result clamp. Asserts `availableStock(3, 8)` → `0`.
-- **`describe('stockFlags')`** — Parameterized cases asserting the `{ inStock, lowStock }` object returned by `stockFlags(available, threshold)`, including the zero-threshold boundary.
-- **`describe('preorderAllowanceLeft')`** — Parameterized cases for `preorderAllowanceLeft(limit, claimed)`, including `undefined` inputs and the `null`-limit sentinel that yields `999_999`.
+- **`describe('availableStock')`** — table-driven (`it.each`) cases of `(onHand, reserved) → expected`:
+  - `(10, 0) → 10`, `(10, 4) → 6`, `(10, 10) → 0`.
+  - Missing counters: `(undefined, undefined) → 0`, `(5, undefined) → 5`, `(undefined, 5) → 0`.
+- **Negative clamp test** — `availableStock(3, 8)` returns `0`. The test comment says this state should be unreachable but is asserted anyway, so a negative count never reaches a screen.
+- **`describe('preorderAllowanceLeft')`** — table-driven cases of `(limit, claimed) → expected`:
+  - `(10, 3) → 7`, `(10, 10) → 0`, `(3, 5) → 0` (over-claimed gives 0).
+  - `(undefined, undefined) → 0`, `(4, undefined) → 4`.
+  - `(null, 5) → 999_999` (no cap).
 
 ## Relationships
-
-- **`src/modules/products/domain/stock.ts`** — The module under test. This file imports `availableStock`, `preorderAllowanceLeft`, and `stockFlags` from that path and asserts their return values. No other imports.
+- Imports `availableStock` and `preorderAllowanceLeft` from `../../domain/stock` (`src/modules/products/domain/stock.ts`). That module is the only unit under test.
 
 ## Notes
-
-- `undefined` counters are treated as zero (safe-failure direction), not as "unlimited."
-- The negative clamp in `availableStock` is explicitly asserted despite being considered unreachable in production; the comment notes every inventory transition should guard against it, but the test documents the invariant.
-- `preorderAllowanceLeft(null, 5)` → `999_999` is the "no cap" contract; the buyer is never shown the count, so a large finite sentinel suffices.
-- All tests are synchronous and pure; no mocks, spies, or async utilities are used.
+- Absent `onHand` counters (`undefined`) count as nothing to sell, not unlimited. The test comment calls this the safe direction for a number that decides whether to take payment.
+- For `preorderAllowanceLeft`, a `null` limit means no cap and returns `999_999`. A comment explains that the contract wants an integer and the buyer is never told the count. An `undefined` limit returns `0`, so `null` and `undefined` behave differently.

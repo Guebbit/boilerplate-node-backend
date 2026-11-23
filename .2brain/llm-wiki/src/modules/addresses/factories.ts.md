@@ -1,33 +1,30 @@
 ---
 source: src/modules/addresses/factories.ts
-sha256: 735d4e9bddfc9386208dcc0f53d393ba60177c2210b33c0eb9962ec8fb562c4a
-generated_at: 2026-11-08T04:54:31.486687+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fe08204e91bd9b57a79c616dd0c7a6f693bdfd5808a560dbc5eeab04437c830b
+context_sha256: 363e98708eaa9fd0e81f7eedb424a38e6334ee60b9b60508becd83549bc22e88
+generated_at: 2026-11-22T04:13:30.733224+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/factories.ts
 
 ## Purpose
-
-Builds address-book fixtures for use with `addressBookRepository.create`. It encodes the domain rule that a book is identified by its owner (`userId` is unique on the wire, so no book `_id` is generated) while individual entries are identity-bearing (each carries its own `_id`). The file exists so test and scenario code can produce valid, type-safe book payloads without hand-assembling Mongoose shapes.
+Test-fixture factory for address books. It builds a document-shaped object from a caller's plain-contract data (string ids, `Address[]`) so it can be passed to `addressBookRepository.create`. It exists to keep the conversion from the wire contract to the Mongoose document shape in one place.
 
 ## Key elements
-
-- **`AddressBookOverrides`** – Input interface. `userId` (required) and optional `items: Address[]`. Passing `items: undefined` lets the schema's `default: []` produce an empty book.
-- **`AddressBookFixture`** – Output type: `Partial<AddressBookDocument>` with `userId` pinned as required. This is the shape accepted by the repository's `create` method.
-- **`makeAddressBook(overrides)`** – The sole factory function. Converts the caller's `userId` string into a `Types.ObjectId`, and if `items` are present, maps each entry's `id` → `_id` (also an ObjectId) while forwarding `label`/`phone` via `stripUndefined` so absent keys are omitted rather than set to `undefined`.
+- `AddressBookOverrides` — input type: required `userId` (`Id`, 24-char hex) and optional `items` (`Address[]`). If `items` is omitted, the schema's `default: []` applies, giving a book with no entries.
+- `AddressBookFixture` — `Partial<AddressBookDocument>` with `userId` required. Making `userId` required means the compiler enforces an owner, rather than leaving the assertion to the caller.
+- `makeAddressBook({ userId, items })` — returns an `AddressBookFixture`:
+  - converts `userId` to a `Types.ObjectId`;
+  - when `items` is given, maps each address to an `AddressItem`. The contract `id` becomes the subdocument `_id` (as an `ObjectId`), the remaining fields are spread through, and `label` and `phone` go through `stripUndefined`, so absent optionals leave no key;
+  - when `items` is `undefined`, the `items` key is omitted entirely.
 
 ## Relationships
-
-- **`src/modules/addresses/model.ts`** – Supplies the `AddressBookDocument` and `AddressItem` types that define the fixture shape and the per-entry field set.
-- **`src/infrastructure/object-guards.ts`** – Provides `stripUndefined`, used to avoid writing explicit `undefined` keys into entry subdocuments.
-- **`src/types/index.ts`** – Source of the `Address` and `Id` types consumed by the overrides interface.
-- **`scenarios/addresses.ts`** – Scenario-level caller that assembles end-to-end address flows on top of the fixture this factory produces.
-- **`src/modules/addresses/tests/unit/factories.test.ts`** – Unit tests exercising `makeAddressBook`'s mapping and omission behavior.
-- **`tests/cross-cutting/side-effects-have-one-layer.test.ts`** – Cross-cutting guard that asserts this factory performs no I/O or other side effects (it is a pure shape transformation).
+- `src/modules/addresses/model.ts` — supplies the `AddressBookDocument` and `AddressItem` types the fixture is shaped against (type-only import).
+- `src/types/index.ts` — supplies the `Address` and `Id` contract types (type-only import, via the `@types` alias).
+- `src/infrastructure/object-guards.ts` — supplies `stripUndefined`, used to drop undefined `label` and `phone`.
+- `src/modules/addresses/tests/unit/factories.test.ts` and `scenarios/addresses.ts` are neighbors in the dependency graph. The file content doesn't show how they use this module.
 
 ## Notes
-
-- The `items` branch uses a spread (`...(items === undefined ? {} : { items: … })`) specifically so the key is *absent* from the object when not supplied; writing `items: undefined` would serialize differently in some Mongoose paths.
-- Entry `id` is destructured out before the rest-spread, so it never leaks into the subdocument as a literal `id` key—only `_id` appears on the wire.
-- The module doc-comment deliberately contrasts book identity (owner-keyed) with entry identity (self-keyed); keep that distinction intact when extending the factory.
+- The book has no `_id` override. A book is identified by its owner, since `userId` is `unique` and no book id reaches the wire.
+- Entries are the opposite case. Two addresses can be identical in every field and still be different entries, so each entry keeps its own `_id`, taken from the address `id`.

@@ -1,45 +1,45 @@
 ---
 source: src/modules/payments/tests/integration/canceled.test.ts
-sha256: 95c4b103047dccf51407852ccc24f9ef001e5570d436e340518a8d1503c8ad21
-generated_at: 2026-11-14T21:13:01.226467+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 95c4b103047dccf51407852ccc24f9ef001e5570d436e340518a8d1503c8ad21
+context_sha256: a402fa74eb97ccf08472cf5a8a80606dc8ccf713e0fafab7c06c4a9067057793
+generated_at: 2026-11-22T06:56:13.302730+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/canceled.test.ts
 
 ## Purpose
-
-Integration tests for the `canceled` payment state. Verifies that canceling an order transitions the payment to `canceled` (or leaves it untouched if the provider refuses), that late provider reports on a canceled payment are handled correctly (ignored, refunded-if-money-landed, idempotent on redelivery, skipped by reconciliation), and that the retention reaper deletes old canceled payments while preserving succeeded ones.
+Integration tests for the `canceled` payment status. They check that a payment is written `canceled` only after the provider confirms the intent closed. They also check that money landing late on a canceled payment is recorded as `succeeded` and refunded, and that other late reports (`processing`, `declined`) leave it alone. The provider side is the fake PSP, driven through `setFakeOutcome` and `confirm`. The application learns of changes only through the settlement entry points.
 
 ## Key elements
-
-- **`canceledOrder()`** — shared fixture: creates a user, product, order, and a payment intent via `paymentService.createIntent`, then cancels the order through the order service and flushes the outbox. Returns `{ user, orderId, providerRef }`.
-- **`statusOf` / `refundCountOf` / `providerRefOf` / `orderStatusOf`** — tiny read helpers that pull a single field from the payment or order for assertions.
-- **`describe('cancelling an order with an open intent')`** — three cases: provider confirms close → status `canceled`; payment never reached provider → still `canceled`; provider rejects cancel → status unchanged (`requires_confirmation`).
-- **`describe('a late report on a canceled payment')`** — covers webhook settlement for `processing`/`declined` (no state change, no `PAYMENT_FAILED` event), buyer sync (does not call `retrieve`), a late success (records refund, display status `refunded`), idempotent redelivery, and the reconciliation sweep skipping canceled payments.
-- **`describe('the retention reaper')`** — calls the repository's deletion method and asserts the canceled payment is removed while a succeeded one survives.
+- **Setup**: `setupTestDb()`, `registerCheckoutModules([paymentsModule])` in `beforeEach`, and `resetDomainEvents()` in `afterEach`.
+- **Read helpers**: `statusOf`, `refundCountOf`, `providerRefOf` (all via `paymentRepository.findByOrderId`) and `orderStatusOf` (via `orderService.getById`).
+- **`canceledOrder()`**: creates a user, a product, and an order with a card intent. It then calls `orderService.cancelOnRequestById` and `settleOutboxNudges()`, and returns `{ user, orderId, providerRef }`.
+- **"cancelling an order with an open intent"**:
+  - The payment becomes `canceled`, and `presentPayment` shows `displayStatus` `canceled`.
+  - A payment that never reached the provider (created directly via `paymentModel.create`) also becomes `canceled`.
+  - If `fakePaymentProvider.cancel` rejects, the payment stays `requires_confirmation`.
+- **"a late report on a canceled payment"**:
+  - `processing` and `declined` (via `it.each`) change nothing and emit no `PAYMENT_FAILED` outbox event.
+  - `syncPayment` does not call the provider's `retrieve` and returns `canceled`.
+  - If money landed, `applyWebhookSettlement` records `succeeded` with one refund, `displayStatus` is `refunded`, and the order stays `canceled`.
+  - A redelivered success adds no second refund.
+  - `reconcileStalePayments()` skips it and returns 0 (run with `NODE_PAYMENT_RECONCILE_MINUTES=0`).
+- **"the retention reaper"**: `paymentRepository.deleteAbandonedBefore` deletes an old canceled payment and keeps an old `succeeded` one.
 
 ## Relationships
-
-- **`scenarios/support/doubles/payments/fake.ts`** — the fake PSP; all provider-side state (confirm, decline, cancel-rejection, late outcomes) is driven through this file's exports.
-- **`src/kernel/events.ts`** — provides the domain-event reset used in `afterEach` to prevent cross-test leakage.
-- **`src/kernel/outbox.ts`** — the asynchronous event-delivery mechanism; tests must flush it after an order cancel before asserting on the payment, and also use it to confirm no unwanted events were emitted.
-- **`src/modules/orders/index.ts`** — exports the order service used to cancel orders and read back order status.
-- **`src/modules/orders/services/index.ts`** — the orders service layer underlying the order module; the cancel entry point lives here.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder` and `toOrderItem` build the order fixture.
-- **`src/modules/payments/events.ts`** — provides the `PAYMENT_FAILED` event name used in outbox count assertions.
-- **`src/modules/payments/model.ts`** — the payment aggregate; used for direct document creation (the "never reached provider" case) and existence checks in the reaper test.
-- **`src/modules/payments/module.ts`** — registered via `registerCheckoutModules` in `beforeEach` to wire listeners.
-- **`src/modules/payments/presenter.ts`** — transforms the stored payment into buyer-facing display status.
-- **`src/modules/payments/repository.ts`** — read access for assertions and the `deleteAbandonedBefore` operation used by the reaper test.
-- **`src/modules/payments/services/index.ts`** — the payment service under test (intent creation, webhook settlement, buyer sync, reconciliation).
-- **`src/modules/products/tests/factories.ts`** — `createProduct` fixture.
-- **`src/modules/users/tests/factories.ts`** — `createUser` fixture.
-- **`tests/support/callers.ts`** — `asCustomer` and `testCallerContext` supply caller identity for service calls.
+- **`@modules/payments/services`** (`paymentService`): `createIntent`, `applyWebhookSettlement`, `syncPayment` and `reconcileStalePayments` are the code under test.
+- **`@modules/orders`** (`orderService`): cancelling the order triggers the payment cancellation.
+- **`@kernel/outbox`**: `settleOutboxNudges` drains the outbox after cancelling, and `outboxEventModel` is used to assert no `PAYMENT_FAILED` was recorded.
+- **`@kernel/events`**: `resetDomainEvents` resets state between tests.
+- **`@modules/payments/events`**: supplies the `PAYMENT_FAILED` constant.
+- **`@modules/payments/repository`, `model` and `presenter`**: used to read and seed payments and to check `displayStatus`.
+- **`@modules/payments/module`**: registered through `registerCheckoutModules`.
+- **`@scenarios/support/doubles/payments/fake`**: provides `fakePaymentProvider` and `setFakeOutcome`.
+- **Factories** (users, products, orders) and **`@tests/callers`** (`asCustomer`, `testCallerContext`): provide test data and caller identities.
+- **`@tests/environment`** (`withEnvironmentOverrides`): sets the env override for the reconciliation test.
 
 ## Notes
-
-- The cancel → payment-listener path is **asynchronous via the outbox**; every test that cancels an order must flush the outbox before asserting on the payment. Forgetting this is the most common source of false-green tests here.
-- The `retrieve` spy in the "buyer sync" test is installed **after** `canceledOrder()` returns deliberately — the cancel flow itself may call `retrieve`, so an earlier spy would produce a false positive.
-- `setFakeOutcome` (from the fake PSP) simulates a provider-side state change that the application learns about only through the webhook settlement entry point; it is not an application-level call.
-- The reconciliation-sweep test sets `NODE_PAYMENT_RECONCILE_MINUTES` to `'0'` via `withEnvironmentOverrides` so that any payment older than the threshold is eligible for processing.
+- The `retrieve` spy in the buyer-sync test is installed after `canceledOrder()` because the cancel path may call `retrieve` itself.
+- The `order.canceled` event reaches the payments listener through the outbox, not inline, so each test must call `settleOutboxNudges()`.
+- The failed-cancel test uses `mockRejectedValueOnce` on `fakePaymentProvider.cancel`.

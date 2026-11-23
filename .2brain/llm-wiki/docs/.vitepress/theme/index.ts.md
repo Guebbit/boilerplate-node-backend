@@ -1,30 +1,29 @@
 ---
 source: docs/.vitepress/theme/index.ts
-sha256: 0653270e38e428a9356a7ae0dbe5e98d512d1f5703b1529c4466ee91645d7862
-generated_at: 2026-11-08T02:24:50.512090+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 08dfee6f6330c5466a9a66a65d5bf2dc7a3be9028096eb9d6144179f5dc9eb83
+context_sha256: c092dd6e012d83ebd48033cd538a11d27eb45fbe9fa8f8d9d4fa614dabee53a1
+generated_at: 2026-11-22T01:35:05.137982+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docs/.vitepress/theme/index.ts
 
 ## Purpose
-
-VitePress custom theme entry that extends the default theme to add a click-to-zoom overlay for Mermaid diagrams. Because Mermaid renders SVGs client-side after page load, the theme uses a `MutationObserver` to wire up interaction handlers as diagrams appear in the DOM.
+VitePress theme entry point. It extends the default VitePress theme, registers the `MermaidDiagram` component globally, and adds a click-to-zoom feature: clicking a rendered Mermaid diagram opens an enlarged copy in a full-screen overlay.
 
 ## Key elements
-
-- **`openOverlay(container: HTMLElement): void`** — Clones the first `<svg>` inside a `.mermaid` container into a full-screen dialog overlay (`.mermaid-zoom-overlay`). Removes fixed width/height attributes so the SVG scales, forces a reflow to trigger the CSS transition, and supports closing via backdrop click or Escape.
-- **`attachToUnprocessed(): void`** — Iterates all `.vp-doc .mermaid` elements lacking the `data-zoom-attached` flag and an existing `<svg>`, then attaches a one-time click listener that calls `openOverlay`.
-- **Default export** — An object extending `DefaultTheme` whose `enhanceApp` guard-checks for a browser environment and starts a `MutationObserver` on `document.documentElement` (childList + subtree) that repeatedly calls `attachToUnprocessed` as new diagram nodes mount.
-- **`./custom.css`** — Imported for the overlay's visual styling (backdrop, transition, body scroll lock via `.mermaid-zoom-active`).
+- **`OVERLAY_FADE_FALLBACK_MS`** (400): upper bound on the overlay's fade-out before it is removed, whether or not `transitionend` fires.
+- **`openOverlay(container)`**: clones the diagram's `<svg>` into a `div.mermaid-zoom-overlay` (`role="dialog"`) appended to `document.body`. It strips the clone's `width`/`height` so CSS can size it, and adds `mermaid-zoom-active` to `<body>`. A reflow is forced before `mermaid-zoom-overlay--visible` is added so the CSS transition plays. A click on the backdrop (not the SVG) or the Escape key closes it. It does nothing if the container has no SVG.
+- **`attachToUnprocessed()`**: finds `.vp-doc .mermaid` elements that already contain an SVG, marks each with `data-zoom-attached`, and adds a click listener that calls `openOverlay`. Each diagram is wired only once.
+- **Default export**: the theme object, `extends: DefaultTheme`. Its `enhanceApp` registers `MermaidDiagram` and, in the browser only, starts a `MutationObserver` on `document.documentElement` (`childList`, `subtree`) that calls `attachToUnprocessed`.
+- Imports `./custom.css`, which presumably holds the overlay styles; the stylesheet's contents aren't shown here.
 
 ## Relationships
-
-No external file dependencies beyond the VitePress runtime (`vitepress`, `vitepress/theme`) and the local stylesheet. The theme is loaded by VitePress's build pipeline as the entry point specified in the project's `vitepress` config.
+- **`MermaidDiagram.vue`**: imported and registered as the global component `MermaidDiagram` in `enhanceApp`, so it can be used in Markdown pages. This file doesn't render diagrams itself. It only wires up zoom on the `.mermaid` elements that appear in the DOM.
 
 ## Notes
-
-- The `data-zoom-attached` dataset flag is the sole guard against double-wiring; if a diagram re-renders (e.g., code-block refresh), the old flag is lost and the handler is re-attached on the new node.
-- `getBoundingClientRect()` is called purely to force a reflow so the CSS `transition` fires; removing it makes the overlay appear instantly without animation.
-- Click-to-close is scoped to `e.target === overlay`, so interacting with the SVG itself does not dismiss the dialog.
-- The SSR guard (`globalThis.window === undefined`) is necessary because VitePress prerenders pages; without it the `MutationObserver` constructor would throw during server rendering.
+- Component registration happens before the SSR check (`globalThis.window === undefined`), because server rendering also needs the component. The observer is created only in the browser.
+- The observer is needed because Mermaid renders client-side after load, so the SVGs don't exist at `enhanceApp` time.
+- `close()` guards against double invocation (for example Escape followed by a click). It removes the overlay on `transitionend` and also on a timer, because `transitionend` doesn't fire when transitions are disabled (reduced motion, hidden tab). `remove()` is idempotent.
+- Closing also removes the `keydown` listener and the `mermaid-zoom-active` body class.
+- The observer is never disconnected, and `attachToUnprocessed` rescans the whole document on every DOM mutation.

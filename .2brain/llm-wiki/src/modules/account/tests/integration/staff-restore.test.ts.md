@@ -1,37 +1,33 @@
 ---
 source: src/modules/account/tests/integration/staff-restore.test.ts
-sha256: 4bf5c86ec93a06f94016238e3ce1f40ba7b4138a82297c595b1e0f551da723de
-generated_at: 2026-11-08T04:44:04.518096+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4bf5c86ec93a06f94016238e3ce1f40ba7b4138a82297c595b1e0f551da723de
+context_sha256: d7ecdee942f73ebd666fd2f0beda2eb5a7ca9af5b16bea8eae12c6312f9005d4
+generated_at: 2026-11-22T04:02:26.388135+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/staff-restore.test.ts
 
 ## Purpose
-
-Integration test for the `POST /users/{id}/restore` endpoint, exercising the cross-module flow where staff cancels an owner-scheduled deletion: `users` clears the purge schedule, emits a domain event, `account` consumes it to drop the restore token, and the owner receives a notification. Runs over real HTTP with the outbox relayed, since the event is the join point between the two modules.
+Integration test for `POST /users/{id}/restore`, where staff cancel an account deletion that its owner had scheduled. It checks the cross-module flow: `users` clears the deletion schedule and emits an event, and `account` reacts by dropping the restore link and emailing the owner. It runs over HTTP with the outbox relayed, because the event is what connects the two modules.
 
 ## Key elements
-
-- **`mockOutbox`** — module-level array that captures every `enqueueEmail` call (to, template, data) via the jest mock of `@infrastructure/adapters/mailer`.
-- **`scheduled(purgeAt, email)`** — helper that creates a user with `deletedBy: 'owner'`, `deletedAt` set to yesterday, the given `purgeAt`, and plants an `account-restore` token. Returns the user.
-- **Test: restores, drops link, notifies owner** — asserts 200, `deletedAt`/`purgeAt` cleared in the DB, all tokens removed, and an `account.restored` email sent to the owner with a non-empty `staffNote`.
-- **Test: schedule visibility & grace window** — staff `GET /users` listing shows `purgeAt` and `actions.restore: true` only when `purgeAt` is in the future; `false` once past.
-- **Test: 403 without `delete:User`** — a `support`-role caller gets 403 and the user's `deletedBy` is unchanged.
+- `mockOutbox`: array that captures every email the app queues (`to`, `template`, `data`), newest last. It is cleared in `beforeEach`.
+- `jest.mock('@infrastructure/adapters/mailer')`: keeps the real module but replaces `enqueueEmail` with a function that pushes to `mockOutbox`.
+- `scheduled(purgeAt, email?)`: helper that creates a verified user with `deletedAt` set to one day ago, `deletedBy: 'owner'` and the given `purgeAt`. It also plants an `account-restore` token for that user.
+- Test 1: an admin restores the account. The response is 200, `deletedAt` and `purgeAt` are cleared, no tokens remain, and an `account.restored` mail goes to the owner with a non-empty `staffNote`.
+- Test 2: `GET /users?pageSize=50` as admin. Each row shows `purgeAt`. `actions.restore` is `true` when the purge date is in the future and `false` when it has passed.
+- Test 3: a `support` role caller gets 403 (lacks `delete:User`), and the user's `deletedBy` stays `'owner'`.
 
 ## Relationships
-
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initializes the test database before the suite.
-- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules()` wires the account and users modules so the endpoint is reachable over HTTP.
-- **`tests/support/http.ts`** — `api()`, `authenticateAs('admin')`, `authenticateAsRole('support')` provide the HTTP client and auth headers.
-- **`src/kernel/events.ts`** — `resetDomainEvents()` in `afterEach` clears any pending event state between tests.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges()` flushes queued outbox messages so the `users`→`account` event is delivered within the test.
-- **`src/modules/users/tests/factories.ts`** — `createUser()` builds the test user record; `userRepository.findById` verifies post-request DB state.
-- **`src/modules/account/tests/factories.ts`** — `plantToken()` inserts the `account-restore` token; `tokenTypesOf()` asserts it was removed.
+- `@tests/http` (`tests/support/http.ts`): provides `api`, `authenticateAs` and `authenticateAsRole` for authenticated requests.
+- `@tests/setup-test-db` (`tests/support/setup-test-db.ts`): `setupTestDb()` sets up the test database.
+- `@tests/checkout-modules` (`tests/support/checkout-modules.ts`): `registerCheckoutModules()` is called in `beforeEach` to register the modules so their event handlers are wired.
+- `@kernel/events`: `resetDomainEvents()` runs in `afterEach` to clear handlers between tests.
+- `@kernel/outbox`: `settleOutboxNudges()` is awaited after the restore call so the outbox relays the event before the assertions.
+- `@modules/users/tests/factories`: `createUser` builds the fixture users, and `userRepository` reads back the stored state.
+- `../factories` (`src/modules/account/tests/factories.ts`): `plantToken` creates the restore token and `tokenTypesOf` lists a user's tokens.
 
 ## Notes
-
-- The mailer adapter is mocked at the module level (`jest.mock`), so no real email is sent; assertions read from `mockOutbox` directly.
-- `settleOutboxNudges()` must be awaited *after* the HTTP call but *before* asserting on `account`-side effects (token removal, email), because the outbox relay is what triggers the `account` module's handler.
-- The `scheduled()` helper intentionally sets `deletedAt` to the past (yesterday) so the account is in a "pending deletion" state, while `purgeAt` controls whether the grace window is still open.
-- The 403 test does **not** call `settleOutboxNudges()` because no state change is expected.
+- Mail assertions go through the mocked `enqueueEmail`, so no real mail is sent.
+- Test 2 builds its dates from `Date.now()`. One fixture is 5 days in the future and the other is 1 second in the past.

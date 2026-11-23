@@ -1,30 +1,32 @@
 ---
 source: src/modules/payments/controllers/get-order-payments.ts
-sha256: 27dc73a699de28284af82ca9d7bcfcead72826c727d6d4ec69d2e3b964182c2f
-generated_at: 2026-11-08T07:16:56.726542+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 27dc73a699de28284af82ca9d7bcfcead72826c727d6d4ec69d2e3b964182c2f
+context_sha256: f3cbcfc5005faa4e715958e4cd5eb97f9bc13c5d8b666a955e7e9de656aab6e7
+generated_at: 2026-11-22T06:41:02.832859+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/controllers/get-order-payments.ts
 
 ## Purpose
-
-Handler for `GET /orders/:id/payments`. Returns the payment records (intents and their statuses) for a given order so the order-page payment panel can rehydrate on load. An order with no payment started returns `{ items: [] }`; a 404 is returned only when the caller cannot see the order (authorization failure), not when the order simply has no payments.
+Express controller for `GET /orders/:id/payments`. It returns the payments of an order so the order page's payment panel can reload mid-flow and find the existing intent and its status instead of starting over. An order nobody has started paying returns `{ items: [] }`. A 404 is returned only for an order the caller cannot see.
 
 ## Key elements
-
-- **`getOrderPayments`** (exported) — The sole route handler. Validates the `:id` param via `requireId`, delegates to `paymentService.listForOrder(orderId, request.authContext)`, and writes either a refusal (401/403/404) or a `successResponse` with `OrderPaymentsResponse` data. Catches unexpected errors via `catchAs`.
+- `getOrderPayments(request, response)`: the only export. It does the following:
+  - Validates the `:id` param with `requireId`, using the `orders.not-found` key for a missing or invalid id. If there is no id it returns early, because `requireId` has already responded.
+  - Calls `paymentService.listForOrder(orderId, request.authContext)`.
+  - If `refused(response, result)` reports a refusal, it stops. Otherwise it sends `result.data` through `successResponse<OrderPaymentsResponse>`.
+  - Unexpected errors go to `catchAs(response, 'getOrderPayments')`.
+- The handler always returns a Promise, either `Promise.resolve()` on the early exit or the service promise chain.
 
 ## Relationships
-
-- **`src/infrastructure/http/ids.ts`** — `requireId` extracts and validates the order ID from request params; short-circuits with a 404 (message key `orders.not-found`) when absent.
-- **`src/modules/payments/services/index.ts`** — Provides `paymentService.listForOrder`, the single business-logic call this controller makes.
-- **`src/infrastructure/http/response.ts`** — `successResponse` wraps the service result into the standard HTTP envelope.
-- **`src/infrastructure/http/controller.ts`** — `refused` inspects the service result and writes the appropriate error status; `catchAs` maps unexpected throws to a 500.
-- **`src/modules/payments/order-routes.ts`** — Registers `getOrderPayments` on the `GET /orders/:id/payments` route.
-- **`src/types/index.ts`** — Exports the `OrderPaymentsResponse` type used as the generic parameter of `successResponse`.
+- `src/infrastructure/http/ids.ts`: provides `requireId`, which parses the route id and sends the not-found response.
+- `src/infrastructure/http/response.ts`: provides `successResponse`, which writes the success payload.
+- `src/infrastructure/http/controller.ts`: provides `refused`, which checks the service result and responds if it was refused, and `catchAs`, the error handler for the promise chain.
+- `src/modules/payments/services/index.ts`: provides `paymentService`, whose `listForOrder` does the lookup and the caller-visibility check.
+- `src/types/index.ts`: provides the `OrderPaymentsResponse` type (imported via `@types`).
+- `src/modules/payments/order-routes.ts`: the neighbor that wires this handler to the route. The handler file itself does not show the registration.
 
 ## Notes
-
-- The 404 semantics are intentional and slightly counter-intuitive: "no payments yet" is a 200 with an empty `items` array, not a 404. A 404 signals *the caller is not authorized to see this order*, not that the order is missing.
-- `requireId` is called with a typed param `Request<{ id?: string }>`, meaning the ID is optional in the type signature; the handler relies on `requireId` to enforce presence.
+- The controller contains no authorization or lookup logic. It passes `request.authContext` to the service, and the service result decides whether the response is refused.
+- The "404 only for an order the caller cannot see" rule is implemented outside this file, in the service and the `refused` helper.

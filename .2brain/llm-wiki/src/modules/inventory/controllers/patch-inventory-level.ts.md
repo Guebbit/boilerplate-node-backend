@@ -1,34 +1,34 @@
 ---
 source: src/modules/inventory/controllers/patch-inventory-level.ts
-sha256: eb30f4dcfcd73b0b6f44f03dc5aa573222522b357da6f9a1f851d7143d8652b1
-generated_at: 2026-11-14T20:03:11.882109+00:00
-model: ollama:qwen3.8:27b
+source_sha256: eb30f4dcfcd73b0b6f44f03dc5aa573222522b357da6f9a1f851d7143d8652b1
+context_sha256: 04299a4fd8d4426c81cae349faee474aa4f84160813b82ab69640547b100c008
+generated_at: 2026-11-22T05:17:28.925915+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/controllers/patch-inventory-level.ts
 
 ## Purpose
-
-Controller for `PATCH /inventory/levels/:productId`. Updates the single editable field on a product's inventory level — the backorder (preorder) limit. The mutation is audited because this value is the cap the shop's purchase promise is made under.
+Express controller for `PATCH /inventory/levels/:productId`. It edits a product's stock level. The only editable field is the backorder (preorder) limit, which is audited because it caps what the shop can promise buyers.
 
 ## Key elements
-
-- **`patchInventoryLevel`** (exported) — Express route handler. Validates `productId` via `requireId`, parses the request body against the `UpdateInventoryLevelBody` Zod schema, then either reads the current level (no-op) or writes a new backorder limit via `inventoryService.setBackorderLimit`.
-- **No-op short-circuit** — If the parsed body has `backorderLimit === undefined`, the handler calls `inventoryService.getLevel(productId)` instead of writing, returns the current level with 200, and performs no audit.
-- **Audited write path** — When `backorderLimit` is present, `callerContextOf(request)` is passed to the service so the mutation is recorded with attribution.
+- `patchInventoryLevel(request, response)`: the exported handler. It returns a Promise, or `Promise.resolve()` when it has already replied with an error.
+  - Validates `productId` with `requireId`. If the id is invalid, the error code is `inventory.product-not-found`.
+  - Parses the body with `parseBody(UpdateInventoryLevelBody, ...)`.
+  - If `body.backorderLimit` is `undefined`, it reads the current level through `inventoryService`. This is a no-op merge patch, so there is no write and no audit.
+  - Otherwise it calls the service to set the backorder limit, passing `callerContextOf(request)`.
+  - If `refused(response, result)` is true, it stops, because the response has already been sent. Otherwise it replies 200 with `successResponse<InventoryLevel>(response, result.data, 200)`.
+  - Rejections go to `catchAs(response, 'patchInventoryLevel')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — provides the `catchAs`, `parseBody`, and `refused` helpers used for error handling and body validation.
-- **`src/infrastructure/http/ids.ts`** — provides `requireId` to extract and validate the `productId` route param.
-- **`src/infrastructure/http/request.ts`** — provides `callerContextOf` to derive the audit context from the incoming request.
-- **`src/infrastructure/http/response.ts`** — provides `successResponse` to emit the JSON 200 payload.
-- **`src/modules/inventory/routes.ts`** — wires this handler onto the `PATCH /inventory/levels/:productId` route.
-- **`src/modules/inventory/services/index.ts`** — source of `inventoryService`, whose `getLevel` and `setBackorderLimit` methods are the two service calls this controller makes.
-- **`src/types/index.ts`** — defines the `InventoryLevel` type used as the response payload.
+- `src/infrastructure/http/controller.ts`: supplies `parseBody`, `refused` and `catchAs`.
+- `src/infrastructure/http/ids.ts`: supplies `requireId` for the `productId` param.
+- `src/infrastructure/http/request.ts`: supplies `callerContextOf`, which provides the caller context passed to the service write.
+- `src/infrastructure/http/response.ts`: supplies `successResponse`.
+- `src/modules/inventory/services/index.ts`: supplies `inventoryService`, which does the actual read and write work.
+- `src/types/index.ts`: supplies the `InventoryLevel` type for the response payload.
+- `src/modules/inventory/routes.ts`: the route wiring for this handler, as described by the file header. The import direction is not visible in this file.
 
 ## Notes
-
-- **No `If-Match` / ETag**: the handler deliberately omits optimistic concurrency. The file's doc comment explains that stock quantity changes flow through separate `receive`/`adjust` endpoints with their own atomic rules; this endpoint only touches the single backorder-limit field.
-- **Merge-patch semantics**: an empty or field-less body is treated as a read, not a write. This avoids spurious audit entries for clients that send `{}`.
-- The Zod schema (`UpdateInventoryLevelBody`) is imported from `@api/schemas.zod` (not listed in the graph neighbors) and is the single source of truth for what fields the client may submit.
+- There is no `If-Match` precondition. The file's comment says this is because only one field is editable. Stock quantity changes go through separate receive/adjust operations, which have their own atomic rule.
+- An empty patch returns the current level with status 200 and does not touch the audit trail.

@@ -1,38 +1,36 @@
 ---
 source: src/modules/products/tests/integration/api-key-reads.test.ts
-sha256: 3b1e0bef5ef1e2919869cceb468339476da6a01f67bc6f327b40bc0fa581ba86
-generated_at: 2026-11-08T07:50:16.391339+00:00
-model: ollama:qwen3.8:27b
+source_sha256: dea552e46d37fe1c3e9dfbf6f1a5d8d27ad792e09eadd28784231e9f6f8a2d1a
+context_sha256: 714b288f1224f0aced50d5bbe4041e799ac0a3b831576b648f85768dd2c91c3a
+generated_at: 2026-11-22T07:15:29.848696+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/integration/api-key-reads.test.ts
 
 ## Purpose
-
-Integration tests verifying that an `sk_…` API key, when used to call the product endpoints, receives the same visibility and scoping rules as a session with identical permissions. Specifically, it asserts that scope-dependent fields (drafts, soft-deleted rows, translations) appear or disappear based on the key's granted scopes, and that the cache middleware correctly distinguishes a key caller from an anonymous guest so a wider answer is never stored under the guest's cache key.
+Integration tests showing that an `sk_...` API key reads products the same way a session with the same permissions does. `callerScope` takes `request.caller`, which both sessions and keys resolve to. A key holding `display:Product` therefore sees drafts and soft-deleted rows. A key without it sees only the published catalogue a guest sees.
 
 ## Key elements
-
-- **`bearerOf(secret)`** – Local helper that formats a credential secret into an `Authorization: Bearer …` header value.
-- **`titlesAt(secret)`** – Helper that GETs `/products`, extracts the `items[].title` array, and returns it sorted. Used by the list-visibility tests.
-- **`describe('GET /products/:id with an api key')`** – Three tests confirming a soft-deleted product returns 200 for `display:Product`, 404 for a key lacking that scope, and that a published product is still visible to an unrelated scope.
-- **`describe('GET /products/:id: translations follow read:Translation')`** – Four tests covering: translations present for `read:Translation` vs absent for a guest; the key's response must not seed the guest's cached entry; and the `cache-control` header must be `private` (not shared with the anonymous tier).
-- **`describe('GET /products with an api key')`** – Two tests confirming the list endpoint includes drafts for `display:Product` and only active products otherwise.
-- **`describe('the cache scope of a key caller')`** – Two unit-level assertions calling `hasAnonymousReadScope(productService.callerScope, callerAs(…))` to lock in that an admin-scoped caller is *not* treated as anonymous while a customer-scoped one *is*.
+- `bearerOf(secret)`: builds the `Bearer <secret>` `Authorization` header value.
+- `titlesAt(secret)`: calls `GET /products` with the key and returns the sorted item titles.
+- `GET /products/:id with an api key`: checks a soft-deleted product is 200 for `display:Product` and 404 for a `read:User` key. It also checks a published product is still 200 for a key minted for something else.
+- `GET /products/:id: translations follow read:Translation`:
+  - A `read:Translation` key gets all languages in `translations`, and a guest gets no `translations` property.
+  - After the key reads a product, a guest's request for it must still return no `translations`, so the key's wider answer must not seed the guest's cached entry.
+  - The keyed response has a `private` `cache-control` header.
+- `GET /products with an api key`: a `display:Product` key lists drafts and live products. A key without it lists only published ones.
+- `the cache scope of a key caller`: unit-style checks of `hasAnonymousReadScope(productService.callerScope, callerAs(...))`. It is `false` for `admin` (holds `display:Product`) and `true` for `customer` (public baseline only).
 
 ## Relationships
-
-- **`@tests/http` → `api`** – Provides the supertest-style HTTP client used for every request in this file.
-- **`@tests/setup-test-db` → `setupTestDb`** – Called once at module scope to reset/provision the test database before any test runs.
-- **`@tests/credentials` → `credentialHolding`** – Mints a throwaway `sk_…` secret bound to a specific scope list; the file's primary fixture for "a key with scopes X."
-- **`@modules/products/tests/factories` → `createProduct`** – Inserts a product row with the desired `active`/`deletedAt` state.
-- **`@tests/callers` → `callerAs`** – Produces a caller context object (e.g. `'admin'`, `'customer'`) for the `hasAnonymousReadScope` unit assertions.
-- **`@kernel/access/query` → `hasAnonymousReadScope`** – The predicate under test in the cache-scope block; determines whether a given caller's scope is equivalent to the public baseline.
-- **`../../services` → `productService`** – Imported solely to read `productService.callerScope`, the function the cache middleware consults to decide whether a response is guest-equivalent.
+- `tests/support/http.ts`: `api()` issues the requests.
+- `tests/support/setup-test-db.ts`: `setupTestDb()` is called at module level to prepare the test DB.
+- `tests/support/credentials.ts`: `credentialHolding` returns an API key secret holding the listed permissions.
+- `tests/support/callers.ts`: `callerAs('admin' | 'customer')` builds callers for the cache-scope tests.
+- `src/modules/products/tests/factories.ts`: `createProduct` seeds products with `title`, `active` and `deletedAt`.
+- `src/kernel/access/query.ts`: provides `hasAnonymousReadScope`.
+- `src/modules/products/services/index.ts`: provides `productService`, whose `callerScope` is passed to `hasAnonymousReadScope`.
 
 ## Notes
-
-- `setupTestDb()` is invoked at **module top level**, not inside a `beforeAll`, so it runs once when the test file loads.
-- The last describe block ("the cache scope of a key caller") makes no HTTP requests; it asserts the pure predicate `hasAnonymousReadScope` directly, so failures there point to a misconfigured `productService.callerScope` rather than a routing or serialization bug.
-- The translation-cache test ("never lets that key seed the guest's cached answer") relies on request ordering: the keyed GET must complete *before* the guest GET so that any cache pollution would be observable.
-- Scope strings are plain arrays (`['display:Product']`, `['read:Translation']`); there is no wildcard or hierarchical matching exercised here.
+- The cache middleware shares the guest's cache entry only when `hasAnonymousReadScope` is true. A key that reads more than a guest must make it false, or its answer would be stored under the guest's key.
+- A `read:Translation` key reads the same rows as a guest, so only the field-level check keeps its translations out of the guest's cached entry.

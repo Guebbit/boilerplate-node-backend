@@ -1,28 +1,25 @@
 ---
 source: src/modules/locales/presenters.ts
-sha256: 82f931482ad6b795230ee77f18f962d9ce05386d6f945f20bf72c4855addc6ae
-generated_at: 2026-11-08T06:23:50.743810+00:00
-model: ollama:qwen3.8:27b
+source_sha256: abc05d9f8a9cbf7dce9b7d5e54fde57c7ea8eb938451cc9df350ba8c278c1e76
+context_sha256: 44d2c92ed73d1828e14d5f269e2f62a45645d118bcca9e3b8e377d5106cc6a42
+generated_at: 2026-11-22T05:45:54.281041+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/presenters.ts
 
 ## Purpose
-
-Provides the single-document wire-shape transform for locale entries. Because the repository's `search()` path already returns `LocaleEntry` directly and languages merge both tiers without needing a separate presenter, this module exists solely to give single-document write flows (create/update) a stored-document → wire-shape cast.
+Converts a locale entry document into its wire shape (`LocaleEntry`) for single-document write responses. Stored documents are typed as stored, not as the API contract promises, so this presenter centralizes the conversion instead of scattering casts.
 
 ## Key elements
-
-- **`presentLocaleEntry(document: LocaleEntryDocument): LocaleEntry`** — Calls the model's `toJSON()` (which renames `_id` → `id` and serializes dates to ISO strings) and casts the result to `LocaleEntry`. The cast is necessary because `toJSON()` is untyped relative to the wire contract.
+- `presentLocaleEntry(document: LocaleEntryDocument): LocaleEntry` — calls `document.toJSON()` and casts the result to `LocaleEntry`. The model's `toJSON` transform maps `_id` to `id` and dates to ISO strings.
 
 ## Relationships
-
-- **`./model.ts`** — Supplies the `LocaleEntryDocument` type that this file accepts; the document's `toJSON()` implementation performs the actual field renaming and date serialization.
-- **`@types` (`src/types/index.ts`)** — Supplies the `LocaleEntry` type that this file returns; the presenter is the bridge between the stored document shape and this wire shape.
-- **`controllers/post-locale-entry.ts` / `controllers/put-locale-entry.ts`** — The write-path controllers that need a single-document presentation after persisting; they consume `presentLocaleEntry` to hand a correctly-shaped `LocaleEntry` to the HTTP response.
-- **`controllers/get-locale-entries.ts`** — Does **not** consume this presenter; its `search()` call already yields `LocaleEntry` via the repository's lean transform.
+- `src/modules/locales/model.ts` — supplies the `LocaleEntryDocument` type and, by its `toJSON` transform, the actual conversion.
+- `src/types/index.ts` (`@types`) — supplies the `LocaleEntry` wire type.
+- `src/modules/locales/controllers/get-locale-entries.ts`, `src/modules/locales/controllers/post-locale-entry.ts`, `src/modules/locales/controllers/put-locale-entry.ts` — neighbors in the dependency graph. The module doc says only single-document writes need this presenter, so the post and put controllers are the likely consumers. The file does not show how any controller uses it.
 
 ## Notes
-
-- The module doc explicitly states that a language does **not** need a presenter here — `localeService.describeStoredLanguage` handles that merge. Do not add a language variant.
-- The `as LocaleEntry` cast is load-bearing: `toJSON()` is not typed as `LocaleEntry`, so removing it (or the underlying `toJSON` contract) will break the return type silently.
+- The `as LocaleEntry` cast is not checked by the compiler. The doc comment says `toJSON` leaves no date or id object (`serialize.ts`) and that contract tests check the rest.
+- Languages have no presenter. `localeService.describeStoredLanguage` builds their wire shape, which merges both tiers.
+- `src/modules/locales/services/entries.ts`'s `search()` already returns `LocaleEntry` from the repository's lean transform, so it does not use this presenter.

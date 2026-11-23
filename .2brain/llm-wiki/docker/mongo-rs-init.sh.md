@@ -1,35 +1,31 @@
 ---
 source: docker/mongo-rs-init.sh
-sha256: c3378d2ee5b607e5725733d0af8dceea107e40442dad7dfd343c7a0e57e31f27
-generated_at: 2026-11-08T02:20:54.899671+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c3378d2ee5b607e5725733d0af8dceea107e40442dad7dfd343c7a0e57e31f27
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T01:30:52.420808+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/mongo-rs-init.sh
 
 ## Purpose
-
-One-shot Compose service that initiates the single-node replica set (`rs0`) on the `database` MongoDB container and blocks until that node reaches **PRIMARY** before exiting. It exists because the MongoDB entrypoint's temporary init scripts run *without* `--replSet`, making `rs.initiate()` impossible from `mongo-init.js`; this container connects to the already-running, replSet-enabled `mongod` over the Compose network instead.
+A one-shot Bash script, run as a compose service, that initiates the single-node MongoDB replica set `rs0` on the already-running `database` service and blocks until it is PRIMARY. It exists because `mongo-init.js` cannot do this. The entrypoint's temporary init-script mongod runs without `--replSet`, so `rs.initiate()` fails there.
 
 ## Key elements
-
-- **`TLS_OPTS`** – Array passed to every `mongosh` invocation; enables TLS and points at the shared CA cert (`/ca-dir/mongo-ca.crt`) mounted read-only from the `database` service.
-- **`AUTHENTICATE`** – Multi-line JS fragment prepended to authenticated `--eval` calls. Reads the root password from `/run/secrets/mongo_root_password` via Node's `fs.readFileSync` (avoids exposing the secret in `ps`/`cmdline`) and calls `db.getSiblingDB("admin").auth(...)`.
-- **Readiness poll** – `until mongosh … db.adminCommand('ping').ok` loop (1 s sleep). Acts as a hard gate for `podman-compose 1.6`, which does not honour `service_healthy` the way Docker Compose does.
-- **Idempotent initiation** – Tries `rs.status()`; on the "no replset config" error calls `rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'database:27017' }] })`. Re-running is a no-op.
-- **PRIMARY wait loop** – Polls `rs.isMaster().ismaster` until it returns `true`, ensuring the node can accept writes before downstream services (`db:sync`, `access:bootstrap`) proceed.
+- **`TLS_OPTS`**: `--tls --tlsCAFile /ca-dir/mongo-ca.crt`. `database` requires TLS, and this container reaches it over the compose network using the CA cert from the read-only `/ca-dir` mount.
+- **`AUTHENTICATE`**: a mongosh snippet prepended to `--eval` scripts. It reads the root password from `/run/secrets/mongo_root_password` and authenticates against `admin` as the user named by the `MONGO_ROOT_USER` environment variable. The password never appears in `ps` or `/proc/<pid>/cmdline`.
+- **Ping loop**: polls `db.adminCommand('ping')` unauthenticated until mongod answers.
+- **Idempotent initiation**: `rs.status()` succeeds if the set is already initiated. If it throws, the script calls `rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'database:27017' }] })`.
+- **PRIMARY wait loop**: polls `rs.isMaster().ismaster` until `grep -q true` matches, then prints `[mongo-rs-init] database is PRIMARY`.
 
 ## Relationships
-
-No graph-neighbour files are registered. The script interacts at runtime with:
-
-- **`database`** (Compose service / `mongod`) – the sole target; connects via `database:27017` over the Compose network.
-- **`/ca-dir/mongo-ca.crt`** – CA certificate shared out by the `database` entrypoint (`mongo-entrypoint.sh`).
-- **`/run/secrets/mongo_root_password`** – Secret file mounted by Compose; read only inside the JS context.
+No graph neighbors are listed, so no file-level dependencies are recorded. The comments refer to other parts of the setup by name:
+- `database` service: the mongod being initialized, which runs with `--replSet rs0`, `--tlsMode requireTLS` and `--keyFile`.
+- `setup` service: its `depends_on` relies on this script exiting 0. `db:sync` and `access:bootstrap` run after it.
 
 ## Notes
-
-- **`podman-compose 1.6` healthcheck gap:** the ping loop is not redundant belt-and-suspenders; on podman-compose it is the *only* mechanism that blocks until `mongod` is reachable, since `depends_on: condition: service_healthy` is not enforced the same way as in Docker Compose.
-- **`rs.initiate()` ≠ PRIMARY:** the initiation call returns before the single-node election completes. The final `ismaster` poll is what actually guarantees write-readiness for downstream services.
-- **Secret handling:** the root password is deliberately never passed as a CLI `-p` argument to avoid leaking via `ps` / `/proc/<pid>/cmdline`; it is read from a file inside the JS `require("fs")` context.
-- **Idempotency contract:** re-running the script against an already-initiated set is safe and prints a log line rather than erroring, consistent with the repo's other one-shot seeder services.
+- The script uses `set -euo pipefail`.
+- The ping loop backs up `depends_on`'s `service_healthy`, because podman-compose 1.6 does not enforce healthchecks like Docker Compose does.
+- The final PRIMARY wait is necessary because `rs.initiate()` returns before the election finishes. Without it, downstream services could see a set with no PRIMARY.
+- `ping` works without auth even with `--keyFile`, which implies `--auth`.
+- The CA cert at `/ca-dir` is shared out by `mongo-entrypoint.sh`, and `mongo-init.js` is the script that cannot call `rs.initiate()`; neither is a recorded graph neighbor.

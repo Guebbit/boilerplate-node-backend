@@ -1,42 +1,38 @@
 ---
 source: src/modules/returns/repository.ts
-sha256: f8b05aeb1cafbdd6fc2a991092d1451ed26e56b890424ab7662a98cdf2b36562
-generated_at: 2026-11-14T21:35:50.961540+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 236b21bc0b5d690a8699cdb73fa9c586b204870582a88fbe1af6b53d19037ff3
+context_sha256: 3a481681420fa8acf7b6204c974d63327aeb04c852175fd71d1f9853a7db46af
+generated_at: 2026-11-22T07:27:11.424213+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/repository.ts
 
 ## Purpose
-
-Persistence layer for the Returns module. It exposes the generic CRUD surface (delegated to `createRepository`) plus the domain-specific operations the service layer needs: atomic status transitions, per-order reads, transactional locking, GDPR text scrubbing, and a stats aggregation. It exists so that services never touch Mongoose directly and so the two concurrency-sensitive primitives (`claimStatus`, `claimProof`) live in one place.
+Persistence layer for returns. It exposes the generic CRUD repository for the return model, plus the specialised primitives the returns services use to drive lifecycle moves safely: an atomic conditional status write, per-order reads, an order-level lock, a stats aggregation, and a free-text scrub.
 
 ## Key elements
-
-- **`ReturnStamp`** (type) — The set of fields a lifecycle move may write alongside its status change. Includes dotted paths for per-line `restocked` counts.
-- **`returnRepository`** (object, main export) — The repository instance. Spreads generic CRUD (`createRepository<ReturnDocument, StoredReturn>(returnModel, …)`) and adds:
-  - `claimStatus(id, from, to, stamp?, session?, where?)` — Conditional `findOneAndUpdate` guarded by a `$in` on `status`. Returns the updated doc or `null` if the status wasn't in `from`. This is the exactly-once mechanism for every lifecycle move.
-  - `claimProof(id, stamp, session)` — Stamps proof-of-sending on an `approved` return that has no proof yet. Returns `null` on conflict or if already stamped.
-  - `findByOrderId(orderId, session?)` — All returns for one order, sorted `createdAt` asc.
-  - `lockOrder(orderId, session)` — Upserts a `returnOrderLockModel` row (`$inc: openings`). Two concurrent transactions on the same order conflict; the driver retries the loser.
-  - `findByOrderIds(orderIds)` — Batch read for account exports.
-  - `scrubFreeTextBefore(cutoff)` — `$unset`s `note` and `declineMessage` on returns unchanged since `cutoff`. Uses `timestamps: false` to avoid advancing `updatedAt` (the query's own filter clock). Idempotent on rerun.
-  - `sumReceived<TRow>(window, group, productId?)` — Aggregation over `BACK_RETURN_STATUSES` within a `receivedAt` window, unwinds `lines`, applies caller-supplied `$group`. Used by reporting.
+- **`ReturnStamp`** (type): the fields a lifecycle move may set in the same write as its status (decline reason/message, decided/received/closed/canceled timestamps, remedy, handling deduction, refund amounts, proof-of-sending fields, shipping refund). Also allows a per-line `restocked` value, set by line position as a dotted path.
+- **`returnRepository`**: `createRepository(...)` spread (with `applyReturnTransform`, searchable `orderId`/`status`/`reason`, sortable `createdAt`/`status`) plus these extras:
+  - **`claimStatus(id, from, to, stamp?, session?, where?)`**: moves a return between statuses only if it is currently in one of `from`; the `$in` condition is in the write filter, so concurrent deciders race in the database and the loser gets `null`. Stamps facts in the same statement; extra `where` conditions are merged into the filter.
+  - **`claimProof(id, stamp, session)`**: stamps proof of sending on a return with no `proofOfSendingAt` yet. Allowed from the statuses `returnLifecycle.fromOf('receive')`, and the status is written as `approved`. Returns `null` if the guard fails.
+  - **`findByOrderId(orderId, session?)`**: all returns for one order, oldest first (`createdAt`, `_id`).
+  - **`lockOrder(orderId, session)`**: upserts and increments a row in `returnOrderLockModel` so concurrent transactions on the same order conflict on the write and the loser is retried by the driver.
+  - **`findByOrderIds(orderIds)`**: returns across many orders, oldest first (used for the account export, per the doc comment).
+  - **`sumReceived(window, group, productId?)`**: aggregation over returns in `BACK_RETURN_STATUSES` with `receivedAt` in `[from, to)`, unwinds `lines`, optionally filters by product, then applies the caller's `$group` body.
+  - **`scrubFreeTextBefore(cutoff)`**: unsets `note` and `declineMessage` on returns with `updatedAt <= cutoff` that still hold text; returns the modified count.
 
 ## Relationships
-
-- **`@infrastructure/persistence/conditional-status`** — Provides `updateStatusIfIn`, the primitive both `claimStatus` and `claimProof` delegate to for their atomic conditional write.
-- **`@infrastructure/persistence/create-repository`** — Supplies the generic CRUD base (find, getById, etc.) and the `toObjectId` helper, both spread into `returnRepository`.
-- **`@infrastructure/persistence/report`** — Provides the `ReportWindow` type used by `sumReceived`.
-- **`./model`** — Source of `returnModel` (the Mongoose model), `returnOrderLockModel` (the lock table), `applyReturnTransform` (document → `StoredReturn` mapper), and the `ReturnDocument` type.
-- **`./domain`** — Source of `BACK_RETURN_STATUSES` (used in the `sumReceived` filter), `returnLifecycle` (used to derive the `from` set in `claimProof`), and the `ReturnStatus` type.
-- **`./presenter`** — Source of the `StoredReturn` type that the generic CRUD's `transform` produces.
-- **Services (`create`, `decide`, `close`, `cancel`, `cancel-remainder`, `digest`, `notify`, `options`)** — Each calls into `returnRepository` for its reads and writes; `decide`, `close`, `cancel`, and `cancel-remainder` drive status transitions through `claimStatus`; `digest` and `notify` read via `findByOrderId`/`claimProof`.
+- Uses `infrastructure/persistence/conditional-status` (`updateStatusIfIn`) as the engine behind `claimStatus` and `claimProof`.
+- Uses `infrastructure/persistence/create-repository` for the base CRUD repository, the `Repository` type and `toObjectId`.
+- Uses `infrastructure/persistence/report` for the `ReportWindow` type in `sumReceived`.
+- Uses `./model` for `returnModel`, `returnOrderLockModel`, `applyReturnTransform` and the `ReturnDocument` type.
+- Uses `./domain` for `BACK_RETURN_STATUSES`, `returnLifecycle` and `ReturnStatus`.
+- Uses `./presenter` for the `StoredReturn` type.
+- The services in `./services/` (cancel, cancel-remainder, close, create, decide, digest, notify, options) are neighbors in the graph; this file's own header says the service drives lifecycle moves through `claimStatus`, though the file does not show which service calls which method.
 
 ## Notes
-
-- **Concurrency model:** `claimStatus` and `claimProof` rely on a single conditional `findOneAndUpdate` — there is no read-then-write. Two concurrent callers on the same return get exactly one non-`null` result. Services must treat `null` as "someone else moved first" and re-read or abort.
-- **`lockOrder` is a no-op outside a transaction.** The upsert only creates contention when both callers pass a `session`. Callers that don't pass one get no mutual exclusion.
-- **`scrubFreeTextBefore` is idempotent** but only for *new* text: if a return is edited after the cutoff, its text is preserved. The `timestamps: false` flag is load-bearing — without it the query would advance `updatedAt` and make the next run's `$lte` filter wrong.
-- **`ReturnStamp` allows dotted paths** (`lines.${number}.restocked`), so callers can target a specific array element in the same atomic write. This is a Mongoose-specific feature; it won't work if the schema ever switches off Mongoose.
-- The `searchable` config passed to `createRepository` declares which fields support `objectIds`, `exact`, and `sortable` lookups — the generic CRUD methods filter/sort on those keys.
+- `claimProof` is a stamp guarded by the receive window rather than a status move; the status stays `approved`.
+- `lockOrder` only works inside a transaction; the lock is meaningless without a session.
+- `scrubFreeTextBefore` passes `timestamps: false` so the wipe does not change `updatedAt`, the field the query filters on. It is idempotent because the filter only matches returns that still hold text.
+- `claimStatus` returns `null` on a lost race or wrong starting status; callers must handle that result.

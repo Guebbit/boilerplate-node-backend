@@ -1,37 +1,33 @@
 ---
 source: src/modules/orders/domain/projections.ts
-sha256: db184f53c5df3be63b5820d814e4347e2c08bf79d49a4fa8186a5697d2203f0b
-generated_at: 2026-11-08T06:49:24.299591+00:00
-model: ollama:qwen3.8:27b
+source_sha256: db184f53c5df3be63b5820d814e4347e2c08bf79d49a4fa8186a5697d2203f0b
+context_sha256: f75bd36178b2bc9468dfb099690a0cccbbe43ed2a5e8dbac6e675e529ea9d0d3
+generated_at: 2026-11-22T06:12:25.976509+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/domain/projections.ts
 
 ## Purpose
-
-Defines how the two "adjacent" statuses on an order — Shopify's `financial_status` (payment) and `returnStatus` — are **derived on read** and **queried on write**. Because `orders` cannot import `payments` or `returns`, those modules stamp the stored field through this file's helpers rather than the order module computing them. Everything here is pure (no I/O) so the mappings are trivially unit-testable.
+Pure, I/O-free mappings for the statuses that sit beside an order's own `status`: Shopify's `financial_status` (payment) and `returnStatus`. Because `orders` cannot import `payments` or `returns`, these values can't be derived on read. They are stored, stamped by the owning module through the orders service, and this file defines the allowed stamps, how to resolve the effective status, and the inverse Mongo filters. (`fulfillment_status` is handled separately in `./fulfillment`.)
 
 ## Key elements
-
-- **`STAMPED_PAYMENT_STATUSES`** / **`StampedPaymentStatus`** — Closed set of refund states (`partially_refunded`, `refunded`) that `payments` may write to the `paymentStatus` field. `unpaid` and `paid` are *derived*, never stored.
-- **`STAMPED_RETURN_STATUSES`** / **`StampedReturnStatus`** — Closed set of return states (`requested`, `in_progress`, `partially_returned`, `returned`) that `returns` may write. `none` is the absence of a stamp.
-- **`paymentStatusOf(stamped, paidAt)`** — Read-time projection: a stamped refund state wins; otherwise falls back to `paid` (if `paidAt` exists) or `unpaid`.
-- **`returnStatusOf(stamped)`** — Read-time projection: the stored stamp, or `'none'` when absent.
-- **`paymentStatusFilter(status)`** — Inverse of `paymentStatusOf`; returns a Mongo filter over the raw stored fields (`paymentStatus`, `paidAt`).
-- **`returnStatusFilter(status)`** — Inverse of `returnStatusOf`; returns `{ returnStatus: null }` for `'none'`, else `{ returnStatus: status }`.
+- `STAMPED_PAYMENT_STATUSES` / `StampedPaymentStatus` — the refund states `payments` stamps: `partially_refunded`, `refunded`. `unpaid` and `paid` are derived, never stored.
+- `STAMPED_RETURN_STATUSES` / `StampedReturnStatus` — the return states `returns` stamps: `requested`, `in_progress`, `partially_returned`, `returned`. `none` is never stored.
+- `paymentStatusOf(stamped, paidAt)` — returns the stamped refund state if present; otherwise `paid` if `paidAt` is set, else `unpaid`.
+- `returnStatusOf(stamped)` — returns the stamp, or `none` if absent.
+- `paymentStatusFilter(status)` — builds the Mongo filter that is the inverse of `paymentStatusOf`:
+  - `paid` → `{ paymentStatus: null, paidAt: { $ne: null } }`
+  - `unpaid` → `{ paymentStatus: null, paidAt: null }`
+  - any other status → `{ paymentStatus: status }`
+- `returnStatusFilter(status)` — the inverse of `returnStatusOf`: `none` → `{ returnStatus: null }`, otherwise `{ returnStatus: status }`.
 
 ## Relationships
-
-- **`src/types/index.ts`** — Source of the `OrderPaymentStatus` and `OrderReturnStatus` enums consumed by every export here.
-- **`src/modules/orders/domain/index.ts`** — Domain barrel that re-exports the symbols defined in this file so the rest of the module can import them from a single entry point.
-- **`src/modules/orders/model.ts`** — The order document carries the stored fields (`paymentStatus`, `paidAt`, `returnStatus`) that these functions read and filter against.
-- **`src/modules/orders/services/status.ts`** — The "service door" through which `payments` and `returns` stamp the stored fields; it calls into this file's constants/types to validate what it writes.
-- **`src/modules/orders/repository.ts`** — Consumes `paymentStatusFilter` / `returnStatusFilter` to build MongoDB queries for filtered order lookups.
-- **`src/modules/orders/tests/unit/projections.test.ts`** — Unit tests exercising every exported function at its boundary values.
+- Imports `OrderPaymentStatus` and `OrderReturnStatus` from `src/types/index.ts` (`@types`).
+- `src/modules/orders/tests/unit/projections.test.ts` is the unit test for these pure mappings.
+- The remaining neighbors (`src/modules/orders/domain/index.ts`, `src/modules/orders/model.ts`, `src/modules/orders/repository.ts`, `src/modules/orders/services/status.ts`) are related in the dependency graph, but nothing in this file's content shows how they use it. By its docs, the stamping happens through the orders service, and the stored fields (`paymentStatus`, `paidAt`, `returnStatus`) are the ones the filters query.
 
 ## Notes
-
-- `paid` and `unpaid` are **never persisted** in `paymentStatus`; they are reconstructed from `paidAt` at read time. Any code that writes to `paymentStatus` should only write the values in `STAMPED_PAYMENT_STATUSES`.
-- `none` is **never persisted** in `returnStatus`; it is the sentinel for "no stamp present." The stored value is always `null` or one of `STAMPED_RETURN_STATUSES`.
-- The `satisfies` clauses on both const arrays act as a compile-time guard: if a new enum member is added upstream, the array will fail to satisfy the expected type until a developer explicitly opts in.
-- The file is intentionally free of imports from `payments` or `returns` modules — the architectural constraint is the reason it exists as a separate projection layer rather than logic embedded in those modules.
+- The filters and the `*Of` functions must stay in sync: the stamp field is null/absent for `paid`, `unpaid`, and `none`, so `paid` vs `unpaid` is decided by `paidAt`.
+- The filters return `Record<string, unknown>` (untyped Mongo filters).
+- A stamped refund state takes precedence over `paidAt` when resolving payment status.

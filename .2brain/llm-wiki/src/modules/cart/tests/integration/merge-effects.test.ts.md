@@ -1,41 +1,36 @@
 ---
 source: src/modules/cart/tests/integration/merge-effects.test.ts
-sha256: 4cf79b2186ac3c23df0770e111e6cbcd34a18daf3191ab4da76a2809eccef99e
-generated_at: 2026-11-08T05:21:05.075860+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2e96a9a639ebd9774662d8c634f8ab73f10f91333472b92e3a8e67aeed54c97c
+context_sha256: 2889ad431aa860298828ed87c2ab43f31120dd5e8e8d9b59525e6d68a12ae4d1
+generated_at: 2026-11-22T04:40:15.878468+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/integration/merge-effects.test.ts
 
 ## Purpose
-
-Integration tests that verify the **observable side effects** of cart merge and product-removal operations: the analytics events emitted per line outcome, the refusal shape when a quantity-cap race occurs, and the `CART_LINES_REMOVED` domain event. These effects are not exercised by the merge answer's own unit tests.
+Integration tests for the observable side effects of cart operations that the main merge-answer tests do not cover: the analytics events a merge emits, and the domain event announced when a product is removed from all carts. They guard against a dashboard series silently stopping, or an announcement firing with no recipients.
 
 ## Key elements
-
-- **`jest.mock('@infrastructure/observability/analytics', …)`** — Replaces the analytics module with a recording wrapper around the real `emitAnalyticsEvent`. Necessary because `jest.spyOn` cannot redefine the non-configurable property a CommonJS namespace import exposes under the swc transform.
-- **`describe('a merge's analytics')`** — Three cases asserting that `cartAnalyticsEvents.CART_ITEM_ADDED` fires for a new line, `CART_ITEM_UPDATED` for a grown line, and nothing for an unavailable product id.
-- **`describe('a merge that loses a race at the cap')`** — Simulates the `QUANTITY_LIMIT` race by mocking `cartRepository.upsertLine` to resolve `QUANTITY_LIMIT` once; asserts the line is returned with `reason: 'capped'` and no analytics event.
-- **`describe('productRemoveFromCartsById')`** — Subscribes to `CART_LINES_REMOVED` via `onDomainEvent`; asserts the event payload (userIds, productId, titles) when a holder exists, and that no event fires when no cart held the product.
+- **`jest.mock('@infrastructure/observability/analytics', ...)`**: replaces the analytics module with the real one, except `emitAnalyticsEvent` is wrapped in `jest.fn(actual.emitAnalyticsEvent)`. This is a recording wrapper rather than a `jest.spyOn`, because spyOn can't redefine the non-configurable CommonJS namespace property under the swc transform used by mutation runs.
+- **`setupTestDb()`**: sets up the test database for the file.
+- **`describe('a merge’s analytics')`**:
+  - A merged line that creates a new cart line emits exactly one `CART_ITEM_ADDED` with `{ product_id, quantity }`.
+  - A merged line that grows an existing line emits `CART_ITEM_UPDATED` with `{ product_id, quantity }`, not an add.
+  - A merged line for a nonexistent product (`'000000000000000000000000'`) emits no analytics event.
+- **`describe('productRemoveFromCartsById')`**:
+  - A `beforeEach` calls `resetDomainEvents()`, resets the `announced` mock, and subscribes it to `CART_LINES_REMOVED` with `onDomainEvent`.
+  - When a cart holds the product, the event payload is `{ userIds: [holder.id], productId, titles }`, announced once.
+  - When no cart holds it, nothing is announced.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/cart/services/index.ts` | Under test: `cartService.merge`, `cartService.addItemById`, `cartService.productRemoveFromCartsById`. |
-| `src/modules/cart/analytics.ts` | Provides the `cartAnalyticsEvents` enum used in assertions. |
-| `src/modules/cart/events.ts` | Provides the `CART_LINES_REMOVED` constant for domain-event subscription. |
-| `src/modules/cart/repository.ts` | `QUANTITY_LIMIT` sentinel and `cartRepository.upsertLine` spied for the race case. |
-| `src/kernel/events.ts` | `onDomainEvent` / `resetDomainEvents` to subscribe and clean up domain-event listeners. |
-| `src/infrastructure/observability/analytics/index.ts` | Mocked at module level; `emitAnalyticsEvent` is the function under observation. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` seeds the test database before the suite runs. |
-| `tests/support/callers.ts` | `testCallerContext` supplies the caller argument to service calls. |
-| `tests/support/ports.ts` | `observePort` wraps a jest mock so tests can assert calls without re-mocking. |
-| `src/modules/users/tests/factories.ts` | `createUser` creates a persistent user row. |
-| `src/modules/products/tests/factories.ts` | `createProduct` creates a persistent product row. |
+- **`cartService`** (`modules/cart/services`): the system under test, via `merge`, `addItemById` and `productRemoveFromCartsById`.
+- **`cartAnalyticsEvents`** (`modules/cart/analytics`) and **`CART_LINES_REMOVED`** (`modules/cart/events`): the event names the assertions check against.
+- **`@infrastructure/observability/analytics`**: the port that is mocked and observed.
+- **`@kernel/events`**: provides `onDomainEvent` and `resetDomainEvents` for subscribing to and clearing domain events.
+- **`@tests/*` support** (`setup-test-db`, `callers`, `ports`): provide DB setup, `testCallerContext`, and `observePort`, which obtains the mocked `emitAnalyticsEvent` for assertions.
+- **User and product factories** (`modules/users/tests/factories`, `modules/products/tests/factories`): `createUser` and `createProduct` create the test data.
 
 ## Notes
-
-- The analytics mock **delegates** to the real implementation (`jest.fn(actual.emitAnalyticsEvent)`) rather than stubbing it, so any internal side-effects of the real emitter still run. This is a deliberate choice to avoid masking behavior.
-- The `QUANTITY_LIMIT` race path is **only** reachable by mocking `upsertLine`; no timing manipulation is used.
-- Domain-event tests call `resetDomainEvents()` in `beforeEach` to prevent listener leaks across test files.
+- The analytics mock must be declared in this file with `jest.mock`; `observePort` is then applied to `analyticsPort.emitAnalyticsEvent` inside each test.
+- `announced` is a shared `jest.fn()` reset in `beforeEach`, together with the domain event registry, to keep tests isolated.

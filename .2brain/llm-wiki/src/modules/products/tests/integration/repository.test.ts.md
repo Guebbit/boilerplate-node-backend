@@ -1,35 +1,40 @@
 ---
 source: src/modules/products/tests/integration/repository.test.ts
-sha256: e8490c473355ba2e2a74c0359dcd4985d7a4f6b4a2ab2047a881213b611f364a
-generated_at: 2026-11-08T07:52:30.331264+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 74809a2ef626095e7c6ca93a89064400924b1bdb610a7f072774a327d058162f
+context_sha256: 25d13ec7b781f60d9bc1f8802e66db5323cb8d89e7ecc1c601be405701a8605e
+generated_at: 2026-11-22T07:17:41.946099+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/integration/repository.test.ts
 
 ## Purpose
-
-Integration tests for `productRepository` run against a real MongoDB instance. Covers the full CRUD surface (`create`, `findById`, `findOne`, `findAll`, `count`, `save`, `deleteOne`), the `facets` aggregate read, and the `writebackImage` image-pipeline callback. A dedicated "empty catalogue" block pins the no-row-at-all behaviour of Mongo `$group`/`$facet` pipelines and the idempotency/staleness semantics of `writebackImage`.
+Integration tests for `productRepository` run against a real Mongo instance. They cover CRUD, listing and counting, the `facets` aggregate, and `writebackImage`, including how these behave over an empty catalogue. An empty `$group` or `$facet` returns no row at all rather than a zeroed one, so these tests assert that case explicitly. Stock aggregates (`sumReserved`, `countLowAvailability`, the stock board) are not tested here. They belong to `stockLevelRepository` in `@modules/inventory`.
 
 ## Key elements
-
-- **`describe('productRepository')`** — top-level block exercising each CRUD method with seeded and unseeded data, including `limit`/`skip` pagination, `active`-flag filtering, and lean-object assertions.
-- **`describe('an empty catalogue')`** — cleanup via `productModel.deleteMany({})` in `beforeEach`; asserts `facets()` resolves to `{ categories: [], tags: [] }` and exercises `writebackImage` success, duplicate-run, and stale-key paths.
-- **`setupTestDb()`** — called once at module scope to provision a real Mongo connection before any test runs.
-- **`makeProduct` / `createProduct`** (from test factories) — `makeProduct` yields a plain input object for `create`; `createProduct` inserts a document and returns the Mongoose doc for subsequent assertions.
-- **`asStub`** (from `tests/support/stub.ts`) — type-level cast used to assert the *absence* of Mongoose methods on lean `findAll` results.
+- `setupTestDb()` is called at module level to provide the database lifecycle for the suite.
+- `describe('productRepository')` holds the tests for each repository method:
+  - `create` returns a Mongoose document with `_id`, and leaves `imageUrl` undefined when none is given (the schema has no default).
+  - `findById` returns the product, or `null` for a non-existent id (`'000000000000000000000000'`).
+  - `findOne` returns a product matching the query, or `null` when nothing matches.
+  - `findAll` covers no filter, `limit`, `skip` pagination and an `active` filter. It also checks that results are lean objects with no `save` method.
+  - `count` works with and without a filter, and returns 0 on an empty collection.
+  - `save` persists mutations made to an existing document.
+  - `deleteOne` removes the document permanently and leaves other documents untouched.
+- `describe('an empty catalogue')` clears the collection with `productModel.deleteMany({})` in `beforeEach`.
+  - `facets()` is expected to resolve to `{ categories: [], tags: [] }` rather than crash on the missing aggregate row.
+  - `writebackImage(id, key, urls)` is tested in three cases:
+    - It returns `true` when the document's `pendingImageKey` matches the key.
+    - It returns `true` again on a duplicate run of the same job, so the twin files are not deleted.
+    - It returns `false` for a stale job whose document has a different `pendingImageKey`.
 
 ## Relationships
-
-- **`src/modules/products/repository.ts`** — the system under test; every assertion calls a method on `productRepository`.
-- **`src/modules/products/model.ts`** — accessed directly (`productModel.deleteMany`, `productModel.updateOne`) in the empty-catalogue block to seed `pendingImageKey` values and to wipe the collection, bypassing the repository on purpose.
-- **`src/modules/products/tests/factories.ts`** — source of `makeProduct` and `createProduct` helpers.
-- **`tests/support/setup-test-db.ts`** — provides `setupTestDb` which wires up the real Mongo instance for the suite.
-- **`tests/support/stub.ts`** — provides the `asStub` utility for asserting absence of properties.
+- `../../repository` supplies `productRepository`, the unit under test.
+- `../../model` supplies `productModel`, used to clear the collection and to set `pendingImageKey` directly with `updateOne`.
+- `@modules/products/tests/factories` supplies `makeProduct` (an unsaved payload) and `createProduct` (a persisted document). The tests rely on its defaults, such as the title 'Test Product' and an `active` value of true.
+- `@tests/setup-test-db` supplies `setupTestDb`, which connects the suite to the test Mongo.
+- `@tests/stub` supplies `asStub`, used to cast a lean result so the missing `save` method can be checked.
 
 ## Notes
-
-- `setupTestDb()` runs at **module top level**, not inside `beforeAll`; if other test files in the same process also call it, ordering of module evaluation matters.
-- The "empty catalogue" block deliberately avoids the shared factory helpers for its `writebackImage` seeds (uses `productModel.updateOne` directly) to simulate an external image-digestion job writing a key onto the document.
-- Stock aggregates (`sumReserved`, `countLowAvailability`, stock board) are **explicitly out of scope** here; the module doc-comment points to `@modules/inventory`'s own test suite.
-- `findAll` is tested to return **lean** (plain JS) objects; the `asStub` assertion is the only place that verifies no Mongoose prototype methods leak through.
+- The `describe('an empty catalogue')` block sits outside the main `describe('productRepository')`, and the `writebackImage` tests are nested inside it. Because of the `beforeEach` there, each of those tests starts from an empty collection.
+- `price` is a string (`'9.99'`, `'99.99'`), not a number.

@@ -1,28 +1,25 @@
 ---
 source: src/modules/orders/services/guarantee.ts
-sha256: 6ed803f1ab1e5c93d5ee8ad86bf2a9d0c6624d836632a48b76fb2a1e00ec3433
-generated_at: 2026-11-08T06:57:43.338542+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 88790841209c7d7aeef9fc21ba8e484ff04b9bfd9121883c89c182d2a4761273
+context_sha256: 6b87d59b8c3cf4b4a88da8918189679e8c1b2b8753b34e7dc39c13c62f0330df
+generated_at: 2026-11-22T06:20:44.471729+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/guarantee.ts
 
 ## Purpose
-
-Implements the one-time guarantee extension for repaired goods under EU Directive 2024/1799. When a repair is performed under the statutory warranty, the order's `conformityUntil` date is pushed forward by twelve months — but only once per order. The `returns` module calls in; `orders` owns the underlying field.
+Implements the legal-guarantee extension that follows a repair (Directive 2024/1799). When goods are repaired, the order's `conformityUntil` date moves twelve months on, once. The `returns` module asks for the extension; the `orders` module owns the field, so the write lives here.
 
 ## Key elements
-
-- **`extendGuarantee(orderId, session): Promise<boolean>`** — The sole export. Looks up the order within the caller's Mongoose transaction. If the order has no `conformityUntil` (never shipped) or already carries a `conformityExtendedAt` stamp, it returns `false` without writing. Otherwise it writes the new deadline via `orderRepository.extendConformity` and returns `true`.
+- `extendGuarantee(orderId, session): Promise<boolean>`: the file's only export. It loads the order inside the caller's Mongoose `ClientSession`. It returns `false` and changes nothing if the order is missing, has no `conformityUntil`, or already has `conformityExtendedAt` set. Otherwise it calls the repository's `extendConformity` with the current and new deadlines and returns that call's result. The resolved boolean means "the guarantee was extended by this call".
 
 ## Relationships
-
-- **`src/modules/orders/domain/index.ts`** — Imports `repairedConformityUntil`, the pure function that computes the new twelve-month-out date from the current `conformityUntil`.
-- **`src/modules/orders/repository.ts`** — Imports `orderRepository` and calls `findInSession` (read) and `extendConformity` (write), both scoped to the passed-in `ClientSession`.
-- **`src/modules/orders/services/index.ts`** — Barrel file that re-exports `extendGuarantee` alongside the other order services.
+- `src/modules/orders/domain/index.ts`: provides `repairedConformityUntil`, which computes the new deadline from the current `conformityUntil`.
+- `src/modules/orders/repository.ts`: supplies `orderRepository`. Its `findInSession` method reads the order and its `extendConformity` method persists the new deadline.
+- `src/modules/orders/domain/withdrawal.ts` and `src/modules/orders/services/index.ts` are graph neighbors, but this file does not reference them directly in its code.
 
 ## Notes
-
-- **Idempotent by design.** The `conformityExtendedAt` check means a second repair on the same order will silently no-op; callers should not assume `true` means "repair processed."
-- **Transaction coupling.** The function does not create its own session; it is expected to be called *inside* an existing transaction (the receipt/return flow). Passing `undefined` as `session` would bypass atomicity.
-- **Return-value contract.** `false` covers two distinct cases (no deadline yet, already extended). If a caller needs to distinguish them, it must inspect the order separately.
+- It does not open its own transaction. The caller (the receipt's transaction) passes the `session`, so the extension commits or rolls back with the caller's work.
+- The "once per order" rule is checked in this function through `conformityExtendedAt`. The file does not show how that field gets set, so it is presumably handled inside `extendConformity`.
+- An order that never arrived has no deadline yet, so it quietly returns `false` instead of throwing.

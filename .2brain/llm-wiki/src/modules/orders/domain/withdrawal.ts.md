@@ -1,55 +1,42 @@
 ---
 source: src/modules/orders/domain/withdrawal.ts
-sha256: 259f5796e8e98b12cf8e9b8e9ba91acc03e4ecbdc25ffb62dfc76c8036e50a7e
-generated_at: 2026-11-14T20:36:31.365672+00:00
-model: ollama:qwen3.8:27b
+source_sha256: afe746645b5bfd37c2fb24861d3858a02c1a5eb4d1cbd9e5cc001f9c50a13023
+context_sha256: 09f90dd5f613116b5458b054927b9aa8a8c1371340800c17aa0ec3a374b354e8
+generated_at: 2026-11-22T06:14:09.494106+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/domain/withdrawal.ts
 
 ## Purpose
-
-Pure domain logic for the EU right of withdrawal (Consumer Rights Directive 2011/83/EU) and the statutory guarantee of conformity as they apply to a single order. It answers, without any I/O: when the withdrawal window opens and closes, whether a withdrawal is a cancel or a return, whether staff can still redirect unshipped units, when the shop must refund, and when the conformity guarantee expires. Every service, email, timeline row, and UI button reads from these functions so the answer is computed in exactly one place.
+Pure domain logic for the consumer right of withdrawal (Consumer Rights Directive Art. 9 and 11a) as far as an order alone can answer it: when the withdrawal window closes, when related legal deadlines fall, and whether a withdrawal is currently allowed. It has no I/O. The window is absent until the clock starts. For goods the clock starts at delivery, and for digital content at the conclusion of the contract.
 
 ## Key elements
-
-- **`isBeforeDispatch(order)`** – Returns `true` when nothing has shipped (status trait + `fulfillment.shipped !== true`), i.e. a withdrawal is a *cancel* rather than a *return*.
-- **`canCorrectAddress(order)`** – Returns `true` when at least one unshipped unit still exists and the order has a shipping address, so staff may redirect the remaining units.
-- **`withdrawUntilFrom(start, days)`** – Computes the announced last valid day (end of the Nth UTC day after `start`), following Reg. 1182/71 calendar-day rules.
-- **`withdrawalClosesAt(withdrawUntil)`** – The real enforcement instant: one UTC day after the announced last day, absorbing timezone edge cases.
-- **`withdrawalRefundDueBy(informedAt, timeZone)`** – The last instant the shop may refund without being late (14 calendar days in the shop's IANA zone).
-- **`conformityUntilFrom(deliveredAt)`** – End of the 2-year statutory guarantee plus a 7-day margin for UTC offset and weekend roll-over.
-- **`repairedConformityUntil(current)`** – Extends the guarantee by 12 months post-repair (Dir. 2024/1799).
-- **`withdrawalStartFor(order, at)`** – Single owner of the clock-start rule: payment date for digital-only orders, delivery date for goods.
-- **`deliveryClockFor(order, at, days)`** – Convenience pair: `{ withdrawUntil, conformityUntil }` frozen at delivery.
-- **`isExcludedFromWithdrawal(line)`** – Checks the per-line `product.noWithdrawal` flag (Art. 16 excluded goods).
-- **`withdrawalRefusalOf(order, now)`** – The one source of truth for *why* withdrawal is blocked (`all_excluded`, `window_closed`, `nothing_left`) or `undefined` when open.
-- **Constants** – `WITHDRAWAL_SEND_BACK_DAYS` (14), `WITHDRAWAL_REFUND_DAYS` (14), `CONFORMITY_YEARS` (2), `CONFORMITY_MARGIN_DAYS` (7), `REPAIR_EXTENSION_MONTHS` (12).
-- **Interfaces** – `DispatchCandidate`, `AddressCandidate`, `WithdrawalClockCandidate`, `WithdrawalCandidate`, `WithdrawableLine`, `DeliveryClock`: minimal structural types each function reads, decoupling callers from full order models.
+- `isBeforeDispatch(order)` – true if the status trait `beforeDispatch` holds and `fulfillment.shipped` is not true. A withdrawal then counts as a cancel rather than a return. It reads `shipped`, not `processing`, so a partly shipped order is not refunded whole.
+- `canCorrectAddress(order)` – true if the order has a shipping address, its status is before dispatch, and it is either not fully shipped or has `remaining > 0` units.
+- `withdrawUntilFrom(start, days)` – the announced last day: the end of the UTC day `days` after `start`.
+- `withdrawalClosesAt(withdrawUntil)` – the real refusal point, one extra UTC day (`DAY_MS`) after the announced date.
+- `WITHDRAWAL_SEND_BACK_DAYS` and `WITHDRAWAL_REFUND_DAYS` – both 14 (Directive Arts. 14(1) and 13(1)).
+- `withdrawalRefundDueBy(informedAt, timeZone)` – the last millisecond of the shop-zone day that is 14 days after the day the shop was informed.
+- `conformityUntilFrom(deliveredAt)` – the end of the guarantee of conformity: two years plus a 7-day margin, to the end of that UTC day.
+- `repairedConformityUntil(current)` – adds 12 months to the current guarantee end.
+- `withdrawalStartFor(order, at)` – the clock start: `paidAt ?? at` for digital-only orders, otherwise `at`.
+- `deliveryClockFor(order, at, days)` – returns a `DeliveryClock` of `{ withdrawUntil, conformityUntil }`.
+- `isExcludedFromWithdrawal(line)` – true when `line.product.noWithdrawal === true`.
+- `withdrawalRefusalOf(order, now)` – returns the first `WithdrawBlockedReason`, or `undefined` if the withdrawal is open. The reasons are `all_excluded`, `window_closed` and `nothing_left`. The visible source is cut off partway through this function.
+- Candidate interfaces – `DispatchCandidate`, `AddressCandidate`, `WithdrawalClockCandidate`, `WithdrawableLine`, `WithdrawalCandidate`. Each lists only the order fields its function reads.
 
 ## Relationships
-
-- **`src/domain-primitives/time.ts`** – Source of `DAY_MS`, `dayInZone`, `endOfUtcDay`, `startOfDayInZone`; all calendar-day arithmetic in this file delegates to these helpers.
-- **`src/modules/orders/domain/status-traits.ts`** – Provides `ORDER_STATUS_TRAITS`; every eligibility check (`beforeDispatch`, `withdrawable`) reads a boolean from the status's trait record.
-- **`src/modules/orders/domain/rules.ts`** – Provides `isDigitalOnlyOrder` and `ShippableLineCandidate`; used by `withdrawalStartFor` to decide whether the clock starts at payment or delivery.
-- **`src/modules/orders/domain/fulfillment.ts`** – Provides the `FulfillmentSummary` type; `DispatchCandidate` and `AddressCandidate` pick a subset of its fields.
-- **`src/modules/orders/domain/index.ts`** – Barrel re-export; this file's public API is the module's external surface.
-- **`src/modules/orders/services/actions.ts`** – Consumes `withdrawalRefusalOf`, `isBeforeDispatch`, `canCorrectAddress` to gate the UI button and the `POST /returns` endpoint.
-- **`src/modules/orders/services/status.ts`** – Calls `deliveryClockFor` / `withdrawalStartFor` when an order transitions to `delivered` to freeze the deadlines.
-- **`src/modules/orders/services/guarantee.ts`** – Calls `conformityUntilFrom` and `repairedConformityUntil` to manage the conformity deadline.
-- **`src/modules/orders/services/override.ts`** – Reads `canCorrectAddress` before allowing a delivery-address override on unshipped units.
-- **`src/modules/orders/services/address.ts`** – Reads `canCorrectAddress` to gate address corrections on the remaining (unshipped) portion of an order.
-- **`src/modules/orders/emails.ts`** – Reads the frozen `withdrawUntil` / `withdrawalClosesAt` values to compose deadline-notice mails.
-- **`src/modules/orders/repository.ts`** – Persists and fetches the frozen `DeliveryClock` fields on the order row.
-- **`src/modules/orders/tests/integration/timeline.test.ts`** – Verifies that timeline rows render the same dates these functions produce.
-- **`src/modules/delivery/tests/integration/override-sync.test.ts`** – Exercises `canCorrectAddress` through the delivery override flow.
-- **`src/modules/delivery/tests/integration/service.test.ts`** – Exercises `isBeforeDispatch` through the shipped-status stamp.
+- `@domain-primitives/time` (`src/domain-primitives/time.ts`) supplies `DAY_MS`, `dayInZone`, `endOfUtcDay` and `startOfDayInZone` for the date arithmetic.
+- `./status-traits` supplies `ORDER_STATUS_TRAITS`, whose `beforeDispatch` flag drives `isBeforeDispatch` and `canCorrectAddress`.
+- `./fulfillment` supplies the `FulfillmentSummary` type (`shipped`, `remaining`).
+- `./rules` supplies `isDigitalOnlyOrder` and the `ShippableLineCandidate` type, used for the clock start.
+- `@types` supplies `OrderStatus` and `WithdrawBlockedReason`.
+- The doc comments say `withdrawalRefusalOf` backs both the withdraw button and the door (`POST /returns`), so the two cannot disagree. The other neighbors (repository, services, emails, tests) are not shown importing this file in the visible content.
 
 ## Notes
-
-- **Two deadlines, one concept.** `withdrawUntil` is the date shown to the buyer; `withdrawalClosesAt` is the actual enforcement instant (one UTC day later). Never compare `now` against `withdrawUntil` directly—always use `withdrawalClosesAt`.
-- **Calendar-day rules are intentional, not incidental.** Reg. 1182/71 means the event day does not count and the period ends at 23:59:59.999 of the last day, not `event + N×24h`. Do not "simplify" to `Date + N*DAY_MS` without also calling `endOfUtcDay`.
-- **No weekend/holiday roll-over is computed.** The configured minimum period always exceeds the longest possible Art. 3(4) shift, so the margin is baked into the constant values rather than the logic.
-- **`Date.UTC` for rollover.** In `withdrawalRefundDueBy` and `conformityUntilFrom`, month/year overflow is delegated to `Date.UTC`'s normalisation rather than manual carry logic.
-- **The file is the single owner of the clock-start rule.** Any code path that transitions an order to `delivered` must call `withdrawalStartFor` (or `deliveryClockFor`); computing the start date ad hoc in a service will drift from the law.
-- **`withdrawalRefusalOf` returns `undefined` for non-withdrawable statuses** (e.g. `canceled`)—callers must treat that as "no reason, no button," not as "withdrawal available."
+- Two deadlines exist on purpose. `withdrawUntil` is the announced date shown in mails, timeline rows and screens. `withdrawalClosesAt` adds one silent grace UTC day, so a buyer is never turned away over a one-day difference in counting.
+- Days are UTC days, and Art. 3(4) weekend and holiday roll-over is deliberately not computed. The comments say the minimum configured withdrawal period outlasts it.
+- The refund deadline uses the shop's IANA time zone. The legal numbers are constants in this file, so a change in the law means editing them.
+- The guarantee margin (7 days) covers UTC offset and weekend roll-over, and made-to-order goods keep the guarantee even though they lose the right of withdrawal.
+- An order with an empty `items` list gets `all_excluded`, because `[].every(…)` is true. An order with no `items` field skips that check.

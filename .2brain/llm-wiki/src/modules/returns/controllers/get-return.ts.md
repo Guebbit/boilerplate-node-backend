@@ -1,35 +1,38 @@
 ---
 source: src/modules/returns/controllers/get-return.ts
-sha256: 0e3bb8547f3c78ba14adb123f1cd0e1acfee4a818084559fa413556a7e865da1
-generated_at: 2026-11-14T21:32:42.154445+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5c4236b59a019e6c68df90e4b84b4885c9c20ec0095d71ebcaf52c1ffc8e966f
+context_sha256: 0fc6c1d897e7fd78b4270befaa9f9031eb040c16b5dfe8798487c51203466ec2
+generated_at: 2026-11-22T07:21:27.165213+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/controllers/get-return.ts
 
 ## Purpose
-
-Controller for `GET /returns/:id`. Resolves a single return for the authenticated caller, records a staff-read audit event, and returns the return payload. A return belonging to another buyer is indistinguishable from a missing one (both yield 404).
+Express controller for `GET /returns/:id`. It returns a single return along with the caller's `actions`. A return on someone else's order gets the same 404 as a nonexistent one. On success it also records a staff-read audit entry that names the order's buyer as the subject.
 
 ## Key elements
-
-- **`getReturnById`** (exported) — The sole handler. Validates the `:id` param, fetches the return via `returnService.getReturn`, resolves the associated order to obtain the buyer ID, records the audit row, and sends a `200` response with the `Return` object.
+- `getReturnById(request, response)`: the only export, the route handler.
+  - Validates the `:id` param with `requireId`, using the `returns.not-found` error key. It stops if the id is missing.
+  - Takes `request.authContext!`, which the `isAuth` middleware guarantees.
+  - Calls `returnService.getReturn(id, authContext)`. If `refused(response, result)` handles the result, the handler stops.
+  - Otherwise it loads the order with `orderService.getById(result.data.orderId)`.
+  - Calls `recordStaffRead` with key `read:Return`, an audit action of `ADMIN_RETURN_VIEWED`, `targetType: 'return'`, `targetId: id` and `subjectId`. The `subjectId` is `buyerIdOf(order)`, or `undefined` if the order is not found.
+  - Sends `successResponse<Return>(response, result.data, 200)`.
+  - Any rejection is handled by `catchAs(response, 'getReturnById')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Imports `catchAs` (error → HTTP mapping) and `refused` (short-circuits when the service returns a refusal instead of data).
-- **`src/infrastructure/http/ids.ts`** — Imports `requireId` to extract and validate the route param, short-circuiting with a 404 if absent.
-- **`src/infrastructure/http/response.ts`** — Imports `successResponse` to serialize the final 200 body.
-- **`src/kernel/staff-read.ts`** — Calls `recordStaffRead` to persist an audit row keyed `read:Return` with action `ADMIN_RETURN_VIEWED`.
-- **`src/modules/orders/index.ts`** — Imports `buyerIdOf` and `orderService`; the latter is used to look up the parent order so the buyer ID can be attached to the audit event.
-- **`src/modules/returns/services/index.ts`** — Imports `returnService`; delegates the actual fetch + authorization to `getReturn`.
-- **`src/modules/returns/audit.ts`** — Imports `returnsAuditActions` to supply the enum value (`ADMIN_RETURN_VIEWED`) used in the audit record.
-- **`src/modules/returns/routes.ts`** — Registers this handler on the `GET /returns/:id` route (not imported here, but this file is its target).
-- **`src/types/index.ts`** — Imports the `Return` type for the response generic.
+- `src/infrastructure/http/controller.ts` supplies `catchAs` for error handling and `refused` for turning refused service results into responses.
+- `src/infrastructure/http/ids.ts` supplies `requireId` for param validation.
+- `src/infrastructure/http/response.ts` supplies `successResponse`.
+- `src/modules/returns/services/index.ts` supplies `returnService`, whose `getReturn` is called with the id and auth context.
+- `src/modules/orders/index.ts` supplies `buyerIdOf` and `orderService`, used to resolve the buyer for the audit row. `src/modules/orders/services/index.ts` is a related neighbor in the orders module.
+- `src/kernel/staff-read.ts` supplies `recordStaffRead`, which writes the audit record.
+- `src/modules/returns/audit.ts` supplies `returnsAuditActions`, the source of the audit action constant.
+- `src/types/index.ts` supplies the `Return` type.
+- `src/modules/returns/routes.ts` presumably mounts this handler. The file itself does not show that.
 
 ## Notes
-
-- **404 over 403**: Cross-buyer access is deliberately indistinguishable from a missing return; the service layer (`returnService.getReturn`) is responsible for enforcing ownership, and the controller treats any refusal as a 404 via `refused`.
-- **Buyer is not on the Return model**: The return entity intentionally omits the buyer. The controller resolves it from the parent order *solely* for the `subjectId` field on the audit row. The returned payload does not include it.
-- **Auth context via non-null assertion**: `request.authContext!` is safe only because the route is guarded by an `isAuth` middleware; there is no runtime guard in this function.
-- **No pagination or list logic**: This is strictly a single-entity fetch; the list endpoint lives elsewhere.
+- The return model has no buyer field on purpose. The buyer is resolved from the order only to fill the audit row's `subjectId`, and it is not part of the response.
+- The audit entry is recorded after the service check passes and before the response is sent. It is recorded even when the order lookup returns nothing, in which case `subjectId` is `undefined`.
+- The handler does not `return` on the `requireId` or `refused` early exits beyond stopping. Response writing is delegated to those helpers.

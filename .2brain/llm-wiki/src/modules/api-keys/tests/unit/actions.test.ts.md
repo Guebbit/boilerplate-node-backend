@@ -1,32 +1,26 @@
 ---
 source: src/modules/api-keys/tests/unit/actions.test.ts
-sha256: ed6c37cd766c4a7463626143818876c5d1881bc2840de2a44bcc032a4cef5ad6
-generated_at: 2026-11-08T05:06:46.692950+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ed6c37cd766c4a7463626143818876c5d1881bc2840de2a44bcc032a4cef5ad6
+context_sha256: 7199ea5a34b6273692dc57fb610212b16584755ecfa00569876d8a9350dd5c17
+generated_at: 2026-11-22T04:25:40.536005+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/api-keys/tests/unit/actions.test.ts
 
 ## Purpose
-
-Unit tests for `actionsForRows`, verifying which credential actions are exposed to a caller based on their permissions and the credential's state. The only tested action is **revoke**, which requires the `delete:ApiKey` permission and is unavailable once the credential is already revoked.
+Unit tests for `actionsForRows` from `src/modules/api-keys/services/actions.ts`. They check which actions a caller may perform on an API key (credential) row. The only action is revoking, which requires the `delete:ApiKey` key and is unavailable once the credential is already revoked.
 
 ## Key elements
-
-- **`describe('actionsForRows')`** — single test block covering three scenarios:
-  - Admin caller + live credential → `{ revoke: true }`
-  - Admin caller + credential with `revokedAt` set → `{ revoke: false }`
-  - Non-admin caller (`customer`) + live credential → `{ revoke: false }`
-- **`callerContextAs(role)`** — imported from `@tests/callers`; constructs a caller context fixture for the given role.
-- **`actionsForRows(context)`** — imported from `../../services/actions`; the unit under test. Accepts a caller context and returns a function that maps a credential row to an availability object.
+- `describe('actionsForRows')` has three cases, each building `actionsFor` from `actionsForRows(callerContextAs(...))` and calling it with a row object:
+  - **Admin, live credential:** `actionsFor({})` returns `{ revoke: true }`.
+  - **Admin, revoked credential:** `actionsFor({ revokedAt: <ISO string> })` returns `{ revoke: false }`.
+  - **Customer, no key:** `actionsFor({})` returns `{ revoke: false }`.
 
 ## Relationships
-
-- **`src/modules/api-keys/services/actions.ts`** — the module under test; exports `actionsForRows`, which this file exercises directly.
-- **`tests/support/callers.ts`** — provides `callerContextAs`, a test helper that produces caller-context fixtures (admin, customer) consumed by `actionsForRows`.
+- **`src/modules/api-keys/services/actions.ts`:** the module under test, imported as `../../services/actions`. `actionsForRows` takes a caller context and returns a function that maps a row to an actions object.
+- **`tests/support/callers.ts`:** provides `callerContextAs`, imported through the `@tests/callers` alias. It builds caller contexts for the `'admin'` and `'customer'` roles.
 
 ## Notes
-
-- The test file's JSDoc header describes the *service module* (`services/actions.ts`) rather than the test itself — a convention that mirrors the subject under test.
-- `callerContextAs` is imported via the `@tests/callers` path alias, not a relative path; ensure the alias is configured if running tests outside the standard toolchain.
-- The "already revoked" check is triggered by the presence of a `revokedAt` field on the row object; there is no separate boolean flag.
+- A row counts as revoked when `revokedAt` is set. The tests pass an ISO date string.
+- When the caller lacks the key, revoke is `false` whether or not the row is revoked. Only the live-row case is tested for the customer.

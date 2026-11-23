@@ -1,37 +1,34 @@
 ---
 source: src/infrastructure/security/pseudonymise.ts
-sha256: d14df46023fbf51dc03fa4e9262ffa64384d17a4b7a5747ae91cc39b52591661
-generated_at: 2026-11-08T03:49:35.473469+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a07aa0b84b52a5b1c9f61280c189923e2ba79f2fc1f0c8d03d18136be60a1bf2
+context_sha256: 41601f7404cac70a91edc98683e6b85db973565c2793ec4ade36ad895cce640a
+generated_at: 2026-11-22T03:09:20.948080+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/security/pseudonymise.ts
 
 ## Purpose
-
-Provides keyed pseudonymisation (HMAC-SHA256) for identifiers and secrets that must remain comparable across log lines, rate-limit buckets, and idempotency fingerprints without being human-readable. A bare hash of a guessable value is brute-forceable; binding each digest to an HKDF-derived subkey under a root secret makes offline replay infeasible.
+Keyed pseudonymisation of identifiers and secrets that must be comparable but not readable: log fields, rate-limit identities and the idempotency fingerprint. It uses HMAC-SHA256 under a per-purpose subkey (HKDF-derived from a single root secret), so a guessable value can't be brute-forced without the key.
 
 ## Key elements
-
-- **`PseudonymPurpose`** (exported type) — Closed union `'log' | 'rate-limit' | 'idempotency'`. Adding a purpose requires a deliberate edit and prevents cross-purpose digest replay.
-- **`subkeyFor(purpose)`** (module-private) — Reads `NODE_PSEUDONYM_KEY` from `config.ts`, throws if unset (no built-in fallback), and calls `deriveSubkey` with `info = "pseudonym/v1/<purpose>"` to produce the purpose-specific `KeyObject`.
-- **`pseudonymise(purpose, value)`** (exported) — Returns the full 64-char hex HMAC-SHA256 digest of `value` under the purpose subkey. Deterministic: same input → same output. Callers may truncate.
-- **`correlationDigest(value)`** (exported) — Convenience wrapper that calls `pseudonymise('log', …)`, truncates to 12 hex chars, and prefixes with `hmac:`. Used in log lines and audit rows so a human can distinguish a keyed digest from a raw hash.
+- `PseudonymPurpose` — closed union type `'log' | 'rate-limit' | 'idempotency'`. Adding a purpose is a deliberate edit, and digests from one purpose can't be replayed as another's.
+- `subkeyFor(purpose)` (internal) — reads `NODE_PSEUDONYM_KEY` via `pseudonymConfig()` and derives a subkey with `deriveSubkey(root, 'pseudonym/v1/<purpose>')`. Throws `Error('NODE_PSEUDONYM_KEY is not set.')` if the key is unset.
+- `pseudonymise(purpose, value)` — returns the full HMAC-SHA256 digest as 64 hex characters. Deterministic for the same input; callers may truncate.
+- `correlationDigest(value)` — returns `hmac:` plus the first 12 hex chars of `pseudonymise('log', value)`. Used wherever a log line or audit row shows a personal value, so the audit page's digests match the log lines by construction.
 
 ## Relationships
-
-- **`security/config.ts`** — Supplies `pseudonymConfig().NODE_PSEUDONYM_KEY`, the single root secret all subkeys derive from.
-- **`security/subkey.ts`** — Provides `deriveSubkey`, the HKDF step that turns the root key + purpose `info` string into the per-purpose HMAC key.
-- **`adapters/logger.ts`** — Imports `correlationDigest` to replace personal values in structured log fields (the module doc explicitly notes this import direction to avoid a circular dependency on jest's `globalSetup` chain).
-- **`http/middlewares/idempotency.ts`** — Consumes `pseudonymise('idempotency', …)` to produce the request fingerprint.
-- **`http/middlewares/rate-limit.ts`** — Consumes `pseudonymise('rate-limit', …)` as the bucket identity.
-- **`audit-logs/presenter.ts`** — Calls `correlationDigest` so audit rows show the same short token as the corresponding log lines.
-- **`tests/unit/infrastructure/security/pseudonymise.test.ts`** — Unit tests for digest correctness and key-missing error.
-- **`tests/cross-cutting/crypto-conformance.test.ts`** — Validates the HMAC/HKDF implementation against reference vectors.
+- `./config` — supplies `pseudonymConfig()`, the source of `NODE_PSEUDONYM_KEY`.
+- `./subkey` — supplies `deriveSubkey`, which does the HKDF derivation and returns a `KeyObject`.
+- `src/infrastructure/adapters/logger.ts` imports this file for log-field pseudonymisation. Its tests (`tests/unit/infrastructure/adapters/logger.test.ts`, `tests/cross-cutting/log-redaction-conformance.test.ts`) cover that behaviour.
+- `src/infrastructure/http/middlewares/rate-limit.ts` and `src/modules/account/rate-limits.ts` relate to the `rate-limit` purpose.
+- `src/infrastructure/http/middlewares/idempotency.ts` relates to the `idempotency` fingerprint purpose.
+- `src/modules/audit-logs/presenter.ts` relates to the shared `correlationDigest` so audit rows line up with logs.
+- Other graph neighbors that depend on this file or exercise it: `otel-sdk.ts`, `mail-budget.ts`, `login-observability.ts`, `auth-events.test.ts`, `span-client-address.test.ts` and `crypto-conformance.test.ts`.
 
 ## Notes
-
-- **No default key.** If `NODE_PSEUDONYM_KEY` is absent the call throws immediately. There is intentionally no fallback so a digest under a guessable key is never silently produced.
-- **Scheme version is in the `info` string.** `pseudonym/v1/…` means any change to that literal (or to the root key) invalidates every previously stored digest. Rotation is a one-time event; see `docs/tools/security.md`.
-- **`correlationDigest` hard-codes purpose `'log'`.** It is *not* a general-purpose shortener; use `pseudonymise` directly when you need a different purpose.
-- **Relative imports only.** The module sits on jest `globalSetup`'s require chain, so `logger.ts` → `pseudonymise.ts` must stay a relative (non-package) import to avoid a cycle.
+- There is no built-in fallback key. A missing `NODE_PSEUDONYM_KEY` makes every call throw rather than produce a weak digest.
+- Rotation is a single value. Rotating the key changes all digests once.
+- The module uses relative imports only, because `logger.ts` imports it and it sits on jest `globalSetup`'s import chain.
+- The HKDF `info` string includes `v1`, which binds each subkey to this scheme's version as well as to its purpose.
+- `correlationDigest` truncates to 12 hex characters, so it is shorter and more collision-prone than the full `pseudonymise` digest. The `hmac:` prefix marks it as keyed.

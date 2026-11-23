@@ -1,40 +1,38 @@
 ---
 source: src/modules/stats/controllers/get-stats.ts
-sha256: 060fd99f4ef763960636a768da31b4d5e8aeb47e7cda2fa3375f5116b946183d
-generated_at: 2026-11-08T08:23:44.292500+00:00
-model: ollama:qwen3.8:27b
+source_sha256: da1ba27e91f889336ebf3e036b8a88735c2ff1333494e1fb37fd40b49398c4b6
+context_sha256: a03140d8be13832cd6da83d77e55d73557f183de6ee4bb83320d069dc1dea178
+generated_at: 2026-11-22T07:50:06.709541+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stats/controllers/get-stats.ts
 
 ## Purpose
-Read-only (GET) controllers for the stats module. Each exported handler validates query parameters with a zod schema, delegates to `statsService`, and writes the response. It is the thin controller layer between `routes.ts` and the stats service; all shared validation/handler logic lives in `./respond`.
+Defines the HTTP controllers for the stats read endpoints. Each is a thin wrapper that pairs a strict Zod query schema with a call into `statsService`, delegating the shared request/response handling to `statsHandler` in `./respond`. Every route takes a shop-local period except the pipeline, which is a snapshot of the current state.
 
 ## Key elements
-
-- **`getSalesStats`** — `GET /stats/sales`. Period + interval query → `statsService.getSalesStats`.
-- **`getProductStats`** — `GET /stats/products`. Period + optional `limit` (1–100, default 10) → `statsService.getProductStats`.
-- **`productSeries`** *(internal, not exported)* — Core series handler; reads `request.params.productId` and calls `statsService.getProductSeries`.
-- **`getProductSalesSeries`** — `GET /stats/products/:productId`. Wraps `productSeries` with `requireId`; a malformed id is treated as 404 (`stats.product-not-found`).
-- **`getCategoryStats`** — `GET /stats/categories`. Period only.
-- **`getPaymentMixStats`** — `GET /stats/payments`. Period only.
-- **`getOperationsStats`** — `GET /stats/operations`. Period only.
-- **`getCustomerStats`** — `GET /stats/customers`. Period only.
-- **`getPipelineStats`** — `GET /stats/pipeline`. No period or query; a point-in-time snapshot. The only handler that bypasses `statsHandler` and writes the response directly.
+- `getSalesStats`: `GET /stats/sales`. Query is the period fields plus `interval`. Calls `statsService.getSalesStats(period)`.
+- `getProductStats`: `GET /stats/products`. Query is the period fields plus `limit`. `limit` is blank-to-undefined preprocessed, coerced to an integer from 1 to 100, and defaults to 10. Calls `statsService.getProductStats(period, limit)`.
+- `productSeries` (internal): `statsHandler` for the per-product series. Query is the period fields plus `interval`. Reads `request.params.productId` and calls `statsService.getProductSeries(period, productId)`.
+- `getProductSalesSeries`: `GET /stats/products/:productId`. A `namedHandler` that first runs `requireId` on `productId`, then runs `productSeries` if the id is valid.
+- `getCategoryStats`: `GET /stats/categories`. Calls `statsService.getCategoryStats`.
+- `getPaymentMixStats`: `GET /stats/payments`. Calls `statsService.getPaymentMix`.
+- `getOperationsStats`: `GET /stats/operations`. Cancellation, return and refund rates. Calls `statsService.getOperationsStats`.
+- `getCustomerStats`: `GET /stats/customers`. Calls `statsService.getCustomerStats`.
+- `getPipelineStats`: `GET /stats/pipeline`. Hand-written handler with no period or query schema. It calls `statsService.getPipelineStats()`, sends the result with `successResponse`, and routes errors through `catchAs`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Supplies `namedHandler` and `catchAs`, the generic Express handler wrappers used here.
-- **`src/infrastructure/http/ids.ts`** — Supplies `requireId`, used by `getProductSalesSeries` to validate the path parameter before delegating.
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, used by `getPipelineStats`.
-- **`src/infrastructure/http/schemas.ts`** — Supplies `blankToUndefined`, a zod preprocessor for empty-string query values.
-- **`src/modules/stats/controllers/respond.ts`** — Supplies `statsHandler` (the shared validate-then-call-then-respond factory) and the reusable field schemas `periodFields` / `intervalField`.
-- **`src/modules/stats/routes.ts`** — Imports every exported handler from this file and attaches them to Express routes.
-- **`src/modules/stats/services/index.ts`** — Provides `statsService`, the domain layer every handler delegates to.
+- `./respond` supplies `statsHandler`, `periodFields` and `intervalField`. Every period-based controller is built from these.
+- `../services` (`statsService`) is the data layer. Each controller maps to one service method.
+- `@infrastructure/http/controller` supplies `namedHandler`, which wraps the product-series handler, and `catchAs`, which handles errors in the pipeline controller.
+- `@infrastructure/http/ids` supplies `requireId`, which validates `productId`.
+- `@infrastructure/http/response` supplies `successResponse`, used directly only by the pipeline controller.
+- `@infrastructure/http/schemas` supplies `blankToUndefined`, used for the `limit` preprocessing.
+- `../routes` is the consumer. It presumably binds these exports to the `/stats/*` paths named in the doc comments.
 
 ## Notes
-
-- All handlers except `getPipelineStats` are one-liner calls to `statsHandler(name, schema, fn)` from `./respond`; keep new reads in that same shape.
-- `z.strictObject` is used throughout, so unknown query parameters are rejected (400) rather than silently ignored.
-- `productSeries` is deliberately non-exported so that every external entry point to the series read goes through the id-validation wrapper.
-- The file's module docstring states the convention: every route takes a shop-local period *except* the pipeline endpoint (a "right now" snapshot).
+- All period schemas use `z.strictObject`, so unknown query parameters are rejected.
+- A malformed `productId` returns 404 with the key `stats.product-not-found`, not a validation error. The check runs before the query is parsed.
+- `getProductSalesSeries` and `productSeries` share the handler name `'getProductSalesSeries'` for error reporting.
+- `getPipelineStats` bypasses `statsHandler`, so it has no query validation.

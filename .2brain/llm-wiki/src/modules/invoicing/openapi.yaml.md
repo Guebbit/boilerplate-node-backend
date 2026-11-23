@@ -1,33 +1,45 @@
 ---
 source: src/modules/invoicing/openapi.yaml
-sha256: dde6e405b7272910079266253ebededcad64146e2b1b37362a2d3f08b93f74d5
-generated_at: 2026-11-14T20:12:11.597768+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 39a047f8f1d9bc96ac89bd1896c3cb2db5a3d50ebb4785b85234e5008139e810
+context_sha256: 475cfe47af80c35f2d2550ab6e1900cda84cc42a080fc05842e6b800873e79d0
+generated_at: 2026-11-22T05:32:47.626690+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 contract for the **invoicing** module. It defines the three order-scoped endpoints (download invoice PDF, list credit notes, download a credit-note PDF), the module's error-code vocabulary, and the `invoicing` section the bundler injects into `POST /account/export`. It is the single source of truth for what the invoicing API exposes and how errors/limits are signalled.
+OpenAPI 3.1 contract fragment for the invoicing module (version `0.1.0`). It declares the module's HTTP operations for downloading frozen invoice and credit-note PDFs and listing credit notes. It also declares the module's error codes and its section of the account data export. A bundler presumably merges it with the shared root contract, since it references `shared/contracts/openapi.root.yaml`.
 
 ## Key elements
-
-- **`GET /orders/{id}/invoice`** (`getOrderInvoice`) — Returns the frozen invoice PDF issued at the `pending → paid` transition. Server names the file via `Content-Disposition`. Rate-limited (`429`); returns `503` + `Retry-After` when the render queue is saturated.
-- **`GET /orders/{id}/credit-notes`** (`listOrderCreditNotes`) — Unpaged list of `CreditNoteSummary` rows (one per settled refund, oldest first). Empty array when the order was never refunded or the caller lacks `display:Payment`.
-- **`GET /orders/{id}/credit-notes/{creditNoteId}`** (`getOrderCreditNote`) — Downloads a single credit-note PDF. Same 429/503 behaviour as the invoice route.
-- **`x-error-codes`** — `ORDER_INVOICE_NOT_ISSUED` (404) and `ORDER_CREDIT_NOTE_NOT_ISSUED` (404); both intentionally indistinguishable from a plain "order not found" to the client.
-- **`x-personal-data.invoicing`** — Declares the module's export slice (`invoices` + `creditNotes` arrays of `ExportInvoiceDocument`). Removed automatically if the module is removed.
-- **Schemas** — `CreditNoteSummary`, `CreditNotesResponse`, `ExportInvoiceDocument`. All are deliberately *summaries* (number, amount, currency, date); the frozen document body (line items, VAT, seller identity) lives only in the PDF.
+- **Tag `Invoicing`** (`x-family: Buying`): groups the frozen invoice and credit-note PDFs, issued at payment and at refund.
+- **`GET /orders/{id}/invoice`** (`getOrderInvoice`): returns the order's frozen invoice as `application/pdf`.
+  - `Content-Disposition` is `invoice-<number>.pdf`.
+  - `x-cache: no-store`.
+  - Responses: 401, 404, 429 and 503.
+- **`GET /orders/{id}/credit-notes`** (`listOrderCreditNotes`): returns a `CreditNotesResponse` (unpaged, oldest first). It is empty when the order was never refunded, has no invoice, or the caller may not read its money.
+- **`GET /orders/{id}/credit-notes/{creditNoteId}`** (`getOrderCreditNote`): returns one credit note as PDF.
+  - `Content-Disposition` is `credit-note-<number>.pdf`.
+  - `x-cache: no-store`.
+  - Responses: 401, 404, 429 and 503.
+- **`x-error-codes`**:
+  - `ORDER_INVOICE_NOT_ISSUED` (404).
+  - `ORDER_CREDIT_NOTE_NOT_ISSUED` (404).
+  - Each operation maps its 404 to the matching code.
+- **`x-personal-data.invoicing`**: the module's section of `POST /account/export`. It is an object with required `invoices` and `creditNotes` arrays of `ExportInvoiceDocument`, and the arrays are empty rather than absent.
+- **Schemas**:
+  - `CreditNoteSummary`: `id`, `number`, `issuedAt`, `currency`, `grandTotal`, `reason` (`refund` | `correction`), and optional `refundId`, which is absent on a correction.
+  - `CreditNotesResponse`: `{ items: CreditNoteSummary[] }`.
+  - `ExportInvoiceDocument`: `orderId`, `number`, `issuedAt`, `currency`, `grandTotal`.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — All cross-module `$ref`s resolve here: the shared `Id` / `IdPathParam` / `CurrencyCode` / `NonNegativeDecimalAmount` schemas and the canonical `Unauthorized`, `NotFound`, `TooManyRequests`, `ServiceUnavailable` responses. This file contributes no shared components back; it only consumes them.
+- `src/modules/invoicing/templates/documents/logo.svg` is the only graph neighbor. This file does not reference it, and it does not appear in the spec. It is presumably used by the PDF document templates that render the documents this contract serves.
+- The file's actual `$ref` dependencies are the shared root contract (`IdPathParam`, `Unauthorized`, `NotFound`, `TooManyRequests`, `ServiceUnavailable`, `Id`, `CurrencyCode`, `NonNegativeDecimalAmount`).
 
 ## Notes
-
-- Invoices are **frozen at issue time**; the endpoint never re-renders from current config. A `404` means "not invoiced yet" (never paid, or the invoice listener failed), not a missing record.
-- Credit-note `404` collapses three cases (non-existent, wrong order, insufficient permission) into one status + code — by design, to avoid leaking existence.
-- PDF endpoints carry `x-cache: no-store`; the list endpoint does not.
-- The `503` path is specific: all render slots busy **and** the bounded queue full. A cached/stored PDF never hits this.
-- The export schema is a strict subset of the download response; do not add line-item fields there.
+- All three operations require `bearerAuth`.
+- The invoice and credit-note PDFs are rendered once and frozen, not re-rendered from current config. Invoice numbers come from a gap-free series. An order that is unpaid, or whose invoice listener failed, has no invoice yet and returns 404.
+- The 404 responses are deliberately indistinguishable between a missing document, another user's order, and staff lacking `display:Payment`.
+- The 503 means every render slot and the bounded queue behind them are full, and `Retry-After` says when to retry. A stored copy never gets a 503. The 429 comes from a rate limiter (`invoicingLimiter`) placed in front of the invoice route.
+- `reason: correction` credit notes arise when staff correct the buyer's details. The old invoice is cancelled and reissued, and no money moves.
+- Schemas are `additionalProperties: false`. Export rows deliberately omit lines, seller identity and VAT breakdown.

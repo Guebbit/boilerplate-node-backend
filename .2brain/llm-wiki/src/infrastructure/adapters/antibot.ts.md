@@ -1,41 +1,40 @@
 ---
 source: src/infrastructure/adapters/antibot.ts
-sha256: 4a9bb6e43ee926c07d811abf2f808bf88fa54d3076d28314df6590b68d8574ff
-generated_at: 2026-11-08T03:17:33.604741+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c00030ff1b87233f4d384a5e7fb0146d9ca48ddb8b7fbde59005bc679a209325
+context_sha256: ec701f9f308cca52edca18d03dad3fd733070450cbcb26c32c4a5dc36941ecbf
+generated_at: 2026-11-22T02:34:57.501995+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/antibot.ts
 
 ## Purpose
-
-Rung 2 of the anti-automation ladder. Answers a single yes/no question—whether an email address passes the deployment's anti-disposable-inbox policy—and returns a `RungVerdict`. It does not enforce the verdict; each caller decides what `refused` means for its endpoint. Off by default because an aggressive blocklist can refuse legitimate forwarding-service users.
+Rung 2 of the anti-automation ladder: decides whether an email address may proceed, by refusing disposable-inbox domains or (optionally) domains with no mail target. It is off by default (`NODE_ANTIBOT_EMAIL_POLICY`) because blocklists need maintenance and aggressive ones refuse real users on legitimate forwarding services. It only answers yes/no; each caller decides what a `refused` verdict means for its endpoint.
 
 ## Key elements
-
-- **`EmailPolicy`** (type) — the three postures selectable via `NODE_ANTIBOT_EMAIL_POLICY`: `'off' | 'disposable' | 'mx'`.
-- **`resolveEmailPolicy()`** — reads the active policy from `antibotConfig()` and throws on an invalid value rather than silently defaulting to `'off'`. Exported so the config endpoint can publish it.
-- **`checkEmailPolicy(email)`** — the main entry point. Returns `Promise<RungVerdict>`. Under `'off'` always resolves `'ok'`; under `'disposable'` rejects known disposable domains plus any deployment-specific denylist additions; under `'mx'` additionally performs a DNS MX (with RFC 5321 A/AAAA fallback) lookup.
-- **`mxResolver`** (internal) — a `Resolver` configured with `timeout: 2000, tries: 1` so a slow nameserver cannot stall a signup request.
-- **`isNoDataError`** (internal) — distinguishes "no such data" (`ENOTFOUND`/`ENODATA`) from "lookup failed" (timeout, SERVFAIL, etc.). Only the former is treated as evidence of a non-mail domain.
-- **`hasMxRecord`** (internal) — resolves `false` only on positive evidence of "no mail" (NXDOMAIN, null MX per RFC 7505, or no MX + no A/AAAA). Any failed lookup resolves `true` (fail-open) and logs a warning.
-- **`hasAddressRecord`** (internal) — RFC 5321 §5.1 fallback: checks A and AAAA records when MX is absent.
+- `EmailPolicy`: type `'off' | 'disposable' | 'mx'`, the three deployment postures.
+- `resolveEmailPolicy()`: reads `NODE_ANTIBOT_EMAIL_POLICY` via `antibotConfig()` fresh on every call. It is exported so `GET /config` can publish it. It throws on a value outside the closed set, so a typo cannot silently become `off`.
+- `checkEmailPolicy(email)`: the main export. Returns `Promise<RungVerdict>` (`ok` or `refused`). Flow:
+  1. Policy `off` returns `ok`.
+  2. A domain in `NODE_ANTIBOT_EMAIL_ALLOWLIST` returns `ok`.
+  3. A domain in `NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA`, or one that `isDisposableEmailDomain` flags (from `disposable-email-domains-js`), returns `refused`.
+  4. Policy `disposable` returns `ok`.
+  5. Policy `mx` returns the result of the MX check.
+- `mxResolver` (private): a `node:dns/promises` `Resolver` with a 2000 ms timeout and 1 try, so a slow nameserver cannot stall a signup request.
+- `hasMxRecord` (private): resolves `false` only on evidence of "no mail". That means NXDOMAIN, a null MX (RFC 7505), or no MX and no A/AAAA. If MX returns ENODATA or an empty list, it falls back to `hasAddressRecord`.
+- `hasAddressRecord` / `addressesOf` / `isNoDataError` (private): implement the RFC 5321 A/AAAA fallback. `ENOTFOUND` and `ENODATA` count as "no data".
 
 ## Relationships
-
-- **`./antibot-verdict`** — imports the `RungVerdict` type used as the return type of `checkEmailPolicy`.
-- **`./config`** — reads `NODE_ANTIBOT_EMAIL_POLICY`, `NODE_ANTIBOT_EMAIL_ALLOWLIST`, and `NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA` via `antibotConfig()`.
-- **`./logger`** — logs warnings when MX or address lookups fail (fail-open path).
-- **`modules/antibot/service`** — consumes `resolveEmailPolicy` to publish the active policy on `GET /config`.
-- **`modules/account/services/signup`** — calls `checkEmailPolicy` as part of the signup flow; the doc comment notes its `.then`-chained style requires the throw to surface as a rejected promise.
-- **`modules/tasks/service`** — another caller of `checkEmailPolicy`.
-- **`tests/unit/infrastructure/adapters/antibot.test.ts`** — unit tests for this module.
+- `src/infrastructure/adapters/antibot-verdict.ts`: supplies the `RungVerdict` type returned by `checkEmailPolicy`.
+- `src/infrastructure/adapters/config.ts`: `antibotConfig()` supplies the policy, allowlist and extra denylist.
+- `src/infrastructure/adapters/logger.ts`: its `logger` records a warning when a DNS lookup fails.
+- `src/modules/account/services/signup.ts` and `src/modules/tasks/services/contact.ts`: callers that act on the verdict. The file's comments name `signup` as a `.then`-chained caller.
+- `src/modules/antibot/service.ts`: its relationship is not visible in this file. The `GET /config` comment suggests `resolveEmailPolicy` is exposed alongside rung 3's provider.
+- `tests/unit/infrastructure/adapters/antibot.test.ts`: unit tests for this module.
 
 ## Notes
-
-- **Fail-open by design.** A DNS timeout, SERVFAIL, or any non-NXDOMAIN/ENODATA error resolves to `true` (allow) with a logged warning. The module only *refuses* on positive evidence.
-- **`resolveEmailPolicy` throws, but `checkEmailPolicy` wraps it in `Promise.resolve().then(…)`** so the throw becomes a rejected promise, matching the declared `Promise<RungVerdict>` return type and ensuring `.then`-chained callers (e.g. `signup`) catch it in their rejection path.
-- **Allowlist short-circuits before denylist/disposable/MX checks.** A deployment can exempt specific domains (forwarding services, customer domains flagged by mistake) even under the `mx` policy.
-- **`NODE_ANTIBOT_EMAIL_DENYLIST_EXTRA`** is for deployment-specific abuse patterns not yet in the upstream `disposable-email-domains` list. Freshness of the upstream list is considered an upstream responsibility.
-- **Null MX (RFC 7505)** is reported by Node as `exchange` being `''` or `'.'`; the code checks both.
-- **Domain extraction** uses `email.slice(email.lastIndexOf('@') + 1)` and lower-cases for list membership; no shape validation is performed here (upstream's job).
+- DNS failures (timeout, SERVFAIL, refused) are treated as unknown, not refusal. They fail open: the check resolves `true`, which gives `ok`, and logs a warning.
+- `checkEmailPolicy` wraps its body in `Promise.resolve().then(...)`. An invalid policy value therefore surfaces as a rejected promise rather than a synchronous throw, which `.then`-chained callers would miss.
+- The domain is taken after the last `@` and lower-cased. Allowlist and denylist matching uses `.includes` on that lower-cased domain.
+- The allowlist is checked before the denylist and disposable list, so it overrides both.
+- Under the `mx` policy, the disposable and denylist checks still run before DNS.

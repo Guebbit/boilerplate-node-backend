@@ -1,30 +1,27 @@
 ---
 source: src/modules/observability/audit.ts
-sha256: 34511235049f76cb61780a653704286d86312ed52302a6e4b5ade7b86f3efabb
-generated_at: 2026-11-08T06:37:52.131480+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 34511235049f76cb61780a653704286d86312ed52302a6e4b5ade7b86f3efabb
+context_sha256: c81c985c44c6f303a7da81248a5fd4f53e73247a88cc436305ebe8363f0dd137
+generated_at: 2026-11-22T06:00:08.902802+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/audit.ts
 
 ## Purpose
-
-Declares the observability module's security-audit action strings and registers them with the infrastructure security-events system. Currently defines a single action for detecting invalid bearer tokens on `/observability/metrics` scrapes. Follows the same "module-local action map + infrastructure registration" pattern as `modules/account/audit.ts`.
+Declares the audit action strings emitted by the observability module and registers them with the infrastructure layer. It does this by augmenting infrastructure's `AuditActionMap` type rather than editing infrastructure directly. The only action covers an attack on the scrape credential: a `/observability/metrics` scrape with the wrong bearer token.
 
 ## Key elements
-
-- **`observabilityAuditActions`** (exported const) — Object holding the module's audit action string literals. Contains one key:
-  - `SECURITY_METRICS_TOKEN_INVALID` (`'security.metrics_token.invalid'`) — fired when a metrics scrape presents the wrong bearer token.
-- **`registerSecurityEvents([...])`** — Call that pushes the action into the infrastructure-level registry so it is recognised globally.
-- **Module augmentation** (`declare module '@infrastructure/observability/audit'`) — Adds an `observability` key to the shared `AuditActionMap` interface, typed as a union of this module's action values.
+- `observabilityAuditActions`: a `const` object of audit action strings keyed by event. It has one entry, `SECURITY_METRICS_TOKEN_INVALID`, whose value is `'security.metrics_token.invalid'`.
+- `registerSecurityEvents([...])`: called at module load with `SECURITY_METRICS_TOKEN_INVALID`, so that action is registered as a security event.
+- `declare module '@infrastructure/observability/audit'`: adds an `observability` key to `AuditActionMap`. Its type is the union of the values in `observabilityAuditActions`.
 
 ## Relationships
-
-- **`src/infrastructure/observability/security-events.ts`** — Provides `registerSecurityEvents`, which this file imports and calls to publish its action string(s) to the central registry.
-- **`src/modules/observability/metrics-scraper.ts`** — The runtime consumer that emits `SECURITY_METRICS_TOKEN_INVALID` when a scrape request fails bearer-token validation.
-- **`tests/integration/security-events.test.ts`** — Integration tests that exercise the security-events pipeline, including this module's registered action.
+- **`src/infrastructure/observability/security-events.ts`**: provides `registerSecurityEvents`, which this file imports and calls.
+- **`@infrastructure/observability/audit`**: the module whose `AuditActionMap` is augmented. It is not in the neighbor list, but the file names it directly.
+- **`src/modules/observability/metrics-scraper.ts`**: a neighbor in the dependency graph. The action's description refers to the metrics scrape endpoint. This file does not import the scraper, so the nature of the link is not visible here.
+- **`tests/integration/security-events.test.ts`**: a neighbor in the dependency graph, most likely covering security-event registration. The file shows nothing more about it.
 
 ## Notes
-
-- The `as const` on `observabilityAuditActions` is what lets the module augmentation derive a precise string-literal union type for `AuditActionMap.observability` without repeating the values.
-- Adding a new audit action to this module requires: (1) adding a key/value to `observabilityAuditActions`, (2) including it in the `registerSecurityEvents([...])` array. Forgetting either step silently breaks either the type contract or the runtime registry.
+- Registration is a side effect of importing this file, so the module must be loaded for the action to be registered as a security event.
+- The file's header comment points to `src/modules/account/audit.ts` for the reasoning behind the augmentation pattern.

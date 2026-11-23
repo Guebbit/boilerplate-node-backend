@@ -1,51 +1,43 @@
 ---
 source: src/modules/cart/tests/integration/stock.test.ts
-sha256: 3c0b24ff4b0ff35186f4fff6e57c493a49523e727443a331ea92e7d224d9f9cb
-generated_at: 2026-11-14T19:36:28.539191+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 710c39fdeb95e54d81a9a906a16619356c483d48f7b12765d0bcb07cb6392faa
+context_sha256: 6372f7e1779f514e71be7b62ed791e286581eef36eb86e6dbc98d29a8e0269aa
+generated_at: 2026-11-22T04:42:21.597789+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/integration/stock.test.ts
 
 ## Purpose
-
-Integration suite that verifies the reservation invariant across the full checkout→payment→cancel/expiry lifecycle: units are *held* (not deducted from `onHand`) between checkout and payment, are recoverable on cancel or TTL expiry, and only leave the shelf once PAID. Runs against a real MongoDB instance so that conditional-write guarantees (the atomic reserve that prevents two checkouts from sharing the last unit) are actually exercised rather than mocked.
+Integration suite for the stock reservation model across the order lifecycle. The invariant under test is that units leave the shop only once paid for. Between checkout and payment they are held (reserved), not sold, and can be recovered by cancel or by the expiry sweep. Every case asserts `onHand` and `reserved` together. It runs against a real Mongo, because the guarantees are conditional writes that a mock cannot show.
 
 ## Key elements
-
-- **`withoutWindow(body)`** — helper that wraps a test body with `NODE_RESERVATION_TTL_MINUTES: '0'` via `withEnvironmentOverrides`, forcing every reservation to be stale by the time a sweep reads it. Scoped per-test so other cases keep a normal TTL.
-- **`describe('checkout holds units without selling them')`** — core suite asserting the `onHand`/`reserved`/`available` triple after:
-  - successful checkout (reserve, no deduction),
-  - insufficient-stock refusal (cart survives, error names every short line),
-  - all-units-held refusal by another user,
-  - multi-line shortage reporting (all short lines listed, healthy line excluded),
-  - rollback of earlier holds when a later line fails,
-  - concurrent `Promise.all` checkout race on the last unit (exactly one wins; loser gets `out_of_stock`, not `insufficient_stock`).
-- **`describe('a checkout that cannot keep its order')`** — verifies that a refused reserve writes no order document and burns no order-number counter (spies on `orderRepository` methods).
-- **`beforeEach`** — resets domain events (`resetDomainEvents`) and registers checkout modules (`registerCheckoutModules([paymentsModule])`) so the `RESERVATION_EXPIRED` event subscription on the orders module is active.
+- `setupTestDb()`: called at module level to set up the test database.
+- `beforeEach`: calls `resetDomainEvents()` and `registerCheckoutModules([paymentsModule])`, so event subscriptions exist.
+- `withoutWindow(body)`: runs `body` with `NODE_RESERVATION_TTL_MINUTES` set to `'0'` through `withEnvironmentOverrides`, so any hold it opens is already stale for the sweep. It is scoped per test because the TTL is read lazily on each reserve.
+- `describe('checkout holds units without selling them')`: covers these cases:
+  - A completed checkout reserves units and leaves `onHand` unchanged (`onHand: 10, reserved: 3, available: 7`).
+  - A cart over the available stock is refused with 409 and `CART_INSUFFICIENT_STOCK`. The error details name the line (`productId`, `title`, `requested`, `availability`) but not the quantity left. The cart survives, with `checkoutable: false`.
+  - A product whose units are all held by another user is refused.
+  - Every short line is reported at once, and healthy lines are omitted.
+  - A failed line releases the holds that earlier lines already took.
+  - Two concurrent checkouts for the last unit: exactly one succeeds, and the loser gets `availability: 'out_of_stock'`. The refusal comes from the reserve write, not the pre-flight.
+- `describe('a checkout that cannot keep its order')`: uses `afterEach(jest.restoreAllMocks)`. Its first visible case checks that no order is written and no order number is burned when the hold is refused. It spies on `orderRepository.create` and `incrementOrderNumberCounter`. The file is cut off partway through this case.
 
 ## Relationships
-
-- **`src/modules/cart/services/index.ts`** — the primary SUT; the test imports `cartService` and drives the entire checkout flow through it.
-- **`src/modules/cart/repository.ts`** — the test imports `cartRepository` to set the shipping method as a checkout prerequisite.
-- **`src/modules/inventory/index.ts`** — the test imports `inventoryService` to inspect and manipulate stock counter state.
-- **`src/modules/inventory/services/index.ts`** — inventory service layer exercised as part of the reservation logic under test.
-- **`src/modules/inventory/services/levels.ts`** — level-related inventory operations that participate in the stock assertions.
-- **`src/modules/inventory/tests/factories.ts`** — provides the `removeLevel` test utility.
-- **`src/modules/orders/index.ts`** — the test imports `orderService` for order-lifecycle steps after checkout.
-- **`src/modules/orders/services/index.ts`** — order service logic (including the `RESERVATION_EXPIRED` handler) is exercised indirectly via the checkout and sweep flows.
-- **`src/modules/orders/repository.ts`** — the test imports `orderRepository` and spies on its methods to prove no order is persisted when the reserve is refused.
-- **`src/modules/orders/tests/factories.ts`** — provides `readOrder` and `countOrders` helpers for post-checkout assertions.
-- **`src/modules/payments/module.ts`** — registered as a checkout module so its event subscriptions (payment confirmation, release-on-fail) are active during the sweep tests.
-- **`src/kernel/events.ts`** — `resetDomainEvents` clears the in-memory event bus between tests.
-- **`src/kernel/outbox.ts`** — `outboxEventModel` and `settleOutboxNudges` are used to flush or assert outbox entries produced during the flow.
-- **`src/modules/addresses/tests/factories.ts`** — `giveAddress` seeds the required shipping/pickup address for each test user.
-- **`src/infrastructure/adapters/logger.ts`** — `logger` is imported, likely to capture structured log output or silence noise in test output.
+- **`cart/services` (`cartService`)**: the entry point under test, through `addItemById`, `orderConfirm` and `getForBadge`.
+- **`cart/repository` (`cartRepository`)**: `setShippingMethod` is used to prepare carts with the `'pickup'` method.
+- **`orders` (`orderService`, `orderRepository`)**: `orderRepository` is spied on. `readOrder` and `countOrders` come from the orders test factories. Orders are expected to react to `RESERVATION_EXPIRED`.
+- **`inventory` (`inventoryService`, `removeLevel`)**: imported, along with `inventory/tests/factories`, for the stock-level side of the suite.
+- **`kernel/events`**: `resetDomainEvents` clears subscriptions between tests.
+- **`kernel/outbox`**: `outboxEventModel` and `settleOutboxNudges` are imported for outbox assertions and settling.
+- **`payments/module`**: registered in `beforeEach` as a checkout module.
+- **`addresses/tests/factories`**: `giveAddress` gives each user an address before checkout.
+- **`infrastructure/adapters/logger`**: `logger` is imported.
+- **Other helpers**: user and product factories (`createUser`, `createProduct`, `countersOf`) and `@tests/*` helpers for the DB, environment overrides, callers and checkout module registration.
 
 ## Notes
-
-- **Real Mongo, not mocks.** The file's header comment states the guarantees under test are conditional writes (atomic `findAndModify`-style reserves) that a mock cannot demonstrate. The suite calls `setupTestDb()` at the top level.
-- **TTL is read lazily.** `NODE_RESERVATION_TTL_MINUTES` is read at reserve-time, not at module-load time, which is why `withoutWindow` can override it per-test rather than at import time.
-- **Event subscription is a prerequisite.** Without `registerCheckoutModules([paymentsModule])`, the `RESERVATION_EXPIRED` → order-status transition never fires, and expiry cases would assert only half the expected behaviour.
-- **`toEqual` vs `toMatchObject` is intentional.** In the concurrent-race refusal assertion, `toEqual` is used on `details` to guarantee no extra `available` field leaks into the API response — a shopper must not see the remaining count.
-- **The file is truncated** in the source provided; the full suite likely includes cancel-releases-units and TTL-expiry-sweep cases referenced in the module docstring.
+- Registering modules in `beforeEach` matters. Without the `orders` subscription to `RESERVATION_EXPIRED`, the sweep would release units but leave orders `pending`, and the expiry cases would assert only half the behaviour.
+- Mocks are restored by hand with `jest.restoreAllMocks()`, because `clearMocks` clears call logs but not implementations.
+- The hold is taken before the order is written, so a refused reserve leaves no order to roll back.
+- The concurrency test sorts the results with `toSorted()` and uses `toEqual`, not `toMatchObject`, on the loser's details. This makes an extra `available` field on a line fail the test.

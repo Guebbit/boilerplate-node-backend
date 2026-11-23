@@ -1,37 +1,39 @@
 ---
 source: src/modules/products/tests/integration/delete-titles.test.ts
-sha256: b3d323ca1f1ab703e59b1da2fe4a12d6845f0357deb1ef6dbe4443ba79f8820f
-generated_at: 2026-11-08T07:51:11.706699+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 89edd782a53329b63fb2ac8e0c087e5f3d9fada6c8cea86e61579079c4074545
+context_sha256: 09794205847705af132bb8b363f0bb30c2590a21f3c7c1e7e6a0d6b7db1c6507
+generated_at: 2026-11-22T07:16:14.896256+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/integration/delete-titles.test.ts
 
 ## Purpose
-
-Integration tests verifying that the `product.deleted` domain event carries the product's titles (by locale) captured **before** translation rows are hard-deleted, and that `productService.titlesById` returns correct results for soft-deleted vs. hard-deleted products. Ensures downstream consumers (e.g. notifications) can still display a product's names after it no longer exists.
+Integration tests for what the `product.deleted` domain event carries: the product's titles by locale, read before a hard delete removes the translation rows. Consumers that outlive the product (e.g. `notifications`) can only quote what travelled with the event, so a missing title can never be shown later. The file also covers `productService.titlesById`.
 
 ## Key elements
-
-- **`describe('product.deleted titles')`** — Four cases: fallback-language title on hard delete, title on soft delete, read-before-remove ordering (multi-locale), and idempotency (no second event on repeated soft delete).
-- **`describe('productService.titlesById')`** — Three cases: soft-deleted product still resolves titles, hard-deleted product returns an empty map, and a translated title overrides the product column for the same locale.
-- **`jest.mock('@kernel/translation')`** — Replaces the three port methods (`readAllTranslations`, `readServedTranslations`, `removeTranslations`) with `jest.fn(actual.…)` wrappers so they record calls while still executing the real logic.
-- **`afterEach`** — Resets all three mocked translation functions back to their real implementations to prevent cross-test leakage.
-- **`beforeEach` (first describe)** — Calls `resetDomainEvents()`, `markDomainEventsWired()`, and subscribes the `deleted` spy to `PRODUCT_DELETED`.
+- `jest.mock('@kernel/translation', ...)`: replaces `readAllTranslations`, `readServedTranslations` and `removeTranslations` with `jest.fn` wrappers around the real implementations. They are recording wrappers rather than `jest.spyOn` spies, because `spyOn` cannot redefine the non-configurable property a CommonJS namespace import exposes under the swc transform.
+- `afterEach`: resets each wrapper and restores the real implementation, so a stub from one case doesn't leak into the next.
+- `describe('product.deleted titles')`: `beforeEach` calls `resetDomainEvents()`, `markDomainEventsWired()` and subscribes a `deleted` mock to `PRODUCT_DELETED`. Cases:
+  - A hard delete emits `{ productId, hardDelete: true, titles: { en: 'Blue mug' } }`.
+  - A soft delete emits the same shape with `hardDelete: false`.
+  - `readServedTranslations` is called before `removeTranslations` (recorded in an `order` array). The event's titles are `{ en, it }`.
+  - A repeated soft delete of an already-deleted product emits nothing.
+- `describe('productService.titlesById')`:
+  - It returns the names of an existing product, soft-deleted ones included.
+  - It returns `{}` for a product that has been hard-deleted.
+  - A translated title wins over the product column for its own language.
 
 ## Relationships
-
-- **`src/kernel/events.ts`** — Imports `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` to control the in-process event relay lifecycle.
-- **`src/kernel/outbox.ts`** — Imports `settleOutboxNudges` to flush async outbox work before asserting on event payloads.
-- **`src/kernel/translation.ts`** — Mocked at module level; tests assert call order (`read` → `remove`) and inspect returned `Map<locale, {title}>` shapes.
-- **`src/modules/products/events.ts`** — Imports the `PRODUCT_DELETED` constant used as the subscription key.
-- **`src/modules/products/services/index.ts`** — The system under test: `productService.removeById(id, hardDelete)` and `productService.titlesById(id)`.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` builds a seeded product row for each case.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the test database before any test runs.
+- `@tests/setup-test-db` (`setupTestDb`): called at module level to set up the test database.
+- `@modules/products/tests/factories` (`createProduct`): creates the products under test.
+- `../../services` (`productService`): `removeById(id, hardDelete)` and `titlesById(id)` are the code under test.
+- `../../events` (`PRODUCT_DELETED`): the event name the tests subscribe to.
+- `@kernel/events`: `onDomainEvent`, `resetDomainEvents` and `markDomainEventsWired` control and observe event dispatch.
+- `@kernel/outbox`: `settleOutboxNudges()` is awaited after each action so the event is delivered before assertions run.
+- `@kernel/translation`: mocked as described above to verify call order and to inject served translations.
 
 ## Notes
-
-- The translation mock uses **recording wrappers around real implementations** (not pure spies) because `jest.spyOn` cannot redefine the non-configurable property exposed by a CommonJS namespace import under the swc transform used in CI.
-- `markDomainEventsWired()` is required in `beforeEach`; without it the relay silently drops events (it only dispatches in a process where at least one subscriber has registered).
-- Every assertion on the event payload must come **after** `settleOutboxNudges()`, since `removeById` enqueues the event asynchronously via the outbox.
-- The `afterEach` reset is load-bearing: a stub left on `readServedTranslations` by one test case would answer the next case's real reads with stale data.
+- Event handlers are called with a second argument, matched with `expect.anything()`.
+- `markDomainEventsWired()` is needed because the relay only dispatches in a process where modules have subscribed.
+- Cases that stub `readServedTranslations` use `mockImplementation` or `mockResolvedValueOnce`. The `afterEach` restores the real behavior.

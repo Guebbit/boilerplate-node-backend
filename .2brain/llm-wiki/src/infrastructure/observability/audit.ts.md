@@ -1,45 +1,39 @@
 ---
 source: src/infrastructure/observability/audit.ts
-sha256: 29baf8dd1633c5c4034afb734bb867f30ec55d8fcb2d7d0b0467e9d2d36a6d3c
-generated_at: 2026-11-14T18:11:49.417985+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 75113fa26f2ae2c8ff191c85e9e0714c65a849e3465fe98c20e29a56ae4f0eb1
+context_sha256: 2e16232cf10a5fd23c7dcd2a9b354f989311158d794a9ab3a4673c2ed4b001fd
+generated_at: 2026-11-22T02:58:11.091797+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/observability/audit.ts
 
 ## Purpose
-
-Defines the application's audit trail: a structured, machine-readable record of "who did what to which resource, and did it work." It is deliberately decoupled from application logging — audit entries are security/compliance artefacts written to a dedicated always-on logger with a stable field set, and optionally persisted through a sink for admin queryability.
+Defines the audit trail: the "who did what to which resource, and did it work" record. It is deliberately separate from application logging. Entries go to a dedicated always-on `auditLogger` with a stable, machine-readable field set. Optionally, a registered persistence sink also stores them so an admin endpoint can query them back.
 
 ## Key elements
-
-- **`coreAuditActions`** (re-exported from `./audit-actions.generated`) — app-level action constants in `domain.resource.verb` dot-notation, used by guards that reject requests before any domain module sees them.
-- **`AuditActionMap`** — an empty interface intended for declaration merging; each domain module augments it with its own action strings so `infrastructure` never imports a module.
-- **`AuditAction`** — union of `CoreAuditAction | AuditActionMap[keyof AuditActionMap]`; the full set of emittable actions.
-- **`AuditEvent`** — the structured event schema (`actorUserId`, `actorRole`, `actorRoleName`, `actorCredentialId`, `actorScope`, `action`, `outcome`, `ip`, `userAgent`, `requestId`, `traceId`, `targetType`, `targetId`, `subjectId`, `metadata`).
-- **`AuditEntry`** — `AuditEvent` + `timestamp` + `level`; the shape handed to the persistence sink.
-- **`AUDIT_ACTOR_ROLES` / `AUDIT_OUTCOMES` / `AUDIT_LEVELS`** — constant arrays derived from the schema enums, for programmatic reference.
-- **`AuditSink`** (type) / **`registerAuditSink()`** — port for a fire-and-forget persistence callback; installed once at module registration.
-- **`emitAuditEvent(event)`** — the single emission point: scrubs credentials from `metadata`, writes the log line via `auditLogger`, then invokes the sink (wrapped in a try/catch so a misbehaving sink cannot crash the request).
-- **`extractRequestContext(context)`** — pulls `ip`, `userAgent`, `requestId`, `traceId` from a `CallerContext` for use in an audit event.
-- **`resolveActorRole(context)`** (private) — maps `CallerContext` to the four-way `anonymous | user | admin | system` split; checks `system` before `unrestricted` so background jobs aren't misread as admin actions.
+- `coreAuditActions` (re-exported from `./audit-actions.generated`): app-level action constants in `domain.resource.verb` form. They cover requests refused by guards before any domain saw them. The source list is `shared/rules/audit-actions.yaml`.
+- `AuditActionMap`: an empty interface that modules augment through declaration merging with their own actions. This keeps `infrastructure` from importing any module.
+- `AuditAction`: the union of the core actions and every module-declared action.
+- `AUDIT_ACTOR_ROLES`, `AUDIT_OUTCOMES`, `AUDIT_LEVELS`: value arrays taken from the generated `AuditEntryItem*` enums. They are the schema's `enum`s.
+- `AuditEvent`: the entry shape. Required fields are `actorUserId` (`'unknown'` when unresolvable), `actorRole`, `actorScope`, `action` and `outcome`. Optional fields are `actorRoleName`, `actorCredentialId` (public api-key prefix only), `ip`, `userAgent`, `requestId`, `traceId`, `targetType`, `targetId`, `subjectId` and `metadata`.
+- `AuditEntry`: an `AuditEvent` plus `timestamp` and `level`, both added at emit time.
+- `AuditSink` / `registerAuditSink(sink)`: a port for persistence. `app.ts` supplies the implementation at boot, and the call is made from `@modules/audit-logs/module`'s `onRegistered`.
+- `emitAuditEvent(event)`: scrubs credentials and logs the line via `auditLogger.log(level, action, scrubbed)`. If a sink is registered, it then builds the `AuditEntry` and passes it to the sink inside a try/catch. A sink failure is logged as `audit.sink.failed`.
+- `extractRequestContext(context)`: pulls `ip`, `userAgent`, `requestId` and `traceId` from a `CallerContext`. The trace id comes from `getActiveSpanContext()`.
+- `resolveActorRole` (internal): derives `actorRole` from the caller context. The file shown ends partway through its body.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/logger.ts`** — imports `auditLogger` (the dedicated always-on logger) and `redactCredentials` (credential scrubbing applied to `metadata` at emit time).
-- **`src/infrastructure/observability/span-context.ts`** — imports `getActiveSpanContext` to attach the OTel `traceId` to each audit entry.
-- **`scripts/docs/generate-audit-actions.ts`** — the build script that produces the generated action-constants file this module imports; its output defines the `coreAuditActions` set.
-- **`src/kernel/middlewares/authorizations.ts`** — `requirePermissionGuard` (the authorization guard) is a primary caller of `emitAuditEvent` and the one caller that overrides `actorScope` for platform-key checks.
-- **`src/kernel/staff-read.ts`** — sets the `subjectId` field on audit events when a staff member reads another person's record.
-- **`src/modules/account/services/caller.ts`** — builds the `CallerContext` that `extractRequestContext` and `resolveActorRole` consume.
-- **`src/modules/access/services/role-audit.ts`** — a domain module that augments `AuditActionMap` and emits audit events for role-related actions.
+- Depends on `src/infrastructure/adapters/logger.ts` for `auditLogger` and `redactCredentials`.
+- Depends on `src/infrastructure/observability/span-context.ts` for the active trace id.
+- `scripts/docs/generate-audit-actions.ts` is the likely producer of the generated actions file that this file re-exports.
+- The remaining neighbors (`src/infrastructure/http/middlewares/origin.ts`, `src/infrastructure/http/middlewares/rate-limit.ts`, `src/infrastructure/observability/forbidden.ts`, `src/infrastructure/observability/security-events.ts`, `src/kernel/middlewares/authorizations.ts`, `src/kernel/staff-read.ts`, and the access and account services) are consumers that emit audit events. The visible part of this file does not show their exact usage. The docblocks name the guards and `requirePermissionGuard` as emitters of the core actions.
 
 ## Notes
-
-- **Dependency direction is strict:** `infrastructure` may not import `@modules/*` or `@kernel/*`. Modules that need audit emit events via the public API of this file; the sink is injected at boot by the `audit-logs` module, not imported.
-- **Sink contract:** the registered sink MUST NOT throw or reject. `emitAuditEvent` wraps the call in a try/catch as a belt-and-braces guarantee that a broken sink cannot fail the in-flight request or suppress the already-written log line.
-- **Unregistered sink is valid:** unit tests and queue workers import this module without a database; the log line is still written either way.
-- **`actorScope` default vs. override:** it defaults to `context.caller.scope` (always tenant), but platform-key guard checks must pass the scope they actually resolved, or platform refusals will be misrecorded as tenant events.
-- **`resolveActorRole` ordering:** `system` is checked before `unrestricted` because `SYSTEM_ACTOR` is unrestricted; reversing the check would label every background job as an admin action.
-- **`ip` accuracy** depends on Express `trust proxy` being configured behind a load balancer; otherwise it records the proxy address.
-- **Credential scrubbing** (`redactCredentials`) is applied once at emit time so the log line and the stored row share the same scrubbed `metadata`; personal fields are left raw in the row and handled by the logger's own pipeline for the log line.
+- `infrastructure` sits at the bottom of the dependency graph and may not import `@kernel/*` or `@modules/*`. This is why the sink is a port, the action map is augmented by modules, and `resolveActorRole` reads `unrestricted` and `system` from `context.caller` rather than re-deriving them.
+- Level mirrors outcome: `success` logs as `info`, anything else as `warn`.
+- Credentials in `metadata` are scrubbed once, so the log line and the stored row match. Personal fields stay raw in the stored row and are handled only by the logger's own pipeline for the line.
+- Sinks MUST be fire-and-forget and MUST NOT throw or reject. An unregistered sink is a supported state (unit tests, queue workers), and the log line is still written.
+- `context.caller` is always resolved in tenant scope. A platform-key check must therefore pass `actorScope` explicitly, as `requirePermissionGuard` does.
+- `ip` reflects the proxy address unless Express `trust proxy` is configured.
+- Field names are camelCase here, in Mongo and in the API. The logger's `semanticNamesFormat` renames them to OpenTelemetry names in the log line only.

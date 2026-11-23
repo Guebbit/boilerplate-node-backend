@@ -1,46 +1,41 @@
 ---
 source: src/modules/account/tests/integration/service-flows.test.ts
-sha256: ae1dfda15b472c5ebec730b572cd33da0359566f8b53f988fdbf96c9531e662d
-generated_at: 2026-11-14T19:10:04.050369+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7d82f89d3395eeafcf568d9cc85d0bd32385d3cbd0148e2e1d15d323bab80839
+context_sha256: f06785c68ccfaa99878ba966490da9d07f6d545b420c4b581fcb6f10c81d2baa
+generated_at: 2026-11-22T04:00:41.742222+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/service-flows.test.ts
 
 ## Purpose
-
-Integration tests for the account service's ordinary (happy-path and argument-rejection) flows: signup, login, one-time token issuance, password change, and refresh-token exchange. Drives a real database via `setupTestDb` and complements the sibling `service.test.ts`, which covers security invariants. Lives under `account/tests/` (not `users/tests/`) because the code under test is `account`'s.
+Integration tests for the ordinary (happy-path and argument-validation) flows of `accountService` in `src/modules/account/services/index.ts`: signup, login, one-time token issuance, password change, and (further in the file) refresh-token exchange. It complements the sibling `service.test.ts`, which covers security invariants. Tests run against a real database via `setupTestDb()`, and live under `account` because the code under test belongs to `account`.
 
 ## Key elements
-
-- **`describe('accountService.signup')`** — success path, password mismatch (422), duplicate email (409 / `EMAIL_ALREADY_USED`), invalid email format (422), short password (422), and a breached-but-composition-valid password (`Password1!`).
-- **`describe('accountService.login')`** — success with correct credentials, wrong password (401), non-existent email (401), and soft-deleted user (401).
-- **`describe('issueToken')`** — plaintext returned to caller, only `hashToken` digest persisted, expiry set to `now + lifetime`, and the one-live-link (`password`) vs. many-live-link (`mfa-challenge`) replacement semantics.
-- **`describe('passwordChange')`** — success, mismatch (422), too-short (422), and a round-trip proving the new password actually authenticates on subsequent login.
-- **`describe('accountService.refreshAccessToken')`** — three outcomes of exchanging a refresh cookie, verified against a real signed token (not a stub). Sets `NODE_TOKEN_ACCESS` / `NODE_TOKEN_REFRESH` in `beforeEach` because unit tests don't load dotenv.
-- **`issueRefreshToken`** (local helper) — creates a user and calls `startSession` to produce a real stored refresh token for the refresh tests.
-- **`jest.mock('@infrastructure/observability/audit', …)`** — replaces the audit port with `auditPortMock()` from `@tests/ports`.
+- **`jest.mock('@infrastructure/observability/audit', ...)`**: replaces the audit port with `auditPortMock()` from `@tests/ports` instead of using `jest.spyOn`. Spying fails on CommonJS namespace getters under the swc mutation config and in Stryker's sandbox.
+- **`setupTestDb()`**: sets up the real test database.
+- **`describe('accountService.signup')`**: covers success, mismatched passwords, 409 `EMAIL_ALREADY_USED`, 422 for an invalid email, 422 for a too-short password, and 422 for a breached password (`Password1!`). The breached case is the only one proving `signup` calls `assertPasswordNotBreached`.
+- **`describe('accountService.login')`**: covers success, and 401 for a wrong password, an unknown email, and a soft-deleted user.
+- **`describe('issueToken')`**:
+  - returns a 32-character plaintext token;
+  - stores only the `hashToken` digest plus the token kind;
+  - sets the expiry from the given lifetime;
+  - a `password` token replaces the previous one, while `mfa-challenge` tokens accumulate.
+- **`describe('passwordChange')`**: covers success, 422 on mismatch, 422 when too short, and a check that the new password works for a later login.
+- **`issueRefreshToken()`**: local helper that creates a user and returns the value from `startSession(user.id, ['pwd'])`. The stored row only holds a digest, so the helper keeps the plaintext JWT.
+- **`describe('accountService.refreshAccessToken')`**: exercises the three outcomes of exchanging a refresh cookie with a real signed token. Its `beforeEach` sets token secrets through `setEnvironment`. The rest of the file is not shown here.
 
 ## Relationships
-
-- **`src/modules/account/services/index.ts`** — exports the `accountService` object whose `signup`, `login`, and `refreshAccessToken` methods are the primary SUT for most blocks.
-- **`src/modules/account/services/tokens.ts`** — exports `issueToken`; the test asserts its DB side-effects (hash storage, expiry, kind-replacement).
-- **`src/modules/account/services/password.ts`** — exports `passwordChange`; the test verifies the changed credential via a subsequent `login` call.
-- **`src/modules/account/session/jwt.ts`** — `startSession` creates the real refresh token; `verifyAccessToken` is used in the refresh block.
-- **`src/infrastructure/security/hash-token.ts`** — `hashToken` is called to build the expected digest and assert the stored row holds only the hash.
-- **`src/infrastructure/observability/audit.ts`** — mocked at module level (not spied) via `auditPortMock()`.
-- **`src/modules/account/audit.ts`** — `accountAuditActions` is imported for audit-assertion matching.
-- **`src/modules/account/metrics.ts`** — `authRefreshReuseTotal` is imported and asserted in the refresh block.
-- **`src/infrastructure/http/response.ts`** — `ResponseSuccess` / `ResponseReject` types used for discriminated-union narrowing in assertions.
-- **`src/modules/users/tests/factories.ts`** — `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`, and `userRepository` provide shared user fixtures and post-change lookups.
-- **`src/modules/account/tests/factories.ts`** — `tokenRowsOf` and `dropSessionOf` read/delete token and session rows for assertions.
-- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity passed to service methods.
-- **`src/modules/users/index.ts`** — source of the `UserDocument` type used in result casts.
+- Calls `accountService` from `src/modules/account/services/index.ts`, plus `issueToken` (`src/modules/account/services/tokens.ts`) and `passwordChange` (`src/modules/account/services/password.ts`) directly.
+- Uses `startSession` and `verifyAccessToken` from `src/modules/account/session/jwt.ts`.
+- Uses `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD` and `userRepository` from `src/modules/users/tests/factories.ts`. Uses `tokenRowsOf` and `dropSessionOf` from `src/modules/account/tests/factories.ts`.
+- Uses `hashToken` (`src/infrastructure/security/hash-token.ts`) to check that stored digests match.
+- Asserts on `ResponseSuccess` and `ResponseReject` shapes from `src/infrastructure/http/response.ts`. Uses the `UserDocument` type from `src/modules/users/index.ts`.
+- Imports `accountAuditActions` (`src/modules/account/audit.ts`) and `authRefreshReuseTotal` (`src/modules/account/metrics.ts`), which the refresh section uses together with the mocked audit port (`src/infrastructure/observability/audit.ts`) and `observePort` from `@tests/ports`.
+- Uses `testCallerContext` from `tests/support/callers.ts`, `setEnvironment` from `@tests/environment`, and `setupTestDb` from `@tests/setup-test-db`.
 
 ## Notes
-
-- **Audit port is replaced, not spied.** `jest.spyOn` cannot redefine the non-configurable getter a CommonJS namespace import exposes; this fails under Stryker's sandbox and the SWC transform. The `jest.mock` call delegates to `auditPortMock()` in `tests/support/ports.ts`.
-- **422 for all validation failures.** The file deliberately asserts 422 (not 400) for invalid email, short password, and mismatched passwords, matching `openapi.yaml`, which declares 422 and never declares 400.
-- **`PLAIN_PASSWORD` is a breached password.** It is `Password1!`, a listed entry in `shared/rules/breached-passwords.txt`, chosen so the "breached but composition-valid" test case works against `accountService.signup`.
-- **`setupTestDb()` runs at module scope** (not per-test), giving every `describe` block the same real database connection.
-- **Refresh tests set JWT secrets manually** via `setEnvironment` because the unit-test environment does not load `.env`; this mirrors the convention in `jwt.test.ts`.
+- Validation failures return 422, including auth ones, because `openapi.yaml` declares 422 and never 400.
+- `PLAIN_PASSWORD` is documented as deliberately not the breached `Password1!`, so that value stays available for the breached-password test.
+- Secrets are set in the test because unit tests don't load dotenv.
+- Verification consults the user document, so a stubbed verifier would let a revoked token pass. That is why refresh tests use real signed tokens.

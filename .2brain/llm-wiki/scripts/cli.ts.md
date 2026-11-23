@@ -1,29 +1,26 @@
 ---
 source: scripts/cli.ts
-sha256: 0d9b0674717343ea2315c3129429192110f5c059846b1c551a64fb8f0ff421d6
-generated_at: 2026-11-08T02:37:49.638274+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 62b72942da23f7e6140d0f905ceea47d6a2a56640327f52c2f9ad5b6f9bb0edf
+context_sha256: 89ca683265faf54e769e338e1d834071ae626419a61c3c29bccb5bf599f26868
+generated_at: 2026-11-22T01:52:29.012933+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/cli.ts
 
 ## Purpose
-
-Shared CLI-argument parsing helper for standalone scripts. Wraps `node:util`'s `parseArgs` with a minimal API (`flagValue`, `hasFlag`, `requiredPath`) so individual scripts don't hand-roll `indexOf`/`startsWith` logic for each `--flag` they accept.
+Small command-line helper for scripts. It reads `--flag value` and `--flag=value` arguments through `node:util`'s `parseArgs`, so individual scripts don't need their own `indexOf`/`startsWith` parsing. Parsing is lenient (`strict: false`): unknown flags and positionals are ignored, which matches how `npm run x -- --flag` passes extra flags that npm itself adds.
 
 ## Key elements
-
-- **`flagValue(flag)`** — Returns the string value of `--flag value` / `--flag=value`, or `undefined` if absent. The flag name is passed *without* dashes.
-- **`hasFlag(flag)`** — Returns `true` when a boolean switch (`--flag`, no value) was provided.
-- **`requiredPath(flag, root)`** — Like `flagValue` but calls `process.exit(1)` with a usage line when missing; otherwise resolves a relative value against `root` via `path.resolve` and returns the absolute path.
-- **`scriptArguments()`** (internal) — Reads `process.argv.slice(2)` at *call time* rather than module-load time, so tests can reassign `process.argv` between invocations.
+- `flagValue(flag)`: returns the string value of `--flag`, or `undefined` if the flag is absent or has no value.
+- `hasFlag(flag)`: returns `true` when the boolean switch `--flag` was passed.
+- `requiredPath(flag, root)`: returns the flag's value resolved to an absolute path with `path.resolve(root, value)`. If the flag is missing, it prints `Missing required argument: --<flag> <path>` to stderr and exits with code 1.
+- `scriptArguments()` (private): `process.argv.slice(2)`.
 
 ## Relationships
-
-Every script under `scripts/contracts/`, `scripts/db/`, and `scripts/docs/` (e.g. `generate-asyncapi-types.ts`, `sync-indexes.ts`, `generate-jobs.ts`) imports from this module to parse its own command-line flags. This file is a leaf dependency: it imports only `node:path` and `node:util`, and no project-internal modules.
+The neighbors are scripts under `scripts/contracts/`, `scripts/db/` and `scripts/docs/`, such as the `generate-*` generators, `check-asyncapi-breaking.ts` and `sync-indexes.ts`. They are the likely consumers of these helpers for reading their command-line flags. This file imports only `node:path` and `node:util`, and no other project files.
 
 ## Notes
-
-- `parseArgs` is called with `strict: false` and `allowPositionals: true` so that unknown flags (e.g. ones npm injects) and bare positionals don't throw.
-- `requiredPath` terminates the process (`exit(1)`) rather than throwing; callers should not wrap it in `try/catch`.
-- Because `scriptArguments()` reads `process.argv` lazily, the module is safe to import once and call repeatedly with different argv values (relevant for test suites).
+- `process.argv` is read on every call, not once at load time. Tests can set `process.argv` before calling, and `parseArgs`' own default changes shape under `node -e`.
+- `flagValue` and `hasFlag` each declare only their own flag, and the other flags are passed through under `strict: false`.
+- `requiredPath` treats an empty string value as missing.

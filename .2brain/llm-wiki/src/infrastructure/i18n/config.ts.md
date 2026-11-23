@@ -1,36 +1,29 @@
 ---
 source: src/infrastructure/i18n/config.ts
-sha256: 3ec5a277dce8aa75796526fa4a908f9461457110914426dee24841ee7e4ebe9f
-generated_at: 2026-11-14T18:07:56.030235+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 69962a9c214275144ce5ab6b4c0bce5873dede5863ceeca6793aabb318ecf4a1
+context_sha256: 8400b94bdfb553cf86fb26dca5ebf6c3cde4e6bb0edf18319f0d539f0a68c8e8
+generated_at: 2026-11-22T02:55:30.347542+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/i18n/config.ts
 
 ## Purpose
-
-Declares the locale-related environment configuration (default locale, fallback locale, supported-locale list, and the refresh interval for edited-copy overrides) as a typed, validated config shape consumed by the rest of the i18n subsystem.
+Declares the deployment's locale configuration: the default locale, the fallback locale, the set of supported languages, and how often the edited-copy overlay is refreshed. It exposes these as a single typed config object built from environment variables.
 
 ## Key elements
-
-- **`localeConfig`** (exported const) — The single public export. A `defineConfig` object named `'locales'` whose `shape` maps four env-var keys to validated fields:
-  - `NODE_DEFAULT_LOCALE` — `locale` field, defaults to `'en'`.
-  - `NODE_FALLBACK_LOCALE` — `locale` field, defaults to `'en'`.
-  - `NODE_SUPPORTED_LOCALES` — `locales` field (list of allowed locale codes).
-  - `NODE_LOCALE_OVERRIDE_REFRESH_MS` — `int` field, defaults to `MINUTE_MS`, minimum `1`.
+- `localeConfig` — result of `defineConfig` with the name `'locales'`. Its shape has four environment-backed fields:
+  - `NODE_DEFAULT_LOCALE` — a `locale` field, default `'en'`.
+  - `NODE_FALLBACK_LOCALE` — a `locale` field, default `'en'`.
+  - `NODE_SUPPORTED_LOCALES` — a `locales()` field with no default declared here.
+  - `NODE_LOCALE_OVERRIDE_REFRESH_MS` — an `int` field, default `MINUTE_MS` (one minute), minimum `1`.
 
 ## Relationships
-
-- **`src/infrastructure/config/define.ts`** — Provides `defineConfig`, the wrapper that turns the shape object into a validated config instance.
-- **`src/infrastructure/config/fields.ts`** — Supplies the field constructors (`locale`, `locales`, `int`) used to declare each entry in the shape.
-- **`src/domain-primitives/time.ts`** — Source of `MINUTE_MS`, used as the default for the override-refresh interval.
-- **`src/infrastructure/i18n/overrides.ts`** — Consumes the `NODE_LOCALE_OVERRIDE_REFRESH_MS` value to control how often the edited-copy overlay is re-fetched.
-- **`src/infrastructure/i18n/catalog.ts`** — Sibling i18n module that reads `NODE_DEFAULT_LOCALE` / `NODE_SUPPORTED_LOCALES` when building the locale catalog.
-- **`src/app/config.ts`** — Top-level app config that aggregates (or re-exports) `localeConfig` for the rest of the application.
-- **`src/modules/users/model.ts`** — May reference the default/supported locales when modeling user language preferences.
+- Uses `defineConfig` from `src/infrastructure/config/define.ts` to build the config.
+- Uses the `int`, `locale` and `locales` field builders from `src/infrastructure/config/fields.ts`.
+- Uses `MINUTE_MS` from `src/domain-primitives/time.ts` as the default refresh interval.
+- The neighbors `src/app/config.ts`, `src/infrastructure/i18n/catalog.ts`, `src/infrastructure/i18n/overrides.ts` and `src/modules/users/model.ts` are linked in the dependency graph. This file does not import them, so any use of `localeConfig` is on their side.
 
 ## Notes
-
-- The file is purely declarative — no runtime logic beyond field defaults. All validation (type, min-value, allowed codes) is delegated to the `fields` constructors.
-- `NODE_SUPPORTED_LOCALES` has **no** `default` argument; it must be supplied by the deployment environment.
-- The module JSDoc points to `docs/tools/configuration.md` for operator-facing documentation of these variables.
+- The refresh interval is described as governing the "edited-copy overlay". That points to the overrides module, but this file only defines the value.
+- The module header carries a `@see` reference to the "who-owns-what" section of a configuration doc under `docs/operate/`, concerning configuration ownership. That doc is not confirmed to exist in the repository.

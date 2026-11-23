@@ -1,36 +1,31 @@
 ---
 source: src/kernel/middlewares/locale-preview.ts
-sha256: fd3af33883535d9a18370203a75db4564be0f621ae982f89cbaf8882f8b4eadf
-generated_at: 2026-11-14T18:22:19.188179+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:13:16.243112+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/kernel/middlewares/locale-preview.ts
 
 ## Purpose
-
-Express middleware that lets an authenticated staff member preview product copy in a draft (switched-off) language. If the caller's first `Accept-Language` entry names a draft locale and the caller has draft-read permission, the request is re-bound to that locale for the downstream handlers; everyone else falls through untouched.
+Express middleware that lets staff preview a draft (switched-off) language's product text. When the caller's first `Accept-Language` choice is a draft language and they are allowed to read drafts, the request is re-bound to that language and the response is marked uncacheable. Everyone else keeps the live locale already chosen earlier, with no error.
 
 ## Key elements
-
-- **`previewDraftLanguage(request, response, next)`** — the sole export. Reads the best-preferred language via `request.acceptsLanguages().at(0)`, resolves it to a draft through `draftLocaleFor`, and verifies permission with `canPreviewDraftLanguages(request.caller)`. When all three conditions are met it:
-  - creates a preview context (`createPreviewContext`),
-  - overwrites `request.locale` and `request.t`,
-  - sets the `Content-Language` response header,
-  - calls `markDraftPreview(response)` to force `private, no-store`,
-  - invokes `next()` inside `runWithLocaleContext(context, …)`.
+- `previewDraftLanguage(request, response, next)`: the only export. Steps:
+  - Resolves the first `Accept-Language` range (`request.acceptsLanguages().at(0)`) to a draft locale via `draftLocaleFor`.
+  - Calls `next()` unchanged if there is no draft, if `request.locale` already equals it, or if `canPreviewDraftLanguages(request.caller)` is false.
+  - Otherwise builds a context with `createPreviewContext(draft)` and sets `request.locale` and `request.t` from it.
+  - Sets the `Content-Language` header to the draft and calls `markDraftPreview(response)`.
+  - Calls `next` inside `runWithLocaleContext(context, next)`, so downstream code runs under the preview locale context.
 
 ## Relationships
-
-- **`src/infrastructure/http/middlewares/cache.ts`** — imports `markDraftPreview`, which stamps the response so the cache layer skips storage/serving of the draft content.
-- **`src/infrastructure/i18n/index.ts`** (barrel) — imports `createPreviewContext`, `draftLocaleFor`, and `runWithLocaleContext`; these encapsulate the locale-switching and context-propagation mechanics.
-- **`src/kernel/translation.ts`** — provides `canPreviewDraftLanguages`, the permission check that gates the preview path.
-- **`src/modules/products/routes.ts` / `src/modules/example/routes.ts`** — mount `previewDraftLanguage` per router, positioned after the auth middleware and before the cache middleware.
-- **`tests/unit/kernel/locale-preview.test.ts`** — unit tests covering the pass-through and re-bind paths.
+- `src/infrastructure/i18n/index.ts` (and its `context.ts` / `served.ts` modules): supplies `draftLocaleFor`, `createPreviewContext` and `runWithLocaleContext`.
+- `src/kernel/translation.ts`: supplies `canPreviewDraftLanguages`, the permission check (`display:Locale`, asked through the translation port).
+- `src/infrastructure/http/middlewares/cache.ts`: supplies `markDraftPreview`, which makes the answer `private, no-store`. `setCache` builds its key from `request.locale`, so this middleware must run before it.
+- `src/modules/products/routes.ts` and `src/modules/example/routes.ts`: mount it per router.
+- `tests/unit/kernel/locale-preview.test.ts`: unit tests for it.
 
 ## Notes
-
-- Mounting order matters: it must run **after** auth (so the caller is available) and **before** `setCache` (so the cache key reflects the overridden locale).
-- Only the **first** `Accept-Language` range is considered; a draft language appearing later in the list (e.g. at a lower `q` value) is intentionally ignored.
-- When the draft check fails the middleware is a no-op `next()` — it never throws or short-circuits the request for non-preview callers.
-- `request.locale === draft` is an early-exit guard: if the request is already bound to that locale, no re-binding or context swap occurs.
+- Ordering matters: mount it AFTER `getAuth`, because it needs `request.caller`, and BEFORE `setCache`.
+- It only looks at the first range from `acceptsLanguages()`, which lists ranges best first. A draft at lower priority behind a live language does not trigger a preview.
+- It builds on a live locale pick made earlier by `locale.ts`. Without the trigger, that pick is left untouched.
+- Further detail is in `src/modules/locales/model.ts`.

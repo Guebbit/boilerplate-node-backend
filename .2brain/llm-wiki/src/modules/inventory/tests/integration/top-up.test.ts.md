@@ -1,39 +1,44 @@
 ---
 source: src/modules/inventory/tests/integration/top-up.test.ts
-sha256: c0390d504e9457c5118fe1122de74466d66335e6982157d8b93ddc4faf5b9d27
-generated_at: 2026-11-08T06:08:07.034564+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c7b08e7139d3a51d1ee9a4ee323eb264730d7e2d062518c7a75cc95b59458785
+context_sha256: bc622b8957ee8c227ccbe0f763d52c00dd074863a480b78221f6aabd16bfde39
+generated_at: 2026-11-22T05:28:20.869507+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/tests/integration/top-up.test.ts
 
 ## Purpose
-
-Integration tests for the "top-up" flow: reserving additional units onto an order's existing hold after a parcel was lost or partially returned. Verifies that the inventory service correctly splits a top-up between shelf stock and owed (backorder) units, respects existing holds from other orders, reopens already-shipped holds, and handles release-back semantics.
+Integration tests for topping up an order's stock hold after a parcel was lost, covering `inventoryService.reserveMoreForOrder` and `releaseTopUpForOrder`. They check that free shelf units are reserved (never another order's), that the remainder is claimed outside the closed backorder cap, that an ended hold is reopened as `committed` with its original `committedAt`, and that giving the top-up back ends the hold `shipped`, not `released`.
 
 ## Key elements
-
-- **`anOrderId()`** – Generates a unique, syntactically valid 24-hex-char order ID per call.
-- **`productWith(shelf)`** – Creates a product with the given on-hand count; backorder cap defaults to `0` (closed).
-- **`shippedOrder(productId, quantity)`** – Runs the full lifecycle (reserve → commit → ship) to produce a completed order.
-- **`topUp(orderId, productId, quantity)`** – Wraps `inventoryService.reserveMoreForOrder` in a `withTransaction` call.
-- **`levelOf` / `holdOf` / `itemsOf` / `statusOf`** – Read helpers that project stock-level counters, hold status, and held items for assertions.
-- **`describe('reserveMoreForOrder', …)`** – 8 tests covering: full shelf cover, hold reversion to `committed`, split shelf/owed claims, ledger reason (`owed` vs `backorder`), owed claims bypassing a closed cap while new sales are refused, protection of other orders' reservations, growth of a partially-shipped hold, and graceful no-op when the stock level row is deleted.
-- **`describe('releaseTopUpForOrder', …)`** – 1 test verifying that releasing a top-up returns both shelf and backorder units and transitions the hold to `shipped` (not `released`).
+- `setupTestDb()`: called at module level to set up the test database.
+- `anOrderId()`: returns a unique 24-character hex-style order id from a counter, padded with `e`.
+- `productWith(shelf)`: creates a product with `shelf` units on hand and returns its id as a string. Backorder is closed (cap 0, the default).
+- `shippedOrder(productId, quantity)`: reserves, commits and ships `quantity` units for a new order, and returns the order id.
+- `levelOf`, `holdOf`, `itemsOf`, `statusOf`: read helpers. `levelOf` returns the stock level counters (`onHand`, `reserved`, `available`, `backordered`). `holdOf` returns the hold's `status`, `committedAt` and items (`quantity`, `kind`). `itemsOf` and `statusOf` return one part of `holdOf`.
+- `topUp(orderId, productId, quantity)`: calls `reserveMoreForOrder` inside `withTransaction`.
+- `describe('reserveMoreForOrder')` cases:
+  - Reserves the free shelf units and owes nothing when the shelf covers the parcel.
+  - Reopens a `shipped` hold as `committed`, keeping `committedAt`.
+  - Claims what the shelf can't cover as `backorder` items. The result is `{ productId, shelf, owed }`.
+  - Writes the owed units to the ledger with reason `owed`, not `backorder`.
+  - Lets an owed claim past the closed cap, while a new `reserveForOrder` sale with `spill: true` is still refused (`held: false` plus `shortfalls`).
+  - Never takes units held for another order.
+  - Grows an open hold instead of replacing it.
+  - Claims nothing and does not fail when the product has no stock level (after `removeLevel`).
+- `describe('releaseTopUpForOrder')`: releasing both the shelf and backorder parts zeroes `reserved` and `backordered`, and leaves the hold `shipped`.
 
 ## Relationships
-
-- **`src/modules/inventory/services/index.ts`** – Source of `inventoryService`; all SUT calls (`reserveMoreForOrder`, `releaseTopUpForOrder`, `reserveForOrder`, `commitForOrder`, `shipLinesForOrder`, `receive`) go through this barrel.
-- **`src/modules/inventory/repository.ts`** – Provides `reservationRepository`, `stockLevelRepository`, and `stockMovementRepository` used exclusively for post-condition assertions.
-- **`src/modules/inventory/services/levels.ts`** – Indirectly exercised through `inventoryService`; the level counters asserted in `levelOf` are managed by this module.
-- **`src/infrastructure/runtime/database.ts`** – `withTransaction` wraps every service call that mutates state, ensuring each top-up/ship/release is atomic.
-- **`src/modules/products/tests/factories.ts`** – `createProduct` seeds the product with a chosen on-hand quantity.
-- **`src/modules/inventory/tests/factories.ts`** – `removeLevel` deletes the stock-level row to test the no-level edge case.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` resets the database before the suite runs.
-- **`tests/support/callers.ts`** – `testCallerContext` supplies the caller identity required by `inventoryService.receive`.
+- `src/infrastructure/runtime/database.ts`: provides `withTransaction`, used for `shipLinesForOrder`, `reserveMoreForOrder` and `releaseTopUpForOrder`.
+- `src/modules/inventory/services/index.ts`: exports `inventoryService`, the code under test.
+- `src/modules/inventory/repository.ts`: `reservationRepository`, `stockLevelRepository` and `stockMovementRepository` are used to read state back for assertions.
+- `src/modules/inventory/tests/factories.ts`: provides `removeLevel`.
+- `src/modules/products/tests/factories.ts`: provides `createProduct`.
+- `tests/support/setup-test-db.ts` and `tests/support/callers.ts`: provide `setupTestDb` and `testCallerContext`.
+- `src/modules/inventory/services/levels.ts` and `src/modules/delivery/tests/unit/fulfillment.test.ts` are graph neighbors, but this file doesn't import them directly.
 
 ## Notes
-
-- All product fixtures have a backorder cap of `0` (closed). The tests explicitly verify that owed top-up claims bypass this cap while new-sale claims are still refused — a behavioral distinction central to the "owed" vs "backorder" ledger reasons.
-- The hold lifecycle invariant tested here: top-up reverts a `shipped` hold to `committed` (preserving `committedAt`), while releasing the top-up reverts it back to `shipped` — never to `released`.
-- `shippedOrder` ships the full quantity, so the shelf count drops to the on-hand remainder; tests rely on this to set up tight stock scenarios (e.g., 3 on hand, 3 shipped, then 1 received back).
+- The order id helper pads with `e` so ids from this file don't collide with ids from other test files.
+- `reserveMoreForOrder` returns per-product `{ productId, shelf, owed }`. `owed` units go to the ledger with reason `owed`, distinct from a preorder's `backorder`.
+- The test for a product with no stock level expects `{ shelf: 0, owed: 0 }` and no error.

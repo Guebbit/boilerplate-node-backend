@@ -1,43 +1,35 @@
 ---
 source: src/infrastructure/i18n/served.ts
-sha256: 41ead6dddfdd2f8eb6d77e268442c060f1dd3ff081e4a07d6fe61491a1f265ca
-generated_at: 2026-11-14T18:09:52.769923+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f31ae4914d8e4bc99da1e1ec9f5a46b0aa4251527cb956e0b1923286b50a72a8
+context_sha256: 7789cde831608f0cded9b6f18c934a7a44cd6c71342146e3afddc27a80d48631
+generated_at: 2026-11-22T02:56:37.377155+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/i18n/served.ts
 
 ## Purpose
-
-In-memory registry of which languages this deployment serves *right now*. It combines the set of deployed dictionary files with the on/off state of registered languages (pushed in by the `overrides` refresh) to produce a single, request-consistent list of answerable locales. It exists so that every part of a request — negotiation, email rendering, order snapshots — resolves to the same set without hitting the database per request.
+Holds the single, in-memory answer to "which languages does this deployment serve right now?", so negotiation, emails and order snapshots all agree. A language is served if it is switched on (a deployed dictionary file or a registered row), and the fallback language always is. Switched-off languages are never selected; the fallback is used instead. State is filled by the database overlay's refresh (`./overrides`), never read from Mongo during a request. Until the first refresh it is empty, so only the deployed files are served.
 
 ## Key elements
-
-- **`ServedLanguages`** (interface, not exported) — holds two `ReadonlySet<string>` fields (`active`, `inactive`) representing registered languages that are on/off. The module-level `served` binding is swapped wholesale on each refresh so readers never see a torn state.
-- **`setServedLanguages(active, inactive)`** — replaces the on/off sets with the result of one database-overlay refresh. Called by `./overrides`.
-- **`resetServedLanguages()`** — clears both sets, leaving only deployed files and the fallback.
-- **`listServedLocales()`** — returns the full ordered list a request may be answered in: fallback first, then deployed files minus switched-off ones, then registered active languages. Deduplicated.
-- **`draftLocaleFor(tag)`** — returns the registered spelling of a draft (switched-off) language for a client tag, or `undefined`. Never matches the fallback.
-- **`isServedLocale(tag)`** — canonical, case-blind check that a tag is in the served set.
-- **`hasServedDictionary(tag)`** — true when a deployed file exists for the tag *and* it hasn't been switched off.
-- **`servedLocaleFor(locale)`** — resolves a stored/negotiated tag to the language the request runs in: the tag (or its base) if served, otherwise the fallback.
-- **`dictionaryLocaleFor(locale)`** — resolves a tag to the language whose dictionary file the API's own wording is read in, falling back through base language then the global fallback.
+- `setServedLanguages(active, inactive)`: replaces the registered languages' on/off state as a whole with the result of one refresh.
+- `resetServedLanguages()`: clears that state, so only deployed files and the fallback are served.
+- `listServedLocales()`: deployed files minus switched-off tags, plus switched-on registered tags, plus the fallback. The fallback is placed first.
+- `draftLocaleFor(tag)`: returns the registered spelling of a switched-off ("draft") language that the tag names, or `undefined`. It never returns the fallback, ignores case, and matches the exact tag only (a regional tag is not its base language's draft).
+- `isServedLocale(tag)`: whether the canonicalised tag is in `listServedLocales()`.
+- `hasServedDictionary(tag)`: whether the API has its own deployed dictionary file for the tag and it is not switched off. A registered language without a file is served but has no dictionary.
+- `servedLocaleFor(locale)`: returns the canonical tag if it or its base language is served (`it-CH` follows `it`), otherwise the fallback.
+- `dictionaryLocaleFor(locale)`: returns the tag if it has a served dictionary, else its base language if that does, else the fallback.
 
 ## Relationships
-
-- **`./catalog`** (imported) — source of `getFallbackLocale()` and `listSupportedLocales()` (the set of deployed dictionary files). `served.ts` filters and extends that set.
-- **`./locale-tag`** (imported) — source of `canonicalLocale()` and `baseLanguage()` used for normalisation and base-language fallback logic.
-- **`./overrides`** — the writer side: its refresh calls `setServedLanguages` / `resetServedLanguages` to push the latest on/off state into this module.
-- **`src/infrastructure/http/middlewares/locale.ts`** — consumes `servedLocaleFor` / `isServedLocale` to resolve the active locale per request.
-- **`src/modules/locales/controllers/get-locales.ts`** — reads `listServedLocales` to report which languages are available to the frontend.
-- **`src/modules/sitemap/service.ts`** — uses `listServedLocales` to decide which locale paths appear in the sitemap.
-- **`src/infrastructure/http/frontend-link.ts`** — builds locale-scoped URLs for the served set.
-- **`src/kernel/middlewares/locale-preview.ts`** — uses `draftLocaleFor` / `servedLocaleFor` to let a user preview a switched-off language.
+- Imports `getFallbackLocale` and `listSupportedLocales` from `./catalog` (the deployed dictionary files and the fallback).
+- Imports `baseLanguage` and `canonicalLocale` from `./locale-tag` for tag normalisation.
+- `./overrides` is the documented writer: its refresh feeds `setServedLanguages` and `resetServedLanguages`.
+- The rest of the neighbor list (the locale middleware, locale preview, the locales controller, the sitemap service, `./context`, `./index`, `frontend-link`) and the unit and integration tests are connected through the dependency graph. The file's content does not show how they use it.
 
 ## Notes
-
-- The state is **never** read from Mongo at request time. Until the first `overrides` refresh lands, `served` is empty, which means the served set equals the deployed files plus the fallback.
-- `listServedLocales` places the fallback **first** intentionally: the downstream `negotiator` library returns the first candidate for a bare `*` or missing `Accept-Language` header, so order is load-bearing.
-- `draftLocaleFor` explicitly excludes the fallback tag, so the fallback can never be treated as a "draft" even if it somehow appeared in the inactive set.
-- `servedLocaleFor` follows the tag → base-language → fallback chain (e.g. `it-CH` → `it` → fallback), but `dictionaryLocaleFor` adds a second lookup: it checks whether the base language actually has its own file before falling through to the global fallback.
-- All tag comparisons go through `canonicalLocale`, so `pt-br` and `pt-BR` are the same answer, but a regional tag (`pt-BR`) is **not** the same as its base (`pt`) for draft matching.
+- State is a module-level variable replaced whole on each refresh, so readers never see a half-updated answer.
+- The fallback comes first in `listServedLocales()` deliberately: `negotiator` answers a bare `*` or a missing header with the first candidate it is offered, so both resolve to the fallback.
+- The fallback cannot be switched off or deleted.
+- Tags are compared in canonical form, so `pt-br` and `pt-BR` are one answer.
+- A saved tag that was later switched off falls back to the fallback language.

@@ -1,30 +1,31 @@
 ---
 source: src/modules/invoicing/providers/pdf.ts
-sha256: 35ba96e7ca40ab65c6e062a996f56e805d2e488e9b005eeeb46aafb53ed7bd70
-generated_at: 2026-11-14T20:12:33.907504+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 028ba6f6c5e1e4c8bb69f56edd23c54a18314e5777cad6ce0629b9bfd3344647
+context_sha256: 6c1f9ff270231475c0191aa54fb9251bce63bb748532b315238982af951e799b
+generated_at: 2026-11-22T05:33:31.983374+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/providers/pdf.ts
 
 ## Purpose
-
-The default (and only shipped) implementation of the `EInvoicingProvider` port. It renders an invoice or credit note to a PDF by piping an EJS template through Puppeteer/Chromium.
+The default (and only shipped) e-invoicing provider. It renders an invoice or credit note to a PDF by feeding an EJS template through the shared HTML-to-PDF (Chromium/Puppeteer) pipeline that `orders` also uses for its receipt.
 
 ## Key elements
-
-- **`pdfEInvoicingProvider`** (exported) — object matching the `EInvoicingProvider` interface (`name: 'pdf'`, `render(document) → Promise<Buffer>`). `render` does: EJS render → HTML → `renderHtmlToPdf` → `Buffer`.
-- **`DOCUMENT_TEMPLATE`** — module-private path constant pointing to `templates/documents/invoicing.document.ejs`, one level deeper than the module's other templates.
+- **`pdfEInvoicingProvider`** (export): an `EInvoicingProvider` named `'pdf'`. Its `render(document)` reads the logo, builds the view context, renders the EJS template to HTML, prints the HTML to PDF, and returns a `Buffer`.
+- **`DOCUMENT_TEMPLATE`**: path to `../templates/documents/invoicing.document.ejs`. The module owns this template, and every render (invoice or credit note) uses it.
+- **`readLogo()`**: reads `logo.svg` (next to the template) once and memoises it as a `data:image/svg+xml;base64,...` URI. A failed read clears the cache, so the next render retries.
+- **`printOptions(footer)`**: the `page.pdf()` options. They set A4, backgrounds on, 16/16/20/16 mm margins, an empty header, and an inline-styled footer. The footer text is escaped with `ejs.escapeXML`.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/pdf.ts`** — provides `renderHtmlToPdf`, the Puppeteer step that turns the EJS-rendered HTML string into PDF bytes.
-- **`src/modules/invoicing/emails.ts`** — provides `buildDocumentView(locale, document)`, which assembles the EJS render context from the document's fields.
-- **`src/modules/invoicing/providers/index.ts`** — defines the `EInvoicingProvider` type that this file implements; this file is the sole concrete provider shipped.
+- **`src/infrastructure/adapters/pdf.ts`**: supplies `renderHtmlToPdf(html, options)`, which does the Chromium printing.
+- **`src/modules/invoicing/emails.ts`**: supplies `buildDocumentView(locale, document)`, the template context, and `buildDocumentFooter(locale, document)`, the footer line.
+- **`src/modules/invoicing/providers/index.ts`**: defines the `EInvoicingProvider` port that this file implements.
+- **`src/modules/invoicing/tests/unit/pdf-provider.test.ts`**: the unit test for this provider.
 
 ## Notes
-
-- The EJS `root` is set to `process.cwd()` so the template's root-relative includes (e.g. `/shared/templates/layouts/…`) resolve regardless of this module's depth under `src/modules`.
-- The template lives at `templates/documents/` (one level deeper than sibling templates) **deliberately**: `mailer.ts#registerTemplateDirectories` collects templates non-recursively, so nothing else resolves this file by name. It is reached only by the explicit `path.join` here.
-- The template is owned by this module, not by `shared/templates` — removing the invoicing module removes the template with it.
-- Render locale is always the document's own frozen locale, never the viewer's request locale, because a document records what was issued and in which language.
+- The logo is embedded as a `data:` URI because the renderer refuses every non-`data:` request (`refuseNonDataRequest`).
+- Rendering always uses the document's own frozen locale (`document.locale`), never the viewer's request locale.
+- The template sits one level deeper (`templates/documents/`) than the module's other templates. This keeps it out of the non-recursive collection in `mailer.ts#registerTemplateDirectories`. It is safe because it is only reached by path, never by name.
+- EJS runs with `root: process.cwd()`, so root-relative `include("/...")` paths resolve from the project root.
+- `printBackground` must stay on, or Chromium drops the tinted banner, chips and totals card. The empty `headerTemplate` suppresses Chromium's default date and title header.

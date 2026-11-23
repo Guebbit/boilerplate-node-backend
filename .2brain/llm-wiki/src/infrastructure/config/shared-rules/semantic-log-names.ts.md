@@ -1,25 +1,25 @@
 ---
 source: src/infrastructure/config/shared-rules/semantic-log-names.ts
-sha256: 9ca60ad1c7f6cd6923600ef5f9e61c32a8591d815d741b53c57eb5f49bfdf792
-generated_at: 2026-11-08T03:27:49.316695+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 9ca60ad1c7f6cd6923600ef5f9e61c32a8591d815d741b53c57eb5f49bfdf792
+context_sha256: 961f9030c41cb56fec10e82c7b43dfbd5b52b152fb44b40ad4cdb7022b1680a3
+generated_at: 2026-11-22T02:46:43.133506+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/config/shared-rules/semantic-log-names.ts
 
 ## Purpose
-
-Defines the Zod validation schema for the `shared/rules/semantic-log-names.yaml` configuration file. The YAML maps each structured-log field (as named in code, camelCase) to the name that field appears under in emitted log lines. This file exists so the YAML can be parsed and validated at load time rather than discovered at runtime.
+Defines the Zod schema for `shared/rules/semantic-log-names.yaml`. That YAML file maps each field the code logs to the name that field is written with on a structured log line. The file holds only the schema, and its module doc comment states that it uses relative imports only.
 
 ## Key elements
-
-- **`semanticLogNamesSchema`** (exported const) — A `z.strictObject` with a single key `semanticLogNames`: a record where keys match `/^[a-z][A-Za-z0-9]*$/` (lowercase-first, alphanumeric only) and values are non-empty strings. `strictObject` rejects any extra top-level keys.
+- `semanticLogNamesSchema`: a `z.strictObject` with a single key, `semanticLogNames`. Its value is a `z.record` that maps a code field name to a log-line name.
+  - Keys must be camelCase, matching `/^[a-z][A-Za-z0-9]*$/`.
+  - Values must be non-empty strings (`z.string().min(1)`).
+  - Because the object is strict, any other top-level key in the YAML is rejected.
 
 ## Relationships
-
-- **`src/infrastructure/config/shared-rules/registry.ts`** — Imports `semanticLogNamesSchema` to register it as one of the shared-rule configs, making it available to the loader/validator pipeline defined alongside `load.ts`.
+- `registry.ts` is the neighboring file in `shared-rules/`. This file itself imports only `zod`, and nothing in its content references `registry.ts` directly.
 
 ## Notes
-
-- Key regex does **not** strictly enforce camelCase (e.g. `aB` and `ab` both pass); it only guarantees a lowercase first character and alphanumerics thereafter. Treat "camelCase" in the doc comment as intent, not a hard constraint.
-- The module doc comment mandates **relative imports only** (see `load.ts` in the same directory). Do not add package-specifier imports here.
+- Imports must stay relative (no path aliases), as the module doc comment states.
+- The schema checks only key format and that values are non-empty. It does not check that the values are unique or that the keys correspond to fields actually logged.

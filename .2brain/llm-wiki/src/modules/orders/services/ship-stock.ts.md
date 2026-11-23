@@ -1,32 +1,32 @@
 ---
 source: src/modules/orders/services/ship-stock.ts
-sha256: 89098269a00e0f026f69cee6b2017ce995741221bc1ab85de3479ed6f28e36bc
-generated_at: 2026-11-08T07:00:56.559769+00:00
-model: ollama:qwen3.8:27b
+source_sha256: aa096c773343a15e16050ef50b47a2b851491051c07806de91f5e779179bf587
+context_sha256: df762d32311c0ddf8aa6ed171575d53e89154874ac6563c289d1439b38f76b64
+generated_at: 2026-11-22T06:23:41.861990+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/ship-stock.ts
 
 ## Purpose
-
-Provides the stock-release step for **status overrides** (shipped/delivered) that ship the entire remaining held quantity of an order in one go. It is the whole-remainder counterpart to the per-shipment `shipStock` in `./fulfillment`. Its reason for existence is to guarantee that an order never reads `shipped` while its units still count as on-hand: the status write and the stock decrement are committed atomically.
+Implements the stock-taking half of the order status override. When an order is forced forward to `shipped` or `delivered`, any part of the order's inventory hold that hasn't already left is taken off the shelf. It is the whole-remainder counterpart to the per-shipment `shipStock` in `./fulfillment`, which handles ordinary shipments. Stock is decremented when goods leave, not when they are paid for.
 
 ## Key elements
-
-- **`announceMoveShippingStock(orderId, write, announce)`** — The sole export. Inside a single Mongoose transaction it (1) runs the caller-supplied conditional `write`, (2) if a document is returned, calls `inventoryService.shipForOrder` to decrement shelf stock, and (3) emits domain events via `announceInTransaction`. After the commit lands (outside the transaction) it calls `inventoryService.refreshStockCacheForOrder` because the catalogue stock cache cannot participate in the rollback. Returns the updated `OrderDocument`, or `null` when the conditional write matched nothing (lost race) and no stock moved.
+- `announceMoveShippingStock(orderId, write, announce)` is the only export. It does the following:
+  - Runs the caller's conditional status `write(session)` inside a transaction.
+  - If the write returned an order, calls `inventoryService.shipForOrder(orderId, session)` in the same transaction.
+  - Announces events through `announceInTransaction`, using `announce(order)` to build the `OutboxAnnouncements<DomainEventName>`.
+  - After the commit, calls `inventoryService.forgetAvailabilityForOrder(orderId)`.
+  - Returns the updated `OrderDocument`, or `null` if the write matched nothing.
 
 ## Relationships
-
-- **`src/kernel/outbox.ts`** — Supplies `announceInTransaction` (the transaction + outbox envelope) and the `OutboxAnnouncements<DomainEventName>` type that shapes the `announce` parameter.
-- **`src/kernel/events.ts`** — Source of the `DomainEventName` type used in the `announce` callback signature.
-- **`src/modules/inventory/index.ts`** — Re-exports `inventoryService`, whose `shipForOrder` and `refreshStockCacheForOrder` methods perform the actual stock mutation and cache refresh.
-- **`src/modules/inventory/services/index.ts`** — Implementation layer behind `inventoryService` (the two methods called above).
-- **`src/modules/orders/model.ts`** — Defines `OrderDocument`, the type threaded through `write` and `announce`.
-- **`src/modules/orders/services/override.ts`** — The caller that supplies the `write` and `announce` callbacks for a whole-remainder status transition; this file is its stock side.
+- `src/kernel/outbox.ts`: provides `announceInTransaction` and the `OutboxAnnouncements` type. This supplies the transaction and the event announcement.
+- `src/kernel/events.ts`: supplies the `DomainEventName` type that constrains the announcements.
+- `src/modules/inventory/index.ts`: exports `inventoryService`, which this file uses to take stock off the shelf in the transaction and to clear the availability entry after commit.
+- `src/modules/orders/model.ts`: supplies the `OrderDocument` type.
+- `src/modules/orders/services/override.ts` and `src/modules/inventory/services/index.ts` are graph neighbors, but this file does not import from either.
 
 ## Notes
-
-- **Stock moves at ship, not at payment.** The shelf count drops when goods leave, consistent with Shopify, Magento MSI, Saleor, and Medusa conventions.
-- **Cache refresh is post-commit.** `refreshStockCacheForOrder` runs *after* the transaction resolves. If it fails, the DB is correct but the in-memory/CDN cache is stale until the next refresh cycle.
-- **`write` returning `null` is a normal path.** It signals a lost optimistic race (e.g., two concurrent overrides); no stock is moved and no event is emitted.
-- **Not for per-shipment fulfilment.** Ordinary line-by-line shipments go through `./fulfillment`'s `shipStock`. Using this function for a partial shipment would release the entire remaining hold.
+- The status write, the stock decrement and the event announcement commit atomically, so an order can't read `shipped` while its units still count as on hand.
+- The availability entry lives outside the transaction and can't be rolled back. It is therefore deleted only after the commit lands, and only if the write matched an order.
+- If `write` returns `null` (a lost race), no stock moves and no availability cleanup runs.

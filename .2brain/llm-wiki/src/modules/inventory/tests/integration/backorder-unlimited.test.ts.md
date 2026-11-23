@@ -1,34 +1,37 @@
 ---
 source: src/modules/inventory/tests/integration/backorder-unlimited.test.ts
-sha256: f20f9d5926be87a2a15357dd980338390b5dc3f3e830aa4ef718f1b6a0fdbbcf
-generated_at: 2026-11-08T06:05:24.682279+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:26:07.062861+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/tests/integration/backorder-unlimited.test.ts
 
 ## Purpose
-
-Integration tests that pin down the semantics of the `backorderLimit` field: `null` means unlimited (no ceiling), `0` means closed (refuses all claims), and a stock-level document that simply lacks the field is treated as closed—not open. Each case is exercised through the full service layer against a real database.
+Integration tests for the inventory backorder cap semantics: `backorderLimit: null` means unlimited, `0` means closed (refuses), and a stock-level row lacking the field is treated as closed rather than unlimited. Covers reservation, the checkout pre-flight, and the preorder board. Its header comment points to a doc for preorders, but that doc is not part of the dependency graph.
 
 ## Key elements
-
-- **`anOrderId()`** — module-level counter that mints a syntactically valid, unique 24-char hex order id per call; used as the hold key.
-- **`claim(productId, quantity)`** — shorthand to build a single `{ productId, quantity, kind: 'backorder' }` reservation line.
-- **`productWithCap(limit)`** — helper that creates a zero-on-hand product with `allowBackorder: true`, then calls `inventoryService.setBackorderLimit` with the given `limit` (or `null`); returns the product id.
-- **`describe('an unlimited backorder cap')`** — five tests covering: successful claim with no ceiling, `availableFor` returning `Infinity`, `listPreorders` omitting `backorderLimit`/`left`, the same omission for a non-preorder product, and re-capping after an unlimited claim (subsequent over-limit claim is rejected with a shortfall).
-- **`describe('a closed backorder cap')`** — two tests: a `0` cap refuses a claim, and a document with the field physically absent (via `$unset`) is treated as closed.
+- `setupTestDb()` — called at module level to set up the test database.
+- `anOrderId()` — returns a distinct 24-char hex-like order id (counter padded with `'d'`), since holds are keyed by order id.
+- `claim(productId, quantity)` — builds a `kind: 'backorder'` line for `reserveForOrder`.
+- `productWithCap(limit)` — creates a product with `onHand: 0` and `allowBackorder: true`, applies `setBackorderLimit`, and returns the product id string.
+- `describe('an unlimited backorder cap')`:
+  - A claim of 1000 is held and the level records `backorderLimit: null, backordered: 1000`.
+  - `availableFor` reports `available: Infinity`.
+  - `listPreorders` returns the product with neither `backorderLimit` nor `left` properties.
+  - The same omission applies to a product that is neither a preorder nor open to backorder (it still appears in `listPreorders`).
+  - After claiming 3 under a null cap, setting the limit to 4 makes a claim of 2 fail with `held: false` and `shortfalls: [{ available: 1 }]`.
+- `describe('a closed backorder cap')`:
+  - A limit of `0` refuses a claim of 1, with `available: 0`.
+  - A level whose `backorderLimit` field was removed is treated as closed (`held: false`).
 
 ## Relationships
-
-- **`src/modules/inventory/services/index.ts`** — all business-logic calls go through `inventoryService`: `setBackorderLimit`, `reserveForOrder`, `availableFor`, `listPreorders`.
-- **`src/modules/inventory/repository.ts`** — `stockLevelRepository.findByProductId` is used to assert persisted state after a successful claim.
-- **`src/modules/inventory/model.ts`** — `stockLevelModel.collection.updateOne({ $unset: … })` bypasses the Mongoose schema to remove the `backorderLimit` key entirely, simulating a legacy/absent document.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds a product with the required `onHand` and `allowBackorder` flags.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` (called once at module top) provisions and resets the test database.
+- `src/modules/inventory/services/index.ts` — exports `inventoryService`, the system under test, via `setBackorderLimit`, `reserveForOrder`, `availableFor` and `listPreorders`.
+- `src/modules/inventory/repository.ts` — `stockLevelRepository.findByProductId` is used to check persisted `backorderLimit` and `backordered`.
+- `src/modules/inventory/model.ts` — `stockLevelModel` is used through its raw collection with `$unset` to remove `backorderLimit`.
+- `src/modules/products/tests/factories.ts` — `createProduct` creates the product fixtures.
+- `tests/support/setup-test-db.ts` — `setupTestDb` provides the test database lifecycle.
 
 ## Notes
-
-- The "field absent" test intentionally skips the repository layer and talks to the raw MongoDB collection via `stockLevelModel.collection`, because the Mongoose schema would re-populate the field with its default on any `save`. This is the only place in the file where the model is used directly.
-- `orderCounter` is module-scoped mutable state; it is not reset between test runs, so order ids are only unique within a single process lifetime.
-- Assertions on `listPreorders` use `not.toHaveProperty` to verify that the API surface deliberately hides the limit and "remaining" concept for unlimited caps.
+- The `$unset` goes through the raw driver on purpose, because the schema would restore its default if the model's normal path were used.
+- `listPreorders` tests expect exactly one item, so they depend on the database being reset between tests by `setupTestDb`. This is inferred, not shown in the file.
+- The order-id helper's padding letter is chosen so ids don't collide with those from other test files.

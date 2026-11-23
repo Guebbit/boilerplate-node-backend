@@ -1,33 +1,29 @@
 ---
 source: docker/observability/tempo.config.yaml
-sha256: 0a598a1a0c701722aee0fdc6500ce8f9d522d88419da926137c8eddccca127cf
-generated_at: 2026-11-08T02:24:15.273845+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0a598a1a0c701722aee0fdc6500ce8f9d522d88419da926137c8eddccca127cf
+context_sha256: 17ebc33806d68d7022aae10b367c252d41f701f9f4df6ed317dcaa35cefdb0cb
+generated_at: 2026-11-22T01:34:04.924746+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/observability/tempo.config.yaml
 
 ## Purpose
-
-Configuration for a single-process Tempo instance used in local development. It explicitly defines the HTTP/UI port, OTLP ingest endpoints, in-memory flush cadence, trace retention, and a local-disk storage backend so the tracing pipeline runs with zero external dependencies.
+Configuration for Grafana Tempo, the distributed trace store in the local observability stack. It defines the listening ports, OTLP ingest, and storage locations explicitly, since Tempo doesn't auto-discover them. The setup is deliberately simple: a single process with local-disk storage and real OTLP ingest.
 
 ## Key elements
-
-- **`server.http_listen_port`** — Tempo HTTP API/UI port (3200) on the container network.
-- **`distributor.receivers.otlp`** — OTLP receivers exposed on `0.0.0.0:4318` (HTTP) and `0.0.0.0:4317` (gRPC) for trace ingestion.
-- **`ingester.max_block_duration: 5m`** — In-memory block flush interval; tuned short for quick visibility in dev.
-- **`compactor.compaction.block_retention: 24h`** — Traces are kept one day, then compacted away.
-- **`storage.trace.backend: local`** — Uses the local filesystem backend (no S3 or object store).
-- **`storage.trace.wal.path`** — Write-ahead log location (`/var/tempo/wal`) protecting in-flight data across restarts.
-- **`storage.trace.local.path`** — Final trace block directory (`/var/tempo/blocks`), expected to be backed by a host volume mount.
+- `server.http_listen_port: 3200`: Tempo HTTP API/UI port inside the container network.
+- `distributor.receivers.otlp`: OTLP receivers on `0.0.0.0:4318` (HTTP) and `0.0.0.0:4317` (gRPC). The comments say HTTP is the expected path for app traces via the collector, and gRPC is kept for tooling compatibility.
+- `ingester.max_block_duration: 5m`: how long traces stay in memory blocks before flush. The comment says shorter values give faster visibility and less memory pressure in dev.
+- `compactor.compaction.block_retention: 24h`: traces are kept for one day.
+- `storage.trace.backend: local`: local filesystem backend with no external dependencies.
+- `storage.trace.wal.path: /var/tempo/wal`: write-ahead log for in-flight data across restarts.
+- `storage.trace.local.path: /var/tempo/blocks`: final block storage, described as mounted from a host volume.
 
 ## Relationships
-
-No graph neighbors. This file is consumed by the Tempo process at container start; it is not imported or referenced by any other file in the dependency graph.
+- `otel-collector.config.yaml`: the collector is the expected source of app traces. Per the comments, it forwards to Tempo's OTLP HTTP receiver on port 4318.
+- `grafana.datasources.yaml`: Grafana would query Tempo through its HTTP API on port 3200, so the datasource URL must match `http_listen_port`.
 
 ## Notes
-
-- Designed strictly for local/dev use: local-disk backend, single process, short retention. Do not reuse this configuration for staging or production without swapping to a durable object-store backend and adjusting retention.
-- The OTLP HTTP endpoint (4318) is the primary ingest path (expected from an OTel Collector); the gRPC endpoint (4317) is kept for tooling compatibility.
-- The two storage paths (`/var/tempo/wal`, `/var/tempo/blocks`) assume a volume mount is configured in the container definition; without it, data is lost when the container is recreated.
-- `max_block_duration` of 5 minutes means traces are not queryable until a block is flushed, so there is a small ingestion-to-visibility lag even in dev.
+- Retention is 24h and storage is local-only, so this is a dev configuration, not a production one.
+- The `/var/tempo/*` paths must be backed by a mounted volume for data to survive container recreation. The mount itself is not defined in this file.

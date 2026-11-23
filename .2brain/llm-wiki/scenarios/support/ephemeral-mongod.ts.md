@@ -1,33 +1,34 @@
 ---
 source: scenarios/support/ephemeral-mongod.ts
-sha256: 243074f5335432ecd69a4a3dba9de72c703a83937cba01931b5f27fa7e70c50d
-generated_at: 2026-11-08T02:35:07.280527+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6896c6669f3f5e37c00ccaafec6279523c2caa0f285f2eb05c3d1846ccc56286
+context_sha256: 8e38de8d3b1e18a5eade7560872fc81ad6eb10f88d4f15c4f7b71b570dc651e1
+generated_at: 2026-11-22T01:48:54.310095+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/support/ephemeral-mongod.ts
 
 ## Purpose
-
-Starts a real, single-member `mongod` replica set in-process via `mongodb-memory-server` and adapts it to the `EphemeralMongo` interface. Lives in `scenarios/support/` (not `src/`) because `mongodb-memory-server` is a devDependency and the `not-to-dev-dep` rule forbids `src/` from importing one.
+Actually starts an in-process `mongod` using `mongodb-memory-server`. It is the half of `startEphemeralMongo` that has to live outside `src/`, because `mongodb-memory-server` is a devDependency and the `not-to-dev-dep` rule bars `src/` from importing one. One copy serves `scenarios/` and `tests/`, since `tests/` may import `scenarios/`.
 
 ## Key elements
-
-- **`startInProcessMongod(databasePath?)`** — the sole export. Spins up a one-member `MongoMemoryReplSet` (wiredTiger, `heartbeatIntervalMillis: 250`) and returns a `Promise<EphemeralMongo>`. Races `MongoMemoryReplSet.create()` against a 120 s timeout to catch a stale binary-download lock hang. On failure, logs via `logger.error` and calls `process.exit(1)`.
-- **`toEphemeralMongo(server)`** — private adapter mapping `MongoMemoryReplSet` → `{ uri, stop() }`.
-- **`CREATE_SERVER_TIMEOUT_MS`** (120 000 ms) — distinguishes a genuine stall (stale pid in `~/.cache/mongodb-binaries` lock) from a slow first-time download.
+- `startInProcessMongod(databasePath)` (exported): starts a single-member `MongoMemoryReplSet` and returns `Promise<EphemeralMongo>`.
+  - Uses `count: 1`, `storageEngine: 'wiredTiger'` and `configSettings.heartbeatIntervalMillis: 250`.
+  - Sets `instanceOpts` to `[{ dbPath: databasePath }]` when a path is given. Otherwise the library picks a temp directory.
+  - Races creation against a 120 s timeout. If the timeout wins, the error message points at a stale lock file in the library's `mongodb-binaries` cache directory under the user's home.
+  - On any failure it logs through `logger.error` and calls `process.exit(1)`.
+  - Clears the timeout timer in `.finally`.
+- `toEphemeralMongo` (internal): adapts a `MongoMemoryReplSet` to `{ uri, stop }`. `uri` comes from `getUri()`, and `stop()` resolves to `undefined`.
+- `CREATE_SERVER_TIMEOUT_MS` (internal): 120_000 ms.
 
 ## Relationships
-
-- **`scenarios/support/ephemeral-mongo.ts`** — provides the `EphemeralMongo` type that this file adapts to.
-- **`scenarios/run-server.ts`** — imports `startInProcessMongod` to bring up a local mongod before starting the server.
-- **`tests/support/global-setup.ts`** — imports `startInProcessMongod` to create a shared mongod for the jest test suite.
-- **`tests/cluster/support/cluster.ts`** — imports `startInProcessMongod` for cluster-test fixtures.
-- **`src/infrastructure/adapters/logger.ts`** — imported **by relative path** (`../../src/...`) rather than the `@infrastructure` alias, because `global-setup.ts` is loaded by jest outside its `moduleNameMapper` context.
+- `scenarios/support/ephemeral-mongo.ts`: supplies the `EphemeralMongo` type this file returns. The module doc describes this file as the half of `startEphemeralMongo` that is kept out of `src/`.
+- `scenarios/run-server.ts`, `tests/support/global-setup.ts`, `tests/replicas/support/copies.ts`: the three callers that share this implementation.
+- `src/infrastructure/adapters/logger.ts`: provides `logger`, used to report start-up failures.
 
 ## Notes
-
-- **Relative import is intentional, not a mistake.** `tsc`/`eslint` resolve the alias fine, but jest's `global-setup.ts` bypasses `moduleNameMapper`, so the alias would fail at runtime. Do not "fix" it to the alias.
-- **Replica set, not standalone.** Multi-document transactions require a replica set; `count: 1` avoids real replication overhead while satisfying the `startTransaction()` requirement.
-- **`heartbeatIntervalMillis: 250`** works around a library hard-coded 500 ms election timeout that MongoDB Server 9.0 rejects against the default 2000 ms heartbeat. The spread preserves the library's 500 ms election timeout.
-- **`process.exit(1)` on failure** is deliberate: if the mongod cannot start, the dependent process (server or test runner) cannot function, so a clean abort beats a hung promise.
+- A replica set is used rather than a standalone `mongod` because a standalone refuses `startTransaction()`.
+- `heartbeatIntervalMillis` is set below 500 because the library hard-codes an election timeout of 500 ms. Server 9.0 rejects that against the default 2000 ms heartbeat.
+- The logger is imported by relative path, not the `@infrastructure` alias. `tests/support/global-setup.ts` loads this file outside jest's normal module resolution, so `moduleNameMapper` does not apply and the alias would fail at runtime.
+- The timeout exists because the library's lock on its machine-wide `mongodb-binaries` cache directory has no timeout of its own. If the lock-holder's pid was killed and then reused by another process, the wait never ends and prints nothing.
+- A start-up failure terminates the process with `process.exit(1)` rather than rejecting, so callers never see a rejected promise.

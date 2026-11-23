@@ -1,31 +1,35 @@
 ---
 source: src/modules/invoicing/services/reencrypt.ts
-sha256: fbc587c966d80ea6fc48da27fd4487a1a132c41c29b6b0e118f15f4dc57aa090
-generated_at: 2026-11-08T06:15:30.683859+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fbc587c966d80ea6fc48da27fd4487a1a132c41c29b6b0e118f15f4dc57aa090
+context_sha256: d2840882d5d2c8bd763a1eafe069b362442d2784da660c60068cd396e5cca073
+generated_at: 2026-11-22T05:36:25.467308+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/services/reencrypt.ts
 
 ## Purpose
-Domain-level orchestrator that re-encrypts the buyer address (`billingAddress`) on all invoices and credit notes onto the newest PII encryption key. It translates invoicing-specific concerns (which fields, which AAD binding, which collections) into calls on the generic infrastructure re-encryption utilities.
+Moves the buyer address (`billingAddress`) frozen on every invoice and credit note onto the newest `NODE_PII_ENCRYPTION_KEY`. It is the invoicing-side implementation behind the ops script `reencrypt`; the generic re-encryption machinery lives in `@infrastructure/security/reencrypt`.
 
 ## Key elements
+- `partyFields(kind, document)` (internal): builds the list of `EncryptedField` entries for one document. For each name in `PARTY_FIELDS` that is present on `document.billingAddress`, it emits:
+  - `path`: `billingAddress.<field>`
+  - `stored`: the currently stored value
+  - `binding`: `piiBinding(partyAad(kind, field, String(document._id)))`, tying the ciphertext to the document's own `_id`
+  - `label`: `<kind>.billingAddress.<field>`
 
-- **`partyFields`** (module-private) – Takes a document kind (`'invoice'` | `'credit-note'`) and a `FrozenTaxDocument`, returns `EncryptedField[]` for every `billingAddress` sub-field that is present. Each entry carries a PII binding computed via `piiBinding(partyAad(kind, field, document._id))`, tying the ciphertext to that specific document.
-- **`reencryptInvoices(dryRun?)`** (exported) – Runs the re-encryption for both invoices and credit notes concurrently (`Promise.all`). Passes a `billingAddress: { $exists: true }` filter, the live key ring, and the `partyFields` mapper to the repository. Returns a single merged report. `dryRun` (default `false`) counts affected rows without writing.
+  Fields that are `undefined` are skipped.
+- `reencryptInvoices(dryRun = false)` (exported): fetches the key ring via `getPiiEncryptionKeyRing()`, then re-encrypts invoices and credit notes concurrently (`Promise.all`) through the invoicing repository. It returns the two reports combined with `mergeReports`. With `dryRun`, it only counts what a real run would move and writes nothing.
 
 ## Relationships
-
-- **`@infrastructure/security/reencrypt`** – Supplies `mergeReports` and the `EncryptedField` shape used to describe each field to be rotated.
-- **`@infrastructure/security/pii-encryption`** – Supplies `getPiiEncryptionKeyRing()` (current key ring) and `piiBinding()` (per-document AAD binding).
-- **`../model`** – Provides the `FrozenTaxDocument` type that shapes the `billingAddress` access.
-- **`../pii`** – Provides `PARTY_FIELDS` (the list of address sub-fields), `partyAad` (AAD construction), and the `InvoiceDocumentKind` union.
-- **`../repository`** – `invoicingRepository.reencryptInvoices` / `.reencryptCreditNotes` perform the actual per-collection read-mutate-write.
-- **`services/index.ts`** – Re-exports `reencryptInvoices` so callers can import from the services barrel.
+- `src/infrastructure/security/reencrypt.ts`: supplies `mergeReports` and the `EncryptedField` type.
+- `src/infrastructure/security/pii-encryption.ts`: supplies `getPiiEncryptionKeyRing` and `piiBinding`.
+- `src/modules/invoicing/pii.ts`: supplies `PARTY_FIELDS`, `partyAad` and the `InvoiceDocumentKind` type, which define which fields are encrypted and how the AAD is built.
+- `src/modules/invoicing/repository.ts`: exports `invoicingRepository`, whose `reencryptInvoices` and `reencryptCreditNotes` methods do the actual processing. This file passes each a `{ filter, ring, fieldsOf }` options object and the `dryRun` flag.
+- `src/modules/invoicing/model.ts`: provides the `FrozenTaxDocument` type used for the documents.
+- `src/modules/invoicing/services/index.ts` and `src/modules/tasks/tests/integration/idempotent-note.test.ts` are listed as graph neighbors. Nothing in this file shows how they interact with it.
 
 ## Notes
-
-- Encryption AAD is scoped to `(kind, field, document._id)`; the same address value stored on two different invoices produces different bindings and therefore different ciphertexts.
-- Documents lacking a `billingAddress` are skipped entirely (the `$exists` filter), so `partyFields` never sees a `null` object in practice.
-- The two collections are re-encrypted independently; a failure on one does not roll back the other, but the merged report will surface both outcomes.
+- Both collections use the same filter, `{ billingAddress: { $exists: true } }`, so documents with no `billingAddress` are not selected.
+- The kinds used are `'invoice'` and `'credit-note'`. The kind is part of the AAD and of the label, so the two document types bind their ciphertexts differently.
+- Because the AAD includes `document._id`, a stored value is bound to its own document.

@@ -1,36 +1,33 @@
 ---
 source: src/modules/products/controllers/get-products.ts
-sha256: 79761778330dfb053b6e4c6f2f5c3bf17b43d0abff673f62afa913a86d137769
-generated_at: 2026-11-08T07:42:40.447751+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 79761778330dfb053b6e4c6f2f5c3bf17b43d0abff673f62afa913a86d137769
+context_sha256: b84b471a2b4aad902603f3d7486bf88b23883c50aef1464c3c0ae538124e9312
+generated_at: 2026-11-22T07:08:03.711305+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/controllers/get-products.ts
 
 ## Purpose
-
-Builds the query schema, cache-key derivation, and search handler for the two catalogue endpoints (`GET /products` and `POST /products/search`), then hands them to the shared `createSearchController` factory so both routes share identical validation, caching, and response-shaping logic.
+List/search controller for the product catalogue. It builds the query schema that both `GET /products` and `POST /products/search` validate against, derives the response-cache key inputs from that same schema, and wires everything onto the shared `createSearchController` factory.
 
 ## Key elements
-
-- **`searchProductsQuerySchema`** — Zod schema that extends the orval-generated `SearchProductsBody` with query-string-friendly coercions: `page`/`pageSize` coerced from strings, blank `priceMin`/`priceMax` mapped to `undefined`, and `active`/`purchasable`/`deleted` parsed via `optionalBooleanSchema`.
-- **`searchProductsKeyParameters`** (exported) — `Object.keys(schema.shape)`, so the cache-key parameter list is derived from the schema and cannot drift from what the controller actually reads.
-- **`extendSearchInput`** — Normalises `category` and `tag` from possible arrays/CSV to a single value (first element) before validation.
-- **`searchProductsKeyValues`** (exported) — Runs the same `safeParse` the controller uses (via `mergedSearchInput`) and returns the parsed object for the cache key, or `undefined` when the request would be rejected.
-- **`searchProductsOrderedParameters`** (exported) — `['sort']` as const; the only array whose element order is semantically significant (all others, e.g. `id`, are treated as sets and sorted for the key).
-- **`getProducts`** (exported) — The final controller produced by `createSearchController({ entity: 'products', schema, extendInput, runSearch })`. The `runSearch` closure delegates to `productService.searchForCaller`, passing the caller's scope and context for role-based filtering.
+- **`searchProductsQuerySchema`** (private): extends the orval-generated `SearchProductsBody` (kept in sync with `openapi.yaml`). It takes `page`/`pageSize` from the shared schemas, turns blank `priceMin`/`priceMax` into absent, and parses `active`, `purchasable` and `deleted` as optional booleans (query strings carry them as text).
+- **`searchProductsKeyParameters`**: the keys of the schema shape. These are the parameters that change the answer, and therefore the cache key.
+- **`extendSearchInput`** (private): reduces `category` and `tag` to their first value via `coerceStringArray`, because OpenAPI models them as single-value filters. The controller and the cache key both use it.
+- **`searchProductsKeyValues(request)`**: merges the request input with `mergedSearchInput`, validates it with the schema and returns the parsed data. It returns `undefined` if validation fails, meaning there is nothing to cache.
+- **`searchProductsOrderedParameters`**: `['sort']`. This array's order is meaningful. Other arrays, such as `id`, are treated as sets, and the cache key sorts them.
+- **`getProducts`**: the controller, created by `createSearchController` with `entity: 'products'`, the schema and `extendInput`. Its `runSearch` calls `productService.searchForCaller` with the parsed input, `productService.callerScope(request.caller)` and `callerContextOf(request)`.
 
 ## Relationships
-
-- **`src/modules/products/services/index.ts`** — Provides `productService`; the controller calls `productService.searchForCaller(parsed, callerScope, callerContext)` to execute the actual query.
-- **`src/infrastructure/surfaces/create-search-controller.ts`** — Supplies the `createSearchController` factory (wiring validation, caching, and HTTP response) and `mergedSearchInput` (combines query + body parameters before parsing).
-- **`src/infrastructure/http/schemas.ts`** — Source of shared building blocks: `pageSchema`, `pageSizeSchema`, `optionalBooleanSchema`, and the `blankToUndefined` preprocessor.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf(request)`, extracted from the request and forwarded to the service for tenant/caller-aware filtering.
-- **`src/modules/products/routes.ts`** — Mounts `getProducts` on the `GET /products` and `POST /products/search` routes.
+- `src/infrastructure/http/request.ts`: provides `callerContextOf`, which builds the caller context passed to the service.
+- `src/infrastructure/http/schemas.ts`: provides `blankToUndefined`, `optionalBooleanSchema`, `pageSchema` and `pageSizeSchema`, so all search endpoints agree on what is legal.
+- `src/infrastructure/surfaces/create-search-controller.ts`: provides `createSearchController`, which builds the controller, and `mergedSearchInput`, which merges the request input.
+- `src/modules/products/services/index.ts`: provides `productService`, which executes the search and computes the caller's scope.
+- `src/modules/products/routes.ts`: this is a graph neighbour of the file. The content shows no direct reference to it. The route wiring and cache-key configuration presumably import `getProducts` and the `searchProducts*` exports from here.
 
 ## Notes
-
-- **Schema is the single source of truth for both validation and caching.** `searchProductsKeyParameters` and `searchProductsKeyValues` are derived from the same schema object the controller validates against, so a parameter the controller reads but the key omits (a stale-cache bug) cannot occur by construction.
-- **Defaults are *not* applied here.** The schema intentionally leaves `page`/`pageSize` absent rather than filling defaults; `normalizePagination` (lived in the service or factory) owns that step.
-- **`category` / `tag` coercion is shared.** Both the controller and the cache key go through `extendSearchInput`, guaranteeing they agree on which value (first element) is used.
-- **Role-based visibility is implicit.** The controller itself does no filtering; it passes `callerScope` and caller context to the service, which decides whether inactive/deleted products are included (admin vs. public).
+- The cache key is derived from the schema, not hand-listed. This prevents two different requests from sharing one cached response. For the same reason, `priceMin: ""` and an absent `priceMin` produce the same key.
+- `page` and `pageSize` defaults are not set here. They stay absent, and `normalizePagination` owns the defaults.
+- Visibility depends on the caller. Admins see all products, including inactive and deleted ones. The public sees only active ones. This is enforced through `productService.callerScope`.
+- Prices stay as decimal text.

@@ -1,38 +1,33 @@
 ---
 source: src/modules/inventory/services/allocate.ts
-sha256: b3e903e2528e55abe8121033bb98e1cfab3490ab8c55c35779f7766f243d166b
-generated_at: 2026-11-08T06:01:56.304178+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7e3c9a0e9ff099079ed9fd06be48fcf0f787a4e02f4e4d3942a65cd914582d60
+context_sha256: fbaa6aca0c6774da31668439c88e9b2286b944556bdd742e1d4748e60124a847
+generated_at: 2026-11-22T05:21:33.757843+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/services/allocate.ts
 
 ## Purpose
-
-Allocates newly-arrived stock to paid preorders (backorders), oldest payment first. It converts a preorder's `backorder` claim into a real `stock` hold on actual units, decrementing `available` while leaving the shelf count untouched. Everything runs inside the caller's transaction so units are never visible as sellable to anyone else between arrival and allocation.
+Hands newly arrived stock to paid preorders waiting for it, oldest payment first. It runs inside the stock receipt's own transaction, so units are never sellable by others between arriving and being allocated. A paid preorder's claim (`backordered`) becomes a real hold (`reserved`) on real units: `available` drops by the allocated amount, the shelf count is unchanged, and the order's hold carries those units as ordinary `stock` lines that ship, restock and release like any other.
 
 ## Key elements
-
-- **`allocateWithin(productIds, session)`** — the sole export. Iterates the given product IDs sequentially, allocates each one's free units across its paid-preorder queue, then enqueues one `PREORDER_ALLOCATED` outbox event per served order/product pair. Returns the list of `Allocation` results.
-- **`allocateProduct(productId, session)`** (internal) — reads the stock level, walks the paid-preorder holds for that product, and for each hold applies a transition, rewrites the hold's items, and tracks how much was served vs. still waiting.
-- **`withAllocated(hold, productId, quantity)`** (internal) — rebuilds a hold's `StockLine[]` by moving `quantity` of the target product from `kind: 'backorder'` to `kind: 'stock'`, keeping the two kinds as separate lines so later ship/release can distinguish them.
-- **`Allocation`** (internal interface) — per-order result: `orderId`, `productId`, `quantity` (units served), `waiting` (units still outstanding after this allocation).
+- `allocateWithin(productIds, session)` (exported): de-duplicates product IDs and allocates them one at a time, since a transaction session can't run parallel operations. It then enqueues one `PREORDER_ALLOCATED` outbox event per order and product served, with payload `{ orderId, productId, waiting }`, and returns the allocations.
+- `allocateProduct(productId, session)` (internal): loads the product's stock level and returns `[]` if there is no level, nothing is `backordered`, or nothing is `available`. Otherwise it walks the paid preorder holds in the order the repository returns them. For each hold it sums the `backorder` quantity for that product and allocates `min(waiting, free)`. It does so by calling `applyTransition` with the `allocate` stock movement reason and `{ reference: orderId }`. Then it rewrites the hold's items through the reservation repository.
+- `withAllocated(hold, productId, quantity)` (internal): builds the hold's new item list. It shrinks or drops the product's `backorder` line, merges the allocated units into a single `stock` line for that product, and passes other products' lines through (a missing `kind` defaults to `stock`).
+- `Allocation` (internal interface): `{ orderId, productId, quantity, waiting }`, where `waiting` is what the order still lacks after this allocation.
 
 ## Relationships
-
-- **`src/modules/inventory/repository.ts`** — reads the product's stock level (`stockLevelRepository.findByProductId`) and the paid-preorder holds (`reservationRepository.findPaidPreorderHolds`); writes back via `reservationRepository.replaceItems`.
-- **`src/modules/inventory/services/transition.ts`** — calls `applyTransition` with `StockMovementReason.allocate` to perform the actual counter decrement.
-- **`src/kernel/outbox.ts`** — calls `enqueueOutboxEvent` to record a `PREORDER_ALLOCATED` event per allocation within the same transaction.
-- **`src/modules/inventory/events.ts`** — imports the `PREORDER_ALLOCATED` event name.
-- **`src/modules/inventory/services/types.ts`** — imports the `StockLine` shape used to rebuild hold items.
-- **`src/modules/inventory/model.ts`** — imports `ReservationDocument` (the Mongoose document shape for holds).
-- **`src/types/index.ts`** — imports `StockMovementReason` enum.
+- `src/modules/inventory/repository.ts`: provides the stock level and reservation repositories used to load the stock level, find paid preorder holds, and replace a hold's items.
+- `src/modules/inventory/services/transition.ts`: `applyTransition` performs the actual counter movement for the `allocate` reason.
+- `src/modules/inventory/model.ts`: `ReservationDocument` type for holds.
+- `src/modules/inventory/services/types.ts`: `StockLine` shape for rebuilt hold items.
+- `src/modules/inventory/events.ts`: `PREORDER_ALLOCATED` event name.
+- `src/kernel/outbox.ts`: `enqueueOutboxEvent` records events in the same transaction.
+- `src/types/index.ts`: provides `StockMovementReason`, whose `allocate` member is passed to `applyTransition`.
 
 ## Notes
-
-- The function is named **`allocateWithin`**, not `allocate` — search by that exact name.
-- Products are processed **sequentially** (`for…of`), not in parallel, because a Mongoose transaction session does not tolerate concurrent operations.
-- `Allocation.waiting` is the **remaining** backorder after this allocation, not the total owed. A value of `0` means the order is fully covered.
-- If `applyTransition` returns a falsy result (counters refused), the function **throws** rather than skipping — within a correctly-scoped transaction this is expected to be impossible, so a failure signals a bug.
-- `withAllocated` merges all `stock`-kind lines for the same product into a single line (the `stock` accumulator), but always emits `backorder` and `stock` as **separate** lines.
-- The file does not open its own transaction; the caller (e.g. the receipt/ingest flow) supplies the `ClientSession`.
+- If `applyTransition` returns a falsy result, it throws an error ("the counters refused"). This presumably aborts the caller's transaction.
+- Backorder and stock lines of the same product stay as separate lines, so a later ship or release can name which one it means.
+- Events are written only after all products are allocated, and carry the remaining `waiting`, not the allocated quantity.
+- Hold order depends on what the repository's paid-preorder lookup returns. The file itself relies on it for the "oldest payment first" behaviour.

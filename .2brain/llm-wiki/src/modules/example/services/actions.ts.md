@@ -1,29 +1,25 @@
 ---
 source: src/modules/example/services/actions.ts
-sha256: 6900bc68b67fcecc7de1a63e98548372caa8ea142997e1748a60d1049239507d
-generated_at: 2026-11-14T20:00:22.776515+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:11:37.246511+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/services/actions.ts
 
 ## Purpose
-
-Centralises the per-row answer to "what may this caller do?" for the Example module. It combines kernel-level ability checks (`update`, `delete`, own-rows) with the domain's lifecycle-derived moves so that clients receive a ready-made action set and never re-derive permissions themselves. The file exists to be deleted if the module has no per-row actions that need to be greyed out or enabled.
+Decides, server-side and in one place, what a caller may do to an `Example` record, so clients don't re-derive it. It asks the kernel's ability layer about the `update` and `delete` keys (as stated in `authorization.yaml`, covering own rows or all rows) and lets the domain layer add lifecycle-dependent moves. The module header notes it can be deleted if the module has nothing a client must grey out per row.
 
 ## Key elements
-
-- **`actionsForRows(context: CallerContext)`** — The sole export. Accepts the caller's context, builds a single ability via `permitsOnRows`, and returns a closure `(row: ActionRow) => ExampleActions`. Building the ability once means a page of N rows costs one ability lookup, not N.
-- **`ActionRow`** (local, not exported) — The minimal row shape the ability and lifecycle need: `userId` (for own-row comparisons) and `status` (the current lifecycle position).
+- `actionsForRows(context: CallerContext)`: takes the caller context and returns a function `(row: ActionRow) => ExampleActions`. The ability is built once per call, so a page of rows costs one ability rather than one per row.
+- `ActionRow` (internal interface): the slice of a row that is read, with `userId` (the owner, compared to the caller by own-rows conditions) and `status` (`ExampleStatus`, the lifecycle position).
 
 ## Relationships
-
-- **`src/kernel/ability.ts`** — Calls `permitsOnRows(caller, 'Example', ['update', 'delete'])` to obtain a per-row predicate.
-- **`src/modules/example/domain/index.ts`** — Calls `exampleActionsFor(status, permitResult)` to fold the lifecycle's allowed transitions into the final action set.
-- **`src/types/index.ts`** — Imports `CallerContext`, `ExampleActions`, and `ExampleStatus` as type-only dependencies.
+- `src/kernel/ability.ts`: provides `permitsOnRows`, called with the caller taken from the context, subject `'Example'` and actions `['update', 'delete']`. It yields a per-row permission check taking `{ userId }`.
+- `src/modules/example/domain/index.ts`: provides `exampleActionsFor(status, permits)`, which combines the row's lifecycle status with the permission result into the final `ExampleActions`.
+- `src/modules/example/domain/lifecycle.ts`: a graph neighbor, the lifecycle rules in the domain. This file does not import it directly, and reaches the lifecycle's moves through `domain/index.ts`.
+- `src/types/auth-context.ts` / `src/types/index.ts`: supply the `CallerContext`, `ExampleActions` and `ExampleStatus` types, imported via the `@types` alias.
+- `src/modules/example/services/crud.ts` and `src/modules/example/services/owner.ts`: sibling services in the same module. This file does not import them.
 
 ## Notes
-
-- The file is intentionally thin: it is a *wiring* layer between the kernel's ability engine and the domain's lifecycle logic, not a place for business rules.
-- If the module's `authorization.yaml` changes keys (e.g. adds `archive`), the `['update', 'delete']` array and the `ActionRow` shape must be updated in lockstep.
-- The returned closure is designed to be called once per row in a list-render loop; it is not memoised and will re-invoke `exampleActionsFor` on each call.
+- The file only computes actions. It holds no authorization rules or lifecycle logic itself.
+- Call `actionsForRows` once per request or page and reuse the returned function for every row.

@@ -1,32 +1,27 @@
 ---
 source: src/modules/cart/analytics.ts
-sha256: 8f4162705d78a7126d07389eee13ded009960346d865fbeeeb4c0ee7a55ebf27
-generated_at: 2026-11-08T05:10:46.109997+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T04:29:26.007768+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/analytics.ts
 
 ## Purpose
-
-Declares the analytics event names emitted by the cart module and registers them into the analytics port's app-wide `AnalyticsEventMap`. It exists so that event-name strings live alongside the code that fires them (e.g. checkout events are here because `POST /cart/checkout` is a cart endpoint), giving the module a single source of truth for its telemetry vocabulary.
+Declares the analytics event names the cart module emits and registers them into the analytics port's app-wide event-name union. Checkout events live here rather than in `orders` because `POST /cart/checkout` is the endpoint that reports them ("a name belongs to the code that emits it"). The file's header points to a naming rule in a linked docs page (`analytics.md`, `#naming`).
 
 ## Key elements
-
-- **`cartAnalyticsEvents`** — `as const` object mapping intent keys to snake_case event-name strings. Covers cart lifecycle events (`CART_VIEWED`, `CART_ITEM_ADDED`, `CART_ITEM_UPDATED`, `CART_ITEM_REMOVED`, `CART_CLEARED`, `CART_REORDERED`) and the two checkout outcome events (`CHECKOUT_COMPLETED`, `CHECKOUT_FAILED`).
-- **`declare module '@infrastructure/observability/analytics'`** — Module augmentation that adds a `cart` key to the shared `AnalyticsEventMap` interface, unioning the values of `cartAnalyticsEvents` into the global event-name type.
+- `cartAnalyticsEvents` — `as const` object mapping intent keys to snake_case event names:
+  - Cart: `CART_VIEWED` (`cart_viewed`), `CART_ITEM_ADDED`, `CART_ITEM_UPDATED`, `CART_ITEM_REMOVED`, `CART_CLEARED`.
+  - `CART_REORDERED` (`cart_reordered`) — `POST /cart/reorder`; treated as a cart event, not an orders one, since the order is only read and the cart is what changes.
+  - Checkout: `CHECKOUT_COMPLETED` (`checkout_completed`), `CHECKOUT_FAILED` (`checkout_failed`).
+- `declare module '@infrastructure/observability/analytics'` — augments `AnalyticsEventMap` with a `cart` key whose type is the union of the values of `cartAnalyticsEvents`.
 
 ## Relationships
-
-- **`src/modules/cart/services/items.ts`** — Emits the cart-lifecycle events (`CART_VIEWED`, `CART_ITEM_*`, `CART_CLEARED`) defined here.
-- **`src/modules/cart/services/reorder.ts`** — Emits `CART_REORDERED`.
-- **`src/modules/cart/services/checkout.ts`** — Emits `CHECKOUT_COMPLETED` / `CHECKOUT_FAILED`.
-- **`src/modules/cart/tests/integration/analytics-consent.test.ts`** — Verifies that these events respect the user's analytics consent setting.
-- **`src/modules/cart/tests/integration/merge-effects.test.ts`** — Exercises cart-merge scenarios and asserts the correct analytics events fire.
-- **`tests/unit/infrastructure/observability/analytics.test.ts`** — Tests the analytics port (the interface this file augments), confirming the `cart` key is part of the union.
+- `src/modules/cart/services/checkout.ts`, `src/modules/cart/services/items.ts`, and `src/modules/cart/services/reorder.ts` are the cart services adjacent to this file in the graph. Their names line up with the checkout, item, and reorder events defined here.
+- `src/modules/cart/tests/integration/analytics-consent.test.ts`, `src/modules/cart/tests/integration/merge-atomic.test.ts`, and `src/modules/cart/tests/integration/merge-effects.test.ts` are related integration tests.
+- `tests/unit/infrastructure/observability/analytics.test.ts` is the unit test for the analytics port this file augments.
 
 ## Notes
-
-- **Ownership rule:** An event name lives in the module that owns the *endpoint* that reports it, not the domain the event conceptually describes. That is why `CHECKOUT_*` is here (cart owns `POST /cart/checkout`) rather than in an `orders` module.
-- **Augmentation pattern:** This mirrors `./audit.ts` (audit actions). Adding a new event means adding a key to `cartAnalyticsEvents`; the `declare module` block picks it up automatically via the `(typeof …)[keyof …]` indexed type — no separate list to update.
-- **Naming convention** is governed by `docs/tools/analytics.md#naming`; strings are `snake_case`, keys are `SCREAMING_SNAKE_CASE`.
+- Adding an event: add it to `cartAnalyticsEvents`. The union type updates automatically through the module augmentation.
+- The file's header says audit actions are declared with the same augmentation pattern, so the catalogue grows with the modules that own their names.
+- The file contains only constants and a type declaration, with no runtime behavior.

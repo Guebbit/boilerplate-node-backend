@@ -1,63 +1,54 @@
 ---
 source: src/modules/orders/routes.ts
-sha256: 67d07381d360f4efae4947d97971f362aafa43ed96cd6fb1734f86a4bd3b8642
-generated_at: 2026-11-14T20:40:50.933321+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 33e598f847d2db9183db1cae663ed1db0fc8613bc3f2c197b8151e88b73af694
+context_sha256: 050ff40ad3700e846b01f7fb74f0c802f3755bcd8aeaeabfbacd0e46f7b00d27
+generated_at: 2026-11-22T06:17:57.379052+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/routes.ts
 
 ## Purpose
-
-Express router that wires every order-management endpoint (list, read, create, cancel, override-status, shipping-address, timeline, notes, export, soft/hard delete, restore) behind a session-only auth guard and attaches the correct permission, cache, idempotency, and rate-limit middleware per route. Route registration order is load-bearing: static segments (`/search`, `/export`) and longer parameter paths (`/:id/hard`, `/:id/override-status`) must precede the bare `/:id` wildcard.
+Express router for order management. Every route requires an authenticated session. A caller holding only `read:Order` sees only their own orders. The file also fixes route ordering, so that static segments (`/search`, `/export`) and longer paths (`/:id/hard`) are registered before `/:id` and not swallowed by it.
 
 ## Key elements
-
-- **`router`** (exported `Router`) — the single public export; mounted at `/orders` by the app tier.
-- **`isOperatorCancel`** (local helper) — returns `true` when the caller holds `update:Order`; used by `requireFreshAuthWhen` to demand a fresh session only for operator-initiated cancels (the path that can refund or retain funds).
-- **Route table** (registration order):
-  - `POST /search` → `getOrders` (scoped; `noStore`)
-  - `GET /` → `getOrders` (scoped; `privateNoCache`)
-  - `GET /export` → `getOrdersExport` (`export:Order` step-up + per-account rate limit)
-  - `POST /` → `createOrder` (`create:Order` + idempotency + product-cache invalidation)
-  - `POST /:id/cancel` → `postCancelOrder` (fresh-auth for operators; product-cache invalidation)
-  - `POST /:id/override-status` → `postOrderOverrideStatus` (`override:Order`)
-  - `PUT /:id/shipping-address` → `putShippingAddress` (`update:Order`)
+- `router` — the exported Express `Router`. It starts with `router.use(getAuth, isAuth)`. It uses `isAuth` rather than `isAuthOrCredential` on purpose: API-key credentials produce no `authContext`, which would silently widen the "my orders" scope.
+- `isOperatorCancel(request)` — returns true when the caller holds `update:Order`. It is used with `requireFreshAuthWhen(..., 'critical')` so operator cancels need a fresh session. A customer's own cancel is never prompted.
+- Routes:
+  - `POST /search` → `getOrders` (`noStore`)
+  - `GET /` → `getOrders` (`privateNoCache`)
+  - `GET /export` → `getOrdersExport`. It needs `export:Order`, then `ordersExportLimiter`. The controller sets its own cache headers.
+  - `POST /` → `createOrder`. It needs `create:Order` and runs `idempotencyKey` first.
+  - `POST /:id/cancel` → `postCancelOrder`. This is the one write a customer can make.
+  - `POST /:id/override-status` → `postOrderOverrideStatus`. It needs `override:Order`.
+  - `PUT /:id/shipping-address` → `putShippingAddress`
+  - `PUT /:id/billing-address` → `putBillingAddress`
   - `GET /:id/timeline` → `getOrderTimeline` (`privateNoCache`)
-  - `POST /:id/timeline/notes` → `postOrderNote` (`update:Order` + rate limit + idempotency)
+  - `POST /:id/timeline/notes` → `postOrderNote`. It runs `ordersNoteLimiter`, then `idempotencyKey`.
   - `DELETE /:id/timeline/notes/:eventId` → `deleteOrderNote`
   - `GET /:id` → `getOrderItem` (`privateNoCache`)
-  - `PUT /:id` → `replaceOrderById` (`update:Order`)
-  - `PATCH /:id` → `updateOrderById` (`update:Order`)
-  - `DELETE /:id` → `deleteOrders` (`delete:Order`)
-  - `POST /:id/restore` → `restoreOrders` (`delete:Order`)
-  - `DELETE /:id/hard` → `deleteOrders` (`delete:Order` + `routeFlag('hardDelete')`)
+  - `PUT /:id` → `replaceOrderById`
+  - `PATCH /:id` → `updateOrderById`
+  - `DELETE /:id` → `deleteOrders` (soft delete unless `?hardDelete=true`)
+  - `POST /:id/restore` → `restoreOrders`
+  - `DELETE /:id/hard` → `deleteOrders`, preceded by `routeFlag('hardDelete')`
+  - The address routes, note routes and `PUT`/`PATCH /:id` need `update:Order`. The delete and restore routes need `delete:Order`.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `@kernel/middlewares/authorizations` | `getAuth`, `isAuth` applied router-wide; `requirePermission` per route; `requireFreshAuthWhen` on cancel. |
-| `@kernel/ability` | `holds` is called inside `isOperatorCancel` to check `update:Order`. |
-| `@kernel/permissions` | `callerForSubject` builds the ability subject for that same check. |
-| `@infrastructure/http/middlewares/cache` | `noStore`, `privateNoCache`, `invalidateCache` attached to individual routes. |
-| `@infrastructure/http/middlewares/idempotency` | `idempotencyKey` guards order creation and note creation against replay. |
-| `@infrastructure/http/middlewares/route-flag` | `routeFlag('hardDelete')` converts a path segment into a query flag consumed by `deleteOrders`. |
-| `controllers/get-orders` | Serves `POST /search` and `GET /`. |
-| `controllers/get-order` | Serves `GET /:id`. |
-| `controllers/get-order-timeline` | Serves `GET /:id/timeline`. |
-| `controllers/get-orders-export` | Serves `GET /export`. |
-| `controllers/order-notes` | Serves `POST /:id/timeline/notes` and `DELETE /:id/timeline/notes/:eventId`. |
-| `controllers/post-cancel-order` | Serves `POST /:id/cancel`. |
-| `controllers/post-order-override-status` | Serves `POST /:id/override-status`. |
-| `controllers/delete-orders` | Serves both `DELETE /:id` and `DELETE /:id/hard`. |
-| `controllers/post-order-restore` | Serves `POST /:id/restore`. |
+- `@kernel/middlewares/authorizations` supplies `getAuth`, `isAuth`, `requirePermission` and `requireFreshAuthWhen`.
+- `@kernel/ability` (`holds`) and `@kernel/permissions` (`callerForSubject`) are used in `isOperatorCancel`.
+- `@infrastructure/http/middlewares/cache` supplies `noStore` and `privateNoCache`.
+- `@infrastructure/http/middlewares/idempotency` supplies `idempotencyKey`, used on order creation and note posting.
+- `@infrastructure/http/middlewares/route-flag` supplies `routeFlag('hardDelete')` for `/:id/hard`.
+- `./controllers/*` hold the handlers: `get-orders`, `get-order`, `get-orders-export`, `get-order-timeline`, `order-notes`, `post-cancel-order`, `post-order-override-status`, `post-order-restore`, `delete-orders`, plus the create/update/address controllers.
+- `./rate-limits` provides `ordersExportLimiter` and `ordersNoteLimiter`.
+- The `invoicing` module mounts its own router at the same `/orders` basePath. It owns `GET /orders/{id}/invoice` and `/credit-note`, so those are not defined here. The mount order does not matter, because `/:id` matches only one path segment.
 
 ## Notes
-
-- **Session-only auth.** The router deliberately uses `isAuth` (not `isAuthOrCredential`). An API key on a customer-scoped route (`/:id`, `/:id/cancel`) would resolve to no `authContext` and silently widen the read scope beyond the caller's own orders.
-- **Route order is a correctness constraint, not a style choice.** `POST /search`, `GET /export`, `PUT /:id/shipping-address`, `POST /:id/override-status`, and `DELETE /:id/hard` must all precede their `/:id` counterparts; reordering causes silent 404s or wrong-handler dispatch.
-- **Cache policy is per-route and intentional.** Customer-scoped reads use `privateNoCache` (browser may cache, revalidate); the search POST uses `noStore` (RFC 9111 §3.5 — answer depends on caller identity); the export controller sets its own `private, no-store` on the file response. No route uses a shared/Redis cache for caller-scoped data.
-- **Idempotency + rate-limit ordering.** On note creation the permission check runs first, then the per-account budget, then the idempotency ledger — a replayed note still consumes budget.
-- **`DELETE /:id/hard` reuses `deleteOrders`.** The `routeFlag('hardDelete')` middleware injects the flag so the controller's `?hardDelete=true` branch fires without the caller passing a query string.
-- **Invoicing routes are absent by design.** `GET /orders/:id/invoice` and `/credit-note` live in the `invoicing` module's own router, which mounts at the same `/orders` basePath. App-tier router order between the two is documented in `invoicing/module.ts`.
+- Route order is load-bearing. Moving `/search`, `/export`, `/:id/...` or `/:id/hard` below the matching `/:id` route breaks them. For example, `requireId` would answer 404 for `export`.
+- Middleware order within a route is deliberate:
+  - Permission check, then rate limit, then idempotency on notes, so a replayed note still counts against the budget.
+  - `idempotencyKey` first on order creation, so a retry replays the same order.
+  - The fresh-auth check on cancel runs before anything else.
+- Order reads and the timeline are never Redis-cached, because the response depends on the caller. The search `POST` uses `noStore`, and the `GET` routes use `privateNoCache`.
+- Opening this router to API-key credentials would require splitting it first.

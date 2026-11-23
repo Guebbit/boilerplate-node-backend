@@ -1,43 +1,44 @@
 ---
 source: src/modules/orders/services/export.ts
-sha256: b08ea95909f83f39524f5de06372b057d797dbd2ee1996959826572f34bf7179
-generated_at: 2026-11-08T06:57:19.053078+00:00
-model: ollama:qwen3.8:27b
+source_sha256: de06ecc1ed089e1d01e000c96dfa5e71f0a91da6733a988b8fd71e1517d70196
+context_sha256: d3755d1a609f0de13afafacf95c2a923e8e097186213ae16f3e6d86d808c2364
+generated_at: 2026-11-22T06:20:18.165455+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/export.ts
 
 ## Purpose
-
-Produces a streaming CSV export of orders. The function validates the result size against a configurable cap, writes an audit entry, and returns a pipeable pair (object-mode `Readable` source + `csv-stringify` `Transform`) that the caller wires into the HTTP response. Nothing is written to disk or emailed; the stream is discarded if the client disconnects.
+Builds the orders CSV export as a stream. It reuses the order list's filters, counts the matching rows against a cap, and then returns a database cursor source plus a CSV writer for the caller to pipe into the HTTP response. Nothing is written to disk or mailed, because a stored file can be forgotten and a link can be forwarded (GDPR Art. 5(1)(e)). If the client disconnects, the caller's `pipeline` destroys the stream and the cursor with it.
 
 ## Key elements
-
-- **`auditedFilter(filters)`** — Sanitises the filter bag for the audit log: replaces the `email` value with the boolean `true` so no PII is persisted in audit metadata.
-- **`orderCsvWriter()`** — Returns a `csv-stringify` `Transform` configured with `header`, UTF-8 BOM, fixed column order (`ORDER_CSV_COLUMNS`), and `escape_formulas` (prefixes `= + - @ \t \r` with `'` to prevent CSV/formula injection).
-- **`OrderExport`** (interface) — The return shape: `{ source: Readable, csv: Transform }`.
-- **`csvRows(filters, scope)`** — Async generator that iterates `orderRepository.streamMatching` and maps each order to a CSV row object via `toOrderCsvRow`.
-- **`openOrderExport(search, authContext, context)`** — Main entry point. Resolves scope + fulfillment filter, runs a `countMatching` query, rejects with a localised 422 (`ORDER_EXPORT_TOO_LARGE`) if the cap is exceeded, otherwise records the audit row and returns the pipeable pair.
+- `openOrderExport(search, authContext, context)`: the only export. It does the following, in order:
+  1. Applies `withFulfillmentFilter` and `callerScope` to get the filters and the read scope.
+  2. Counts matches. If the count exceeds `orderExportMaxRows()`, it returns a 422 reject with `ERROR_CODES.ORDER_EXPORT_TOO_LARGE` and a translated message, and no rows are read.
+  3. Otherwise it records an audit entry (`ADMIN_ORDERS_EXPORTED`, outcome `success`, target type `order`) with the filter and `rowCount`.
+  4. Returns `{ source, csv }`.
+- `OrderExport`: the interface of the result. `source` is an object-mode `Readable` of row objects and `csv` is a `Transform` that turns them into CSV text.
+- `csvRows` (internal): an async generator that streams the repository's matching orders and maps each one through `toOrderCsvRow`.
+- `orderCsvWriter` (internal): a `csv-stringify` writer with these options:
+  - header line
+  - UTF-8 BOM, so Excel reads accents correctly
+  - columns taken from `ORDER_CSV_COLUMNS`
+  - `escape_formulas: true`
+- `auditedFilter` (internal): copies the filter for the audit row but replaces `email` with `true`, so no personal data is stored.
 
 ## Relationships
-
-- **`../repository`** (`orderRepository`) — Supplies both `countMatching` (size guard) and `streamMatching` (row cursor).
-- **`./read`** (`withFulfillmentFilter`) — Wraps the raw search filters with the caller's fulfillment constraint before counting/streaming.
-- **`./scope`** (`callerScope`) — Derives the read-scope object from `AuthContext`.
-- **`../domain`** (`ORDER_CSV_COLUMNS`, `toOrderCsvRow`) — Column definitions and the domain→CSV-row mapping.
-- **`../config`** (`orderExportMaxRows`) — Configurable row cap.
-- **`../audit`** (`ordersAuditActions`) — Enum value `ADMIN_ORDERS_EXPORTED` for the audit action field.
-- **`@infrastructure/http/response`** (`generateReject`, `ResponseReject`) — Builds the 422 error envelope.
-- **`@infrastructure/i18n`** (`t`) — Localises the "too large" message.
-- **`@infrastructure/observability/audit`** (`recordAudit`) — Persists the audit row.
-- **`@types`** — Type imports (`AuthContext`, `CallerContext`, `SearchOrdersRequest`).
-- **`./index`** (`services/index.ts`) — Barrel that re-exports `openOrderExport`.
+- `src/modules/orders/services/read.ts`: `withFulfillmentFilter` gives the export the same filter handling as the list.
+- `src/modules/orders/services/scope.ts`: `callerScope` turns the `AuthContext` into the read scope that bounds the file.
+- `src/modules/orders/repository.ts`: `orderRepository` provides the count that acts as the cap guard and the cursor stream of matching orders.
+- `src/modules/orders/config.ts`: `orderExportMaxRows()` supplies the row cap.
+- `src/modules/orders/domain/index.ts` (and `src/modules/orders/domain/export.ts`): provides `ORDER_CSV_COLUMNS` and `toOrderCsvRow`.
+- `src/modules/orders/audit.ts` and `src/infrastructure/observability/audit.ts`: `ordersAuditActions` supplies the action name and `recordAudit` writes the row.
+- `src/infrastructure/http/response.ts`: `generateReject` builds the 422 response.
+- `src/infrastructure/i18n/index.ts`: `t` translates the too-large message.
+- `src/types/index.ts`: supplies `AuthContext`, `CallerContext` and `SearchOrdersRequest`.
 
 ## Notes
-
-- **Count-then-read:** the cap check is a single `COUNT` query; a refusal reads zero rows. A successful export streams lazily — no full materialisation.
-- **BOM is intentional:** ensures Excel opens the file as UTF-8 rather than the OS default code page.
-- **`escape_formulas` gap:** does not cover NUL (`\0`) or full-width CJK equivalents of `= + - @`; documented in the writer's docblock as a known, accepted limitation.
-- **Paging is ignored:** `SearchOrdersRequest` may carry pagination fields, but the export always returns the entire filtered set (bounded only by the cap).
-- **Disconnect safety:** `Readable.from` ties the async iterator to the stream; when the caller's `pipeline` destroys the stream (client hang-up), the underlying DB cursor is cancelled.
-- **Audit metadata:** the `filter` recorded in the audit row is the sanitised version (`email: true`), never the raw PII.
+- The row count is the only guard. Paging in `search` is ignored, and the file holds the whole result.
+- The audit row is written when the export is handed over, before any row is streamed. It records the number of rows the export will carry, and a client that disconnects early does not change it.
+- `escape_formulas` does not cover `\0` or the full-width `＝＋－＠`. The source comments say this is documented and not handled.
+- The return type is `Promise<OrderExport | ResponseReject>`, so callers must check for a reject before piping.

@@ -1,35 +1,34 @@
 ---
 source: scripts/mutation/ci/slice-ignorer.ts
-sha256: 4c70e91fcd03c7425ff8007af825de60defe1a24c0b7a2fba57f529296283089
-generated_at: 2026-11-08T02:53:09.419225+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 43fea89e1ee255f1c0e6df24ef4bd667fe737132e2dfb3db30af46f08a61c2d7
+context_sha256: a56ed82ad21d7484288049605997fae06530c3462ab6eda6af02ea951c11fec2
+generated_at: 2026-11-22T02:08:39.290059+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/mutation/ci/slice-ignorer.ts
 
 ## Purpose
-
-A Stryker ignore-plugin that restricts a single CI run to a line **slice** of a file (e.g. lines 120–240), letting the GitHub mutation sweep split a slow file across parallel 6-hour jobs without losing or duplicating mutants. Unlike Stryker's native `--mutate file:10-50`, which only mutates nodes *wholly inside* the range, this plugin ignores any subtree that does not *touch* the slice — so a node crossing a slice edge is tested by both neighbouring jobs and deduplicated by `merge.ts`.
+A Stryker ignorer plugin that narrows a mutation run to a line slice of one file. The GitHub sweep uses it to split a file that is too slow for a single 6-hour job across several jobs without losing or changing any mutant. Stryker's `--mutate file:10-50` only mutates nodes wholly inside the range, so a node that crosses a slice edge (a function body, a schema object) would be mutated by no slice. This ignorer instead skips every subtree that does not touch the slice, so a node crossing an edge is tested by both neighbouring slices.
 
 ## Key elements
-
-- **`LineSlice`** — exported interface: an inclusive, 1-based `{ from, to }` line range.
-- **`NodeLocation`** — internal interface mirroring the minimal Babel `SourceLocation` shape (`start.line`, `end.line`).
-- **`IgnorerPath`** — exported interface for the subset of Babel `NodePath` the ignorer reads.
-- **`SLICE_IGNORE_REASON`** — exported constant (`'Outside this CI slice'`). The `statusReason` Stryker records on skipped mutants; `merge.ts` uses it to distinguish slice-skipping from user `// Stryker disable` comments.
-- **`parseSlice(raw)`** — parses the `MUTATION_SLICE` env-var value (`"120-240"`) into a `LineSlice`. Throws on malformed input rather than silently falling back to no-slice.
-- **`outsideSlice(location, slice)`** — returns `true` only when a node's range is entirely above or below the slice; touching either boundary keeps the node in.
-- **`strykerPlugins`** — the array Stryker loads via `appendPlugins`. Contains one `Ignore`-kind plugin named `ci-slice` whose `shouldIgnore` callback consults the process-level `activeSlice`.
+- `LineSlice`: an inclusive, 1-based `{ from, to }` line range.
+- `IgnorerPath`: the minimal shape of the Babel `NodePath` that Stryker passes to an ignorer (`node.loc`).
+- `SLICE_IGNORE_REASON` (`'Outside this CI slice'`): the `statusReason` recorded on mutants this ignorer skips.
+- `parseSlice(raw)`: parses `MUTATION_SLICE` (e.g. `"120-240"`). Empty or unset returns `undefined`. Anything that is not a valid range (non-matching format, `from < 1`, or `to < from`) throws.
+- `outsideSlice(location, slice)`: returns true only when a node ends before the slice or starts after it. A node with no location is never outside.
+- `strykerPlugins`: the exported plugin array, a single `Ignore` plugin named `ci-slice`. Its `shouldIgnore` returns `SLICE_IGNORE_REASON` for nodes outside the slice and `undefined` otherwise.
 
 ## Relationships
-
-- **`scripts/mutation/ci/merge.ts`** — reads `SLICE_IGNORE_REASON` from mutant results to tell "tested by a sibling slice" apart from a user-written disable comment when merging partial runs.
-- **`tests/unit/scripts/mutation/ci/slice-ignorer.test.ts`** — unit-tests `parseSlice`, `outsideSlice`, and the `shouldIgnore` callback.
-- **`tests/unit/scripts/mutation/ci/merge.test.ts`** — exercises `merge.ts`'s handling of `SLICE_IGNORE_REASON` in merged reports.
+- `merge.ts`: relies on `SLICE_IGNORE_REASON` to tell a mutant "another slice tested this" apart from one skipped by a `// Stryker disable` comment. When slices overlap, it keeps one result per mutant.
+- `waves.ts`: listed as a graph neighbour. The visible content does not show how the two interact.
+- `tests/unit/scripts/mutation/ci/slice-ignorer.test.ts`: unit tests for this file.
+- `tests/unit/scripts/mutation/ci/merge.test.ts`: tests the merge side that consumes the ignore reason.
 
 ## Notes
-
-- **No imports.** The file is loaded by Node's native type-stripping (not tsx), so it must use only erasable TypeScript syntax (interfaces, `const`, no `enum`/`namespace`/`class`). It deliberately inlines the plugin object shape rather than importing `@stryker-mutator/api`.
-- **`activeSlice` is read once at module load.** The `shouldIgnore` callback runs for every AST node in every file, so the env var is parsed eagerly and cached in a module-level `const`.
-- **Inert without `MUTATION_SLICE`.** If the variable is unset or empty, `parseSlice` returns `undefined` and `shouldIgnore` always returns `undefined` — nothing is ignored.
-- **Validation is strict.** A malformed `MUTATION_SLICE` (e.g. `"240-120"`, `"abc"`) throws immediately; it does *not* degrade to "mutate the whole file," which would overflow a job sized for a fraction.
+- The file is loaded by Node's native type stripping, not tsx. It therefore has no imports and may only use erasable TypeScript syntax. The plugin is written as a plain object in the shape `declareValuePlugin(PluginKind.Ignore, …)` returns, to avoid importing `@stryker-mutator/api`.
+- The plugin is loaded via Stryker's `appendPlugins` and enabled with `ignorers: ['ci-slice']`.
+- With no `MUTATION_SLICE`, it ignores nothing.
+- `MUTATION_SLICE` is read once at module load into `activeSlice`, because `shouldIgnore` runs for every node of every file.
+- An invalid `MUTATION_SLICE` throws at load rather than falling back, so a typo cannot silently mutate the whole file in a job sized for a fraction of it.
+- Stryker skips a whole subtree once `shouldIgnore` answers for its root. This is why the only safe test is "does not touch the slice".

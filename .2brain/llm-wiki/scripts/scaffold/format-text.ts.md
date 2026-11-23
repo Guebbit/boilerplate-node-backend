@@ -1,32 +1,29 @@
 ---
 source: scripts/scaffold/format-text.ts
-sha256: 22ff161db342470af801a19657cced646b582e440d4a8fae2353bc17b8b70fa5
-generated_at: 2026-11-08T02:59:32.657586+00:00
-model: ollama:qwen3.8:27b
+source_sha256: bb373360ebb6fab8a32c93ecaa898ec63d23525020bda4b879a370da3a3bf539
+context_sha256: 950aa41b76c211240b906e90e4099b17603890b6edb27fb0a3546c33199d809e
+generated_at: 2026-11-22T02:15:37.409392+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/scaffold/format-text.ts
 
 ## Purpose
-
-Provides a single formatting seam (`FormatText`) so scaffold scripts can produce Prettier-conformant output without importing Prettier directly. The real implementation lives in this file; tests substitute an identity formatter to sidestep Prettier's dynamic-import requirements that Jest cannot satisfy.
+Provides text formatting for scaffolded output behind a small seam. The real implementation wraps Prettier and applies the repo's configuration. Unit tests can substitute an identity formatter, because Prettier can't load under Jest (its dynamic imports need a Node flag Jest doesn't set).
 
 ## Key elements
-
-- **`FormatText`** (type) — `(root: string, file: string, content: string) => Promise<string>`. The injectable contract every consumer imports; callers pass an implementation, so the module is swappable in tests.
-- **`formatWithRepoConfig`** (const, implements `FormatText`) — The production formatter. It:
-  1. Checks `.prettierignore` via `getFileInfo`; returns `content` unchanged if the file is ignored.
-  2. Resolves per-file config with `resolveConfig` (including `.editorconfig`, which the Prettier API skips by default).
-  3. Calls `format` with the resolved options plus `filepath` (so the parser is inferred from extension).
+- `FormatText` (type): `(root, file, content) => Promise<string>`. It turns raw text into what `prettier:check` accepts for `file`.
+- `formatWithRepoConfig` (const): the real `FormatText` implementation.
+  - It calls Prettier's `getFileInfo` with `<root>/.prettierignore`. If the file is ignored, it returns the content unchanged.
+  - Otherwise it calls `format` with the config from `resolveConfig(file, { editorconfig: true })` and `filepath: file`, so the file path selects the parser.
 
 ## Relationships
-
-- **scripts/scaffold/apply.ts**, **scripts/scaffold/demo-remove.ts**, **scripts/scaffold/scaffold-module.ts**, **scripts/scaffold/scenario-registry.ts** — Scaffold scripts that consume the `FormatText` type (and likely `formatWithRepoConfig`) to format generated files before writing them.
-- **scripts/contracts/generate-shared-rule-schemas.ts**, **scripts/docs/generate-scenario-registries.ts** — Generator scripts that format their output through the same `FormatText` seam.
-- **tests/unit/scripts/scaffold/apply.test.ts** — Exercises `apply.ts` by injecting an identity `FormatText` in place of `formatWithRepoConfig`, avoiding the Prettier dependency entirely.
+The neighbor files are not shown in this file's content. The only relationship it declares is the seam itself: callers take a `FormatText` and can be given either `formatWithRepoConfig` or an identity function. The neighbors listed in the graph are the likely consumers:
+- `scripts/scaffold/apply.ts`, `demo-remove.ts`, `scaffold-module.ts` and `scenario-registry.ts`
+- `scripts/contracts/generate-shared-rule-schemas.ts` and `scripts/docs/generate-scenario-registries.ts`
+- `tests/unit/scripts/scaffold/apply.test.ts`, which is presumably where the identity formatter is passed
 
 ## Notes
-
-- The `editorconfig: true` flag in `resolveConfig` is deliberate: the Prettier CLI reads `.editorconfig` automatically, but the API does not. Omitting it would produce output that diverges from `prettier:check`.
-- The `.prettierignore` guard matters for hand-formatted shared files that the repo intentionally excludes from reformatting; without it a one-line edit would reflow the entire file.
-- Callers should treat `FormatText` as the injection point, not `formatWithRepoConfig` directly, so tests can substitute a no-op formatter.
+- `editorconfig: true` is set explicitly because the Prettier API, unlike the CLI, doesn't read `.editorconfig` on its own.
+- Files matched by `.prettierignore` are returned untouched. This stops a hand-formatted shared file from being reflowed in full around a one-line edit.
+- `file` must be an absolute path. `root` is used only to locate `.prettierignore`.

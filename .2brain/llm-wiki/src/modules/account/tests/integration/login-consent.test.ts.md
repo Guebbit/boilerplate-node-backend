@@ -1,35 +1,37 @@
 ---
 source: src/modules/account/tests/integration/login-consent.test.ts
-sha256: b9c8a9f98c2b3900d006d1a4fa2ee0832f0f5152885e069a46dcb703ac1470fd
-generated_at: 2026-11-08T04:37:51.668822+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b9c8a9f98c2b3900d006d1a4fa2ee0832f0f5152885e069a46dcb703ac1470fd
+context_sha256: 2529081be506a30a7156ad0331844d9c284453656c1e960c704c2c381071fa57
+generated_at: 2026-11-22T03:56:38.738580+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/login-consent.test.ts
 
 ## Purpose
-
-Integration test that verifies the consent-gating logic for the `user_logged_in` analytics event at login: the account's stored consent answer (yes or no) is authoritative, and the `Analytics-Consent` banner header is consulted only when the account has never answered. Exercises the real `/account/login` route with the analytics provider's `capture` spied on.
+Integration test that checks which consent source gates the `user_logged_in` analytics event on login. The account's stored answer (yes or no) takes precedence. Only for an account that never answered does the `Analytics-Consent` banner header decide. Tests go through the real `POST /account/login` route and spy on the resolved analytics provider's `capture`.
 
 ## Key elements
-
-- **`loginWith(stored, header, slug)`** — helper that creates a user (with optional `analyticsConsent` + `analyticsConsentAt`) via the factory, then POSTs to `/account/login` with an optional `Analytics-Consent` header; asserts a 200 response.
-- **`capture`** (module-level `jest.SpyInstance`) — spy on `resolveAnalyticsProvider().capture`, re-installed in `beforeEach` after resetting the provider.
-- **Three test cases** covering the consent matrix:
-  - Stored `false` + header `'true'` → no event.
-  - Stored `true` + no header → event sent.
-  - Stored `undefined` + header `'true'` → event sent; stored `undefined` + no header → no event.
+- `setupTestDb()` is called at module level to prepare the test database.
+- `beforeEach` sets `NODE_ANALYTICS_PROVIDER=none` and `NODE_ANALYTICS_REQUIRE_CONSENT=true`, resets the provider, and spies on `resolveAnalyticsProvider().capture`.
+- `afterEach` restores all mocks and resets the analytics provider.
+- `loginWith(stored, header, slug)` is a helper that:
+  - creates a user at `<slug>@example.com`, with `analyticsConsent` and `analyticsConsentAt` set only when `stored` is not `undefined`;
+  - posts to `/account/login`, adding the `Analytics-Consent` header when one is given;
+  - asserts the response status is 200.
+- Test cases in `describe('the login analytics event')`:
+  - Consent withdrawn (`false`) with banner header `'true'`: `capture` is not called.
+  - Consent given (`true`) with no header: `capture` is called with an object containing `event: 'user_logged_in'`.
+  - No stored answer: with header `'true'`, `capture` is called once. After `mockClear()`, with no header, `capture` is not called.
 
 ## Relationships
-
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module load to provision an isolated test database.
-- **`tests/support/http.ts`** — `api()` provides the HTTP client used to hit the real login endpoint.
-- **`tests/support/environment.ts`** — `setEnvironment()` configures `NODE_ANALYTICS_PROVIDER` and `NODE_ANALYTICS_REQUIRE_CONSENT` before each test.
-- **`src/infrastructure/observability/analytics/index.ts`** — `resetAnalyticsProvider()` and `resolveAnalyticsProvider()` are imported to configure the "none" provider and attach the `capture` spy.
-- **`src/modules/users/tests/factories.ts`** — `createUser` and `PLAIN_PASSWORD` are used to seed a valid account for the login request.
+- `@infrastructure/observability/analytics` supplies `resolveAnalyticsProvider` (whose `capture` is spied on) and `resetAnalyticsProvider` (used to get a fresh provider per test).
+- `@modules/users/tests/factories` supplies `createUser` for seeding accounts and `PLAIN_PASSWORD` for logging in.
+- `@tests/setup-test-db` supplies `setupTestDb`.
+- `@tests/http` supplies `api()`, the request client used for the login call.
+- `@tests/environment` supplies `setEnvironment`, which sets the analytics env vars.
 
 ## Notes
-
-- The provider is set to `'none'` but the spy is placed on `resolveAnalyticsProvider().capture`; this is the mechanism by which the test asserts whether the event *would* have been emitted without actually shipping telemetry.
-- Consent priority is the core contract under test: **stored answer beats banner header**. The banner is only a fallback for accounts where `analyticsConsent` is `undefined`.
-- `setupTestDb()` runs once at module scope (outside `beforeEach`), so the same database instance is reused across all three cases.
+- The provider is `none`, so nothing is actually sent. Only the spy on `capture` shows whether an event would have been captured.
+- Each `loginWith` call needs a distinct `slug`, since it determines the email and username. The third test calls it twice with different slugs for this reason.
+- `capture.mockClear()` is needed in the third test so the second assertion isn't affected by the earlier call.

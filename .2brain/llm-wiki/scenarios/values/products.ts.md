@@ -1,29 +1,30 @@
 ---
 source: scenarios/values/products.ts
-sha256: efc76181a54903966f9ac15cab9878625200fd59c2ab47b07a335bfc73ae6209
-generated_at: 2026-11-08T02:36:18.137883+00:00
-model: ollama:qwen3.8:27b
+source_sha256: efc76181a54903966f9ac15cab9878625200fd59c2ab47b07a335bfc73ae6209
+context_sha256: 39a5958bca39bcaf9dd4099ea1922a7d5a326b1173a06e274ef5e402357b9b50
+generated_at: 2026-11-22T01:50:17.820145+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/values/products.ts
 
 ## Purpose
-
-Provides the product-specific example values that the generated API client collections use to construct realistic requests. It pins every product reference to a known seed id so that generated test scenarios always target a product that exists in the catalogue.
+Supplies example values for the `products` generated API client collections. It pins request parameters to a known seeded catalogue row (by id), so generated requests reference a product that actually exists.
 
 ## Key elements
-
-- **`collectionValues`** (exported `const`, typed as `CollectionValues`) — the single export of this module. Its shape has three members:
-  - `byProperty` — maps property names (`id`, `productId`) to `SEED_PRODUCT_IDS.dogFoodStandard`.
-  - `pathParam(name, template)` — a resolver function. Returns the dog-food seed id when `name` is `productId`, or when `name` is `id` and the route template begins with `/products`; returns `undefined` otherwise.
-  - `tokens` — named placeholders for seed products in distinct lifecycle states: `seedProductId` (active), `seedSoftDeletedProductId`, `seedInactiveProductId`, `seedOffSaleProductId`.
+- `collectionValues: CollectionValues` — the sole export, with three parts:
+  - `byProperty` — maps both `id` and `productId` properties to `SEED_PRODUCT_IDS.dogFoodStandard`.
+  - `pathParam(name, template)` — returns `dogFoodStandard` when `name` is `productId`, or when `name` is `id` and the path `template` starts with `/products`. Otherwise it returns `undefined`.
+  - `tokens` — named placeholders for seeded products in different states:
+    - `seedProductId` → `dogFoodStandard`
+    - `seedSoftDeletedProductId` → `heaterSoftDeleted`
+    - `seedInactiveProductId` → `bundleInactive`
+    - `seedOffSaleProductId` → `bedOffSale`
 
 ## Relationships
-
-- **`scenarios/collection-values.ts`** — supplies the `CollectionValues` type that `collectionValues` is declared as; defines the contract this object must satisfy.
-- **`scenarios/product-ids.ts`** — supplies `SEED_PRODUCT_IDS`, the canonical id constants consumed throughout this file (dog food, heater, bundle, bed).
+- `scenarios/collection-values.ts` — provides the `CollectionValues` type (imported type-only) that `collectionValues` conforms to.
+- `scenarios/product-ids.ts` — provides `SEED_PRODUCT_IDS`, the source of every id used here. No literal ids are defined in this file.
 
 ## Notes
-
-- The `pathParam` function intentionally returns `undefined` for non-product paths so the caller can fall back to a different value strategy; it is not a total resolver.
-- All "primary" examples default to the same `dogFoodStandard` id — only the `tokens` block differentiates by product state. When adding a new state, extend `tokens` rather than `byProperty`.
+- The `id` path param is matched only for templates starting with `/products`. This keeps `id` from resolving to a product id on unrelated routes.
+- The default product is always `dogFoodStandard`. The soft-deleted, inactive and off-sale products are available only through the `tokens` entries.

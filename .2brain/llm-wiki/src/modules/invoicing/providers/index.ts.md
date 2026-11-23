@@ -1,36 +1,35 @@
 ---
 source: src/modules/invoicing/providers/index.ts
-sha256: e991d5e5f0311a4df1b9ca84d0954d256dcba536c1704867635abcc38733eea4
-generated_at: 2026-11-14T20:12:25.841588+00:00
-model: ollama:qwen3.8:27b
+source_sha256: be55cd1cae173f65d02e7074164648449e5fe24e97135fa1f7c5578df0d7b594
+context_sha256: b9b6c5a8798de9f3a7d914951ce90f3e2f030b1c81b70c86f054e4d510fb6b1c
+generated_at: 2026-11-22T05:33:19.623472+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/providers/index.ts
 
 ## Purpose
-
-Defines the e-invoicing provider port: the interface, the document type it operates on, and the provider registry that maps a deployment-configured name (`NODE_EINVOICING_PROVIDER`) to a concrete implementation. It mirrors the `payments/providers` pattern — one interface, one shipped adapter (`pdf`), and a registry a new adapter can join with a single entry.
+Defines the e-invoicing port: the interface a national e-invoicing network plugs into, plus the registry that picks the active implementation. The choice is a deployment setting (`NODE_EINVOICING_PROVIDER`), not a code path. It is modeled on `payments/providers`. Only one implementation ships, `pdf`. Italy's SdI and the EU's Peppol are explicitly not built. The port renders only the buyer's copy. Transmitting to an authority is a separate step at issue time, in `src/modules/invoicing/services/issue-invoice.ts` and `issue-credit-note.ts`.
 
 ## Key elements
-
-- **`EInvoicingDocumentKind`** — `'invoice' | 'creditNote'`; distinguishes the two document titles a provider must render.
-- **`EInvoicingDocument`** — The input shape a provider receives. Omits `orderId` from `FrozenTaxDocument`, adds `kind`, and optionally `reversalOf` (the invoice number a credit note reverses). Deliberately never the Mongoose document.
-- **`EInvoicingProvider`** — The interface every adapter implements. Requires a `name` string and a pure `render(document): Promise<Buffer>` that returns PDF bytes. Explicitly must not transmit to an authority.
-- **`registry`** (module-private) — A `createProviderRegistry<EInvoicingProvider>` currently holding only `pdf: pdfEInvoicingProvider`. Adding a provider = one new adapter file + one entry here.
-- **`resolveEInvoicingProvider()`** — Resolves the active provider from `NODE_EINVOICING_PROVIDER` (default `pdf`) via `requireProvider`. Not memoised; reads config fresh each call. Throws if the name is unknown to the build.
-- **`invoicingProviderProbe`** — A `defineProbe` boot-time check that calls `resolveEInvoicingProvider`, surfacing a typo in the env variable at startup rather than at first invoice.
+- `EInvoicingDocumentKind`: `'invoice' | 'creditNote'`. Each kind prints under its own title and disclaimer.
+- `EInvoicingDocument`: `FrozenTaxDocument` from `model.ts` without `orderId`, plus `kind` and an optional `reversalOf` (`{ number, reason }`) that only credit notes carry. It is a plain data shape, never the Mongoose document, so a provider cannot reach the database.
+- `EInvoicingProvider`: the interface an implementation must satisfy.
+  - `name`: used for logs and not persisted.
+  - `render(document)`: returns `Promise<Buffer>` holding the PDF bytes. It must be a pure, repeatable render and must never transmit.
+- `registry` (module-private): built with `createProviderRegistry`, currently `{ pdf: pdfEInvoicingProvider }`.
+- `resolveEInvoicingProvider()`: looks up the provider named by `invoicingConfig().NODE_EINVOICING_PROVIDER` via `requireProvider`. It throws if the name is unknown.
+- `invoicingProviderProbe`: a boot probe created with `defineProbe('invoicing-provider', resolveEInvoicingProvider)`.
 
 ## Relationships
-
-- **`src/infrastructure/runtime/provider-registry.ts`** — Provides `createProviderRegistry` and `requireProvider`, the two primitives this file uses to build and query the registry.
-- **`src/infrastructure/config/define.ts`** — Provides `defineProbe`, used to register `invoicingProviderProbe` as a shape-less boot probe.
-- **`src/modules/invoicing/config.ts`** — Supplies `invoicingConfig()` which exposes `NODE_EINVOICING_PROVIDER`; consumed inside `resolveEInvoicingProvider`.
-- **`src/modules/invoicing/providers/pdf.ts`** — Provides `pdfEInvoicingProvider`, the sole implementation registered in the registry.
-- **`src/modules/invoicing/model.ts`** — Exports `FrozenTaxDocument`, the base type from which `EInvoicingDocument` is derived (via `Omit<FrozenTaxDocument, 'orderId'>`).
+- `src/infrastructure/runtime/provider-registry.ts`: supplies `createProviderRegistry` and `requireProvider`.
+- `src/infrastructure/config/define.ts`: supplies `defineProbe`.
+- `src/modules/invoicing/config.ts`: supplies `invoicingConfig()`, which holds the `NODE_EINVOICING_PROVIDER` value (default `pdf`).
+- `src/modules/invoicing/model.ts`: supplies the `FrozenTaxDocument` and `CreditNoteReason` types.
+- `src/modules/invoicing/providers/pdf.ts`: the only registered implementation, `pdfEInvoicingProvider`. It is covered by `src/modules/invoicing/tests/unit/pdf-provider.test.ts`.
+- `src/modules/invoicing/services/render.ts`, `src/modules/invoicing/emails.ts` and `src/modules/invoicing/module.ts` are graph neighbors. The file's content does not show how they use this module.
 
 ## Notes
-
-- The port is render-only. Transmitting to a national authority (SdI, Peppol, etc.) is a separate one-time step in `services/issue-invoice.ts` / `issue-credit-note.ts`, not part of `EInvoicingProvider.render`.
-- `invoicingProviderProbe` is intentionally a "shape-less slice" (a zero-arg function) because `config` imports `define` and this file imports `config`; a typed probe would create a circular dependency.
-- `render` is expected to be idempotent and safe to repeat on every download that finds no stored copy — do not add side effects or network calls there.
-- The module docblock explicitly scopes out Italy's SdI and the EU's Peppol: they are not built here; the first adapter to need transmission will design that step.
+- The provider is resolved on every call and not memoised. The reasoning is the same as `payments/providers#resolvePaymentProvider`.
+- The probe exists so a typo in `NODE_EINVOICING_PROVIDER` fails at boot rather than on the first invoice. It is a "shape-less slice": the resolver imports the config, so the config cannot import the resolver.
+- To add a provider, write one adapter file and add one entry to `registry`.

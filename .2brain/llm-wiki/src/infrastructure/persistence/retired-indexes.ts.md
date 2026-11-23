@@ -1,29 +1,26 @@
 ---
 source: src/infrastructure/persistence/retired-indexes.ts
-sha256: 903163811deebb4f206233c76f4b345dd77cb192bc15fa94a485f805045c428c
-generated_at: 2026-11-08T03:44:11.926242+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4eba43c641ed4fedd065219bfb7bb4e9dafcb4ebea0f7a6f329f85c4e66e9c55
+context_sha256: 5e3dddaf6921ed003fa7d3e298e6b684722808f31da7e73bd5ac152acc4369fe
+generated_at: 2026-11-22T03:03:58.554713+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/retired-indexes.ts
 
 ## Purpose
-
-Provides a side-channel registry so that `db:sync` knows which existing MongoDB indexes are safe to drop. Because `db:sync` only ever *adds* indexes, a name that is no longer declared in a schema would otherwise persist forever. Schema modules call `retireIndexes` at the point of definition to record those names.
+Registry of index names that a schema has given up. `db:sync` only ever adds indexes, so an index nobody declares any more would otherwise remain in the database forever. Declaring the retired name here, next to the schema, tells the sync it is safe to drop.
 
 ## Key elements
-
-- **`retireIndexes<T extends object>(schema: T, ...names: string[]): T`** — Records one or more index names as retired for the given schema. Returns the same schema so it can be chained as the last expression in a schema definition.
-- **`retiredIndexesOf(schema: object): readonly string[]`** — Reads back the retired names for a schema. Returns an empty array when none were recorded.
-- **`retired` (internal)** — A `WeakMap<object, readonly string[]>` that stores the mapping. Using the schema object itself as the key means no extra field is needed on the model type and no cast is required on the reading side. Schemas are garbage-collected once no references remain.
+- `retired` (private): a `WeakMap<object, readonly string[]>` keyed by the schema object itself. Retired names can be declared without adding a field to the model type and read without a cast.
+- `retireIndexes(schema, ...names)`: records stored index names (as `db.collection.getIndexes()` prints them) as retired for that schema. Repeated calls accumulate names. It returns the same schema, so it can be chained at the end of a schema definition. It is meant to be called once, alongside the schema's definition.
+- `retiredIndexesOf(schema)`: returns the retired names for a schema, or an empty array if it has none.
 
 ## Relationships
-
-- **`scripts/db/index-sync.ts`** — The consumer. `db:sync` calls `retiredIndexesOf(schema)` for each schema it processes; any index whose name appears in the returned list and still exists in the collection is dropped.
-- **`tests/integration/scripts/db/index-sync.test.ts`** — Exercises the drop path by calling `retireIndexes` in test schemas and asserting that `db:sync` removes the matching indexes.
+- `scripts/db/index-sync.ts`: the `db:sync` consumer. Per the module doc, it uses these declarations to learn which indexes it may drop.
+- `tests/integration/scripts/db/index-sync.test.ts`: integration test for the sync script, which is the consumer of this registry.
 
 ## Notes
-
-- Names passed to `retireIndexes` must match exactly what `db.collection.getIndexes()` returns (e.g. `fieldName_1` format), not the logical Mongoose index declaration.
-- The function is idempotent per call (appends) but is intended to be called once per schema in that module's `model.ts`. Calling it twice for the same schema accumulates names in the internal array.
-- Because the key is the schema *object* (not a string name), two separate `Schema` instances with identical fields are tracked independently.
+- Names must match the stored index names, not the schema's field definitions.
+- Because the map is keyed by object identity, `retiredIndexesOf` must receive the same schema object that was passed to `retireIndexes`.
+- `WeakMap` keys do not keep a schema alive, so the registry does not prevent garbage collection.

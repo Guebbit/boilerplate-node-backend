@@ -1,37 +1,47 @@
 ---
 source: shared/cases/ssrf.cases.yaml
-sha256: 946504e560db7476eac005349e14d9aec1de4d1577f0dcf32da100a2789661e5
-generated_at: 2026-11-14T17:44:19.563259+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 46e1953aad5acadc783b342d9611be94731d0262466676461e4a0bdacfde7ad2
+context_sha256: c8d97dc83577c3ea691cf09e3a01765aa63b2e1731719642b52357aed9425a8d
+generated_at: 2026-11-22T02:22:27.191881+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/cases/ssrf.cases.yaml
 
 ## Purpose
-
-A declarative test-case catalog that pins down the SSRF (Server-Side Request Forgery) validation policy for outbound calls. It enumerates which literal IP addresses and whole URLs must be **allowed** vs **refused** (and *why*), so that any implementation of the filter can be verified against a single source of truth. The policy is: HTTPS only, port 443 only, and only ordinary public-unicast addresses (every special-purpose range is refused by default).
+A shared, language-neutral table of test cases for an SSRF (server-side request forgery) guard on outbound calls. It defines what an outbound call may reach: https only, port 443 unless the operator allows more. The address rule is an allowlist of ordinary public unicast space. Every special-purpose range is refused without being listed. All cases use literal IPs, so none needs DNS.
 
 ## Key elements
+A single top-level `cases:` list. Each entry has `name`, `kind`, and `expect`.
 
-- **`cases`** — top-level list; each entry is one test scenario.
-- **`name`** — human-readable description of the scenario (used in test reports).
-- **`kind`** — discriminant: `"address"` (bare IP) or `"url"` (full URL string).
-- **`address`** (when `kind: address`) — the literal IP under test; `expect` is `"allowed"` or `"refused"`.
-- **`url`** (when `kind: url`) — a full URL string; `expect` is `"allowed"` or one of the refusal reasons: `invalid-url`, `insecure-scheme`, `credentials-in-url`, `unsafe-port`, `unsafe-address`.
-- **Coverage areas exercised:**
-  - IPv4: public unicast (allowed) vs. loopback, 0.0.0.0, 10/8, 172.16/12, 192.168/16, link-local (incl. `169.254.169.254`), CGN, multicast, broadcast, documentation, benchmarking, class E.
-  - IPv6: public (allowed) vs. `::1`, `::`, link-local, ULA (fc00/fd00), multicast, site-local, documentation.
-  - IPv4-mapped / compatible / NAT64 / 6to4 / Teredo forms.
-  - URL-level: scheme check, credential embedding, non-443 ports, non-URL text, and alternate IPv4 spellings (decimal, hex, octal, short-form) that normalise to a refused address.
+- **`kind: address`** has an `address` field for one resolved or literal IP. `expect` is `allowed` or `refused`. An IPv4-mapped IPv6 address is judged as the IPv4 address it wraps.
+- **`kind: url`** has a `url` field for a whole URL. `expect` is `allowed` or one of these refusal reasons:
+  - `invalid-url`
+  - `insecure-scheme`
+  - `credentials-in-url`
+  - `unsafe-port`
+  - `unsafe-address`
+
+Coverage:
+- **Allowed addresses:** public IPv4 and IPv6, and an IPv4-mapped public address. Also `172.32.0.1`, the address just past the `172.16/12` boundary.
+- **Refused IPv4:** loopback (including the wider `127/8` block), unspecified, `10/8`, `172.16/12` (including `172.31.255.255`), `192.168/16`, link-local and the cloud metadata address `169.254.169.254`, CGNAT, multicast, broadcast, documentation, benchmarking, and class E.
+- **Refused IPv6:** loopback, unspecified, link-local, unique-local (`fc00`/`fd00`), multicast, site-local `fec0`, and the documentation range. Also IPv4-mapped loopback and private addresses, IPv4-compatible, NAT64, 6to4, and Teredo.
+- **URL cases:**
+  - Allowed: public https, explicit `:443`, and an IPv6 literal.
+  - Scheme: `http` and `ftp` are refused.
+  - Credentials: `user:pass@` and `user@` are refused.
+  - Syntax: non-URL text is refused.
+  - Port: `:22` is refused.
+  - Address: private and loopback literals are refused.
+  - Alternate IPv4 spellings (decimal, hex, octal, short-form `127.1`) are normalised and judged as the real address.
+  - Percent-encoded hosts are decoded once. An encoded loopback is refused and an encoded public host is allowed.
+  - Double-encoded dots, and an encoded slash after the host (`%2F`), give `invalid-url`.
 
 ## Relationships
-
-No graph neighbors are recorded for this file. It is a leaf test-data document consumed by whatever runner iterates the `cases` list; it has no runtime code dependencies of its own.
+The only graph neighbor is `shared/contracts/asyncapi.workers.yaml`. Nothing in the case file references it. The file contains no imports, so any link is through whatever consumes both, and nothing visible here shows what that is. Consumers are expected to load this file and run each case against their own SSRF validator, which keeps implementations consistent.
 
 ## Notes
-
-- The file is **data only** — it defines *expected* outcomes, not the validation logic. The implementation under test is expected to read each case and produce the matching `expect` value.
-- IPv4-mapped IPv6 addresses (`::ffff:x.x.x.x`) are judged as the wrapped IPv4; the same applies to IPv4-compatible (`::x.x.x.x`), NAT64, 6to4, and Teredo forms — all are refused.
-- The 172.16/12 boundary is explicitly tested on both edges (`172.31.255.255` refused, `172.32.0.1` allowed) to guard against off-by-one range errors.
-- WHATWG URL normalisation means `https://2130706433`, `https://0x7f000001`, `https://0177.0.0.1`, and `https://127.1` all resolve to `127.0.0.1` and are refused as `unsafe-address`. An implementation that skips normalisation will fail these cases.
-- Literal IPs only; no DNS resolution is involved in any case, so tests are deterministic and offline-safe.
+- Alternate IPv4 spellings are normalised per the WHATWG URL standard before judging.
+- Percent-decoding happens exactly once.
+- Order of the refusal reasons matters per case. For example, a bad port on a public IP gives `unsafe-port`, not `unsafe-address`.
+- The "port 443 unless the operator allows more" rule is operator configuration, and no case here exercises the override.

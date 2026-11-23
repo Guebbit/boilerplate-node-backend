@@ -1,31 +1,39 @@
 ---
 source: src/modules/account/tests/unit/config.test.ts
-sha256: 3d485f798a49e234d6225d370eb9b155ffaab999efadf0269b48d840eccf290d
-generated_at: 2026-11-14T19:13:43.531828+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c38b281ce7d72f8047e34aa4c9b99787138099316ec3f751c6d803c306bcf22d
+context_sha256: 8ba0d838c8f5fa1616ea4d7f0b9b344fad0409d876fc05b6411698b50c2a298c
+generated_at: 2026-11-22T04:03:53.820547+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/config.test.ts
 
 ## Purpose
-
-Unit tests for the account module's frontend-link URL templates and account-deletion grace-period logic. Verifies that each link kind produces a correct, distinct URL, that per-kind env-var overrides work in isolation, and that the deletion purge date respects both the configured grace window and calendar-month boundaries.
+Unit tests for the account module's config (`@modules/account/config`). They cover the default frontend link templates for each token flow, the per-kind environment override, the deletion grace-period setting, and the computation of the purge date for a deleted account.
 
 ## Key elements
-
-- **`withoutEnvironmentInThisFile([...])`** — called at module scope to guarantee a clean env state (clears `NODE_FRONTEND_URL`, all `NODE_FRONTEND_LINK_*` vars, and `NODE_ACCOUNT_DELETION_GRACE_DAYS`) before any test in this file runs.
-- **`describe('accountFrontendLink — the default template per kind')`** — asserts the default URL for each of the five link kinds (`verify`, `reset`, `setup`, `restore`, `email-change`) plus `accountTermsLink`, and confirms all five link-kind URLs are pairwise distinct.
-- **`describe('accountFrontendLink — per-kind override')`** — sets `NODE_FRONTEND_LINK_RESET` and verifies only the `reset` template changes while others remain default.
-- **`describe('NODE_ACCOUNT_DELETION_GRACE_DAYS')`** — checks the default (30) and that out-of-range values (`0`, `32`) cause `accountConfig()` to throw.
-- **`describe('deletionPurgeAt')`** — verifies the purge timestamp is the *earlier* of (deletion date + grace days) and (first day of the next calendar month), with edge cases around February and month-end.
+- **`withoutEnvironmentInThisFile([...])`**: clears `NODE_FRONTEND_URL`, `NODE_FRONTEND_LINK_VERIFY`, `NODE_FRONTEND_LINK_RESET`, `NODE_FRONTEND_LINK_RESTORE`, `NODE_FRONTEND_LINK_EMAIL_CHANGE` and `NODE_ACCOUNT_DELETION_GRACE_DAYS`, so the defaults are what get tested.
+- **`TOKEN`**: a fixed opaque token (`a1b2c3d4e5f6`) used in the expected URLs.
+- **`accountFrontendLink — the default template per kind`**: with `locale: 'en'`, the default base is `http://localhost:8080`.
+  - `verify` gives `/en/verify-email/confirm#token=…`.
+  - `reset` gives `/en/password-reset/confirm#token=…`.
+  - `setup` gives `/en/account-setup#token=…`.
+  - `restore` gives `/en/account-restore#token=…`.
+  - `email-change` gives `/en/email-change/confirm#token=…`.
+  - A test checks that the five kinds produce distinct URLs.
+  - `accountTermsLink('en')` gives `/en/terms`.
+- **`accountFrontendLink — per-kind override`**: setting `NODE_FRONTEND_LINK_RESET='change-password?t={token}'` changes only the reset link. The verify link keeps its default.
+- **`NODE_ACCOUNT_DELETION_GRACE_DAYS`**: `accountConfig()` defaults it to 30. It throws for `'0'` and `'32'`, so the valid range is 1–31.
+- **`deletionPurgeAt`**:
+  - With the default 30-day grace, 5 March 10:00Z gives 4 April 10:00Z.
+  - 30 January gives 28 February at 00:00Z, which is the calendar-month bound.
+  - With grace 31, 30 April 23:00Z gives 30 May 00:00Z, and 5 March gives 5 April at 00:00Z. The purge date never goes past one calendar month.
 
 ## Relationships
-
-- **`src/modules/account/config.ts`** — the module under test. This file imports `accountConfig`, `accountFrontendLink`, `accountTermsLink`, and `deletionPurgeAt` and exercises their public contracts.
-- **`tests/support/environment.ts`** — provides `withoutEnvironmentInThisFile` (used at file top to reset env vars) and `setEnvironment` (used inside individual tests to inject a single variable override).
+- Tests `accountConfig`, `accountFrontendLink`, `accountTermsLink` and `deletionPurgeAt`, all imported from `src/modules/account/config.ts`.
+- Uses `withoutEnvironmentInThisFile` and `setEnvironment` from the `@tests/environment` alias (`tests/support/environment.ts`) to control env vars.
 
 ## Notes
-
-- The token in every URL is passed as a **fragment identifier** (`#token=…`), not a query string, except where a custom override template explicitly uses `?t=`. Tests assert the exact string, so the hash-vs-query distinction is intentional.
-- `deletionPurgeAt` is capped at the first day of the following month at midnight UTC (`T00:00:00.000Z`), which is a stricter bound than the grace-day calculation. Tests pin this with the "never passes the month" case.
-- `NODE_ACCOUNT_DELETION_GRACE_DAYS` is validated in the `1–31` range; the test uses `it.each` with string values (`'0'`, `'32'`) because env vars are always strings.
+- The header comment says the env vars and default templates for the link kinds live in this module's config. `src/infrastructure/http/frontend-link.ts` only turns a resolved template into a URL.
+- `setup` has no env var in the cleared list, and no override test covers it.
+- When the purge date is bounded by the month, the time is reset to `00:00:00Z`. When the grace is the shorter bound, the original time of day is kept.

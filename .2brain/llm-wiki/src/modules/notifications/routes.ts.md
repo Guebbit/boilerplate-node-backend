@@ -1,38 +1,35 @@
 ---
 source: src/modules/notifications/routes.ts
-sha256: 6f4452c8edf7f58f2ad1077a998cccd25e1ba1a08b9b41f0a598b66754c55be0
-generated_at: 2026-11-08T06:32:53.689833+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4dc34bdc0b925c79731b37765a5edc1ff47d096954dda4888a87ba2f87d5a854
+context_sha256: 044acf5618b72b0387d4db10472fdfb9941e8ba82a5b1af0aea88bd3e69c54f5
+generated_at: 2026-11-22T05:55:11.779094+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/routes.ts
 
 ## Purpose
-
-Defines the Express router for all notification endpoints under `/notifications`. It wires each route to its controller and attaches the correct authentication middleware per route. The file exists to keep route ordering, auth strategy, and origin checks in one place, separated from controller logic.
+Defines the Express route table for the notifications module, mounted at `/notifications`. Every route needs only a signed-in account. Inboxes are scoped to the caller by the service, so the module declares no permission rule.
 
 ## Key elements
-
-- **`router`** (exported) — Express `Router` instance mounted at `/notifications`.
-- **`GET /stream`** — SSE endpoint. Authenticated via `requireSessionViaCookie()` and gated by `requireAllowedOrigin` (no bearer auth).
-- **`GET /`** — List the caller's notifications → `getNotifications`.
-- **`POST /read-all`** — Mark all as read (moves `readAt`, does not delete) → `postReadAll`.
-- **`DELETE /`** — Empty the inbox → `deleteNotifications`.
-- **`GET /:id`** — Fetch a single notification → `getNotification`.
-- **`DELETE /:id`** — Delete a single notification → `deleteNotification`.
-- **`router.use(getAuth, isAuth)`** — Applied to all routes *after* `/stream`; establishes the bearer-token chain for the remaining five routes.
+- `router` — the exported Express `Router`, mounted at `/notifications`.
+- `GET /stream` — the live SSE stream (`getNotificationsStream`), opened by the browser's `EventSource`. It is guarded by `requireAllowedOrigin` and `requireSessionViaCookie()`.
+- `router.use(getAuth, isAuth)` — from this point down, routes use the ordinary bearer-authenticated chain.
+- `GET /` — `getNotifications`.
+- `POST /read-all` — `postReadAll`. Zeroes the badge and keeps the messages (only `readAt` changes).
+- `DELETE /` — `deleteNotifications`. Empties the inbox. It is a delete because membership changes.
+- `GET /:id` — `getNotification`, one of the caller's own.
+- `DELETE /:id` — `deleteNotification`, one of the caller's own.
 
 ## Relationships
-
-- **`src/kernel/middlewares/authorizations.ts`** — Supplies `getAuth`, `isAuth` (bearer chain) and `requireSessionViaCookie` (cookie-only auth for the stream).
-- **`src/infrastructure/http/middlewares/origin.ts`** — Supplies `requireAllowedOrigin`, applied only to `/stream` to prevent cross-origin `EventSource` opens.
-- **`src/modules/notifications/controllers/*`** — Each controller file exports the single handler that the corresponding route invokes.
-- **`src/modules/notifications/module.ts`** — Declares this module's bindings and presumably mounts `router` onto the app.
-- **`src/modules/notifications/tests/unit/routes.test.ts`** — Unit-tests the route table (method, path, middleware order).
+- `@kernel/middlewares/authorizations` (`src/kernel/middlewares/authorizations.ts`) supplies `getAuth` and `isAuth` for the bearer chain, and `requireSessionViaCookie` for the stream.
+- `@infrastructure/http/middlewares/origin` (`src/infrastructure/http/middlewares/origin.ts`) supplies `requireAllowedOrigin`, applied only to the stream.
+- The six handlers come from `./controllers/` (`get-notifications`, `get-notifications-stream`, `post-read-all`, `delete-notifications`, `get-notification`, `delete-notification`).
+- `src/modules/notifications/module.ts` is a neighbor in the graph. The mount at `/notifications` is described only by a comment in this file.
+- `src/modules/notifications/tests/unit/routes.test.ts` covers this route table.
 
 ## Notes
-
-- **Route ordering matters.** `/stream` and `/read-all` are registered *before* `/:id` so the parameterized routes don't swallow them.
-- **Auth split is intentional.** The stream sits *above* `router.use(getAuth, isAuth)` because `EventSource` cannot set an `Authorization` header; it relies solely on the session cookie. All other routes go through the standard bearer chain.
-- **No permission rules are declared here.** Scoping to the caller's own notifications is enforced inside the service layer; the module declares no access-control policy.
-- **POST vs DELETE semantics:** `read-all` is a POST (state change, no resource removed) while `DELETE /` removes rows. This is a deliberate REST distinction noted in the inline comment.
+- **Order matters.** The stream is registered before `router.use(getAuth, isAuth)` because it authenticates by refresh cookie, not by bearer header. Moving it below the bearer chain would silently break it.
+- The stream is cookie-authenticated, so `requireAllowedOrigin` is what stops a page on another origin from opening it.
+- `GET /:id` and `DELETE /:id` come after the literal paths (`/read-all`, `/`) so that a literal path is never read as an id.
+- Ownership is enforced by the service, not by a permission rule in this file.

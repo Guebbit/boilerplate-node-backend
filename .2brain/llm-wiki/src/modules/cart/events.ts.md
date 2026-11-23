@@ -1,34 +1,25 @@
 ---
 source: src/modules/cart/events.ts
-sha256: 0108978da0e18ec43706f1cd1b683f75a41d557fb0dec1f910c85a1a2d6f0608
-generated_at: 2026-11-14T19:28:44.496363+00:00
-model: ollama:qwen3.8:27b
+source_sha256: bfb5cd16eac13902f67e3fba6e557fec1a9de156503da5411096b1869e85c117
+context_sha256: e7f11a398c1bd2ab386afcf826f9a0f10ca73c748c76927d9a5e6e066a78c854
+generated_at: 2026-11-22T04:32:52.151769+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/events.ts
 
 ## Purpose
-
-Declares the cart module's domain events by augmenting the kernel's `DomainEventMap` interface (in `@kernel/events`), and exports the event-name constants so emitters and listeners share a single spelling. This keeps the catalogue of events composable—each module adds its own payloads without editing a central file.
+Declares the names of the domain events the cart module emits. The events themselves are specified in `./asyncapi.domain-events.yaml`. The file exports the names as constants so emitters and listeners share one spelling.
 
 ## Key elements
+- `CART_LINES_REMOVED` — the string `'cart.lines_removed'`.
+- `CART_MERGE_REFUSED` — the string `'cart.merge_refused'`. It corresponds to the `cart.merge_refused` channel in the AsyncAPI file.
 
-- **`declare module '@kernel/events'`** — extends `DomainEventMap` with two cart-owned payloads:
-  - `'cart.lines_removed'` — emitted once per product deletion, after the product has been pulled from carts, only when at least one cart held it. Carries `userIds`, `productId`, and `titles` (product name by locale, copied at emit time because the product is gone).
-  - `'cart.merge_refused'` — emitted once per `POST /cart/merge` call that had at least one line it could not add (product no longer publicly visible, or cart at max-lines and product is new). Carries `userId` and an array of `lines` with `productId`, `requested` quantity, and `titles`.
-- **`CART_LINES_REMOVED`** — string constant `'cart.lines_removed'`, exported as the canonical event name.
-- **`CART_MERGE_REFUSED`** — string constant `'cart.merge_refused'`, exported as the canonical event name.
+Both constants use `satisfies DomainEventName`, so the compiler checks each name against the kernel's event-name type. The literal type is preserved.
 
 ## Relationships
-
-- **`src/modules/cart/services/cleanup.ts`** — the service that pulls a deleted product from user carts; the likely emitter of `CART_LINES_REMOVED`.
-- **`src/modules/cart/services/merge.ts`** — implements `POST /cart/merge`; the likely emitter of `CART_MERGE_REFUSED` when some guest-cart lines cannot be added.
-- **`src/modules/cart/index.ts`** — module entry point; expected to re-export or reference these event constants so other modules can import them through the barrel.
-- **`src/modules/cart/tests/integration/merge.test.ts` / `merge-effects.test.ts`** — exercise the merge path whose failures produce `CART_MERGE_REFUSED`.
-- **`src/modules/cart/tests/integration/line-availability.test.ts` / `line-cap.test.ts`** — exercise line-availability and capacity rules that determine whether a merge line is refused or added.
+- **`src/kernel/events.ts`**: provides the `DomainEventName` type (imported with `import type`, so there is no runtime dependency).
+- **`src/modules/cart/services/cleanup.ts`, `src/modules/cart/services/merge.ts`, `src/modules/cart/index.ts`, and the integration tests** (`line-availability`, `line-cap`, `merge-atomic`, `merge-effects`, `merge`): these are graph neighbors of this file, so they presumably emit or listen for these events. The file itself shows only the exports, not how they are used.
 
 ## Notes
-
-- This file is **type-level + constants only**—no runtime logic. It contains no function bodies or side effects beyond the two `const` declarations.
-- `titles` is deliberately denormalised into the event payload at emit time because the product record may no longer exist by the time a listener reads the event.
-- `cart.merge_refused` is intentionally *not* emitted for lines that were merely added with a corrected quantity; that outcome is conveyed through the HTTP response, not an event.
+- Adding a new cart event means declaring it in `asyncapi.domain-events.yaml`. The name must also be accepted by `DomainEventName`, or the `satisfies` check will fail to compile.

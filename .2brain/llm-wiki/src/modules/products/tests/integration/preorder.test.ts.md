@@ -1,40 +1,42 @@
 ---
 source: src/modules/products/tests/integration/preorder.test.ts
-sha256: 5abc1d5f54e96db5ff4beb15f32490588e7b58486538bd87190f921477909615
-generated_at: 2026-11-08T07:52:07.731720+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 500284d41525e8470db01fee4c8b32981a137c2c78e20f89844b2b2209688a12
+context_sha256: 7b194e981093863d62d8a34964dc306e25846b2c9b26491b734179843285c9a8
+generated_at: 2026-11-22T07:17:14.647403+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/integration/preorder.test.ts
 
 ## Purpose
-
-Integration tests that exercise the preorder behavior of a product over HTTP: a future `releaseDate` marks a product as a preorder (a derived flag, never persisted), the date is bounded to one year ahead, clearing/moving the date emits a `product.release_date_changed` outbox event within the edit's transaction, and the stored instant always corresponds to the shop's local midnight (including DST edge cases).
+HTTP-level integration tests for a product's `releaseDate`. They check that a future date makes a product a preorder (decided by `availability`, not the product), that the date is bounded to one year ahead, and that changing it writes a `product.release_date_changed` event to the outbox in the same transaction as the edit.
 
 ## Key elements
-
-- **`inDays(days)`** — returns a `YYYY-MM-DD` string `days` from now, in the shop's timezone (via `shopDayOf`).
-- **`stored(day)`** — converts a `YYYY-MM-DD` day into the ISO instant of that shop day's midnight (via `startOfShopDay`). Used as the value the factory writes.
-- **`announced()`** — queries `outboxEventModel` for rows named `PRODUCT_RELEASE_DATE_CHANGED`, sorted by `_id`.
-- **`announcedPayloads()`** — maps those rows to their `payload` objects in write order.
-- **`describe('GET /products/:id')`** — asserts the derived `preorder` flag (true for future + purchasable, false for past/off-sale), and that `lowStock` is suppressed on a preorder.
-- **`describe('PATCH /products/:id releaseDate')`** — covers setting a date, clearing with `null`, moving (from→to payload), no-op when unchanged, 422 for >1 year ahead, and accepting a past date.
-- **`describe('a release day is stored as the shop midnight')`** — parametric test over Rome's DST-transition days verifying the exact stored UTC instant round-trips back to the same `YYYY-MM-DD`; also asserts that an ISO instant (not a bare day) is rejected with 422.
+- `setupTestDb()`: called at module level to prepare the test database.
+- `inDays(days)`: the shop day (`YYYY-MM-DD`) `days` from now, which is the form a client sends.
+- `stored(day)`: the ISO instant of the shop's midnight for that day, which is how a day is stored and what the factory accepts.
+- `announced()`: reads `outboxEventModel` rows named `PRODUCT_RELEASE_DATE_CHANGED`, sorted by `_id`.
+- `announcedPayloads()`: the payloads of those rows, in write order.
+- `GET /products/:id` suite: a future release date is returned as the shop day.
+- `PATCH /products/:id releaseDate` suite:
+  - Setting a date and clearing it with `null`. The payloads are `{productId, to}` and then `{productId, from}`, and the cleared response has no `releaseDate`.
+  - Moving a date emits one event with both `from` and `to`.
+  - Sending the day that is already stored returns 200 and emits no event.
+  - A date 400 days ahead returns 422 and writes no event.
+  - A past date is accepted, returns 200, and is read back as that day.
+- `a release day is stored as the shop midnight` suite:
+  - A parameterised test (`it.each`) on the Rome DST days `2026-03-29` and `2026-10-25`. It checks the PATCH response, the stored instant (read through `productService`) and a later GET.
+  - A full ISO instant such as `2027-01-05T10:00:00.000Z` is rejected with 422, because a promise is a day.
 
 ## Relationships
-
-- **`tests/support/http.ts`** — provides `api` (supertest client) and `authenticateAsRole` for every HTTP call.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called once at module scope to prepare a clean DB.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds product documents (accepts `releaseDate`, `purchasable`, `onHand`).
-- **`src/kernel/outbox.ts`** — `outboxEventModel` is queried to assert outbox rows exist (or don't) after a PATCH.
-- **`src/modules/products/events.ts`** — supplies the `PRODUCT_RELEASE_DATE_CHANGED` event-name constant used in assertions.
-- **`src/modules/products/services/index.ts`** — `productService.findByIdRaw` reads the raw stored instant to verify the midnight mapping.
-- **`src/modules/shop/index.ts`** — `shopDayOf` and `startOfShopDay` define the shop-timezone day↔instant conversions used by the helpers.
+- `tests/support/http.ts`: provides `api()` and `authenticateAsRole('editor')`. Every PATCH is made with an editor bearer token.
+- `tests/support/setup-test-db.ts`: provides `setupTestDb`.
+- `src/modules/products/tests/factories.ts`: `createProduct` seeds products, optionally with a `releaseDate`.
+- `src/kernel/outbox.ts`: `outboxEventModel` is queried to inspect the announced events.
+- `src/modules/products/events.ts`: `PRODUCT_RELEASE_DATE_CHANGED` is the event name filtered on.
+- `src/modules/products/services/index.ts`: exports `productService`, used to read the stored `releaseDate` directly in the DST tests.
+- `src/modules/shop/index.ts` (and `service.ts`): `shopDayOf` and `startOfShopDay` convert between shop days and instants. The tests build their dates with them.
 
 ## Notes
-
-- Preorder is purely derived at read time: `future releaseDate && purchasable`. No column is toggled.
-- The one-year boundary is enforced server-side (422); the test uses `inDays(400)` to cross it.
-- A `null` body field clears the date; the response then omits `releaseDate` entirely.
-- The DST tests hard-code Rome's 2026 transition dates (`2026-03-29`, `2026-10-25`) and the exact expected UTC midnights (`23:00` / `22:00` previous UTC day). If the shop timezone changes, both the dates and the expected instants must be updated.
-- Outbox assertions rely on `_id` sort order as a proxy for write order; the test file does not clear the outbox table between cases—each `announced()` call sees only the events written by the test that ran immediately before it (fresh DB per file via `setupTestDb`).
+- The DST cases use 2026-03-29 (23-hour day) and 2026-10-25 (25-hour day) to check that the shop midnight is not computed with a naive fixed offset. The expected instants are `2026-03-28T23:00:00.000Z` and `2026-10-24T22:00:00.000Z`.
+- `inDays` is relative to `Date.now()`, so dates move with the clock. The 400-day case is well past the one-year limit.

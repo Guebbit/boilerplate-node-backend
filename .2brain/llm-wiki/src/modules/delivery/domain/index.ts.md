@@ -1,36 +1,32 @@
 ---
 source: src/modules/delivery/domain/index.ts
-sha256: 435ced10aeb04bf211809aca5e21d4cb7d0dcafcd5b5d4d153f5ba9191d0180b
-generated_at: 2026-11-14T19:39:26.080980+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1e25acf3186ecb504c73ade9ff0f4279669e9fe4e4782f604e32300c472d740c
+context_sha256: 0e94eb39676b0643b5cecce4d9ddfbd5a6dea8dc6920781547279b8b1eadb93d
+generated_at: 2026-11-22T04:47:54.247859+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/domain/index.ts
 
 ## Purpose
-
-Barrel (re-export) file that exposes the delivery domain's full public API—lifecycle, rates, fulfillment, lost-shipment, reship, tracking, and preorder rules—without pulling in the module's HTTP or service surface. It is the single import point consumers use to access domain logic, as described in `docs/theory/domain-layer.md`.
+Barrel file for the delivery domain layer. It re-exports the module's business rules (lifecycle, holds, shipping rates, fulfillment, loss/restoration, reship, tracking, preorders) so they can be imported without pulling in the module's HTTP surface. The header comment says the domain is "importable without the module's HTTP surface" and references a lint rule governing this boundary.
 
 ## Key elements
+The file contains only re-exports (values and types), grouped by source file:
 
-- **Lifecycle** – re-exports `shipmentLifecycle`, `SHIPMENT_EVENTS` (constants) and the `ShipmentEvent` type from `./lifecycle`.
-- **Hold notice** – re-exports `holdNoticeOf`, `holdNeedsBuyerNotice` from `./hold-notice`.
-- **Shipping rates** – re-exports `SHIPPING_METHODS`, `findShippingMethod`, `priceShipping`, `quoteMethod`, `methodFitsWeight`, `cheapestStandardShipping`, and the `StaticShippingMethod` type from `./rates`.
-- **Fulfillment** – re-exports the largest group: `groupOrderLines`, `remainingOf`, `remainingOfLine`, `remainderLines`, `statusOfLines`, `checkShipLines`, `withShipped`, `withRemainderCanceled`, `summarize`, plus guards `isShippable`/`isFulfillable`/`isHoldable`/`isReleasable`, along with 10 related types (`FulfillmentLine`, `FulfillmentOrderDraft`, `FulfillmentReport`, `GroupableLine`, `ProductQuantity`, `WaitCause`, `ShipLinesVerdict`, `SummaryInputs`, `ActionCandidate`) from `./fulfillment`.
-- **Lost shipments** – re-exports `withLoss`, `withRestoration`, `planRestoration`, `owedDateOf` and 4 types from `./lost`.
-- **Reship** – re-exports `planReopening`, `shareOwed` and 2 types from `./reship`.
-- **Tracking** – re-exports `isAwaitingTracking` and `TrackingFacts` from `./tracking`.
-- **Preorder / due-notice** – re-exports `judgeSlip`, `judgeMove`, `expectedDateOf`, `expectedDateOfWaiting`, `needsDueNotice`, `DUE_NOTICE_LEAD_MS`, `slippedDays`, `promisedAfterNotice`, `boardStateOf`, `isLate` and 5 types from `./preorder`.
+- **`./lifecycle`**: `shipmentLifecycle`, `SHIPMENT_EVENTS`, type `ShipmentEvent`.
+- **`./hold-notice`**: `holdNoticeOf`, `holdNeedsBuyerNotice`.
+- **`./rates`**: `SHIPPING_METHODS`, `findShippingMethod`, `priceShipping`, `quoteMethod`, `methodFitsWeight`, `cheapestStandardShipping`, type `StaticShippingMethod`.
+- **`./fulfillment`**: order-line grouping and remainder helpers (`groupOrderLines`, `remainingOf`, `remainingOfLine`, `remainderLines`), status and summary (`statusOfLines`, `summarize`), shipping checks (`checkShipLines`), state transitions (`withShipped`, `withRemainderCanceled`), predicates (`isShippable`, `isFulfillable`, `isHoldable`, `isReleasable`), plus types such as `FulfillmentLine`, `FulfillmentReport`, `ShipLinesVerdict`, `ActionCandidate`.
+- **`./lost`**: `withLoss`, `withRestoration`, `planRestoration`, `owedDateOf`, plus types `LostShipmentFacts`, `OwedDate`, `Restoration`, `RestorableFulfillmentOrder`.
+- **`./reship`**: `planReopening`, `shareOwed`, plus types `ReopenableFulfillmentOrder`, `Reopening`.
+- **`./tracking`**: `isAwaitingTracking`, type `TrackingFacts`.
+- **`./preorder`**: `judgeSlip`, `judgeMove`, `expectedDateOf`, `expectedDateOfWaiting`, `needsDueNotice`, `DUE_NOTICE_LEAD_MS`, `slippedDays`, `promisedAfterNotice`, `boardStateOf`, `isLate`, plus types `BoardFacts`, `MoveFacts`, `SlipFacts`, `SlipVerdict`, `SweepFacts`.
 
 ## Relationships
-
-- **Re-exports from (sibling domain files):** `./lifecycle`, `./hold-notice`, `./rates`, `./fulfillment`, `./lost`, `./reship`, `./tracking`, `./preorder`. This file contains no logic of its own; it is purely a re-export surface.
-- **Consumed by (upstream in the module):** `src/modules/delivery/index.ts` (module-level barrel), `src/modules/delivery/presenter.ts`, `src/modules/delivery/services/actions.ts`, `src/modules/delivery/services/announce.ts`, `src/modules/delivery/services/cancel-remainder.ts` — all expected to import domain rules through this entry point rather than reaching into individual sibling files.
-- **Referenced alongside:** `src/modules/delivery/model.ts` and `src/modules/delivery/repository.ts` sit in the same directory but are *not* re-exported here; they belong to the data-access layer and are kept out of the domain import surface.
+- Re-exports from the eight sibling domain files: `src/modules/delivery/domain/lifecycle.ts`, `hold-notice.ts`, `rates.ts`, `fulfillment.ts`, `lost.ts`, `reship.ts`, `tracking.ts`, `preorder.ts`.
+- The other listed neighbors (`src/modules/delivery/index.ts`, `src/modules/delivery/model.ts`, `src/modules/delivery/presenter.ts`, `src/modules/delivery/repository.ts`, `src/modules/delivery/services/actions.ts`, `src/modules/delivery/services/announce.ts`, `src/modules/delivery/services/cancel-remainder.ts`) are linked to this file in the dependency graph. The file itself shows no code that interacts with them. They are presumably consumers of this barrel.
 
 ## Notes
-
-- This is a **pure re-export file**: adding a new domain concept means creating a sibling `.ts` file *and* adding its exports here. Forgetting the second step makes the symbol invisible to consumers who import via `domain/index`.
-- The module doc comment explicitly scopes this as "importable without the module's HTTP surface," signalling that importing from this barrel should never transitively load Express/Fastify handlers or the repository layer.
-- `DUE_NOTICE_LEAD_MS` is the only **constant** re-exported from `./preorder`; all other re-exports are functions or types.
-- The file uses named `export { … }` / `export type { … }` syntax (no `export *`), so the public API is explicitly curated.
+- It holds no logic of its own. New domain exports must be added here to be reachable through this entry point.
+- Several exported types are "Facts" or "Inputs" shapes (`SlipFacts`, `TrackingFacts`, `SummaryInputs`). This suggests the domain functions take plain data rather than persistence objects, though the file does not confirm that.

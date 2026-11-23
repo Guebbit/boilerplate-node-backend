@@ -1,35 +1,35 @@
 ---
 source: scripts/mutation/check-baseline.ts
-sha256: 5215dfc6b43d2bd6f2e3b3d0217f1cb3d9ba64aa8baa94e7c2bdcce2121d9f86
-generated_at: 2026-11-14T17:36:43.433923+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 908ba1ae3a6afe977be004efc4fc4e1f393b9160139e6f34958a4eec8c97a724
+context_sha256: 9834f0e63d7c29769a82c395b6252317a34396bbfb97565a61baaf1808a937dd
+generated_at: 2026-11-22T02:07:51.908063+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/mutation/check-baseline.ts
 
 ## Purpose
-
-CLI entry point for the per-file mutation ratchet. It reads a Stryker mutation report (produced by a prior `npm run mutation:full` run), compares each file's survival score against the stored `mutation-baseline.json`, and fails (exit 1) if any file regressed. It never runs Stryker itself, keeping the gate cheap enough for CI to split run and check into separate steps.
+A CLI script that implements a per-file mutation-testing "ratchet". It compares the per-file mutation scores from the last Stryker run (the report written by the `json` reporter) against the recorded baseline (located by `BASELINE_PATH` in `scripts/mutation/baseline.ts`), failing if any file regressed. It does not run Stryker itself, so the check is cheap and can be split across CI steps.
 
 ## Key elements
+This is a top-level script with no exports. Its flow is:
 
-- **`printProgress(comparisons, recorded)`** – Logs files that are new (only when a baseline write occurs) and files that improved, so a passing run is visibly distinct from a no-op.
-- **Three invocation modes** (mutually exclusive in practice):
-  - *Bare check* (`npm run mutation:check`) – compares report to baseline, exits 0 or 1. Writes nothing.
-  - `--update` – records the run's scores into the baseline, but only after a partial-report guard passes.
-  - `--merge --merge-dir=<dir>` – folds every `mutation.json` under a directory (sharded-sweep reports) into the baseline, leaving files no shard measured untouched.
-- **Partial-report guard** (`missingFromReport`) – refuses `--update` when the report covers fewer files than the baseline, preventing a `--mutate 'some/file.ts'` run from silently erasing unmeasured files.
-- **Exit codes** – `0` pass, `1` regression (or refused update), `2` usage error (e.g. `--merge` without `--merge-dir`, unreadable report).
+- **Flags**: `--update` records the run's scores. `--merge` folds sharded reports into the baseline and requires `--merge-dir=<path>`.
+- **Loading `current`**: reads scores with `readReportsUnder(mergeDirectory)` in merge mode, otherwise `readReport()`. A read failure prints the message and exits 2.
+- **No baseline yet**: without `--update` or `--merge`, it logs a notice and exits 0 without writing anything. With either flag, it writes a first baseline via `nextBaseline(current)`.
+- **`printProgress(comparisons, recorded)`**: logs `improved` files. It logs `new` files only when `recorded` is true. This runs even on passing runs so the ratchet's progress is visible.
+- **Merge path** (`--merge`): uses `compareMerged`, prints progress, writes `mergeIntoBaseline(current, baseline)`, then exits 1 if `formatRegressions` reports any, otherwise 0.
+- **Partial-report guard**: `missingFromReport` finds baseline files absent from the report. `--update` with any missing files exits 1 ("Refusing to update").
+- **Single-run path**: `compareToBaseline` gives a verdict per file (`held`, `improved`, `new`, `removed`, `regressed`). The script prints `removed` files and a summary line with counts. A regression exits 1. A passing `--update` writes `nextBaseline(current, baseline)`.
+
+**Exit codes**: 0 means fine, 1 means a file regressed or `--update` was refused, 2 means no report or bad arguments.
 
 ## Relationships
-
-- **`scripts/mutation/baseline.ts`** – Supplies all domain logic: `compareToBaseline`, `compareMerged`, `nextBaseline`, `mergeIntoBaseline`, `readBaseline`, `readReport`, `readReportsUnder`, `writeBaseline`, `formatRegressions`, `missingFromReport`, and the `BASELINE_PATH` constant. This file is the thin CLI shell over that module.
-- **`scripts/cli.ts`** – Provides the `hasFlag` and `flagValue` helpers used to parse the `--update`, `--merge`, and `--merge-dir` flags.
+- `./baseline` (`scripts/mutation/baseline.ts`) holds all the logic this script calls: report reading, comparison, formatting, baseline reading and writing, and `BASELINE_PATH`. It also provides the `FileComparison` type.
+- `../cli` (`scripts/cli.ts`) provides `hasFlag` and `flagValue` for argument parsing.
 
 ## Notes
-
-- **First-baseline safety:** If no baseline file exists yet, a bare check exits 0 with a hint (nothing to compare against is not a failure). A baseline is only created when the caller explicitly passes `--update` or `--merge`, preventing an accidental partial baseline from a local `--mutate` run.
-- **Ratchet semantics on regression:** Even with `--update`, `nextBaseline` takes the *higher* of old and new scores, so a regressed file keeps its old (higher) baseline and stays failing until genuinely fixed.
-- **`--merge` vs `--update`:** `--merge` is designed for sharded sweeps where each shard only covers a subset of files; `--update` assumes the report is the full scope. Mixing them up is the primary footgun.
-- **Frontend copy:** Per the header comment, the frontend project ships the same CLI minus the `--merge` path, since it has no sharded pass.
-- **No named exports** – this is a `#!/usr/bin/env tsx` script, not a library module.
+- A first baseline is deliberately never written by a bare check. This stops a local partial run from creating a partial baseline.
+- On a regressing `--update`, the baseline is still rewritten, but `nextBaseline` keeps the higher score per file. A regressed file therefore keeps its old baseline and stays failing.
+- The `--merge` path leaves files that no shard measured untouched. Sharded sweeps belong under `--merge`, not `--update`.
+- The top-of-file comment says the frontend's copy of this CLI omits `--merge`.

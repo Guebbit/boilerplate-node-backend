@@ -1,36 +1,43 @@
 ---
 source: shared/contracts/asyncapi.workers.yaml
-sha256: a725a0f2a05e634bbbae9c36fbe3123a2790d73c705cac57f0a42648d34d5cce
-generated_at: 2026-11-14T17:44:30.220122+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3cae3bf29cee5c7ad4c383516a0080e5dd2a30420f6d93aac503cd5f904aced4
+context_sha256: 4ab3c80dcea5efaf715b426440841f32483fa5bce74b2ba4d0b8e7e7dfc12777
+generated_at: 2026-11-22T02:23:07.354216+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/contracts/asyncapi.workers.yaml
 
 ## Purpose
-
-Standalone AsyncAPI 3.0.0 contract for application-level worker queues that do not belong to any domain (`worker.email.send`, `worker.image.digest`). It exists so these cross-cutting job definitions live beside the root rather than inside whichever module happens to enqueue them most, and so `npm run lint:asyncapi:modules` can validate them like any module document.
+A standalone AsyncAPI 3.0.0 document for the `worker.*` queues that belong to no domain: email delivery and image digesting. It sits beside the root contract because sending mail is a verb rather than a domain, so the contract doesn't live inside whichever module enqueues the most jobs. Webhook delivery is deliberately excluded: that queue belongs to webhooks (`src/modules/webhooks/asyncapi.internal.yaml`).
 
 ## Key elements
-
-- **`servers.rabbitmqLocal`** — Local RabbitMQ broker (`localhost:5672`, AMQP). Declared here because it is the only server whose channels appear in this file; keeps the broker out of `asyncapi.public.yaml`.
-- **`channels.worker.email.send`** / **`channels.worker.image.digest`** — The two queue channels, each bound to `rabbitmqLocal`.
-- **`operations.workerEmailPublish` / `workerEmailConsume`** — Publish (`action: receive`) and consume (`action: send`) operations for the email queue. One message, two operations; direction is read from `action`.
-- **`operations.workerImageDigestPublish` / `workerImageDigestConsume`** — Same pattern for the image-digest queue.
-- **`components.messages.EmailJobMessage` / `ImageDigestJobMessage`** — Message wrappers that reference their payload schemas.
-- **`components.schemas.EmailJobPayload`** — Nodemailer `SendMailOptions` subset, `templateName`, pre-translated `data`, and `attachments` as claim-check keys (no raw paths, no bytes).
-- **`components.schemas.ImageDigestJobPayload`** — `collection` (registry key), `documentId`, and `key` (opaque quarantine key). No filesystem paths.
+- **Server `rabbitmqLocal`**: `localhost:5672` over AMQP. It is declared here because this is the only shared section whose channels bind to it.
+- **Channels**
+  - `worker.email.send`: the ordinary email queue.
+  - `worker.email.urgent`: the same `EmailJobMessage`, with its own consumer, for mail a person is waiting on (verification, password reset, 2FA, export-ready and account-deletion links). A backlog of ordinary mail never delays it.
+  - `worker.image.digest`: the queue for quarantined uploads.
+- **Operations**: each queue has one message and two operations that point at it. `...Publish` uses `action: receive`, meaning the application receives the enqueue request. `...Consume` uses `action: send`, meaning the application hands the job to the worker.
+  - `workerEmailPublish`, `workerEmailConsume`
+  - `workerEmailUrgentPublish`, `workerEmailUrgentConsume`
+  - `workerImageDigestPublish`, `workerImageDigestConsume`
+- **Messages**: `EmailJobMessage` and `ImageDigestJobMessage`.
+- **Schema `EmailJobPayload`**: requires `request`, `templateName` and `data`. It also has an optional `from`.
+  - `request` (titled `EmailRequest`) is a Nodemailer SendMailOptions subset. It requires `to` and also allows `subject`, `text`, `html`, `replyTo`, `messageId`, `inReplyTo` and `attachments`. `additionalProperties` is false.
+  - `messageId` and `inReplyTo` must match `^<[^<>\s@]+@[^<>\s@]+>$`.
+  - `attachments` are Claim Check tasks (`filename` plus a spool `key`), not bytes.
+  - `templateName` is an outbox mail name without a file extension.
+  - `data` holds the values the template prints, already translated by the producer.
+- **Schema `ImageDigestJobPayload`**: referenced by `ImageDigestJobMessage`. Its definition is not in the visible part of the file.
 
 ## Relationships
-
-- **`shared/contracts/asyncapi.root.yaml`** — The complementary root AsyncAPI document covering domain-specific queues. This file holds the queues that do *not* belong to a domain; together they form the complete set of internal async channels.
-- **`src/modules/webhooks/asyncapi.internal.yaml`** — Webhook delivery queues live there, explicitly excluded from this file. No shared channels or schemas between the two.
+- `shared/contracts/asyncapi.root.yaml`: the root is not a standalone AsyncAPI document. This file is its async counterpart for non-domain queues.
+- `shared/contracts/spectral.asyncapi.modules.yaml`: `npm run lint:asyncapi:modules` validates this file exactly as it validates a module's contract. `info` exists only to make that possible.
+- `shared/cases/outbox-backoff.cases.yaml` and `shared/cases/ssrf.cases.yaml`: the visible portion of this file doesn't reference either one.
 
 ## Notes
-
-- The `info` block exists solely to make this a valid standalone AsyncAPI document; it is not semantically different from a module's.
-- The one-message / two-operations pattern means the payload is defined once and both operations reference it — do not add a second message declaration per direction.
-- `rabbitmqLocal` appears here but not in the public bundle because no shared channel in the public set binds to it.
-- `EmailJobPayload.attachments` uses opaque spool keys, never filesystem paths; `ImageDigestJobPayload.key` likewise. Consumers resolve through their respective stores.
-- The `title` on the inline `EmailRequest` object is intentional: it gives Modelina a stable name and prevents `AnonymousSchemaN` renumbering on unrelated schema changes.
-- Webhook delivery is deliberately **not** in this file — look in the webhooks module's internal contract.
+- Because `rabbitmqLocal` is bound only here, it stays out of the public API bundle. That bundle merges the shared sections only, so a server no shared channel can reach never appears in it.
+- The publish operation for `worker.email.send` is documented as never dropping a message when the broker is unavailable. The mail is sent inline or held in a durable fallback queue.
+- The email consumer acknowledges only after the transport accepts the message. Failures are retried up to `NODE_QUEUE_MAX_ATTEMPTS`, then parked in the dead queue. No mail is sent before the render succeeds.
+- The image digest write-back is conditional on `pendingImageKey` still matching `key`, so a stale job cannot overwrite a later upload. The job is published only after the referencing document has been persisted.
+- The `title` on inline objects (`EmailRequest`, `EmailAttachment`) is there to give generated models stable names. Without it, Modelina falls back to `AnonymousSchemaN`, which is renumbered whenever an unrelated schema is added.

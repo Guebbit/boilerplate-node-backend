@@ -1,28 +1,24 @@
 ---
 source: src/infrastructure/adapters/antibot-providers/none.ts
-sha256: 259cd0c0015f44a9e05a48c5f38e68ded0f5d7da8ce9b711847cb7cb4b58138b
-generated_at: 2026-11-08T03:17:01.583662+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 259cd0c0015f44a9e05a48c5f38e68ded0f5d7da8ce9b711847cb7cb4b58138b
+context_sha256: 612b9e7cf0f9defb15db51ac9764615e26c6d3653632842198e554abaae029dd
+generated_at: 2026-11-22T02:34:18.608722+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/antibot-providers/none.ts
 
 ## Purpose
-
-A no-op implementation of the human-challenge provider that always passes verification and renders no widget. It is the default provider so that a boilerplate checkout, test suite, or demo run never contacts a third-party anti-bot service.
+The no-op human-challenge (antibot) provider that ships by default. It always passes verification and renders no widget, so tests, the demo, and a fresh boilerplate checkout never load a third-party widget or send visitor traffic to an external service.
 
 ## Key elements
-
-- **`noneProvider`** (exported const, typed as `HumanChallengeProvider`):
-  - `name`: `'none'`
-  - `publicParameters()`: returns an empty object — there is nothing to inject into the page.
-  - `verify()`: always resolves to `'ok'`.
+- `noneProvider`: a `HumanChallengeProvider` constant with:
+  - `name: 'none'`: the provider identifier.
+  - `publicParameters()`: returns an empty object, since there is no widget to configure.
+  - `verify()`: returns a promise resolving to `'ok'` for every caller, with no checks.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/antibot-providers/index.ts`** — `none.ts` imports the `HumanChallengeProvider` interface from this file and provides a concrete object that satisfies it. The index module defines the contract; this file supplies the "do nothing" implementation.
+- Imports the `HumanChallengeProvider` type from `./index` (`src/infrastructure/adapters/antibot-providers/index.ts`), which defines the interface this object implements. The import is type-only.
 
 ## Notes
-
-- This is intentionally the only provider with zero external dependencies — no network call, no DOM manipulation, no configuration. Treat it as the null-object for the anti-bot pipeline.
-- Because `verify` is a bare `Promise.resolve`, it carries no async logic; any code path that awaits it will always see `'ok'`.
+- `verify` ignores any input and never rejects, so this provider offers no bot protection. It should be treated as a placeholder or test default, not a production safeguard.

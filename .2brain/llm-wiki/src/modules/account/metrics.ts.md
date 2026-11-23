@@ -1,48 +1,62 @@
 ---
 source: src/modules/account/metrics.ts
-sha256: 2928d76e39629b84f1b25589f808f38f6990a656961fe350894d140984bcf840
-generated_at: 2026-11-08T04:10:50.816440+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:30:40.096513+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/metrics.ts
 
 ## Purpose
-
-Declares the full set of Prometheus counters for the account/auth domain (login, sign-up, password flows, 2FA, email verification, account lifecycle, OAuth, data export). Each counter registers itself on the shared `metricsRegistry` so a single `/metrics` scrape includes them alongside HTTP-level metrics. Nothing in the codebase reads these counters programmatically; dashboards and alerts resolve them by metric name off the registry.
+Declares the Prometheus counters owned by the account/auth domain and registers each on the shared `metricsRegistry`, so a single `/metrics` scrape includes them alongside the HTTP metrics. Nothing imports these counters to read them; `GET /observability/metrics/overview` resolves them by metric name from the registry. The `status` label lets each counter serve as both a volume and a success-ratio signal.
 
 ## Key elements
+All exports are `prom-client` `Counter`s with `registers: [metricsRegistry]` and label names declared `as const`, so `inc({...})` is type-checked.
 
-- **`authLoginTotal`** – Login attempts, labelled `status` (success/failure).
-- **`authSignupTotal`** – Sign-up attempts, labelled `status`.
-- **`authPasswordResetTotal`** – Password-reset *request* attempts (not confirmation), labelled `status`.
-- **`authPasswordResetConfirmTotal`** – Password-reset *confirmation* (token-spend) attempts, labelled `status`.
-- **`authRefreshTotal`** – Refresh-token operations, labelled `status`.
-- **`authRefreshReuseTotal`** – Refresh-token reuse (post-rotation, outside grace). No labels.
-- **`authPasswordChangeTotal`** – Authenticated password-change attempts (distinct from reset), labelled `status`.
-- **`authReauthTotal`** – Step-up re-authentication attempts, labelled `status`.
-- **`authEmailVerifyTotal`** – Email-verification confirmation attempts, labelled `status`.
-- **`authEmailChangeConfirmTotal`** – Email-change confirmation (token-spend), labelled `status`.
-- **`authEmailChangeUndoTotal`** – Email-change undo (token-spend), labelled `status`.
-- **`authAccountDeleteTotal`** – Account deletions, labelled `status` (scheduled / canceled / purged / failure).
-- **`authTwoFactorEnrollTotal`** – 2FA enrollment confirmations, labelled `method` + `status`.
-- **`authTwoFactorCodeSentTotal`** – 2FA codes sent, labelled `method` + `status`.
-- **`authTwoFactorChallengeTotal`** – Login-time 2FA challenge attempts, labelled `status`.
-- **`authTwoFactorDisableTotal`** – 2FA disable attempts, labelled `method` + `status`.
-- **`authTwoFactorBackupCodesRegenerateTotal`** – Backup-code regeneration attempts, labelled `status`.
-- **`authOauthTotal`** – OAuth login/signup attempts, labelled `provider` + `status`.
-- **`authOneTimeTokenRejectedTotal`** – One-time link tokens refused, labelled `flow` (password_reset, email_verify, email_change, email_change_undo, account_restore). Pre-initialized to zero for every flow at module load.
-- **`accountExportFailedTotal`** – Data-export build failures. No labels.
+- **Login and signup:** `authLoginTotal`, `authSignupTotal`.
+- **Password flows:**
+  - `authPasswordResetTotal` counts the reset *request* only.
+  - `authPasswordResetConfirmTotal` counts the token-spending confirmation.
+  - `authPasswordChangeTotal` counts authenticated, current-password changes.
+- **Session and re-auth:**
+  - `authRefreshTotal` counts refresh-token operations.
+  - `authReauthTotal` counts step-up re-authentication.
+  - `authRefreshReuseTotal` (`auth_refresh_token_reuse_detected_total`) has no labels. It counts a rotated refresh token presented outside the grace window; each increment also revoked the account's whole refresh set.
+- **Email:**
+  - `authEmailVerifyTotal` counts verification confirmations, not sends.
+  - `authEmailChangeConfirmTotal` counts email-change confirmations.
+  - `authEmailChangeUndoTotal` counts undo attempts from the old address's link.
+- **Account lifecycle:**
+  - `authAccountDeleteTotal` has statuses `scheduled`, `canceled`, `purged` and `failure`.
+  - `accountExportFailedTotal` counts failed data-export builds. It has no labels.
+- **Two-factor** (`method` + `status` labels unless noted):
+  - `authTwoFactorEnrollTotal`
+  - `authTwoFactorCodeSentTotal`
+  - `authTwoFactorDisableTotal`
+  - `authTwoFactorChallengeTotal` (`status` only)
+  - `authTwoFactorBackupCodesRegenerateTotal` (`status` only)
+- **OAuth:** `authOauthTotal` (labels `provider`, `status`).
+- **One-time tokens:** `authOneTimeTokenRejectedTotal` (label `flow`) counts tokens refused as unknown, expired or used.
 
 ## Relationships
+- **`src/infrastructure/observability/metrics-registry.ts`** supplies `metricsRegistry`, the registry every counter here is registered on.
+- **Account controllers** increment these counters. The neighbor list includes:
+  - `get-oauth-callback.ts`: OAuth.
+  - `get-refresh-token.ts`: refresh.
+  - `post-login-2fa.ts` and `post-login-2fa-send.ts`: 2FA challenge and code sent.
+  - `post-2fa-confirm.ts`: enrollment.
+  - `post-2fa-disable.ts`: disable.
+  - `post-2fa-backup-codes.ts`: backup-code regeneration.
+  - `post-2fa-method-remove.ts`: a 2FA method removal controller.
+  - `post-password-change.ts`: password change.
+  - `post-reauth.ts`: re-authentication.
+  - `post-reset-confirm.ts`: reset confirmation.
+  - `post-email-change-confirm.ts` and `post-email-change-undo.ts`: email change.
+  - `delete-account.ts`: account deletion.
 
-- **`src/infrastructure/observability/metrics-registry.ts`** — Provides the `metricsRegistry` instance that every counter in this file registers with. This is the only import in the file.
-- **Account controllers** (each listed neighbor) — Import the relevant counter(s) from this module and call `.inc({ status }, …)` (or with `method`/`provider`/`flow`) at the end of their request handlers to record the outcome. For example, `post-reauth.ts` increments `authReauthTotal`; `get-oauth-callback.ts` increments `authOauthTotal`; `delete-account.ts` increments `authAccountDeleteTotal`. The file itself holds no business logic and is consumed exclusively for side-effect increments.
+  The file content does not show which counter each controller uses, so these pairings are inferred from the names.
 
 ## Notes
-
-- **`as const` on `labelNames`** — Narrows label keys to string literals so `.inc()` calls are type-checked against the declared label set rather than accepting arbitrary strings.
-- **Pre-zeroed labels** — `authOneTimeTokenRejectedTotal` calls `.inc({ flow }, 0)` for every known `flow` value at module load time. This follows the Prometheus instrumentation guideline to avoid missing metrics on `increase()` alerts after a restart.
-- **Request vs. confirmation are separate counters** — Several flows (password reset, email verify, email change) deliberately split the "request/link" step from the "confirm/token-spend" step into distinct metric names rather than a shared counter with a `step` label, so each series can be read as an independent funnel stage.
-- **No `help` text duplication for dashboards** — The `help` strings are the only human-readable description of each metric; Grafana panels and alert rules rely on them.
-- **`accountExportFailedTotal`** is the only counter with an `account_` prefix rather than `auth_`; it tracks a data-privacy obligation (Art. 15) rather than an authentication event.
+- `authOneTimeTokenRejectedTotal` is pre-initialised to zero for the flows `password_reset`, `email_verify`, `email_change`, `email_change_undo` and `account_restore`. This lets an `increase()` alert see the first refusal after a restart. Flow values must be literals, never request data; the file's comments name `OneTimeTokenFlow` in `services/tokens.ts` as the source of the flow names.
+- Related flows deliberately have separate counters rather than extra labels. Examples are password reset request vs. confirm, email verify vs. email-change confirm vs. undo, and OAuth vs. password login. Merging them would blur what each series measures or force every existing call site to change.
+- Several comments flag security-relevant failure series: login (credential stuffing), reauth, 2FA challenge, 2FA disable and backup-code regeneration (stolen-session probing), and code-sent (send endpoint abused as a mail cannon).
+- Naming follows `<domain>_<subject>_total`. `accountExportFailedTotal` uses the `account_` prefix instead of `auth_`.

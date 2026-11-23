@@ -1,28 +1,23 @@
 ---
 source: src/modules/example/metrics.ts
-sha256: 85a1e53c24e61957a55e19c256808362a9de4d556805c23756321958db00e50e
-generated_at: 2026-11-14T19:58:31.011458+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a746ba7707ad3311eba7b5a89007e9d6b50a6edfd5e992ae64a2a6bbe2bf5b6f
+context_sha256: 4cae0d92cf6cc68805926450b3530a127b523eea1663489d45f2926babea5156
+generated_at: 2026-11-22T05:09:13.267921+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/metrics.ts
 
 ## Purpose
-
-Defines the Prometheus counters owned by the `example` module and registers them on the shared observability registry. Currently exposes a single counter (`example_created_total`) that tracks how many examples have been created, giving a signal of whether the module is being used at all.
+Defines the Prometheus counters owned by the example module and registers them on the shared metrics registry. Currently it tracks a single number: how many examples have been created, which indicates whether the module is being used at all. The file is a template: its header says to delete it if a module counts nothing, and to drop the `.inc()` call along with it.
 
 ## Key elements
-
-- **`exampleCreatedTotal`** (exported `Counter`) — A Prometheus counter named `example_created_total`. Registered on `metricsRegistry`. Intended to be incremented (`.inc()`) wherever an example is successfully created.
-- **`metricsRegistry`** (imported from `@infrastructure/observability/metrics-registry`) — The shared registry instance this counter attaches to, so it is collected alongside all other module metrics.
+- `exampleCreatedTotal`: a `prom-client` `Counter` named `example_created_total` (help text "Total examples created."). It is registered explicitly on `metricsRegistry` through the `registers` option.
 
 ## Relationships
-
-- **`src/infrastructure/observability/metrics-registry.ts`** — Provides the `metricsRegistry` instance. This file registers its counter against that registry so it is included in the global Prometheus scrape.
-- **`src/modules/example/services/crud.ts`** — The call site that increments `exampleCreatedTotal` after a successful create operation (the module doc-comment notes that the `.inc()` call at this site should be removed if the counter is deleted).
+- `src/infrastructure/observability/metrics-registry.ts`: provides `metricsRegistry`, the shared registry this counter is registered on.
+- `src/modules/example/services/crud.ts`: the module's CRUD service. The file header refers to an `.inc()` call that must be removed if this file is deleted, which implies the CRUD service increments the counter on creation. The metrics file itself does not show this.
 
 ## Notes
-
-- Prometheus naming convention used: `<domain>_<subject>_total` for counters. Follow this pattern if adding more counters here.
-- The file's doc-comment explicitly states: if the module stops counting anything, delete this file and remove the `.inc()` call at the call site. It is intentionally disposable.
-- For broader context on the metrics system, see `docs/tools/prometheus.md` (referenced in the module JSDoc).
+- Name counters `<domain>_<subject>_total`, per the Prometheus convention noted in the code.
+- The counter is attached only to `metricsRegistry`, not to prom-client's default global registry.

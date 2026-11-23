@@ -1,27 +1,25 @@
 ---
 source: src/modules/cart/metrics.ts
-sha256: beeafe6b9dde169543ad7ea473b0e63eda076736f9bfb9fb9892f34949aaf2a4
-generated_at: 2026-11-08T05:14:13.457812+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 50fbe90b8ff3c0e6115a8dfaad7f9412311a78143a57de96bb033e8029757cb8
+context_sha256: b6ddfb24ee30975e0e71f7f31db1d0b5d9f800c1df3032645ff187c8d8df6c33
+generated_at: 2026-11-22T04:33:15.235228+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/metrics.ts
 
 ## Purpose
-
-Declares the domain-owned Prometheus counters for the cart module (currently: checkout attempts). Metrics live here—colocated with the cart domain—rather than in `infrastructure`, so the module is the single source of truth for what it measures. The overview endpoint reads these counters without importing this file directly (see `modules/account/metrics.ts` for the full rationale).
+Declares the Prometheus counters owned by the cart module. The counters live in the module rather than in `infrastructure`. The file's header points to `src/modules/account/metrics.ts` for the rationale and for how the overview endpoint reads them without importing this file.
 
 ## Key elements
-
-- **`cartCheckoutTotal`** (`Counter`) — Tracks total checkout (cart → order) attempts, labelled by `status` (`as const` narrows the label to a literal for type-safe `inc()` calls). Registered on the shared `metricsRegistry`. Described as the most revenue-critical counter in the app; a rising failure ratio warrants a page.
+- `cartCheckoutTotal`: a `prom-client` `Counter` named `cart_checkout_total`. It counts checkout (cart → order) attempts and is labelled by `status`. It is registered on `metricsRegistry`.
+  - `labelNames` is declared `as const`, so `inc({ status })` is type-checked against the literal label names instead of accepting any string key.
+  - The source comment calls it the most revenue-critical counter in the app. A rising failure ratio means money is not being taken and should page someone rather than wait for a dashboard glance.
 
 ## Relationships
-
-- **`src/infrastructure/observability/metrics-registry.ts`** — Imports the shared `metricsRegistry` instance and passes it as the `registers` array so the counter is exposed on the single global registry (single scrape endpoint).
-- **`src/modules/cart/controllers/post-checkout.ts`** — The checkout controller that performs the cart → order transition is the expected call-site that increments `cartCheckoutTotal` with an appropriate `status` label on success or failure.
+- `src/infrastructure/observability/metrics-registry.ts`: provides `metricsRegistry`, which this file imports and passes in `registers`, so the counter is exposed through that shared registry.
+- `src/modules/cart/controllers/post-checkout.ts`: a graph neighbor of this file. The file itself doesn't show how the controller uses the counter.
 
 ## Notes
-
-- The `status` label is typed via `as const`, so any new status value must be added to that literal tuple; ad-hoc strings will fail at compile time.
-- The doc comment points to `modules/account/metrics.ts` as the reference for the "why metrics live in the module" convention—check there if the pattern is unfamiliar.
-- Naming follows Prometheus `<domain>_<subject>_total` convention; do not rename without coordinating on alerting rules that reference `cart_checkout_total`.
+- The name follows the Prometheus convention `<domain>_<subject>_total` for counters.
+- The file doesn't define which `status` values exist.

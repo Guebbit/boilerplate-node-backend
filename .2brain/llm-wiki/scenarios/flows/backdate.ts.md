@@ -1,39 +1,44 @@
 ---
 source: scenarios/flows/backdate.ts
-sha256: 9c10827a27eec8d7864c37ec82340ac264014a92db38f83a022baf49c7462c58
-generated_at: 2026-11-14T17:15:28.114667+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d5f8c3b8209156242208447fcd0b7207fbe77450d5b649a421740e80304a2e50
+context_sha256: 75fac8b87c4d3eb84edb28051c80ae8ef21f6c7320143fba8be7f3c24e069e69
+generated_at: 2026-11-22T01:42:59.916534+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/flows/backdate.ts
 
 ## Purpose
-
-Rewrites the timestamps on a flow-produced order and every document it touched so the demo shop appears to have multi-month history instead of all data dated to container boot. Without this, analytics charts, "last 30 days" filters, and dashboards would show identical results regardless of the requested period.
+Moves a flow-produced order, and everything the application wrote because of it, into the past. Flows run at boot, so without this every demo-shop order would be dated the minute the container started, leaving analytics charts with no trend and date filters with nothing outside them. Backdating is done per order (never a blanket shift) so the order, payment, shipment, hold, stock movements and audit rows stay consistent about when things happened.
 
 ## Key elements
-
-- **`mover(model, find, dates)`** — Factory that returns a per-collection updater. Each closure keeps its own `Model<T>` and `QueryFilter<T>` typed, avoiding `any` across six heterogeneous document types.
-- **`TRAILS`** — Array of eight bound movers covering: orders (two entries — one for base fields, one conditional on a nested fulfillment field existing), payments, fulfillment orders, shipments, reservations, stock movements, and audit logs.
-- **`shiftStage(dates, days)`** — Builds the `$set` aggregation stage. Uses `$dateSubtract` wrapped in `$ifNull` → `$$REMOVE` so absent columns stay absent rather than being written as `null`.
-- **`backdateOrder(orderId, days)`** — Runs all eight trail movers for one order concurrently. No-ops if `days <= 0`.
-- **`settleAuditTrail()`** — Polls `auditLogModel.countDocuments()` until two consecutive reads (50 ms apart) return the same count, ensuring in-flight fire-and-forget audit writes have landed before the date shift begins. Capped at 20 rounds.
-- **`backdateHistory(ages)`** *(exported)* — Top-level entry point. Awaits audit settlement, then runs `backdateOrder` for every order in the `ages` map concurrently.
+- `backdateHistory(ages)` — the only export. Takes `order id → days back`, first waits for the audit trail to settle, then backdates all orders concurrently.
+- `backdateOrder(orderId, days)` (internal) — runs every entry in `TRAILS` for one order. A no-op when `days <= 0`.
+- `mover(model, find, dates)` (internal factory) — returns a function `(orderId, days)` that runs `updateMany` with an aggregation-pipeline `$set` over one collection. The factory keeps each filter type-checked against its own schema, with no `any`.
+- `TRAILS` (internal) — the list of movers, one per collection or slice of an order's history:
+  - orders: `createdAt`, `updatedAt`, `deletedAt`, `withdrawUntil`, `conformityUntil`.
+  - orders, only where `fulfillment.lastDeliveredAt` exists: that date.
+  - payments: `createdAt`, `updatedAt`, `receivedAt`.
+  - fulfillment orders: `createdAt`, `updatedAt`, `agreedAt`, `expectedAt`.
+  - shipments: `createdAt`, `updatedAt`, `shippedAt`, `deliveredAt`.
+  - reservations: `createdAt`, `updatedAt`, `expiresAt`.
+  - stock movements: `createdAt`, `updatedAt`.
+  - audit logs: `timestamp`.
+- `shiftStage(dates, days)` (internal) — builds the `$set` stage using `$dateSubtract` per field. `$ifNull` falls back to `$$REMOVE`, so absent columns stay absent rather than becoming null.
+- `settleAuditTrail()` (internal) — polls `auditLogModel.countDocuments()` every 50 ms, up to 20 rounds, until two consecutive counts match.
 
 ## Relationships
-
-- **`scenarios/flows/shop-history.ts`** — Produces the `ages` record (order id → days back) that this file consumes. Shop-history decides *what* date each order should carry; this file *applies* it.
-- **`src/modules/orders/model.ts`** — Primary target; two of the eight trail entries update order documents (base date fields, and a conditional nested delivery date guarded by an `$exists` check).
-- **`src/modules/payments/model.ts`** — Shifts `createdAt`, `updatedAt`, `receivedAt` on payment docs linked by `orderId`.
-- **`src/modules/delivery/model.ts`** — Shifts dates on both `fulfillmentOrder` and `shipment` docs linked by `orderId`.
-- **`src/modules/inventory/model.ts`** — Shifts dates on `reservation` docs (`orderId`) and `stockMovement` docs (`reference`).
-- **`src/modules/audit-logs/model.ts`** — Shifts `timestamp` on audit rows (`targetId`); also read during `settleAuditTrail` to confirm writes have flushed.
+- `scenarios/flows/shop-history.ts` — the source of the order ids and ages passed to `backdateHistory`, which dates the orders it produces.
+- `src/modules/orders/model.ts` — `orderModel`, matched by `_id`.
+- `src/modules/payments/model.ts` — `paymentModel`, matched by `orderId`.
+- `src/modules/delivery/model.ts` — `fulfillmentOrderModel` and `shipmentModel`, both matched by `orderId`.
+- `src/modules/inventory/model.ts` — `reservationModel` (matched by `orderId`) and `stockMovementModel` (matched by `reference`).
+- `src/modules/audit-logs/model.ts` — `auditLogModel`, matched by `targetId`. It is also counted in `settleAuditTrail`.
 
 ## Notes
-
-- **`updatePipeline: true`** is required by Mongoose 9 for array-based `updateMany`; omitting it throws.
-- **`timestamps: false`** is load-bearing — without it, Mongoose would stamp `updatedAt` with the current wall-clock time on the very rows being backdated, undoing the write.
-- **String vs ObjectId filters**: `stockmovements` and `auditlogs` store the order id as a plain string (`reference`, `targetId`), not a `MongoObjectId`. The `mover` factory's `find` parameter exists so each collection can use its own naming convention without a shared filter shape.
-- **Conditional nested-field update**: The second order entry filters on the existence of a nested fulfillment delivery date. A pipeline `$set` on that dotted path would otherwise create an empty `fulfillment` object on orders that have none, causing a subsequent save to fail on required summary fields.
-- **`withdrawUntil` / `conformityUntil`** are shifted alongside `createdAt` so a backdated order does not still show a live withdrawal window.
-- **Concurrency model**: Orders are processed in parallel (independent rows), and the eight collection writes within a single order also run in parallel via `Promise.all` (disparate collections, no shared rows).
+- Two collections reference the order by a string in a free-text column (`stockmovements.reference`, `auditlogs.targetId`). The other collections use a real `ObjectId` reference, so each mover has its own filter.
+- `updatePipeline: true` is required because Mongoose 9 rejects array updates without it.
+- `timestamps: false` is required. Otherwise Mongoose would stamp `updatedAt` with the current time and undo the backdating.
+- The `fulfillment.lastDeliveredAt` mover is filtered with `$exists`. Without that, a pipeline `$set` on a dotted path would create an empty `fulfillment` object on orders that have none, and the next save would fail on required fields.
+- `settleAuditTrail` exists because audit emission is fire-and-forget (`record` returns `void`), so late entries could otherwise stay dated at boot time.
+- Concurrency: orders run concurrently with each other. Within one order, the collection writes are all started together through `Promise.all`, although the doc comment calls them sequential.

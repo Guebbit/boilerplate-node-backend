@@ -1,38 +1,50 @@
 ---
 source: src/globals.d.ts
-sha256: 7baa3122d3ca0447bb741d06f33bc28015f384fe821357f8371547bfff4b6f82
-generated_at: 2026-11-08T03:16:18.256974+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c742316ec6e0fbf577b011fffef9ef5035a2e7f989ca4482f28c7c95ff09190e
+context_sha256: 5930e651b267ee0d5265d47eff0c614c518302dcedb34a3b70bb5e2f402b4a56
+generated_at: 2026-11-22T02:33:28.078145+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/globals.d.ts
 
 ## Purpose
-
-Ambient module augmentation of Express's `Request` interface (via `express-serve-static-core`). It gives every route handler in the app a typed view of the fields that middleware attaches at runtime—auth context, request ids, upload state, locale, translation—without requiring an explicit `import` at each call site.
+Ambient type augmentation for Express. It extends the `Request` interface in `express-serve-static-core` with the optional fields that middleware attaches (auth context, request id, locale, upload URLs, and so on). Every handler sees these fields without importing anything at the call site.
 
 ## Key elements
+The file declares a single module augmentation, `declare module 'express-serve-static-core'`, which adds these optional `Request` fields:
 
-- **`declare module 'express-serve-static-core' → interface Request`** — the sole export. Adds the following optional properties:
-  - `authContext` / `caller` — auth guard's DTO and tenant-scoped caller; set together, mutually exclusive with `credentialId`.
-  - `credentialId` — api-key id on the CREDENTIAL path; feeds the audit trail and `apiKeyLimiter`.
-  - `sessionVia`, `sessionIdle`, `sessionRecheck` — session provenance, idle flag, and (for SSE) a re-resolution callback.
-  - `requestId`, `clientRequestId` — server-generated id vs. caller-supplied `x-request-id`.
-  - `storedImageUrls`, `storedThumbnailUrls` — inline (no-broker) upload results; read via `readUploadedImage`.
-  - `quarantinedImageKeys` — broker-path keys for later digest; also read via `readUploadedImage`.
-  - `uploadClaimed` — ownership flag; unclaimed uploads are deleted on 4xx/5xx close.
-  - `rawBody` — original bytes for signature verification; set only on paths listed in `app/security.ts`.
-  - `locale`, `t` — negotiated locale and the bound `TFunction`.
+- **Auth and caller**
+  - `authContext?: AuthContext`: transport-safe auth DTO, set after the auth middleware runs.
+  - `caller?: Caller`: the same caller as an authorization decision sees them, in tenant scope. It is resolved once by the auth guard and set and absent together with `authContext`. Platform-scope questions are never put on the request.
+  - `credentialId?: string`: the api-key id, set only on the `sk_...` credential path of `getAuth`. It is mutually exclusive with `authContext`. It feeds `CallerContext.actorCredentialId` for audit and is the key `apiKeyLimiter` uses for rate limiting.
+  - `sessionVia?: 'bearer' | 'cookie'`: which credential carried the human session. It is absent for anonymous requests, API-key requests, and SSE streams resolved by `requirePermissionViaCookie`.
+  - `sessionIdle?: boolean`: set by `getAuth` when the refused credential was a staff session that idled out.
+  - `refusalLogged?: boolean`: set by `noteMiss` so the following 401 is not logged twice.
+  - `sessionRecheck?: () => Promise<Resolution<AuthContext | undefined>>`: set by `requirePermissionViaCookie` for SSE streams. It re-answers who the session is for as long as its family lives.
+- **Request correlation**
+  - `requestId?: string`
+  - `clientRequestId?: string`: the caller's own well-formed `x-request-id`, kept for correlation only and never used as the request id.
+- **Uploads**
+  - `storedImageUrls?` and `storedThumbnailUrls?`: set only when there is no broker, so `quarantineUploadedImages` runs the pipeline inline.
+  - `quarantinedImageKeys?`: set only when a broker is configured. The worker digests the images later, keyed by these.
+  - `uploadClaimed?: boolean`: set by `claimUpload` when a write takes ownership of the upload.
+- **Body and i18n**
+  - `rawBody?: Buffer`: the exact request bytes, kept for routes whose callers sign the body. It is set by the JSON parser's `verify` hook in `src/app/security.ts` for the listed paths only.
+  - `locale?: string`: negotiated from `Accept-Language` by the locale middleware.
+  - `t?: TFunction`: i18next `t` bound to `request.locale`.
 
 ## Relationships
-
-- **`src/types/auth-context.ts`** — provides the `AuthContext`, `Caller`, and `Resolution<T>` types consumed by `authContext`, `caller`, and `sessionRecheck` on the augmented `Request`.
-- **`i18next`** — provides the `TFunction` type for the `t` property.
+- Imports the types `AuthContext`, `Caller`, and `Resolution` from `src/types/auth-context.ts`. These types back `authContext`, `caller`, and `sessionRecheck`.
+- Imports `TFunction` from `i18next`, used for `t`.
+- The field comments refer to the code that sets or reads them: `getAuth`, the auth guard, `requirePermissionViaCookie`, `noteMiss`, `apiKeyLimiter`, `quarantineUploadedImages`, `claimUpload`, `readUploadedImage`, and the locale middleware. None of these are imported here.
 
 ## Notes
-
-- `authContext` and `credentialId` are **mutually exclusive**: the Bearer/session path sets the former, the `sk_…` api-key path sets the latter. Checking one implies the other is absent.
-- `storedImageUrls` and `quarantinedImageKeys` are also mutually exclusive (inline pipeline vs. broker/worker path). Both are read only through `readUploadedImage`, never directly.
-- `rawBody` is populated solely by the JSON parser's `verify` hook in `app/security.ts` and only for a fixed set of signing routes; do not assume it exists on every request.
-- `sessionRecheck` exists specifically so an SSE stream can re-identify the session while the original cookie may have been cleared; it is absent on non-SSE paths.
-- Because this is an *ambient* declaration (`.d.ts` + `declare module`), no runtime code is emitted. It is purely a type-level contract that keeps middleware and handlers in sync.
+- The file is a declaration-only type file. It has no runtime effect and only describes what other modules attach.
+- All fields are optional, so handlers must handle their absence.
+- Several fields are mutually exclusive or conditional:
+  - `credentialId` is absent whenever `authContext` is set.
+  - The inline upload fields (`storedImageUrls`, `storedThumbnailUrls`) and `quarantinedImageKeys` depend on whether a broker is configured.
+- Read uploaded images through `readUploadedImage` rather than touching the upload fields directly. That keeps controllers from telling a local path from a CDN URL.
+- An upload still unclaimed when the response closes with a 4xx or 5xx is deleted by the upload middleware's close hook.
+- Do not rebuild signed bodies with `JSON.stringify(request.body)`, because the signature covers the original bytes. Use `rawBody` instead.

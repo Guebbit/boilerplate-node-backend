@@ -1,27 +1,25 @@
 ---
 source: src/modules/orders/probes.ts
-sha256: 59dd3fd4e87cc1d0b848d24d413ca12539da34ef2e184002e1c169d6220e2b4a
-generated_at: 2026-11-08T06:54:20.042090+00:00
-model: ollama:qwen3.8:27b
+source_sha256: aa3ced0fc8477959f0ef6db3edf4ea6715fb12f19aeab065aa6a038f8818456b
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T06:17:11.040768+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/probes.ts
 
 ## Purpose
-Declares a set of **probes** — manual API requests that exercise authorization/scoping rules the OpenAPI contract cannot express on its own. Each probe documents a subtle ownership or role-scoping case in the orders module and tells the test runner how to seed variables before the real collection runs.
+Defines hand-written "probe" requests for the orders module: cases the OpenAPI contract cannot express on its own, mainly role- and ownership-based scoping of orders. The probes are meant to be emitted into a generated runnable collection. The module's doc comment points to `scripts/contracts/client-collections-bundle.ts` for what a probe is, where probes are emitted, and which `{{seedToken}}` values they may use.
 
 ## Key elements
-- **`probes: Probe[]`** (exported) — the sole export; an array of three probe objects:
-  - *Probe 1* (`GET /orders?pageSize=10`) — discovers the minted order IDs for the current demo build. Run first; its response feeds the collection's `orderId` and `deletedOrderId` variables.
-  - *Probe 2* (`GET /orders/{{seedDeletedOrderId}}`) — verifies that the non-admin owner of the one soft-deleted order **cannot** retrieve it, while an admin **can**.
-  - *Probe 3* (`GET /orders/{{seedOrderId}}`) — verifies cross-tenant read refusal: the non-admin must not see the admin's order; the admin must.
-- Each probe carries a `name`, a `why` (human-readable explanation of the scoping rule it guards), `method`, `path`, and `auth` fields per the `Probe` type.
+- `probes: Probe[]` is the only export. The `Probe` type comes from `@guebbit/openapi-runnable-collections`. Each entry has `name`, `why` (a prose explanation), `method`, `path` and `auth`. All three use `GET` with `auth: 'bearer'`.
+  - **"the ids for every request below"** sends `GET /orders?pageSize=10`. Order ids are minted when the demo shop is built, so they change between builds. The probe is sent first to discover ids. The user then sets the collection's `orderId` variable to any returned id, and `deletedOrderId` to the id the non-admin account owns.
+  - **"the owner asking for their own soft-deleted order"** sends `GET /orders/{{seedDeletedOrderId}}`. The dataset puts its one soft-deleted order on the non-admin user. Ownership-only scoping would allow the read, and correct scoping must refuse it. An admin token on the same URL must succeed.
+  - **"another user's order"** sends `GET /orders/{{seedOrderId}}`, which is the seeded admin's order. As the non-admin it is a cross-tenant read that must be refused. As the admin it is legitimate.
 
 ## Relationships
-No dependency-graph neighbors are registered. The file is a leaf: it only imports the `Probe` type from `@guebbit/openapi-runnable-collections` and is consumed by the collection-bundling script referenced in its doc comment (`scripts/contracts/client-collections-bundle.ts`).
+No graph neighbors are listed, so there are no tracked file dependencies. The only import is the `Probe` type from the `@guebbit/openapi-runnable-collections` package. The `why` text mentions `npm run demo` and its `GET /__test/scenario` endpoint, which answers the same id question by name. It also refers to "the account probes" that handle logging in as the non-admin.
 
 ## Notes
-- **Seed tokens** (`{{seedOrderId}}`, `{{seedDeletedOrderId}}`): their valid values and emission logic are defined in `scripts/contracts/client-collections-bundle.ts`, not here.
-- **Order of execution matters.** Probe 1 must run before Probes 2–3 so the `orderId` / `deletedOrderId` variables are populated.
-- **`npm run demo`** (`GET /__test/scenario`) is the programmatic equivalent of Probe 1; the probe exists so the same discovery step is available inside the Postman/Insomnia collection.
-- The `why` strings are intentionally verbose: they encode *expected* auth outcomes (200 vs. 403) that a static contract cannot capture.
+- The probes are order-dependent in practice. Log in as the right account (non-admin or admin) before sending, because the expected result depends on the token held.
+- `{{seedDeletedOrderId}}` and `{{seedOrderId}}` are seed-token placeholders. The first probe uses the collection variables `orderId` and `deletedOrderId` instead, which are set by hand.

@@ -1,31 +1,25 @@
 ---
 source: src/modules/analytics/services/index.ts
-sha256: c393cf78e5058cb1099f7d6061552252e1cb6977b7390d8b9a1de09affc80c04
-generated_at: 2026-11-08T04:59:16.106239+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c393cf78e5058cb1099f7d6061552252e1cb6977b7390d8b9a1de09affc80c04
+context_sha256: 3809929bdc87e67c1082683e9b960a8368331cc47708d0270367d6d023809574
+generated_at: 2026-11-22T04:18:23.062607+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/analytics/services/index.ts
 
 ## Purpose
-
-Barrel file for the analytics services layer. It re-exports the browser-event relay functions from `./relay` as a single `analyticsService` object, providing a stable public surface for the rest of the analytics module.
+Barrel file for the analytics module's services. It bundles the browser-event relay functions from `./relay` into a single `analyticsService` object, so the rest of the module has one entry point to the relay.
 
 ## Key elements
-
-- **`analyticsService`** (exported const) — Flat namespace object bundling two relay functions:
-  - `registerBrowserEvents` — registers the browser events the relay accepts.
-  - `relayEvent` — relays a single event.
-- Both functions are imported directly from `./relay` and passed through without modification.
+- `analyticsService`: exported constant object with two members:
+  - `registerBrowserEvents`: re-exposed from `./relay`. Per the file's doc comment, it registers the events the relay accepts.
+  - `relayEvent`: re-exposed from `./relay`. It is the browser-event relay itself.
 
 ## Relationships
-
-- **`src/modules/analytics/services/relay.ts`** — Source of the two imported functions; this file is a thin re-export wrapper around it.
-- **`src/modules/analytics/index.ts`** — Consumes `analyticsService` to expose it as part of the module's public API.
-- **`src/modules/analytics/module.ts`** — Wires the service into the module (likely calls `registerBrowserEvents` during bootstrap).
-- **`src/modules/analytics/controllers/post-analytics-event.ts`** — Controller that invokes `relayEvent` via this export to forward events.
+- `src/modules/analytics/services/relay.ts`: the source of `registerBrowserEvents` and `relayEvent`. This file only re-exports them and adds no logic.
+- `src/modules/analytics/controllers/post-analytics-event.ts`, `src/modules/analytics/module.ts` and `src/modules/analytics/index.ts` are graph neighbors, so they relate to this file through the dependency graph. The file content does not show how they use it, so no interaction is documented here.
 
 ## Notes
-
-- The export shape is a single object (`analyticsService.registerBrowserEvents`), **not** individual named re-exports. Consumers must either destructure or use dot notation; `import { relayEvent } from '…/services'` will fail.
-- JSDoc labels this "the module's one door," signaling it is the intended entry point for service access—prefer importing from here over reaching into `./relay` directly.
+- This file contains no logic of its own. Behavior changes belong in `relay.ts`.
+- Callers use `analyticsService.relayEvent(...)` rather than importing from `./relay` directly. The doc comment calls this object "the module's one door".

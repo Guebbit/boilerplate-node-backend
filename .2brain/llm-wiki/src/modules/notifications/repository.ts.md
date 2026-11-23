@@ -1,45 +1,41 @@
 ---
 source: src/modules/notifications/repository.ts
-sha256: bbfd7260ed3113c5bf897bffd0175f1a3953652f5a849b4e0905f3a9ac5515cc
-generated_at: 2026-11-08T06:32:42.753288+00:00
-model: ollama:qwen3.8:27b
+source_sha256: dd1bc426b7b34a7841ebb9356d2874e1f67e0d45cd10bdcea5d2b27814238c29
+context_sha256: ab9f19bdc6bdf9f5e4255cb4b08c61e5716c961b031da0fd6716e72ba0bc3dd7
+generated_at: 2026-11-22T05:54:59.279353+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/repository.ts
 
 ## Purpose
-
-The data-access layer for notifications. It extends the shared `createRepository` CRUD factory with the specific read/write operations an inbox service needs (list, insert, dedup-aware upserts, per-audience trims, bulk deletes). Every query is scoped by `userId` in the Mongo filter itself, so cross-user access is structurally impossible rather than guarded by a separate check.
+Data-access layer for notifications. It extends the generic repository from `createRepository` with inbox-specific reads and writes. Every method except `deleteSummaries` takes a `userId`, so a row can't be read or removed without naming its owner. Another user's id therefore yields "not found" from the query itself, not from a separate check.
 
 ## Key elements
-
-- **`NewNotification`** — the caller-supplied subset of fields for a new own-audience row (`userId`, `code`, `params`, `severity`).
-- **`NewStaffNotification`** — extends `NewNotification` with the required staff fields (`tenantId`, `sets`, `dedupeKey`, `expiresAt`); `audience` is always `'staff'`.
-- **`notificationRepository`** — the exported singleton. Standard CRUD comes from `createRepository(...)`; the file then layers on:
-  - `listOwn` / `listStaff` — bounded, un-paged lists (own vs. staff audience; optional `tenantId` filter for staff).
-  - `insertMany` — unordered bulk insert (one query for bulk product-delete fan-out).
-  - `insertStaffOnce` — insert-or-skip via the unique `{userId, dedupeKey}` index; returns `null` on duplicate so the caller skips re-push/re-mail.
-  - `findSummary` / `writeSummary` — look up or upsert a per-`(userId, dedupeKey)` summary; `reappear` flag optionally clears `readAt`.
-  - `deleteSummaries` — removes every row for a `dedupeKey` and returns the affected `{id, userId}` pairs.
-  - `findOwned` / `deleteOwned` — single-row access gated by `_id` **and** `userId`.
-  - `deleteByUserId` — full inbox wipe (hard-delete / "clear all"); accepts an optional Mongoose `ClientSession` for transactional use.
-  - `deleteByAudience` — removes one audience's rows and returns the deleted ids so an open UI tab can sync.
-  - `markAllRead` — stamps `readAt` on still-unread rows only.
-  - `trimToNewest` — enforces the per-audience cap; deletes rows beyond the newest `keep` and returns their ids.
+- **`NewNotification`**: caller-supplied fields for a new row (`userId`, `code`, `params`, `severity`).
+- **`NewStaffNotification`**: `NewNotification` plus the required `tenantId`, `sets`, `dedupeKey` and `expiresAt`. Writers force `audience: 'staff'` on it.
+- **`notificationRepository`**: the exported repository. Its type is written out by hand because Mongoose's inferred generics trigger TS7056. It spreads the standard CRUD from `createRepository(notificationModel, { transform: applyNotificationTransform })` and adds:
+  - `listOwn(userId)` and `listStaff(userId, tenantId?)`: newest first, unpaged because each audience is capped. `listStaff` covers every tenant when `tenantId` is omitted (used by the data export).
+  - `insertMany(rows)`: one bulk write with `ordered: false`, so a bad row doesn't block the rest.
+  - `insertStaffOnce(row)`: inserts a staff notice and returns `null` on a duplicate-key error. The unique `{ userId, dedupeKey }` index settles races between writers. Other errors are rethrown.
+  - `findSummary(userId, dedupeKey)` and `writeSummary(row, reappear)`: read and upsert a per-recipient summary row. With `reappear`, `readAt` is unset so the row becomes unread again.
+  - `deleteSummaries(dedupeKey)`: removes all recipients' staff summary rows for a code. Returns `{ id, userId }` for each removed row.
+  - `findOwned(userId, id)` and `deleteOwned(userId, id)`: owner-scoped lookup and delete. They return `null` or `false` for both a missing row and someone else's row.
+  - `deleteByUserId(userId, session?)`: empties a user's inbox, optionally inside a caller's transaction.
+  - `deleteByAudience(userId, audience)`: deletes one audience and returns the removed ids.
+  - `markAllRead(userId, readAt)`: stamps only rows with no `readAt`.
+  - `trimToNewest(userId, keep, audience)`: deletes all but the newest `keep` rows of an audience and returns the removed ids.
 
 ## Relationships
-
-- **`src/infrastructure/persistence/create-repository.ts`** — provides `createRepository`, `toObjectId`, and the `Repository`/`Wire` types that this file composes and extends.
-- **`src/infrastructure/persistence/mongo-errors.ts`** — provides `isDuplicateKey`, used by `insertStaffOnce` to distinguish a safe repeat from a real error.
-- **`src/modules/notifications/model.ts`** — provides `notificationModel` (the Mongoose model), `applyNotificationTransform` (passed to the factory), and the `NotificationDocument` type.
-- **`src/modules/notifications/services/inbox.ts`** — the service layer that calls every method on `notificationRepository`; it interprets `null`/`false` returns as 404 vs. dedup-skip.
-- **`src/modules/notifications/tests/factories.ts`** — builds `NewNotification` / `NewStaffNotification` fixtures for tests.
-- **`src/modules/notifications/tests/integration/service.test.ts`** — integration tests that exercise the repository through the inbox service.
+- **`src/infrastructure/persistence/create-repository.ts`**: provides `createRepository`, `toObjectId`, and the `Repository` and `Wire` types. These supply the base CRUD and id conversion. Its doc explains why a synchronous throw from `toObjectId` becomes a rejection, which decides between a 4xx and a 500.
+- **`src/infrastructure/persistence/mongo-errors.ts`**: `isDuplicateKey` is used by `insertStaffOnce`.
+- **`src/modules/notifications/model.ts`**: supplies `notificationModel`, `applyNotificationTransform` and the `NotificationDocument` type.
+- **`src/modules/notifications/services/inbox.ts`**: the repository's consumer. The comments mention the service returning the same 404 for missing and foreign rows, and the stream telling open tabs which ids were removed. The file doesn't show the calls themselves.
+- **`src/modules/notifications/tests/unit/repository.test.ts`, `src/modules/notifications/tests/integration/service.test.ts`, `src/modules/notifications/tests/factories.ts`**: test and fixture code that exercises the repository.
 
 ## Notes
-
-- `toObjectId` throws on a malformed id; the file's JSDoc notes this is intentional so a bad id yields a 4xx (caught upstream) rather than a 500.
-- The explicit type annotation on `notificationRepository` exists because TypeScript's TS7056 prevents inferring Mongoose generics across an export boundary.
-- `insertMany` uses `ordered: false` deliberately: one bad row should not abort the remaining rows in a bulk fan-out.
-- `deleteByAudience` and `trimToNewest` both do a find-then-delete pattern (two round-trips) so they can return the exact ids removed for UI reconciliation.
-- Per-audience caps are enforced by `trimToNewest`, not by a single global limit, so a staff-notice flood cannot evict a user's own messages.
+- Methods that return removed ids (`deleteByAudience`, `trimToNewest`, `deleteSummaries`) exist so the stream can tell open tabs which rows left. Each audience (`own`, `staff`) has its own cap, so a flood of staff notices can't evict a user's own messages.
+- `deleteSummaries` and `deleteByAudience` do a find followed by a delete. `trimToNewest` uses the same pattern, and its sort has an `_id` tiebreaker for a stable order. `deleteByAudience` and `trimToNewest` delete by the ids they found. `deleteSummaries` re-runs the original filter, so rows added between its two queries are deleted without being reported.
+- `markAllRead` and `deleteByUserId` resolve to `void`.
+- Besides explicit deletes, rows leave through the cap, the TTL, a cleared summary and account deletion.
+- The file's header comment points to the notifications module docs (section "the pipeline") for the wider flow.

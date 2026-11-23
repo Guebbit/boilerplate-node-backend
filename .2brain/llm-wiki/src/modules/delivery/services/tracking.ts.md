@@ -1,39 +1,38 @@
 ---
 source: src/modules/delivery/services/tracking.ts
-sha256: 260a53573e003cc0bbe727e70ee5c5d6a67a705cb59320b68f4f00769025a2e7
-generated_at: 2026-11-08T05:40:48.047059+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T04:59:54.143784+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/tracking.ts
 
 ## Purpose
-
-Service that sets or corrects a physical shipment's tracking code at any point in its lifecycle. It validates the shipment, performs a conditional write, records an audit entry, and notifies the buyer when the code actually changed. It exists to isolate this "evidence-critical" mutation from the broader delivery service surface.
+Implements the admin operation that sets or corrects a shipment's tracking code. It works at any point after the shipment has left, including delivered and lost shipments, because the code is most useful later as evidence in "never arrived" disputes. Digital fulfillments have no carrier, so they are rejected. It audits each edit and mails the buyer when the code changed.
 
 ## Key elements
-
-- **`editShipmentTracking`** (exported) — Main entry point. Looks up the shipment, rejects non-physical fulfillments (409), optionally updates the tracking code via the repository, then returns the shipment view. If `trackingCode` is `undefined` the call is a read-only merge-patch no-op that simply returns the current view.
-- **`afterEdited`** (internal) — Post-write side effects: records the audit entry and mails the buyer. Chooses `"added"` (first code) vs `"corrected"` (replacement); skips the mail entirely if the code is unchanged.
-- **`trackingAuditMetadata`** (internal) — Builds the audit metadata object. Includes the `changes` block (via `fieldChange`) only when the before and after values differ.
+- `editShipmentTracking(shipmentId, trackingCode, authContext, context)` is the only export. It returns `Promise<ResponseSuccess<Shipment> | ResponseReject>`.
+  - It returns 404 if the shipment is not found.
+  - It returns 409 with `ERROR_CODES.DELIVERY_NOT_PHYSICAL` if the shipment's `kind` is not `FulfillmentOrderKind.physical`.
+  - It returns 404 if the owning order is not found.
+  - If `trackingCode` is `undefined`, it writes nothing and returns the current shipment view. This is the "merge patch with no field" case.
+  - Otherwise it calls `shipmentRepository.setTrackingCode`, runs `afterEdited`, and returns the refreshed shipment view. It returns 404 if the write yields no document.
+- `afterEdited` (internal) records the audit entry and mails the buyer if the code changed.
+  - The audit entry uses the action `ADMIN_SHIPMENT_TRACKING_EDITED`, `targetType: 'order'` and the order id as `targetId`.
+  - It sends the mail only when the code actually changed. The notice is `'corrected'` if a code existed before and `'added'` if not.
+- `trackingAuditMetadata` (internal) returns `{ shipmentId }`. When the code changed, it also adds `changes.trackingCode` as a `fieldChange(before, after)`, so the trail records the previous value.
 
 ## Relationships
-
-- **`@modules/delivery/repository`** — Calls `shipmentRepository.findById` and `shipmentRepository.setTrackingCode` for all reads/writes.
-- **`@modules/delivery/services/found`** — Calls `viewShipmentOf` to shape the `Shipment` response view.
-- **`@modules/delivery/services/notify`** — Calls `mailTrackingChanged` to send the buyer's "added"/"corrected" email.
-- **`@modules/orders`** — Calls `orderService.getById` to fetch the order needed by `viewShipmentOf`.
-- **`@infrastructure/observability/audit`** — Calls `recordAudit` to log the edit under `deliveryAuditActions.ADMIN_SHIPMENT_TRACKING_EDITED`.
-- **`@infrastructure/observability/audit-changes`** — Uses `fieldChange` to structure the before/after pair in audit metadata.
-- **`@infrastructure/http/response`** — Uses `generateSuccess` / `generateReject` to shape API responses.
-- **`@infrastructure/i18n`** — Uses `t` for localized error strings.
-- **`@types`** — Consumes `AuthContext`, `CallerContext`, `Shipment`, and `FulfillmentOrderKind`.
-- **`@modules/delivery/audit`** — Reads the `deliveryAuditActions` enum for the audit action key.
-- **`@modules/delivery/model`** — Imports the `ShipmentDocument` type used as the repository's document shape.
+- `./found`: `viewShipmentOf` builds the response view of the shipment, using the order and `authContext`.
+- `./notify`: `mailTrackingChanged` sends the "added" or "corrected" email.
+- `../repository`: `shipmentRepository.setTrackingCode` writes the tracking code. `ShipmentDocument` comes from `../model`.
+- `../audit`: supplies `deliveryAuditActions`.
+- `@infrastructure/observability/audit` and `audit-changes`: provide `recordAudit` and `fieldChange`.
+- `@modules/orders`: provides `orderService`, used to load the order the shipment belongs to.
+- `@infrastructure/http/response`: provides `generateSuccess` and `generateReject` and the response types.
+- `@infrastructure/i18n`: provides `t` for the localized error messages.
+- `@types`: provides `AuthContext`, `CallerContext`, `Shipment` and `FulfillmentOrderKind`.
 
 ## Notes
-
-- **Digital fulfillments are hard-rejected (409).** They never had a carrier, so there is no tracking code to set. The check uses `FulfillmentOrderKind.physical`.
-- **Idempotent write, non-idempotent side effects.** Saving the same code again is a no-op on the mail path (no "corrected" re-send), but the audit entry is still recorded on every call.
-- **`trackingCode === undefined` is not an error.** It is treated as an empty merge patch: the function reads the shipment and returns the current view without writing anything.
-- **Two caller contexts are threaded separately:** `authContext` feeds the response's `actions` metadata (via `viewShipmentOf`); `context` (a `CallerContext`) feeds the audit log.
+- Saving the same code again still writes an audit entry, but its metadata has no `changes`, and no email is sent.
+- The audit entry is recorded with `recordAudit` and is not awaited. Only the mail promise is chained.
+- The order lookup runs before the "no field supplied" shortcut, so a missing order returns 404 even when nothing would be changed.

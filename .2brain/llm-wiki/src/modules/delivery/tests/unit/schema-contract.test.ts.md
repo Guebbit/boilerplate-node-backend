@@ -1,31 +1,42 @@
 ---
 source: src/modules/delivery/tests/unit/schema-contract.test.ts
-sha256: 606147328bc1888bee8bf1dec04b91e6a39b1ecb8b54e7267431fc4f9c00768d
-generated_at: 2026-11-14T19:55:55.886982+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a3f8f3ecb193cf8c035b120cc819ee366abd6417c725382471ffa77d0262ab9b
+context_sha256: 5fff99669dd31857c78fc5c7412db092d4b790b6d373f1845724dcebc0c2a626
+generated_at: 2026-11-22T05:05:52.567563+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/unit/schema-contract.test.ts
 
 ## Purpose
-
-Unit tests that pin the shape, constraints, and defaults of the two Mongoose schemas in the delivery module (`fulfillmentOrderSchema`, `shipmentSchema`). They exist so that a schema change (a new required field, a renamed index, a widened enum) fails CI immediately instead of surfacing as a runtime surprise, and they encode the intent behind non-obvious choices (e.g. `deliveredAt` has no default because its absence *is* "in transit").
+Unit tests that pin the contract of the delivery module's two Mongoose schemas, `fulfillmentOrderSchema` and `shipmentSchema`. They assert required paths, unique indexes, `ObjectId` refs, enum vocabularies, defaults and timestamps, so the database enforces exactly-once behavior. A retried listener cannot create a duplicate fulfillment order, and two shipments cannot take the same number.
 
 ## Key elements
-
-- **`describe('fulfillmentOrderSchema')`** — asserts required paths, the `{orderId, number}` unique compound index, `ObjectId` reference to `Order`, enum closed-ness on `status`, `kind`, and `holdReason` against the `FulfillmentOrderStatus`, `FulfillmentOrderKind`, and `FulfillmentHoldReason` constants, `status` defaulting to `open`, `revision` defaulting to `0`, and `timestamps: true`.
-- **`describe('shipmentSchema')`** — asserts required paths (noting `trackingCode`, `destination`, `deliveredAt` are intentionally optional), the same `{orderId, number}` unique index (but *no* unique index on `orderId` alone), `ObjectId` refs to `Order` and `FulfillmentOrder`, `status` defaulting to `shipped`, `forced` defaulting to `false`, `deliveredAt` having no default, `timestamps: true`, and the `destination` sub-schema requiring `city`, `country`, `fullName`, `street`, `zip`.
-- **Assertion helpers** (`requiredPaths`, `enumOf`, `defaultOf`, `refOf`, `typeOf`, `indexOptionSpecs`, `optionsOf`, `subSchema`) — imported from `@tests/schema`; they wrap Mongoose schema introspection so tests read as flat `expect(...).toEqual(...)` calls.
+- **`describe('fulfillmentOrderSchema')`**
+  - Required paths are exactly `kind`, `lines`, `number`, `orderId` and `revision`.
+  - The index `orderId_1_number_1` is unique.
+  - `orderId` is an `ObjectId` that refs `Order`.
+  - `status`, `kind` and `holdReason` enums equal the `Object.values` of the matching contract enums.
+  - `status` defaults to `open`.
+  - `revision` defaults to `0`.
+  - Timestamps are enabled.
+- **`describe('shipmentSchema')`**
+  - Required paths are exactly `forced`, `fulfillmentOrderId`, `kind`, `lines`, `number`, `orderId` and `shippedAt`.
+  - `trackingCode`, `destination` and `deliveredAt` are optional.
+  - When `destination` is present it requires `city`, `country`, `fullName`, `street` and `zip`. `phone` stays optional.
+  - `orderId_1_number_1` is unique, and `orderId_1` is not unique, so an order can have many shipments.
+  - `orderId` refs `Order`, and `fulfillmentOrderId` refs `FulfillmentOrder`.
+  - `status` matches `ShipmentStatus` and defaults to `shipped`.
+  - `forced` defaults to `false`.
+  - `deliveredAt` has no default, so its absence means "in transit".
+  - Timestamps are enabled.
 
 ## Relationships
-
-- **`src/modules/delivery/model.ts`** — the sole subject under test; the file imports `fulfillmentOrderSchema` and `shipmentSchema` directly from it.
-- **`src/types/index.ts`** — supplies the enum constants (`FulfillmentOrderStatus`, `FulfillmentOrderKind`, `FulfillmentHoldReason`, `ShipmentStatus`) that the tests use to verify the schema's `enum` options are exactly closed to the contract's vocabulary.
-- **`tests/support/schema.ts`** — provides every assertion helper (`requiredPaths`, `enumOf`, `defaultOf`, `refOf`, `typeOf`, `indexOptionSpecs`, `optionsOf`, `subSchema`), making the tests schema-generic rather than hand-rolled.
+- `@modules/delivery/model` (`src/modules/delivery/model.ts`): supplies the schemas under test, `fulfillmentOrderSchema` and `shipmentSchema`.
+- `@types` (`src/types/index.ts`): supplies the enums `FulfillmentHoldReason`, `FulfillmentOrderKind`, `FulfillmentOrderStatus` and `ShipmentStatus`. The tests compare schema enums and defaults against them.
+- `@tests/schema` (`tests/support/schema.ts`): supplies the introspection helpers `requiredPaths`, `indexOptionSpecs`, `typeOf`, `refOf`, `enumOf`, `defaultOf`, `optionsOf` and `subSchema`.
 
 ## Notes
-
-- The unique index is on the **compound** `{orderId, number}` pair, not on `number` alone; the shipment test explicitly asserts that a bare `orderId_1` unique index does **not** exist, because one order legitimately has many shipments.
-- `deliveredAt` is asserted to have `default: undefined` (not omitted) to document the design decision that absence encodes "in transit" rather than being an oversight.
-- `trackingCode` and `destination` are deliberately excluded from `requiredPaths`; inline comments in the test explain why (code may arrive post-shipment; pickup has no address).
-- The tests use `@tests/schema` (a tsconfig path alias) rather than a relative import, consistent with other schema-contract test files in the repo.
+- The tests inspect schema definitions only. They never connect to a database or save documents.
+- Required-path lists are compared with `toEqual` in alphabetical order, so adding or removing a required field breaks the test.
+- Index specs are matched as strings of the form `orderId_1_number_1: unique=true`.

@@ -1,29 +1,31 @@
 ---
 source: shared/contracts/asyncapi.root.yaml
-sha256: b4aeae2525ab7c67c5f4433701682403048020e9572882b7ba8525cc89ea82ae
-generated_at: 2026-11-08T03:06:48.474538+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b4aeae2525ab7c67c5f4433701682403048020e9572882b7ba8525cc89ea82ae
+context_sha256: 00f3f042cece2b4f893ef1113df9ccef3e81cba9bc23d646fbfe2ce0fcccf116
+generated_at: 2026-11-22T02:22:49.621247+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/contracts/asyncapi.root.yaml
 
 ## Purpose
-
-Service-level preamble for the project's AsyncAPI contracts. It declares facts about the backend as a whole — protocol version, application identifier, human-readable `info` block, shared tags, and default content type — so that module-specific channel documents don't repeat them. It is the AsyncAPI counterpart to `openapi.root.yaml`.
+The preamble of the service's AsyncAPI 3.0.0 contract. It declares facts about the service itself (version, application `id`, `info` prose, tags, default content type) once, so domain modules don't restate them. It is the async twin of `openapi.root.yaml`.
 
 ## Key elements
-
-- **`asyncapi: 3.0.0`** — pins the AsyncAPI specification version.
-- **`id`** — application-level URN (`urn:boilerplate-node-backend:asyncapi:contracts`); appears in both the public and internal bundles because they describe the same backend.
-- **`info`** — title, version (`0.1.0`, alpha per SemVer §4), contact, license (AGPL-3.0), a prose description, and a single tag (`implemented`).
-- **`defaultContentType`** — `application/json`; the fallback media type for all channels unless they override it.
+- `asyncapi: 3.0.0` — spec version.
+- `id: 'urn:boilerplate-node-backend:asyncapi:contracts'` — the application identifier; both the full and public bundles carry it, since they describe one backend (one partially).
+- `info` — title ("Boilerplate Node Backend Async Contracts"), version `0.1.0` (alpha, matching `openapi.root.yaml` and the module fragments), contact, AGPL-3.0 license, and a description of the real-time/event-driven flows.
+- `tags` — a single `implemented` tag: contracts already implemented in the backend runtime.
+- `defaultContentType: application/json`.
 
 ## Relationships
-
-- **`shared/contracts/asyncapi.workers.yaml`** — the only sibling contract in this directory. It owns the `rabbitmqLocal` server declaration and any channel not assigned to a domain module. The bundler merges this root preamble with module sections and `asyncapi.workers.yaml` to emit the final `asyncapi.public.yaml`; this file deliberately excludes both channels and servers so the public bundle never advertises an internal broker.
+- `asyncapi.workers.yaml` (sibling) — holds the channels for queues no domain owns, plus the `rabbitmqLocal` server.
+- `asyncapi.domain-events.yaml` — a sibling contract file; per the header, channels belong to the owners of the events, not this root. The root file itself doesn't reference it.
+- `spectral.asyncapi.modules.yaml` — lint ruleset for the module documents. The header says modules are valid standalone and linted that way, whereas this root is not.
+- A bundler merges the root with the module and worker sections to produce the full bundle and the public bundle.
 
 ## Notes
-
-- **Not a standalone valid AsyncAPI document.** A conforming document requires a `channels` map, which this file intentionally omits. Lint and validation must run on the merged output, not on this file in isolation. (Module documents, by contrast, *are* valid on their own.)
-- **`info.description` mentions "the channels below"** — there are none in this file. The text reads as if written for the bundled output; don't expect to find channels here.
-- **Version field is informational.** The `0.1.0` value is ignored by the breaking-change check; it exists for parity with `openapi.root.yaml`.
+- Deliberately has no `channels` and no `servers`, so it is **not a valid standalone AsyncAPI document**. It becomes valid only after the bundler merges the sections in.
+- Servers live with the channels bound to them. This lets the public bundle omit brokers that API clients can't reach.
+- Module fragments own their channels; the observability module declares the `sseLocal` server.
+- The breaking-change check ignores `info.version`.

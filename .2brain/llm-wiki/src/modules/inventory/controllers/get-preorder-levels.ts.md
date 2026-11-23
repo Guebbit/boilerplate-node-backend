@@ -1,28 +1,28 @@
 ---
 source: src/modules/inventory/controllers/get-preorder-levels.ts
-sha256: e8a93d75935bc8ada6a819856150cb011689ded1eb88a49f29483a7d3accd736
-generated_at: 2026-11-08T05:57:29.818671+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e8a93d75935bc8ada6a819856150cb011689ded1eb88a49f29483a7d3accd736
+context_sha256: d00a3232c4b3e1d8f96c9519b57694f8be96d10c8b0f1e5c269f74a91b38c295
+generated_at: 2026-11-22T05:16:52.736267+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/controllers/get-preorder-levels.ts
 
 ## Purpose
-
-Controller for `GET /inventory/preorders`. Returns a paginated list of preorder levels — each product's allowance and the outstanding balance split between paid and unpaid orders. Exists to expose this read-only board view via the inventory module's HTTP surface.
+Defines the HTTP controller for `GET /inventory/preorders`. It returns a page of the preorder board: each product's allowance, what is outstanding against it, and how that outstanding amount splits between paid and unpaid orders. The file is a thin declaration. It wires a query schema and a service call into a generic list-controller factory.
 
 ## Key elements
-
-- **`getPreorderLevels`** — the sole export. Built with the `createListController` factory. Accepts optional `page` / `pageSize` query params (plus any fields from `ListPreorderLevelsQueryParams`), validates them, then delegates to `inventoryService.listPreorders`. The `entity` key is set to `'preorderLevels'` (used by the factory for logging / response shaping).
+- `getPreorderLevels`: the exported controller, built with `createListController`. Its configuration is:
+  - `entity: 'preorderLevels'`
+  - `schema`: `ListPreorderLevelsQueryParams` (from `@api/schemas.zod`), extended with `page: pageSchema` and `pageSize: pageSizeSchema`, then made `.partial()` so every query param is optional.
+  - `runList`: calls `inventoryService.listPreorders(parsed)` with the parsed query.
 
 ## Relationships
-
-- **`src/infrastructure/http/schemas.ts`** — provides `pageSchema` and `pageSizeSchema`, which are mixed into the query-param schema for standard pagination.
-- **`src/infrastructure/surfaces/create-list-controller.ts`** — supplies the `createListController` factory that wires up validation, pagination defaults, and the standard list-response envelope around the thin `runList` callback defined here.
-- **`src/modules/inventory/services/index.ts`** — source of `inventoryService`; its `listPreorders` method is the actual data-fetching call invoked at request time.
-- **`src/modules/inventory/routes.ts`** — registers this controller on the `GET /inventory/preorders` route.
+- `src/infrastructure/surfaces/create-list-controller.ts`: provides the `createListController` factory that turns the entity name, schema and `runList` callback into the actual handler.
+- `src/infrastructure/http/schemas.ts`: supplies `pageSchema` and `pageSizeSchema`, which override the pagination fields in the generated query schema.
+- `src/modules/inventory/services/index.ts`: exports `inventoryService`, whose `listPreorders` does the data retrieval.
+- `src/modules/inventory/routes.ts`: the route file that mounts this controller on `/inventory/preorders`. This is inferred from the module's routing role. The controller file itself doesn't show the registration.
 
 ## Notes
-
-- The query schema is `.partial()`, so every field (including `page` and `pageSize`) is optional; the `createListController` factory is expected to supply sensible pagination defaults when they are absent.
-- The controller is intentionally thin — all HTTP concerns (validation, error mapping, pagination math) live in `createListController`; the only business logic here is the one-line `runList` delegation.
+- `.partial()` is applied after `.extend(...)`, so the generated filter params and the pagination params are all optional.
+- Filtering and pagination semantics are defined elsewhere: in the generated `ListPreorderLevelsQueryParams`, in the shared page schemas and in `listPreorders`. This file adds no logic of its own.

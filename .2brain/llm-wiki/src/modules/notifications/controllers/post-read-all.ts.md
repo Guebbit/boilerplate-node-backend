@@ -1,29 +1,26 @@
 ---
 source: src/modules/notifications/controllers/post-read-all.ts
-sha256: d4e2cef195219ce10874cc22cbca8310f1250b79334c58c8196f18b91042b044
-generated_at: 2026-11-08T06:31:01.879932+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d4e2cef195219ce10874cc22cbca8310f1250b79334c58c8196f18b91042b044
+context_sha256: 42cab71af3da031a017e6dd8346a2adcc38a761b54505a6370a4d8adc1c03f4e
+generated_at: 2026-11-22T05:53:22.274067+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/controllers/post-read-all.ts
 
 ## Purpose
-
-Thin HTTP adapter that handles `POST /notifications/read-all`. It extracts the caller's ID from the authenticated request, delegates the "mark all read" work to `notificationsService.readAll`, and returns a 204 No Content on success or a structured error on failure.
+Express controller for `POST /notifications/read-all`. It is a thin HTTP adapter that marks every unread notification of the authenticated caller as read by delegating to `notificationsService.readAll`.
 
 ## Key elements
-
-- **`postReadAll(request, response)`** (exported const) — Express handler for `POST /notifications/read-all`. Reads `request.authContext!.id`, calls `notificationsService.readAll(id)`, then either sends a 204 via `noContentResponse` or routes the rejection through `catchAs(response, 'readAllNotifications')`.
+- `postReadAll(request, response)` — the only export. It calls `notificationsService.readAll(request.authContext!.id)`. On success it sends a no-content response via `noContentResponse(response)`. On failure it routes the error through `catchAs(response, 'readAllNotifications')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs`, the shared error-catch helper that formats and sends the HTTP error response.
-- **`src/infrastructure/http/response.ts`** — Supplies `noContentResponse`, which writes the 204 (no body) success response.
-- **`src/modules/notifications/services/index.ts`** — Source of `notificationsService`; the controller's sole business-logic dependency (specifically the `readAll` method).
-- **`src/modules/notifications/routes.ts`** — Wires `postReadAll` to the `POST /notifications/read-all` route.
+- `src/modules/notifications/services/index.ts` — supplies `notificationsService`, which holds the actual read-all logic.
+- `src/infrastructure/http/response.ts` — supplies `noContentResponse`, used for the success reply.
+- `src/infrastructure/http/controller.ts` — supplies `catchAs`, which builds the error handler. The string `'readAllNotifications'` is passed as its second argument.
+- `src/modules/notifications/routes.ts` — the neighbor that wires this handler to the `POST /notifications/read-all` route.
 
 ## Notes
-
-- The `authContext` is accessed with a non-null assertion (`!`); the file assumes upstream middleware has already guaranteed authentication. No local guard or 401 path exists here.
-- The function returns the Promise chain (`.then().catch()`) rather than using `async/await`, matching the convention in the surrounding controller layer.
-- No request body or query params are read — the operation is purely derived from the authenticated user identity.
+- It reads `request.authContext!.id` with a non-null assertion. It assumes authentication middleware has already populated `authContext`, and the controller does no check of its own.
+- The handler returns the promise chain rather than being `async`. Errors are handled by `.catch`, not by a try/catch.
+- The success response has no body (204-style, per the `noContentResponse` name).

@@ -1,35 +1,33 @@
 ---
 source: src/infrastructure/persistence/normalize-email.ts
-sha256: b59a9b868d16fec473caf5671951834f80a0c96d23c1ec6898f7fc188d601600
-generated_at: 2026-11-08T03:43:54.725962+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b59a9b868d16fec473caf5671951834f80a0c96d23c1ec6898f7fc188d601600
+context_sha256: 64f097ff66042be026065db2b7dd6abf0733c8a40b764e4651170be9a1774ad6
+generated_at: 2026-11-22T03:03:29.763364+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/normalize-email.ts
 
 ## Purpose
-
-Single source of truth for email normalisation across the app. Provides the two transforms the codebase uses—`normalizeEmail` (trim + lowercase, the canonical "same address" check) and `canonicalMailbox` (inbox-level key for rate/budget logic)—so that no module re-implements its own variant and the same address is never treated as two distinct callers or rows.
+Defines the single email normalisation used across the app before an address is stored, looked up or compared: trim, then lowercase. It also provides a stricter "mailbox" canonicalisation used only for budgets (rate or mail limits), so that different casings or `+tag` variants of one inbox are not counted as separate callers.
 
 ## Key elements
-
-- **`normalizeEmail(email: string): string`** — Trims whitespace and lowercases. Used before storage, lookup, and comparison everywhere an email field is read or written.
-- **`canonicalMailbox(email: string): string`** — Returns the deliverable mailbox for *budget* keying only: applies `normalizeEmail`, strips a `+tag` suffix (only when it follows a non-empty local part), and for `gmail.com` / `googlemail.com` removes all dots in the local part and rewrites the domain to `gmail.com`. Explicitly **not** a storage or uniqueness transform.
-- **`DOT_INSENSITIVE_DOMAINS`** (module-private) — `Set` of domains (`gmail.com`, `googlemail.com`) whose providers ignore dots in the local part.
+- `normalizeEmail(email)`: returns `email.trim().toLowerCase()`. This is the only normalisation applied to stored or compared addresses.
+- `canonicalMailbox(email)`: returns the `local@domain` mailbox an address delivers to. It:
+  - applies `normalizeEmail` first;
+  - returns the normalised string unchanged if there is no `@`, or `@` is at index 0 (`at < 1`);
+  - drops a `+tag` from the local part, but only when the `+` comes after at least one character and before the `@` (so `+@x` is left as is);
+  - for `gmail.com` and `googlemail.com`, removes dots from the local part and rewrites the domain to `gmail.com`;
+  - leaves other domains' dots and domains untouched.
+- `DOT_INSENSITIVE_DOMAINS` (module-private): the set `gmail.com`, `googlemail.com`.
 
 ## Relationships
-
-- **`src/modules/account/mail-budget.ts`** — Consumes `canonicalMailbox` as the budget key so that `a+1@x`, `a+2@x`, and `A@x` all hit the same counter.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Uses `canonicalMailbox` (or `normalizeEmail`) to key per-mailbox rate limits, preventing tag-spam escapes.
-- **`src/modules/account/emails.ts`**, **`src/modules/account/routes.ts`**, **`src/modules/account/services/email-change.ts`** — Call `normalizeEmail` before persisting or comparing addresses so login lookups and stored values stay consistent.
-- **`src/modules/account/session/device-cookie.ts`**, **`src/modules/account/session/login-observability.ts`** — Normalise the submitted address before writing session metadata or emitting login logs.
-- **`src/modules/orders/repository.ts`**, **`src/modules/tasks/service.ts`** — Apply `normalizeEmail` to their own email fields so they match the `users` schema cast.
-- **`tests/unit/infrastructure/persistence/normalize-email.test.ts`** — Unit tests for both exports (trim, case, `+tag`, dot, `googlemail.com` rewrite, edge cases like `+@x`).
-- **`tests/cross-cutting/normalize-email-conformance.test.ts`** — Verifies that every consumer in the graph normalises identically (i.e., no module diverges from this module).
+The file imports nothing. The neighbor list gives only dependency-graph links; the source does not show which function each neighbor calls, so only the intent stated in the module doc is described here.
+- The module doc says the shared normalisation is meant for `users`' schema-level cast, for an infrastructure budget keyed on a submitted address, and for other modules' own email fields.
+- Consumers in the graph include `rate-limit.ts`, `job-store.ts`, `mail-budget.ts`, `email-change.ts`, `emails.ts`, `device-cookie.ts`, `login-observability.ts`, the orders repository, `contact.ts` and `personal-data-subject.ts`.
+- `normalize-email.test.ts` (unit) and `normalize-email-conformance.test.ts` (cross-cutting) test it.
 
 ## Notes
-
-- `canonicalMailbox` is **not** idempotent across two calls on an already-canonical string (e.g. a stored `a+shop@x` re-run through it would drop the tag). It is meant as a *key* for budget/rate-limit lookups, never written back to storage.
-- The `+` is stripped only when it appears **after** at least one local-part character (`plus > 0 && plus < at`); a leading `+@x` is preserved as-is.
-- `googlemail.com` is rewritten to `gmail.com` in `canonicalMailbox` output; this rewrite does **not** appear in `normalizeEmail` output, which preserves the original domain.
-- The module is intentionally in `infrastructure/persistence/` (not `domain/` or `account/`) because it is a shared persistence-layer concern consumed by many modules.
+- Never use `canonicalMailbox` for storage or uniqueness. `a@x` and `a+shop@x` may legitimately be separate accounts, and rewriting a stored address would change the identity the account records. It is for budgets only.
+- `canonicalMailbox` finds the tag with `indexOf('+')` and the domain with `lastIndexOf('@')`, so the tag is stripped only if the first `+` falls before the last `@`.
+- Gmail canonicalisation always outputs `@gmail.com`, so `googlemail.com` and `gmail.com` addresses map to the same mailbox.

@@ -1,38 +1,33 @@
 ---
 source: src/infrastructure/http/middlewares/idempotency-model.ts
-sha256: 6cbf65bac53e83642328db9d754cd03b0d31f03909db81048174c336b75a4bd6
-generated_at: 2026-11-08T03:30:47.214418+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7d0d9987c712ae039b85ac5a07ee85d8a5ca8b607ed6d29f0c2df08bdffce7ae
+context_sha256: 687de506cba54bd92a4633405499d489b4a95634e15eecc4bd9640df4c92e398
+generated_at: 2026-11-22T02:49:44.999245+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/http/middlewares/idempotency-model.ts
 
 ## Purpose
-
-Defines the Mongoose schema and model for the idempotency ledger — one document per `(key, caller)` pair that records a retried write's fingerprint and, once the handler has answered, its full outcome (status, body, `Location`, `Content-Type`, selected headers). It lives in infrastructure rather than a domain module because it belongs to no domain; the same exception as `rate-limit.ts`'s store.
+Defines the Mongoose schema and model for the idempotency ledger: one document per `(key, caller)` that stores a retried write's fingerprint and, once the guarded handler has answered, its outcome (status, body, replayable headers). The read/write flow built on it lives in `idempotency.ts`. It is infrastructure-owned rather than a module's, the same exception `rate-limit.ts`'s store is under, because the collection belongs to no domain.
 
 ## Key elements
-
-- **`IDEMPOTENCY_RECORD_STATES`** — `['in_flight', 'done']` const tuple; the single source of truth for the schema's `enum`.
-- **`IdempotencyRecordState`** — exported type derived from the tuple above.
-- **`IdempotencyRecordDocument`** — the document interface: `key`, `caller`, `fingerprint`, `state`, and optional `status`, `body`, `location`, `contentType`, `headers`, plus Mongoose `timestamps`.
-- **`IdempotencyRecordModel`** — `Model<IdempotencyRecordDocument>` type alias.
-- **`idempotencyRecordSchema`** — the Mongoose schema. `body` and `headers` use `Schema.Types.Mixed` (shape varies per route / header names are a fixed string map). `state` defaults to `'in_flight'`.
-- **Unique index `idempotency_key_caller_unique`** on `{key, caller}` — acts as the distributed lock; `idempotency.ts` interprets the E11000 duplicate-key error as "another caller already holds this key," never as a surfaceable DB error.
-- **TTL index `idempotency_createdAt_ttl`** on `createdAt` — `expireAfterSeconds` is computed from `idempotencyConfig().NODE_IDEMPOTENCY_RETENTION_HOURS × HOUR_SECONDS` (default 24 h).
-- **`idempotencyRecordModel`** — the exported Mongoose model (collection `idempotencyrecords`); the sole entry point consumers import.
+- `IdempotencyRecordState`: type derived from `IDEMPOTENCY_RECORD_STATES` (`'in_flight' | 'done'`), also used as the schema `enum`.
+- `IdempotencyRecordDocument`: document interface with `key`, `caller`, `fingerprint`, `state`, and optional `status`, `body`, `location`, `contentType`, `headers`, `createdAt` and `updatedAt`. The response fields are absent until the handler answers.
+- `IdempotencyRecordModel`: `Model<IdempotencyRecordDocument>` type.
+- `idempotencyRecordModel`: the exported model, registered as `IdempotencyRecord` (collection `idempotencyrecords`).
+- Unique index `idempotency_key_caller_unique` on `{ key, caller }`: acts as the lock.
+- TTL index `idempotency_createdAt_ttl` on `createdAt`: expires records after `retentionHours * HOUR_SECONDS`.
 
 ## Relationships
-
-- **`src/infrastructure/http/config.ts`** — reads `idempotencyConfig()` at import time to resolve the retention-hours value baked into the TTL index.
-- **`src/domain-primitives/time.ts`** — imports `HOUR_SECONDS` for the TTL computation.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — the middleware that performs the insert (lock acquisition) and later `updateOne`/`findOne` calls against this model; the three-way branch (in-flight / replay / mismatch) keys off the `state` field defined here.
-- **`tests/unit/infrastructure/http/middlewares/idempotency.test.ts`** & **`…/idempotency-retention.test.ts`** — unit tests exercising the schema shape, state transitions, and retention behavior.
-- **`tests/contract/idempotency.test.ts`** & **`tests/integration/idempotency-server-fault.test.ts`** — contract/integration tests that drive the full insert → answer → replay flow through this collection.
+- `@infrastructure/http/config`: `idempotencyConfig().NODE_IDEMPOTENCY_RETENTION_HOURS` supplies the retention window.
+- `@domain-primitives/time`: `HOUR_SECONDS` converts hours to the TTL's seconds.
+- `idempotency.ts`: the middleware that consumes this model. It treats an E11000 collision on the unique index as the signal to branch into in-flight, replay or mismatch handling, not as an error to surface. It also branches on `state`.
+- The listed unit, integration and contract tests for idempotency (including `outcome-unknown.test.ts`) are neighbors of this file in the dependency graph.
 
 ## Notes
-
-- **TTL changes require `npm run db:sync`.** Mongo will not modify an existing index's `expireAfterSeconds` in place; a restart after changing `NODE_IDEMPOTENCY_RETENTION_HOURS` fails boot. `db:sync` drops and rebuilds the index.
-- **The unique index *is* the lock.** `idempotency.ts` treats the E11000 duplicate-key error as a control-flow signal (fall into the in-flight / replay / mismatch branch), not as a database error to surface to the caller.
-- **`body` and `headers` are `Mixed`.** `body` shape varies per route; `headers` is a flat `Record<string, string>` whose keys come from a fixed list (`Retry-After`, `WWW-Authenticate`, `Allow`). Do not add structured sub-schemas without coordinating with `idempotency.ts`.
-- **Infrastructure-owned by design.** Despite living under `middlewares/`, it is not owned by any domain module — the same deliberate exception as `rate-limit.ts`'s store.
+- The retention window is read once at import time. Changing `NODE_IDEMPOTENCY_RETENTION_HOURS` and restarting fails the boot, because Mongo will not change an existing TTL index's `expireAfterSeconds` in place. Run `npm run db:sync` to drop and rebuild the index.
+- `state` defaults to `'in_flight'`.
+- `body` and `headers` use `Schema.Types.Mixed`. `body` varies per route. `headers` is a flat name-to-value map drawn from a fixed list (`Retry-After`, `WWW-Authenticate`, `Allow`).
+- `location` and `contentType` are stored so a replay looks like the original response. `contentType` is absent when Express's JSON default applied.
+- Records are a retry ledger, not a durable record of the write. Retention is meant to outlast client retry backoff.

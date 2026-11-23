@@ -1,31 +1,28 @@
 ---
 source: scripts/contracts/validate-asyncapi.ts
-sha256: cba106292d1971aea14d16550541144e2a79b96ba57f81bc7d645b1b842dce1a
-generated_at: 2026-11-08T02:45:15.226543+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 82eed35ac2c09a6da1fc2431bb3f06f3134d6bc7d65df7e2a18603da90b747f9
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:00:46.571808+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/validate-asyncapi.ts
 
 ## Purpose
-
-A CLI script that validates one or more AsyncAPI documents against the `@asyncapi/parser` default Spectral ruleset (`spectral:asyncapi/recommended`). It exists as a lightweight replacement for `asyncapi validate` now that `@asyncapi/cli` (~446 MB, telemetry) is no longer used. Invoked via `npm run lint:asyncapi`.
+A standalone `tsx` CLI script that validates one or more AsyncAPI documents using `@asyncapi/parser` with its default Spectral ruleset (`spectral:asyncapi/recommended`). It replaces `asyncapi validate` from the removed `@asyncapi/cli`, keeping the same diagnostics while dropping the CLI's large install size and telemetry. It is run via `npm run lint:asyncapi`.
 
 ## Key elements
-
-- **`isInvalid(diagnostics)`** — Returns `true` if any diagnostic carries `DiagnosticSeverity.Error`; the parser's own definition of "invalid."
-- **Main flow (top-level `Promise.all`)** — Reads each CLI-arg file with `readFileSync`, calls `parser.parse(...)` in parallel, prints a per-file verdict line and (if diagnostics exist) a Spectral `stylish` report, then exits `1` if any file was invalid.
-- **`Parser`** (from `@asyncapi/parser`) — Instantiated once with no options, so it uses the bundled `spectral:asyncapi/recommended` ruleset.
-- **`stylish`** (from `@stoplight/spectral-formatters`) — Formats the diagnostic array into a grouped, human-readable block; `failSeverity` is set to `Error`.
-- **Usage guard** — Exits `1` with a usage message when zero file arguments are supplied.
+- `files`: the CLI arguments (`process.argv.slice(2)`). If empty, prints a usage message and exits with code 1.
+- `parser`: a single `Parser` instance from `@asyncapi/parser` with default settings.
+- `isInvalid(diagnostics)`: returns true if any diagnostic has `DiagnosticSeverity.Error`. Warnings and lower severities do not make a document invalid.
+- Main `Promise.all` pipeline: reads each file with `readFileSync`, parses it with `{ source: file }` so diagnostics name the file, and prints `<file> is valid.` or `<file> has governance issues and is INVALID.`. If there are any diagnostics, it prints them with Spectral's `stylish` formatter (`failSeverity: Error`). Each file resolves to a boolean `invalid`.
+- Final handlers: exits 1 if any file was invalid. Any thrown or rejected error is logged and also exits 1.
 
 ## Relationships
-
-No graph neighbors. The script has no exports and is not imported by any other file; it is a leaf node invoked only from package-level `npm` scripts.
+No graph neighbors. It depends only on the external packages `@asyncapi/parser` and `@stoplight/spectral-formatters`, plus Node's `fs`.
 
 ## Notes
-
-- **Enum identity trap:** `@asyncapi/parser` re-exports a `DiagnosticSeverity` enum that originates from one nested copy of `@stoplight/types`, while `@stoplight/spectral-formatters` (and `spectral-core`) nest a *separate* copy. Comparing `diagnostic.severity === DiagnosticSeverity.Error` works at runtime because both enums are numeric, but TypeScript flags it as an unsafe enum comparison (hence the `eslint-disable` comment). Do not "simplify" this away.
-- **Not a module:** The file is a `tsx` script (`#!/usr/bin/env tsx`). It has no exports and relies on side effects (console output, `process.exit`).
-- **All-or-nothing exit code:** A single error-severity diagnostic in *any* supplied file causes exit code `1`, matching the old `asyncapi validate` contract. Warnings alone still exit `0`.
-- **Synchronous I/O:** `readFileSync` blocks the event loop for each file before the async parse begins; fine for a CI lint script, not intended for high-volume use.
+- Files are validated in parallel, so output order follows completion order, not argument order.
+- `readFileSync` runs inside the `files.map` callback. A missing or unreadable file throws synchronously there, before the `Promise.all` call finishes building, so it escapes the `.catch` handler and surfaces as an uncaught exception, not a handled error.
+- The `DiagnosticSeverity` enum comparison carries an ESLint `no-unsafe-enum-comparison` suppression. The source explains that `@stoplight/spectral-core` nests its own copy of `@stoplight/types`, so there are two structurally identical but nominally distinct enums.
+- The script keeps the exit-code contract of `asyncapi validate`: 0 when all files are valid, 1 otherwise.

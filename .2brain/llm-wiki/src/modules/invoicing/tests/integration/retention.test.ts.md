@@ -1,46 +1,36 @@
 ---
 source: src/modules/invoicing/tests/integration/retention.test.ts
-sha256: 91de8b0904c222972978e0a6ade27788b8974115aa6bca9b27fe46055a45a138
-generated_at: 2026-11-14T20:16:32.449389+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:39:29.182662+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/tests/integration/retention.test.ts
 
 ## Purpose
-
-Integration test for the `reap:invoices` retention job. Verifies that once an invoice or credit note passes its tax retention window (local New Year of issue year + 11), the buyer block (`billingAddress`) is blanked, the cached PDF is deleted from the document store, all other fields remain untouched, and a second run is a no-op.
+End-to-end integration test for the `reap:invoices` job. It checks that an invoice or credit note loses its buyer block (`billingAddress`) at the end of its tax retention period, keeps all other data, loses its cached PDF, and that a second run is a no-op. It exercises `invoicingService.eraseDueBuyers(now)` against a real test DB and a temp document store.
 
 ## Key elements
-
-- **`invoiceIssuedAt(issuedAt, timezone)`** — Helper that creates a user, product, paid order with a billing address, waits for the invoice, then back-dates `issuedAt`/`timezone` directly on the model. Returns `{ orderId, invoiceId }`.
-- **`invoiceBuyer(id)` / `creditNoteBuyer(id)`** — Thin Mongoose readers that return the `billingAddress` field of an invoice or credit note, used in assertions.
-- **`describe('reap:invoices')`** — Six test cases covering:
-  - Boundary: buyer erased at exactly the retention deadline, not a minute before.
-  - Timezone: a 23:30 UTC stamp in `Europe/Rome` rolls into the next calendar year.
-  - Field preservation: all non-buyer fields and `sumInvoices` totals are unchanged.
-  - Credit notes: erased on their own `issuedAt`, independent of the parent invoice.
-  - PDF cleanup: only the erased document's PDF is removed from disk.
-  - Idempotency: a second run reports zero changes.
+- **`beforeEach` / `afterEach`**: register the users, products, inventory, orders and invoicing modules, create a temp dir, and point `NODE_DOCUMENT_STORE_PATH` at it. Teardown resets domain events and removes the dir.
+- **`invoiceIssuedAt(issuedAt, timezone = 'Europe/Rome')`**: helper that creates a user, product (price `10.00`) and order with a GB billing address. It marks the order paid, waits for the invoice, then overwrites `issuedAt` and `timezone` directly on the model. Returns `{ orderId, invoiceId }`.
+- **`invoiceBuyer` / `creditNoteBuyer`**: read the `billingAddress` still stored on an invoice or credit note.
+- **Test cases** (`describe('reap:invoices')`):
+  - Buyer is erased once local New Year of issue year + 11 arrives, and not a minute earlier. The report is `{ invoices: 1, creditNotes: 0 }` and `buyerErasedAt` is set to the run time.
+  - An invoice issued 31 Dec 23:30 UTC counts into the next year (Rome time), so it is not erased yet.
+  - All other fields and `sumInvoices` stats totals are unchanged after erasure. Only `billingAddress`, `buyerErasedAt` and `updatedAt` are ignored in the comparison.
+  - A credit note is judged on its own `issuedAt`, not its invoice's. In the test, the 2015 invoice is erased and the 2020 note is kept.
+  - The cached PDF `invoice-<id>.pdf` is deleted, and other files in the store are left alone.
+  - A second run reports `{ invoices: 0, creditNotes: 0 }`.
 
 ## Relationships
-
-- **`src/modules/invoicing/services/index.ts`** — Exports `invoicingService`, the retention-erase service that is the primary subject under test.
-- **`src/modules/invoicing/model.ts`** — `invoiceModel` and `creditNoteModel` are read/written directly for setup and assertions.
-- **`src/modules/invoicing/repository.ts`** — Exports `invoicingRepository`, used to confirm aggregate stats survive the erase.
-- **`src/modules/invoicing/services/issue-credit-note.ts`** — `issueCreditNote` creates the credit note fixture.
-- **`src/modules/invoicing/tests/factories.ts`** — Provides `waitForInvoice` (polls for the auto-created invoice) and `issueCreditNote` wrapper.
-- **`src/modules/orders/friends/payments.ts`** — `markPaid` finalizes the order so the invoicing pipeline fires.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder` / `toOrderItem` build the order fixture.
-- **`src/modules/products/module.ts`**, **`src/modules/inventory/module.ts`**, **`src/modules/orders/module.ts`**, **`src/modules/invoicing/module.ts`** — All registered via `registerModules` to satisfy cross-module dependencies.
-- **`src/kernel/registry.ts`** — `registerModules` bootstraps the in-test module graph.
-- **`src/kernel/events.ts`** — `resetDomainEvents` clears the event bus between tests.
-- **`src/infrastructure/adapters/document-store.ts`** — `writeDocument` seeds a fake PDF in the temp directory; the test then asserts it was deleted by the retention job.
+- Calls `invoicingService` (`src/modules/invoicing/services/index.ts`) for `eraseDueBuyers`, and `invoicingRepository.sumInvoices` (`src/modules/invoicing/repository.ts`) for the totals check.
+- Uses `invoiceModel` / `creditNoteModel` (`src/modules/invoicing/model.ts`) to read stored buyers and to backdate `issuedAt`.
+- Uses `issueCreditNote` and `waitForInvoice` from `src/modules/invoicing/tests/factories.ts`. `issueCreditNote` fronts the credit-note service (`src/modules/invoicing/services/issue-credit-note.ts`).
+- Uses `createOrder`/`toOrderItem` from `src/modules/orders/tests/factories.ts`, plus `createProduct` and `createUser` from the products and users test factories.
+- Calls `markPaid` (`src/modules/orders/friends/payments.ts`) to trigger invoice creation. The `waitForInvoice` helper implies the invoice is created asynchronously, via domain events.
+- `registerModules` (`src/kernel/registry.ts`) wires up the orders, products, inventory, users and invoicing modules (`src/modules/orders/module.ts`, `src/modules/products/module.ts`, `src/modules/inventory/module.ts`, `src/modules/invoicing/module.ts`). `resetDomainEvents` (`src/kernel/events.ts`) cleans up between tests.
+- `writeDocument` (`src/infrastructure/adapters/document-store.ts`) seeds the PDF files that the erasure is expected to delete.
 
 ## Notes
-
-- The retention rule is **issue year + 11 local calendar years** (i.e., the buyer block is eligible on the first instant of year `issuedYear + 11` in the invoice's `timezone`). The boundary test pins this with a 22:59 vs 23:30 UTC pair in `Europe/Rome`.
-- A document stamped `2015-12-31T23:30:00Z` in `Europe/Rome` is treated as **2016**-issued locally, pushing its retention deadline a full year later — a common timezone gotcha this test guards against.
-- The document-store path is a per-test `mkdtemp` directory set via `setEnvironment({ NODE_DOCUMENT_STORE_PATH: root })`; cleanup uses `rm(recursive, force)` in `afterEach`.
-- `setupTestDb()` runs once at module scope, outside `beforeEach`.
-- The "field preservation" test strips `updatedAt` from both sides of a deep-equality check because Mongoose auto-updates it on write.
+- The retention rule asserted here is "local New Year of (issue year + 11)", evaluated in the invoice's stored timezone. The first test pins the boundary: `2025-12-31T22:59Z` is not due and `23:30Z` is.
+- Tests backdate `issuedAt` via direct model updates, so invoice issuance still runs normally.
+- The credit-note test expects the invoice to be erased but the credit note to stay, because the note's own issue date (2020) is still within retention.

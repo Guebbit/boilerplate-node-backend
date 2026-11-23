@@ -1,34 +1,36 @@
 ---
 source: src/modules/tasks/controllers/post-task-note.ts
-sha256: c2739d2ab48a334566dc59b7136b6a03c3d688fa5dc7a25b665682f845d246ff
-generated_at: 2026-11-14T22:06:54.696741+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:58:37.386649+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/tasks/controllers/post-task-note.ts
 
 ## Purpose
-
-Controller handler for `POST /tasks/:id/notes`. Validates the incoming note body, extracts the caller context, and delegates to the task service to append a staff note. The operation is append-only: there is no update or delete path for notes.
+Express controller for `POST /tasks/:id/notes`, which lets staff append a note to a task. Notes are append-only. The controller validates the task id and request body, delegates to the task service, and returns the updated task.
 
 ## Key elements
-
-- **`createTrimmedNoteBody`** – Zod schema built by extending `CreateTaskNoteBody` so the `body` field is trimmed before validation. This makes a whitespace-only note a 422 rather than a valid empty string.
-- **`postTaskNote`** (exported) – Express handler. Flow: `requireId` → `parseBody` (against the trimmed schema) → `taskService.addNote(id, body, caller)` → `refused` / `successResponse` (200) → `catchAs` for unexpected errors.
+- `createTrimmedNoteBody` (module-private): `CreateTaskNoteBody` extended so `body` goes through `trimmedInto(...)`. A whitespace-only note is therefore treated as empty and gets the same field-level 422 an empty one does.
+- `postTaskNote` (exported): the request handler.
+  1. `requireId(request, response, { notFound: 'generic.error-item-gone' })` validates the `:id` param. If it returns a falsy value, the handler stops (the helper has already written the response).
+  2. `parseBody(createTrimmedNoteBody, request.body, response)` validates the body. If it returns a falsy value, the handler stops.
+  3. `taskService.addNote(id, body.body, callerContextOf(request))` adds the note.
+  4. If `refused(response, result)` is true, the handler returns (a refusal has been written to the response). Otherwise it sends `successResponse<Task>(response, result.data, 200)`.
+  5. Rejections go to `catchAs(response, 'postTaskNote')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** – provides `parseBody`, `refused`, `catchAs` (the shared validation/error plumbing used in every handler).
-- **`src/infrastructure/http/ids.ts`** – `requireId` resolves and 404s the `:id` route param.
-- **`src/infrastructure/http/request.ts`** – `callerContextOf` extracts the authenticated caller's identity/context for the service call.
-- **`src/infrastructure/http/response.ts`** – `successResponse` shapes the 200 JSON envelope.
-- **`src/infrastructure/http/schemas.ts`** – `trimmedInto` wraps a schema shape so the value is `.trim()`-ed before further validation.
-- **`src/modules/tasks/routes.ts`** – registers `postTaskNote` on the `POST /tasks/:id/notes` route.
-- **`src/modules/tasks/services/index.ts`** – this file imports `taskService` from here and calls its `addNote` method to perform the note-append.
-- **`src/types/index.ts`** – supplies the `CreateTaskNoteRequest` and `Task` type imports.
+- `src/infrastructure/http/controller.ts`: supplies `parseBody`, `refused` and `catchAs`, which handle body validation, service-refusal responses and error handling.
+- `src/infrastructure/http/ids.ts`: `requireId` validates the route id.
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `successResponse` writes the 200 response.
+- `src/infrastructure/http/schemas.ts`: `trimmedInto` trims the note body before validation.
+- `src/modules/tasks/services/index.ts`: exports `taskService`, which this controller calls to add the note.
+- `src/types/index.ts`: provides the `Task` and `CreateTaskNoteRequest` types.
+- `src/modules/tasks/routes.ts`: presumably wires this handler to the route. The routing itself is not visible in this file.
 
 ## Notes
-
-- The trim-then-validate pattern is deliberate: without `trimmedInto`, a body of `"   "` would pass as a valid non-empty string and create a useless note. The extension exists *only* to turn that into a field-level 422.
-- Success status is **200**, not 201, consistent with the rest of the tasks controller set.
-- The handler returns `Promise.resolve()` early on validation failures; it never throws synchronously.
+- Every handler path returns a Promise. Early exits return `Promise.resolve()`.
+- Success returns HTTP 200 with the updated `Task`, not 201.
+- The "staff" restriction is not enforced in this file. It is only noted in the route comment, so any enforcement happens elsewhere (for example in the routes or the service).
+- The `CreateTaskNoteBody` schema comes from the `@api/schemas.zod` alias.
+- The module doc comment references `docs/modules/tasks.md#notes`, but that file is not in the repository.

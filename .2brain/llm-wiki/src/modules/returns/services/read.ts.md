@@ -1,43 +1,42 @@
 ---
 source: src/modules/returns/services/read.ts
-sha256: 0c77d696949753bea7936974b4be932f7a38c656e41e0b1e1f72154d361dbff7
-generated_at: 2026-11-14T21:40:17.798435+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b3b6afcc58dca5261954e4995694c48e444e1993f3fd8f282fc2e3ed58889a02
+context_sha256: 303dd0d6871c73d23786f09a81afec92e10d29706c46bfeb3c1bec47529cd355
+generated_at: 2026-11-22T07:31:48.728796+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/read.ts
 
 ## Purpose
-
-Read-side service for the returns domain. It answers "what can this caller see?" and "what can this caller do with each row?" by combining ability checks, order-ownership scoping, and the return lifecycle state. It is the single place that projects a `ReturnDocument` into a wire-ready `Return` or `ReturnListItem` with caller-specific actions attached.
+Read side of the returns module. It decides which returns a caller may see (staff with `read:Return` see all; everyone else sees only returns on their own orders, since a return is keyed by `orderId` and has no owner of its own). It also computes the per-caller `actions` flags attached to returns, so clients don't re-implement the lifecycle.
 
 ## Key elements
-
-- **`ReturnFilters`** — query-parameter shape accepted by `GET /returns` (page, pageSize, orderId, status, reason, sort).
-- **`isStaff(authContext)`** — returns `true` when the caller holds the `read:Return` ability; gates the wide read vs. ownership-scoped read.
-- **`actionsForCaller(authContext)`** — resolves `update:Return` and `receive:Return` abilities once, then returns a pure function that maps a `StatusOnly` record to a `ReturnActions` object (approve, decline, receive, recordProof, close, cancel). Lifecycle legality is delegated to `returnLifecycle.allows`; the "proof already recorded" and "refund already owed" guardrails are checked here.
-- **`withActions(returned, authContext)`** — spreads the presenter output of a full `ReturnDocument` and appends the computed `actions`.
-- **`listReturns(filters, authContext)`** — paginated list. Staff get an unscoped `returnRepository.search`; everyone else is scoped to their own `orderId`s via `orderService.ownOrderIds`. Each row is projected with `presentReturnListItem` plus per-row actions.
-- **`getReturn(id, authContext)`** — single-return fetch. Non-existent or not-visible both return the same 404 + i18n message.
+- `ReturnFilters` — the query filters for `GET /returns`: `page`, `pageSize`, `orderId`, `status`, `reason`, `sort`.
+- `isStaff(authContext)` (internal) — true if the caller holds `read` on `Return`.
+- `actionsForCaller(authContext)` (internal) — resolves the caller's abilities once (`update` and `receive` on `Return`) and returns a function from a return's status to a `ReturnActions` object. The flags are `approve`, `decline`, `receive`, `recordProof`, `close` and `cancel`. Each needs both the matching permission and a status that `returnLifecycle.allows(...)`.
+  - `recordProof` also requires that no `proofOfSendingAt` is set yet.
+  - `cancel` also requires that `proofOpenedRefund(returned)` is false.
+- `withActions(returned, authContext)` — presents a `ReturnDocument` via `presentReturn` and adds the caller's `actions`.
+- `listReturns(filters, authContext)` — returns `{ items, meta }` of `ReturnListItem`s.
+  - Staff search freely.
+  - Other callers are scoped to `orderId $in` their own order ids.
+  - `status` and `reason` are applied as exact matches.
+- `getReturn(id, authContext)` — returns `ResponseSuccess<Return>`, or a 404 `ResponseReject` using `returns.not-found`. The 404 is returned when the return doesn't exist and also when it is on someone else's order.
 
 ## Relationships
-
-- **`src/modules/returns/repository.ts`** — `returnRepository.search` and `findById` supply the raw documents for both list and single-read paths.
-- **`src/modules/returns/presenter.ts`** — `presentReturn` / `presentReturnListItem` shape documents for the wire before actions are attached.
-- **`src/modules/returns/domain/index.ts`** / **`src/modules/returns/domain/lifecycle.ts`** — `returnLifecycle.allows` gates each action; `proofOpenedRefund` blocks cancel; `ReturnStatus` / `ReturnReason` are the enum types used in `StatusOnly`.
-- **`src/modules/returns/domain/refund-due.ts`** — consumed transitively via the domain barrel; provides the refund-owed logic referenced by the `cancel` guard.
-- **`src/modules/returns/model.ts`** — `ReturnDocument` is the raw shape the repository returns and the presenter consumes.
-- **`src/kernel/ability.ts`** + **`src/kernel/permissions.ts`** — `holds` + `callerForSubject` resolve the caller's standing for `read`, `update`, and `receive` on the `Return` subject.
-- **`src/modules/orders/index.ts`** / **`src/modules/orders/services/index.ts`** — `orderService.ownOrderIds` provides the set of order IDs a customer owns, used to scope non-staff list queries and the single-return visibility check.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` produce the standard response envelopes.
-- **`src/infrastructure/i18n/index.ts`** / **`src/infrastructure/i18n/context.ts`** — `t` localizes the "not found" message.
-- **`src/infrastructure/persistence/search.ts`** — `PaginatedMeta` types the `meta` returned alongside list items.
-- **`src/modules/returns/services/index.ts`** — barrel that re-exports the public surface of this module.
+- `../repository` (`returnRepository`) — `search` for lists and `findById` for single reads.
+- `../presenter` — `presentReturn` and `presentReturnListItem` shape the output.
+- `../model` — supplies the `ReturnDocument` type.
+- `../domain` — `returnLifecycle` (which acts are allowed from which status), `proofOpenedRefund`, and the `ReturnStatus` / `ReturnReason` types.
+- `@kernel/permissions` and `@kernel/ability` — `callerForSubject` and `holds` drive the staff check and the action flags.
+- `@modules/orders` — its `orderService` supplies the own-order ids that scope a non-staff list.
+- `./ownership` — `ownOrder` checks order ownership in `getReturn`.
+- `@infrastructure/http/response` — `generateSuccess` and `generateReject` build the responses.
+- `@infrastructure/i18n` — `t` provides the not-found message.
+- `@infrastructure/persistence/search` — supplies the `PaginatedMeta` type.
 
 ## Notes
-
-- Returns are keyed by `orderId`, not `userId`. "Ownership" is always delegated to the order; there is no `userId` column on a return to filter on directly.
-- A non-staff caller requesting a return on another person's order receives **404**, not 403 — identical to a genuinely missing return, so existence is not leaked.
-- `actionsForCaller` resolves abilities **once** per request, then applies the resulting closure to every row in the page. This avoids one ability check per row.
-- `recordProof` is only offered while `proofOfSendingAt` is `undefined`; the proof is a one-shot record.
-- `cancel` is blocked whenever `proofOpenedRefund` returns true, mirroring the rule in the cancel service.
+- A customer holds none of the `update` or `receive` keys, so every action flag is false for them. Their own entry point is `GET /returns/options`, which is not in this file.
+- Visibility in `getReturn` is decided before building the response, so "not yours" and "not found" are indistinguishable (both 404).
+- In `listReturns`, an `orderId` filter outside the caller's own orders yields an empty page, not someone else's rows.

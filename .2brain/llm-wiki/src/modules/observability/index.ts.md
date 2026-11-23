@@ -1,25 +1,20 @@
 ---
 source: src/modules/observability/index.ts
-sha256: 2f5ca2f28cb4039ffbf18a573cf33819beef00d60c691f3dcda533fedd2efeeb
-generated_at: 2026-11-08T06:39:19.859653+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T06:01:36.404920+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/index.ts
 
 ## Purpose
-
-Public barrel for the `observability` module. It is the **only** surface a sibling module is allowed to import from (per the strategic DDD rule in `docs/theory/strategic-ddd.md` §5), enforcing that external consumers never reach into this module's internal directory structure.
+Public barrel for the observability module. It is documented as the only surface sibling modules may import, and it publishes the module's readiness/telemetry services by re-exporting them.
 
 ## Key elements
-
-- **`export * from './services'`** — Re-exports the full public API of `./services` (readiness/telemetry services). This is the sole line of executable code in the file.
+- `export * from './services'` — re-exports everything the services layer exposes. The file defines no logic of its own.
 
 ## Relationships
-
-- **`src/modules/observability/services/index.ts`** — The sole re-export target. This barrel is the only sanctioned path for a sibling module to reach the observability services; a deep import like `.../observability/services/readiness` is the anti-pattern this file exists to prevent.
+- `src/modules/observability/services/index.ts` — the sole source of this barrel's exports. Whatever that file exports becomes the module's public API.
 
 ## Notes
-
-- **No external consumers today.** The docstring explicitly states nothing outside the module imports from this barrel at present; it is forward-looking infrastructure for future cross-module telemetry needs.
-- **Module-boundary enforcement is by convention + documentation, not tooling.** There is no import-linter rule visible in this file; the "only surface" rule is stated in the JSDoc and the DDD doc, not mechanically enforced here.
+- Per the file's comment, nothing outside the module imports these services today. The barrel is where a future caller should import from, rather than deep-importing into the module.
+- Because of the wildcard re-export, adding an export to `services/index.ts` also makes it public.

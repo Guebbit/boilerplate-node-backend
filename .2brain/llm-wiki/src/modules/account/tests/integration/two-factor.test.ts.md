@@ -1,55 +1,47 @@
 ---
 source: src/modules/account/tests/integration/two-factor.test.ts
-sha256: e53eabb163dfe35dc8a6b7411535e9103c9a71d0d1a751862bd30b567e76a8d7
-generated_at: 2026-11-14T19:13:20.319961+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6c3a7aba8d6f6e13e769d8eea7d3bedce19e2f77ced5f01b2653ced3f6036c11
+context_sha256: b9af1d72f4d7dc33b2b9ace7997712cff52481e5b14953aaa11f7be8eef9ee0d
+generated_at: 2026-11-22T04:03:13.594116+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/two-factor.test.ts
 
 ## Purpose
-
-Integration test suite that drives the real Express app through the full two-factor authentication lifecycle: enrolling TOTP and email-code factors, logging in via the two-step challenge, removing a factor, and disabling 2FA entirely. All routing, auth guards, and serialization run for real. The most critical assertion (not visible in the truncated portion) verifies that a challenge token alone cannot authenticate a request—a bypass would invalidate every other test.
+End-to-end integration suite for two-factor authentication. It drives the real Express app over HTTP to cover enrolling a device (TOTP) factor and a delivered (email) factor, the two-step login challenge, removing a factor, and disabling the rest. Its header calls out a bypass check, that a challenge token must not authenticate a request on its own, as the most important test.
 
 ## Key elements
-
-- **`mockOutbox`** — Captures every email the app queues (template + data). The sole way to read a delivered code; the account stores only its HMAC. Named with the `mock*` prefix because `jest.mock` is hoisted and may only close over identifiers matching that prefix.
-- **`jest.mock('@infrastructure/adapters/mailer')`** — Replaces `enqueueEmail` with a stub that pushes into `mockOutbox` instead of sending.
-- **`mailedCode()`** — Pulls the numeric code from the most recent `account.two-factor-code` mail entry.
-- **`authenticateVerified()`** — Creates a user with `verifiedAt` set, logs in, returns `{ user, bearer }`. Used where the email factor requires a verified address.
-- **`authenticateUnverified()`** — Same flow but without `verifiedAt`; the one place in the suite that opts out of the `authenticateAs` verified default.
-- **`enrollTotp(bearer)`** — POSTs setup → confirm (using `codeFor`) → `forgetSessionEpoch`; returns `{ secret, backupCodes }`.
-- **`enrollEmail(bearer, proof?)`** — POSTs setup (with optional `proof` code) → confirm with `mailedCode()` → `forgetSessionEpoch`; returns `{ backupCodes }`.
-- **`startLogin(email)`** — Fires the password step of `POST /account/login`, which responds with a challenge rather than a token.
-- **`mintChallenge(userId)`** — Loads the user's credentials via `userRepository` and calls `buildLoginChallenge` directly, producing a fresh DB-backed MFA challenge without an HTTP round-trip.
-- **`describe('status')`** — Verifies `GET /account/2fa` shape: fresh account, unverified account, and armed-method reporting.
-- **`describe('status while an enrollment is pending')`** — Confirms a setup that was never confirmed does not count as armed; a replace disarms the old factor before the new code is proved.
-- **`describe('changing factors once one is armed')`** — First factor needs no proof; second factor and replaces require a valid code (422 otherwise) and do not disarm the existing factor on failure.
-- *(Truncated section likely covers: login challenge flow with TOTP/email, bypass check, removal, and full disable.)*
+- `mockOutbox` / `jest.mock('@infrastructure/adapters/mailer')`: replaces `enqueueEmail` so queued mails are captured in memory and nothing is sent. The real module is otherwise kept. It is named `mock*` because `jest.mock` is hoisted.
+- `mailedCode()`: returns the digits from the latest `account.two-factor-code` mail. This is the only way to read a delivered code, since the account stores only its HMAC. It throws if no such mail was queued.
+- `mailsOf(template)`: filters the outbox by template.
+- `authenticateVerified()` / `authenticateUnverified()`: create a user through the factory, log in via `POST /account/login`, and return `{ user, bearer }`. The email factor requires a verified address, so the suite states verification explicitly instead of relying on the `authenticateAs` default.
+- `enrollTotp(bearer)`: calls TOTP `setup` then `confirm` using `codeFor(secret, 0)`. It returns the secret and backup codes.
+- `enrollEmail(bearer, proof?)`: calls email `setup` (with an optional proof code from an already-armed factor), then `confirm` with the mailed code. It returns the backup codes.
+- `startLogin(email)`: does the password-only login step, which answers with a challenge rather than a token.
+- `mintChallenge(userId)`: builds a DB-backed login challenge at service level via `userRepository.findByIdWithCredentials` and `buildLoginChallenge(user, ['pwd'])`, with no login round trip.
+- Test groups visible: `status`, `status while an enrollment is pending`, `changing factors once one is armed`. More groups follow, including the bypass check named in the header.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/account/services/index.ts` | Imports `twoFactorService` (service-level assertions or setup). |
-| `src/modules/account/services/two-factor-challenge.ts` | Imports `buildLoginChallenge` for the `mintChallenge` helper. |
-| `src/modules/account/session/config.ts` | Imports `getExpiryTime` (likely to assert token/session TTLs). |
-| `src/modules/account/tests/factories.ts` | Imports `plantToken` (session/challenge token helpers). |
-| `src/modules/account/two-factor/index.ts` | Imports `DELIVERED_CODE_MAX_ATTEMPTS` (attempt-limit assertions). |
-| `src/modules/users/tests/factories.ts` | Imports `userRepository`, `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD`. |
-| `src/types/index.ts` | Imports `RememberTier` (session type for token assertions). |
-| `tests/support/http.ts` | Imports `api`, `authenticateAs` — the shared HTTP harness. |
-| `tests/support/setup-test-db.ts` | Calls `setupTestDb()` to provision an isolated DB per run. |
-| `tests/support/environment.ts` | Calls `setEnvironment({ NODE_MAIL_TRANSPORT: 'outbox' })` in `beforeEach`. |
-| `tests/support/totp.ts` | Imports `codeFor` to generate valid TOTP codes for confirm steps. |
-| `tests/support/session-epoch.ts` | Imports `forgetSessionEpoch` to clear server-side session state after mutations. |
-| `tests/support/cookies.ts` | Imports `setCookie` (for cookie-based auth paths). |
-| `tests/support/callers.ts` | Imports `testCallerContext` (caller identity for request context). |
+- `tests/support/*` (`http`, `setup-test-db`, `environment`, `totp`, `cookies`, `session-epoch`, `callers`):
+  - `api()` and `authenticateAs` drive the HTTP calls.
+  - `setupTestDb()` handles database setup.
+  - `setEnvironment` sets the mail transport.
+  - `codeFor` generates TOTP codes.
+  - `forgetSessionEpoch` is called after each enrollment.
+  - `setCookie` and `testCallerContext` are imported for use in the rest of the file.
+- `src/modules/users/tests/factories.ts`: supplies `createUser`, `userRepository`, `PLAIN_PASSWORD` and `REPLACEMENT_PASSWORD`.
+- `src/modules/account/tests/factories.ts` (imported as `../factories`): supplies `plantToken`.
+- `src/modules/account/services/two-factor-challenge.ts`: `buildLoginChallenge` is used by `mintChallenge`.
+- `src/modules/account/services/index.ts`: `twoFactorService` is imported.
+- `src/modules/account/two-factor/index.ts`: `DELIVERED_CODE_MAX_ATTEMPTS` is imported.
+- `src/modules/account/session/config.ts`: `getExpiryTime` is imported.
+- `src/types/index.ts`: `RememberTier` is imported.
+- `jose`: `decodeJwt` is imported.
+- `src/modules/users/repository.ts`: reached through the factories' `userRepository`.
 
 ## Notes
-
-- **`mock*` naming is mandatory, not stylistic.** Jest hoists `jest.mock` calls above all imports; the factory closure may only reference identifiers starting with `mock` or `jest`. Renaming `mockOutbox` breaks the test at load time.
-- **`forgetSessionEpoch` after every mutation.** Enrolling, confirming, and removing factors rotate the server-side session epoch. Without the call, a subsequent request with the same bearer token is rejected as stale, producing confusing 401s that look like an auth bug.
-- **`authenticateAs` (from `tests/support/http.ts`) defaults to a verified account.** This suite defines its own `authenticateVerified` / `authenticateUnverified` to make the preconditions explicit and avoid depending on that default, which other suites may change.
-- **`NODE_MAIL_TRANSPORT: 'outbox'` is set per test.** The suite's default environment uses `log` (discards mail). Only `outbox` retains the code in `mockOutbox`. Forgetting this `beforeEach` makes `mailedCode()` throw.
-- **File is truncated.** The header comment references a bypass check "at the bottom" and the remaining test blocks (login challenge, removal, disable, password-change interplay via `REPLACEMENT_PASSWORD`) are not visible in the excerpt provided.
+- The mail transport is set to `outbox` in `beforeEach`, because a mailed code is offered only where mail actually reaches a person (`mailDelivers`). The suite default `log` would drop it. The outbox is cleared in a separate `beforeEach`.
+- A pending or replaced factor counts as disarmed in the status response. A replace disarms the factor before its new code is proved, so `enabled` becomes false and `methods` is empty.
+- Once a factor is armed, adding a second method or replacing one without a code returns 422. The armed factor stays armed and no mail is queued. The first factor needs no code.
+- A confirmed enrollment yields 10 backup codes (`backupCodesRemaining` is 10).

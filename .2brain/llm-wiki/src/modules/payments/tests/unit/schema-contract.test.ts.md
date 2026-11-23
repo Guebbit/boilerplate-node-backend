@@ -1,36 +1,32 @@
 ---
 source: src/modules/payments/tests/unit/schema-contract.test.ts
-sha256: acd9cb17e53e178adada32366dc3ee4420ba9a0a5cfea80900dca86bb16c324a
-generated_at: 2026-11-08T07:41:08.024175+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6b208d3147d7ea9e57a48e643d2c410b6db992d71a163c501e079dcda3d3c689
+context_sha256: c4529677551d9e41b30e094a4f79d5db0d5af80f513215dba6a76a59003409e2
+generated_at: 2026-11-22T07:06:30.005042+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/unit/schema-contract.test.ts
 
 ## Purpose
-
-Locks down the payment schema's contract as a set of executable assertions: required fields, the `unique` index on `orderId` (the module's entire idempotence guarantee), reference integrity, type choices, enum bounds, and safe defaults. It exists so that a schema change that silently breaks any of these invariants fails CI instead of letting the shop charge an order twice.
+Unit test that pins the contract of `paymentSchema`. Its central concern is idempotence: `orderId` must carry `unique: true`, so the database allows at most one payment per order and a retried intent (double-click, replayed webhook) fails on insert instead of creating a second charge. Removing it throws nothing, so this test is the only guard.
 
 ## Key elements
-
-- **`describe('paymentSchema')`** — single block; every assertion is one `it` tied to one contract property.
-- **Required-fields test** — asserts exactly `[amount, amountRefunded, currency, method, orderId, provider]`; documents why `cardLast4` and `userId` are intentionally absent.
-- **Unique-index test** — asserts `orderId_1: unique=true` via `indexOptionSpecs`, the single line that makes retried intents fail on insert rather than create a duplicate.
-- **Reference test** — asserts `orderId → Order` and `userId → User` are `ObjectId` refs.
-- **Negative-amount test** — asserts `-0.01` is refused, `0` is allowed.
-- **Decimal test** — asserts `amount` and `amountRefunded` are `Decimal128`; `amountRefunded` defaults to `'0'`.
-- **Status test** — asserts the enum equals `Object.values(PaymentStatus)` and the default is `PaymentStatus.requires_confirmation`.
-- **Timestamps test** — asserts `timestamps: true` on the schema options.
+- **`describe('paymentSchema')`** with seven tests:
+  - **Required paths**: exactly `amount`, `amountRefunded`, `currency`, `method`, `orderId`, `provider`. `cardLast4` (not every provider has a card), `status` (has a default) and `userId` (unset on account erasure) are intentionally not required.
+  - **Unique order index**: `indexOptionSpecs` contains `orderId_1: unique=true`.
+  - **References**: `orderId` is an `ObjectId` ref to `Order`; `userId` is an `ObjectId` ref to `User`.
+  - **Amount validation**: `amount` refuses `-0.01` but accepts `0`.
+  - **Decimal storage**: `amount` and `amountRefunded` are `Decimal128`; `amountRefunded` defaults to `'0'`.
+  - **Status**: enum equals `Object.values(PaymentStatus)`; default is `PaymentStatus.requires_confirmation`, so a new payment never looks paid.
+  - **Timestamps**: `timestamps` option is `true`.
 
 ## Relationships
-
-- **`src/modules/payments/model.ts`** — provides `paymentSchema`, the sole object under test.
-- **`src/types/index.ts`** — provides `PaymentStatus`; the test compares the schema's enum against its `Object.values` to catch drift.
-- **`tests/support/schema.ts`** — provides the assertion helpers (`requiredPaths`, `indexOptionSpecs`, `typeOf`, `refOf`, `refuses`, `enumOf`, `defaultOf`, `optionsOf`) that this file (and presumably sibling schema-contract tests) use as a shared DSL.
+- **`src/modules/payments/model.ts`**: supplies `paymentSchema`, the only thing under test.
+- **`src/types/index.ts`**: supplies the `PaymentStatus` enum, imported via the `@types` alias, used for the status enum and default checks.
+- **`tests/support/schema.ts`**: supplies the schema-introspection helpers (`requiredPaths`, `indexOptionSpecs`, `typeOf`, `refOf`, `refuses`, `enumOf`, `defaultOf`, `optionsOf`), imported via the `@tests/schema` alias.
 
 ## Notes
-
-- The file-header comment is the canonical warning: removing `unique: true` on `orderId` produces no error at runtime — the shop simply becomes able to charge twice. Treat that index as load-bearing.
-- `userId` is *not* required and *not* nullable-optional; it is set to `null` on account erasure, mirroring the `orders` module's convention.
-- `method` is required even though some code paths might not have it; the comment asserts every creation path sets it, so a missing value would be a bug, not a valid state.
-- The zero-amount allowance (`0` passes, `-0.01` does not) means the schema intentionally permits a zero-value record (e.g., a free/granted order) but blocks accidental refunds routed through the payment insert path.
+- The tests inspect the schema definition and do not touch a database. The uniqueness check reads index specs, so it does not exercise an actual duplicate insert.
+- The required-paths assertion is an exact list. Adding or removing a required field in the model means updating it.
+- Decimal128 is used so database-side sums are exact. A negative amount is rejected because it would act as an unaudited refund.

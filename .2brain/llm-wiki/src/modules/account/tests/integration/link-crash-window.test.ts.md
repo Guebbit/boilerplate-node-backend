@@ -1,53 +1,53 @@
 ---
 source: src/modules/account/tests/integration/link-crash-window.test.ts
-sha256: d5b2450e4655ea4c5e260b705ab25025da33f1bbcae3ea58111d3aa3995f6399
-generated_at: 2026-11-14T19:04:37.626844+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 26321d02117dcd6aa5f186a6200411a5f3c7c67bf352a6895904e18c3a469c3f
+context_sha256: 1968a25c5bb3ff50be1d45f3c7cd543b84b161e9516268f53d9f90e181f39424
+generated_at: 2026-11-22T03:56:32.213803+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/link-crash-window.test.ts
 
 ## Purpose
-
-Integration tests that prove the atomicity contract of one-time link spending: the token spend and the account write it unlocks commit in a single transaction. Each test fails the *write* (not the spend) to verify the transaction rolls back, leaving the token live and the account unchanged, then retries successfully. One case per link flow (verify, email-change confirm, email-change undo, OAuth link, TOTP confirm) plus targeted sub-cases (transient retry, outbox-write failure, 409 conflict, race with a concurrent confirmation).
+Integration test suite for the "crash window" of one-time links (email verification, email change confirm/undo, and others). It checks that spending the link token and the write it unlocks commit in one transaction. If the write fails, the token row is restored, the account is unchanged, and a retry with the same link succeeds. Each flow gets a case that fails that flow's own write once, after the spend has already run. That ordering is what shows the rollback came from the aborted transaction. The file's header doc points to a "spending a link" section of the account-sessions module documentation.
 
 ## Key elements
-
-- **`connectionReset()`** – Returns a plain `ECONNRESET` error with no MongoDB driver label, ensuring the driver does *not* auto-retry the transaction.
-- **`transientFailure()`** – Returns a `MongoServerError` tagged with `TransientTransactionError`, triggering a full transaction re-run by the driver.
-- **`holds(userId, type)`** – Asks the account's token collection whether a given token type is still present.
-- **`storedField(userId, key)`** – Reads a single account field (including credentials) via `userRepository.findByIdWithCredentials`.
-- **`addressesOf(userId)`** – Returns `{ email, previousEmail, pendingEmail }` for matcher comparison.
-- **`pendingChange()`** – Creates a verified account, sets `pendingEmail`, and plants an `email-change` confirmation token.
-- **`changedAccount()`** – Creates a verified account with `previousEmail` set and a live `email-change-undo` token.
-- **`lockedAccount(email)`** – Creates an account in the soft-delete grace window (`deletedAt`, `purgeAt` set).
-- **`armedAccount()`** – Provisions TOTP via the HTTP API and returns the account plus its one-time backup codes.
-- **`describe` blocks** – One per link flow; each contains a "fails → stays live → retries OK" assertion pair, plus flow-specific edge cases (transient retry preserves undo address, outbox-row failure, 409 conflict kills all sessions, race between undo and confirm).
+- `setupTestDb()` and a `beforeEach` that sets `NODE_MAIL_TRANSPORT: 'outbox'`. An `afterEach` calls `jest.restoreAllMocks()`.
+- `connectionReset()`: builds an `ECONNRESET` error with no driver label, so nothing retries it. It simulates a dropped connection.
+- `transientFailure()`: builds a `MongoServerError` labelled `TransientTransactionError`, which the driver may safely retry by re-running the whole transaction.
+- Assertion helpers:
+  - `holds(userId, type)`: whether the account still holds a token of that type.
+  - `storedField(userId, key)`: one field of the stored account, including credentials.
+  - `addressesOf(userId)`: the `email`, `previousEmail` and `pendingEmail` fields.
+- Fixture builders:
+  - `pendingChange()`: an account with `after@example.com` pending and an `email-change` token planted.
+  - `changedAccount()`: an account moved off `old@example.com`, with a live `email-change-undo` token.
+  - `lockedAccount(email)`: an account in its deletion grace period.
+  - `armedAccount()`: an account with TOTP armed through the HTTP API. It returns the user and the backup codes.
+- Test groups visible in the file:
+  - **Email verification link**: a failed `save` leaves the `verify` token live and `verifiedAt` unset. The retry returns 204.
+  - **Email change confirmation link**: a failed save keeps the old email and pending email. A transient error reruns the transaction and keeps `previousEmail` for undo, with exactly one `user.profile_changed` outbox event.
+  - **A later write failing**: when `outboxEventModel.create` fails, the address is left unchanged and the token stays live.
+  - **Email change undo link**: a failed save leaves the link live. A 409 when the old address is taken leaves the link live, ends every session (empty session rows, refresh returns 401), and succeeds once the address is freed.
+  - **Undo racing a confirmation**: the test intercepts the token repository's `spend` to apply the thief's confirmation just before the spend. The prompt cuts off before the assertions, so the exact checks are not shown.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/kernel/outbox.ts` | Imports `outboxEventModel` (spied to simulate outbox-write failure) and `settleOutboxNudges` (flushes pending nudge jobs after a test). |
-| `src/modules/account/repository.ts` | Imports `verificationTokenRepository`; spies on `.spend` in the race-condition test to interleave a competing write. |
-| `src/modules/account/services/oauth.ts` | Imports `startOAuthLink`, `linkProviderToSignedInAccount`, `OAuthIdentityTakenError` for the OAuth-link crash-window case. |
-| `src/modules/account/services/two-factor-challenge.ts` | Imports `buildLoginChallenge` to set up a 2FA login flow. |
-| `src/modules/account/tests/factories.ts` | Imports `plantToken`, `sessionRowsOf`, `tokenTypesOf` for token seeding and session inspection. |
-| `src/modules/users/repository.ts` | Imports `userRepository`; spies on `.save` to inject the write failure, and reads account fields for assertions. |
-| `src/modules/users/tests/factories.ts` | Imports `createUser`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD` for account creation and credential constants. |
-| `tests/support/http.ts` | `api()` – supertest-style HTTP client for all endpoint calls. |
-| `tests/support/environment.ts` | `setEnvironment` – sets `NODE_MAIL_TRANSPORT: 'outbox'` so no real mail is sent. |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` – provisions a clean MongoDB instance before the suite. |
-| `tests/support/totp.ts` | `codeFor` – generates a TOTP code for a given secret. |
-| `tests/support/cookies.ts` | `cookieHeader` – extracts the session cookie from a login response. |
-| `tests/support/session-epoch.ts` | `forgetSessionEpoch` – invalidates the cached session epoch after a TOTP state change. |
-| `tests/support/callers.ts` | `testCallerContext` – provides caller metadata for API calls that require it. |
+- `src/kernel/outbox.ts`: provides `outboxEventModel` (counted and mocked to fail) and `settleOutboxNudges`.
+- `src/modules/account/repository.ts`: provides `verificationTokenRepository`, whose `spend` method is spied on to inject the race.
+- `src/modules/account/services/oauth.ts` and `src/modules/account/services/two-factor-challenge.ts`: imported for `linkProviderToSignedInAccount`, `OAuthIdentityTakenError`, `startOAuthLink` and `buildLoginChallenge`. The visible portion does not use them yet, so they presumably serve later cases.
+- `src/modules/users/tests/factories.ts`: `createUser`, `userRepository`, `PLAIN_PASSWORD` and `REPLACEMENT_PASSWORD`.
+- `src/modules/users/repository.ts`: the `userRepository` used through those factories. Its `save` is mocked to fail writes, and `updateMany` and `findByIdWithCredentials` set up and inspect state.
+- `src/modules/account/tests/factories.ts`: `plantToken`, `sessionRowsOf` and `tokenTypesOf`, for planting tokens and inspecting token and session rows.
+- `tests/support/*` helpers:
+  - `http.ts`: the `api()` HTTP client.
+  - `setup-test-db.ts`: test database setup.
+  - `environment.ts`: `setEnvironment`.
+  - `totp.ts`: `codeFor`.
+  - `cookies.ts`: `cookieHeader`.
+  - `session-epoch.ts`: `forgetSessionEpoch`.
+  - `callers.ts`: `testCallerContext`.
 
 ## Notes
-
-- The critical design choice is failing the write **after** the token spend has already executed. Failing the spend itself would not prove the rollback; the token row only reappears because the surrounding transaction aborted. This is the invariant documented in `docs/modules/account-sessions.md#spending-a-link`.
-- `connectionReset()` deliberately omits any `errorLabels` array so the MongoDB driver treats it as a non-transient error and does not silently re-run the transaction. The assertion then verifies the application-level rollback, not a driver retry.
-- The transient-retry test (`transientFailure()`) exercises the opposite path: the driver re-runs the whole transaction from scratch, so the second attempt sees the partially-edited document. The test asserts `previousEmail` is preserved and exactly **one** `user.profile_changed` outbox row exists.
-- The 409 conflict test (undo link + address already taken) additionally verifies that **all** existing sessions for the account are terminated even though the email field is unchanged — a deliberate security behavior.
-- The race-condition test monkey-patches `verificationTokenRepository.spend` to inject a competing `updateMany` between the token lookup and the real transaction, simulating a concurrent confirmation arriving in the window.
-- `afterEach` calls `jest.restoreAllMocks()`; individual tests use `mockRejectedValueOnce` / `mockImplementationOnce` so spies are auto-cleaned.
+- Failures are injected with `jest.spyOn(...).mockRejectedValueOnce`, so each fails exactly once and the retry goes through the real code.
+- A non-transient `connectionReset()` is expected to surface as a 5xx. A `transientFailure()` is expected to be retried transparently, giving 204.
+- The transient-retry test comments that the second attempt starts from a document the first attempt already edited. The test checks that `previousEmail` still ends up as the original address.

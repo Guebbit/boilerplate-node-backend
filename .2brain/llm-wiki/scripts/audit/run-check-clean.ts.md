@@ -1,29 +1,27 @@
 ---
 source: scripts/audit/run-check-clean.ts
-sha256: 1440a67f548c8615ebe5ab12c187cc4f34d2a6ed720c150b49398a600850399f
-generated_at: 2026-11-14T17:21:39.600506+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1440a67f548c8615ebe5ab12c187cc4f34d2a6ed720c150b49398a600850399f
+context_sha256: a250385511721c3f3e77eff8d5ffbfb22f01005e85fafea176bfae419aab7834
+generated_at: 2026-11-22T01:52:18.412744+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/audit/run-check-clean.ts
 
 ## Purpose
-
-Thin CLI entry point for the audit tripwire (rule 6 in `scripts/audit/RULES.md`). It parses argv, delegates to `main` in `check-clean.ts`, and maps the returned code onto `process.exitCode` (0 clean, 1 changes listed, 2 bad usage). It exists so `npm run audit:check-clean` has a concrete script target with the correct shebang and argument-slicing boilerplate.
+Executable command-line entry point (`#!/usr/bin/env tsx`) for the audit tripwire (rule 6 of the audit rules). It is a thin wrapper that passes command-line arguments to the real logic in `check-clean.ts` and uses the result as the process exit code.
 
 ## Key elements
-
-- **`#!/usr/bin/env tsx`** – shebang; the file is executed directly by tsx, not compiled.
-- **`@module` JSDoc tag** – declares the file as a side-effect module (no exports).
-- **`main` import** – the single import from `./check-clean`; all logic lives there.
-- **`process.exitCode = main(process.argv.slice(2))`** – strips the two Node/tsx args, hands the remainder to `main`, and records the exit code (allows pending I/O to flush before the process terminates).
+- **Top-level call**: `process.exitCode = main(process.argv.slice(2))`. It imports `main` from `./check-clean` and passes it the arguments after the node and script names.
+- **Usage** (via `npm run audit:check-clean --`):
+  - `snapshot <run-folder> [--repo <path>...]`
+  - `compare <run-folder> [--repo <path>...]`
+- **Exit codes**: `0` means clean, `1` means it lists what changed, and `2` means bad usage.
 
 ## Relationships
-
-- **`scripts/audit/check-clean.ts`** – sole dependency. This file imports its `main` function and passes the CLI arguments through; every subcommand (`snapshot`, `compare`), flag (`--repo`), and exit-code decision is implemented there.
+- Depends on `scripts/audit/check-clean.ts`, which exports `main`. That file holds the actual snapshot and compare behavior. This file only wires it to the process arguments and exit code.
 
 ## Notes
-
-- The current working directory is always audited; `--repo` flags *add* paths (e.g. the paired frontend) rather than replacing it.
-- The tool is strictly post-hoc reporting — it never blocks or reverts a write.
-- Because it assigns to `process.exitCode` rather than forcing immediate termination, any open handles (file reads, network) can drain before the process actually exits.
+- The check reports a write after the fact. It does not prevent one.
+- The current directory is always audited. `--repo` adds more repositories, such as the paired frontend.
+- `main` must return a numeric exit code, because its return value is assigned directly to `process.exitCode`.

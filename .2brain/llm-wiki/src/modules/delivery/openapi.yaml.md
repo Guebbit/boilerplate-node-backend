@@ -1,39 +1,55 @@
 ---
 source: src/modules/delivery/openapi.yaml
-sha256: 033ca2791f5c0cc176c1154fd8f6fa8669cdc558697ee35ff3abc778276914f7
-generated_at: 2026-11-14T19:42:24.128052+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 70baa3c15e271fbaa33b569d0fcd22d7f97ce784d773b7e264b4b581efbfcd4b
+context_sha256: 508d566fa49e375b1f4a1205904a1ac81bc14c9114dbb317bee86069027c353f
+generated_at: 2026-11-22T04:51:06.001070+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/openapi.yaml
 
 ## Purpose
-
-The OpenAPI 3.1.0 contract for the **delivery** module — the "after the sale" family. It declares the module's public API surface (shipping-method catalogue, fulfillment-order and shipment reads, order-processing transition, preorder board) together with its error taxonomy and personal-data export bindings, so that every consumer (UI, bundler, docs) agrees on the same shapes before any code is written.
+OpenAPI 3.1 contract for the `delivery` module (version `0.1.0`). It declares the module's tag, error codes, personal-data export sections and HTTP operations for fulfillment orders (the groups of order lines that ship together) and shipments (what actually leaves). It also covers shipping-method listing and the order `process` transition.
 
 ## Key elements
-
-- **`x-error-codes`** — Module-level error vocabulary (`DELIVERY_NOT_SHIPPABLE`, `DELIVERY_LINES_INVALID`, `DELIVERY_NOT_PHYSICAL`, `DELIVERY_NOT_DIGITAL`, `DELIVERY_NOT_HOLDABLE`, `DELIVERY_NOT_RELEASABLE`, `DELIVERY_NOT_DELIVERABLE`, `DELIVERY_NOT_LOSABLE`, `DELIVERY_NOT_REOPENABLE`, `DELIVERY_LOST_SUPERSEDED`, `ORDER_NOT_PAID`, `ORDER_NOT_PROCESSING`). Each maps to an HTTP status (422 or 409) and a human-readable description of the state precondition that failed.
-- **`x-personal-data`** — Declares the `shipments` and `fulfillmentOrders` sections the bundler injects into `POST /account/export`. Removing the module removes these sections.
-- **`tags`** — Single `Delivery` tag carrying `x-family: "After the sale"` for doc-grouping.
-- **`GET /delivery/methods`** — Public, unauthenticated catalogue of shipping methods (flat rates, free-above thresholds). Explicitly *not* a price quote.
-- **`GET /orders/{id}/fulfillment-orders`** — Per-order list of fulfillment orders (groups of lines that leave together). Requires `read:Order`. Empty array (not 404) when the order is unpaid.
-- **`GET /orders/{id}/shipments`** — Per-order list of shipments (oldest first), with tracking/delivered info. Requires `read:Order`.
-- **`POST /orders/{id}/process`** — Transitions an order `paid → processing`. Requires `start:Shipment` (narrower than `update:Order`). Marked `x-versioned: [post]` so the bundler adds `ETag`/`Content-Location`.
-- **`GET /delivery/fulfillment-orders`** — Paged preorder board with filters (`cause`, `state`, `productId`, `late`, `dueWithin`). Requires `read:Order`.
-- **`security` scopes** used: `read:Order`, `start:Shipment`, `display:Order` (implied by descriptions).
+- **`tags`**: a single `Delivery` tag, in the `After the sale` family.
+- **`x-error-codes`**: the module's named errors, each with an HTTP status.
+  - `DELIVERY_LINES_INVALID` is a 422.
+  - 409s: `DELIVERY_NOT_SHIPPABLE`, `DELIVERY_NOT_PHYSICAL`, `DELIVERY_NOT_DIGITAL`, `DELIVERY_NOT_HOLDABLE`, `DELIVERY_NOT_RELEASABLE`, `DELIVERY_NOT_DELIVERABLE`, `DELIVERY_NOT_LOSABLE`, `DELIVERY_NOT_REOPENABLE` and `DELIVERY_LOST_SUPERSEDED`.
+  - `ORDER_NOT_PAID` and `ORDER_NOT_PROCESSING` are 409s on the order status.
+- **`x-personal-data`**: adds `shipments` (array of `ExportShipment`) and `fulfillmentOrders` (array of `ExportFulfillmentOrder`) to `AccountExportResponse` for `POST /account/export`.
+- **`GET /delivery/methods`** (`listShippingMethods`):
+  - Public (`security: []`) and marked `x-cache: "max-age: 60"`.
+  - It is a catalogue, not a quote. Authoritative pricing happens at `PUT /cart/shipping-method` and at checkout.
+- **`GET /orders/{id}/fulfillment-orders`** (`listOrderFulfillmentOrders`):
+  - Needs `read:Order`.
+  - Returns `OrderFulfillmentOrdersResponse`, unpaged.
+  - An unpaid order returns `items: []`, not a 404.
+  - Hold details are role-dependent: `holdNotice` for the buyer, `holdMessage` for staff. `holdReason` and `holdNote` are staff-only.
+- **`GET /orders/{id}/shipments`** (`listOrderShipments`):
+  - Needs `read:Order`.
+  - Returns `OrderShipmentsResponse`, oldest first and unpaged.
+  - Staff with `display:Order` can read any order. Someone else's order is a 404.
+- **`POST /orders/{id}/process`** (`processOrder`):
+  - Needs `start:Shipment`.
+  - Moves an order `paid → processing` and returns the `Order` schema from the orders module's `openapi.yaml`.
+  - Refuses a non-`paid` order with `ORDER_NOT_PAID`.
+  - Marked `x-versioned: [post]`.
+- **`GET /delivery/fulfillment-orders`** (`listPreorderFulfillmentOrders`):
+  - The admin preorder board. Needs `read:Order` and is paged.
+  - Filters are `cause` (`preorder`, `backorder` or `any`), `state`, `productId`, `late` and `dueWithin`.
+  - Staff with `display:Order` see all rows. Everyone else sees only their own orders' rows.
+- The text mentions per-item reads at `GET /delivery/fulfillment-orders/{id}` and `GET /delivery/shipments/{id}`, and shipment creation at `POST /delivery/fulfillment-orders/{id}/shipments`.
 
 ## Relationships
-
-- **`src/modules/delivery/authorization.yaml`** — Defines the named scopes (`read:Order`, `start:Shipment`, `display:Order`, `update:Order`) referenced in the `security` blocks and the role-based visibility rules described in the path descriptions (buyer vs. staff field filtering, such as `holdNotice` vs. `holdMessage`).
-- **`src/modules/delivery/module.ts`** — The TypeScript module entry that loads this spec, registers its paths into the server router, and wires the `x-personal-data` export sections into the account-export handler.
-- **`src/modules/delivery/module.yaml`** — Module manifest; declares the module's identity, its dependency on the shared contracts, and the order of bundling relative to other modules.
+- `src/modules/delivery/authorization.yaml` is the only graph neighbour. The operations here reference scopes such as `read:Order` and `start:Shipment` through `bearerAuth`, and `display:Order` in the descriptions. Presumably `authorization.yaml` defines them, but its content isn't visible here.
+- The file also refers to a shared root contract (parameters `IdPathParam`, `PageParam`, `PageSizeParam`, the `Id` schema, and the `Unauthorized`, `Forbidden`, `NotFound` and `Conflict` responses) and to the orders module's `Order` schema. These are not graph neighbours.
 
 ## Notes
-
-- **Unpaged by default.** `/orders/{id}/fulfillment-orders`, `/orders/{id}/shipments`, and `/delivery/methods` are intentionally unpaged (small, bounded sets). Only the preorder board (`GET /delivery/fulfillment-orders`) accepts `Page`/`PageSize` params.
-- **Absence ≠ 404.** An unpaid order's fulfillment-order list returns `items: []`, not a 404. Same for an order with no shipments.
-- **Error codes are module-owned.** The 409/422 error set lives in this file's `x-error-codes`, not in a shared response object. Handlers must return the named code, not a generic 409.
-- **`x-versioned` annotation.** The bundler interprets `x-versioned: [post]` on `POST /orders/{id}/process` to attach `ETag` and `Content-Location` headers; this is not standard OpenAPI and is meaningful only to the internal bundler.
-- **Cross-module schema refs.** The spec pulls `Order` from `../orders/openapi.yaml` and shared parameters/responses from `../../../shared/contracts/openapi.root.yaml` — the delivery module does *not* re-declare those shapes.
-- **File is truncated in the source above**; the full spec contains additional paths (individual shipment/fulfillment-order reads, ship, hold, release, deliver, lose, reopen endpoints) and a `components/schemas` section not shown here.
+- Several `x-*` keys are bundler directives rather than standard OpenAPI:
+  - `x-personal-data` is merged into `AccountExportResponse`.
+  - `x-versioned` adds `ETag` and `Content-Location` headers to 2xx responses.
+  - `x-error-codes` appears at module level and per operation, where it maps a status to the codes it can return. An example is `'409': [ORDER_NOT_PAID]`.
+  - `x-cache` sets caching on the methods list.
+- The `dueWithin` query parameter is declared with `type: int`, which is not a valid JSON Schema type (`integer` is).
+- Local schemas such as `ShippingMethodsResponse`, `PreorderFulfillmentState`, `ExportShipment` and `ExportFulfillmentOrder` are referenced via `#/components/schemas/...`. Their definitions are not visible in the shown portion.

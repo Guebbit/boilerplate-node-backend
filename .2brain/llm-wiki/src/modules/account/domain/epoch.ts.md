@@ -1,33 +1,26 @@
 ---
 source: src/modules/account/domain/epoch.ts
-sha256: 39059feec683a6993527a247f739830935ac610964ef5a577b01d832787d81bc
-generated_at: 2026-11-08T04:08:53.362356+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 39059feec683a6993527a247f739830935ac610964ef5a577b01d832787d81bc
+context_sha256: 17a20e845b3af97703685e4f61c0c58fee14e99c7b83948dd71121ac4fee47a8
+generated_at: 2026-11-22T03:28:30.741577+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/domain/epoch.ts
 
 ## Purpose
-
-Single source of truth for the "session epoch" rule: a token or login proof is invalid if it predates the account's `tokensValidAfter` timestamp. Kept as pure functions so that the resolver, refresh path, and mint path all apply the same check and cannot drift apart.
+Holds the session epoch rule in one pure module: a token, or a login's proof, is refused if it predates the account's `tokensValidAfter`. Keeping it in one place stops the resolver, the refresh path and the mint from drifting apart.
 
 ## Key elements
-
-- **`predatesSessionEpoch(authTime, tokensValidAfter)`** — Returns `true` when a token's `auth_time` claim (epoch **seconds**) is strictly before the epoch. Compares against `Math.floor(tokensValidAfter.getTime() / 1000)`, giving a same-second grace so a re-minted session survives its own epoch bump.
-- **`proofPredatesEpoch(provedAt, tokensValidAfter)`** — Returns `true` when a login proof's check time (epoch **milliseconds**) is strictly before the epoch. No same-second grace, because at mint time there is no caller session to preserve.
-
-Both accept `tokensValidAfter: Date | undefined` and return `false` (i.e. "not predating") when the epoch is absent.
+- `predatesSessionEpoch(authTime, tokensValidAfter)`: reports whether the token's `auth_time` (epoch seconds) is less than `tokensValidAfter` floored to whole seconds. When `tokensValidAfter` is undefined (no event ever moved the epoch), the token does not predate it.
+- `proofPredatesEpoch(provedAt, tokensValidAfter)`: reports whether `provedAt` (epoch milliseconds, when the proof's check began) is less than `tokensValidAfter` in milliseconds. When `tokensValidAfter` is undefined, the proof does not predate it.
 
 ## Relationships
-
-- **`session/auth-context.ts`** — Consumes `predatesSessionEpoch` when resolving an incoming token's validity.
-- **`session/jwt.ts`** — Produces the `auth_time` claim that `predatesSessionEpoch` later compares; the epoch check is the gate after `iat`-based expiry.
-- **`session/mint-guard.ts`** — Calls `proofPredatesEpoch` to reject a login proof that was verified before a password change moved the epoch.
-- **`session/listing.ts`** — Applies the same epoch rule when deciding which sessions to surface (only sessions whose tokens don't predate the epoch).
-- **`tests/unit/epoch.test.ts`** — Unit tests covering both functions, including the seconds-vs-milliseconds boundary cases.
+- Neighbors in `src/modules/account/session/`: `auth-context.ts`, `jwt.ts`, `listing.ts` and `mint-guard.ts` are linked to this file in the dependency graph. The file's own doc names the resolver, the refresh path and the mint as the shared callers. It does not say which neighbor is which, so check those files for the actual calls.
+- `src/modules/account/tests/unit/epoch.test.ts`: unit tests for these functions.
 
 ## Notes
-
-- The two functions intentionally use **different time units** (seconds vs. milliseconds). `predatesSessionEpoch` matches the resolution of the `auth_time` JWT claim and preserves a same-second grace; `proofPredatesEpoch` has no such grace. Do not "unify" them.
-- `predatesSessionEpoch` compares `auth_time`, **not** `iat` — `iat` is reset by `/refresh`, while `auth_time` is copied forward from the original login, so only a re-login or post-epoch re-mint clears it.
-- Both functions are side-effect-free and depend only on their arguments; safe to call from any layer.
+- The token check uses `auth_time`, not `iat`. A `/refresh` resets `iat` but copies `auth_time` forward from the login. Only a re-login or a re-mint after the epoch moves can clear it.
+- The token check compares in whole seconds, the claim's resolution. A token stamped in the same second as the bump is kept, so the caller's re-minted session survives its own bump.
+- The proof check compares in milliseconds with no same-second grace. At the mint there is no re-minted session to protect. It catches a password changed while the old one was being verified.
+- Don't mix the units. `authTime` is seconds and `provedAt` is milliseconds.

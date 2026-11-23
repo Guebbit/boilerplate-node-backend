@@ -1,30 +1,32 @@
 ---
 source: src/modules/account/controllers/post-account-export.ts
-sha256: f891b9037b461a274cf4fb0e3b041c40da59f06457a16f7b6a2f2a3bc7542a71
-generated_at: 2026-11-08T04:04:11.518115+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f891b9037b461a274cf4fb0e3b041c40da59f06457a16f7b6a2f2a3bc7542a71
+context_sha256: 665989fd5ac6a1e2bbc304c4265423acb80492e23799f332971164662c5c9c05
+generated_at: 2026-11-22T03:23:49.525232+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-account-export.ts
 
 ## Purpose
-
-Thin HTTP adapter for `POST /account/export`. Receives an authenticated request, delegates the actual data-export request to the `requestExport` service, and shapes the HTTP response (status, body, `Location` header). It contains no business logic beyond wiring the caller's identity into the service call.
+Express controller for `POST /account/export`. It is a thin HTTP adapter that lets an authenticated caller request an export of their own data. It delegates to `requestExport` and replies `202 Accepted` while the file is built in the background. A link to the finished file is mailed when it is ready.
 
 ## Key elements
-
-- **`postAccountExport(request, response)`** — the sole export. Extracts the caller's `id` from `request.authContext`, calls `requestExport(id, callerContextOf(request))`, then either short-circuits via `refused`, or returns `202` with the export payload, its status, and a `Location: /account/export` header (a status-monitor poll target per RFC 9110 §15.3.3, not a redirect). Errors are funnelled through `catchAs`.
+- **`postAccountExport(request, response)`** (exported): the route handler.
+  - Reads `id` from `request.authContext!`, which the auth middleware guarantees is set.
+  - Calls `requestExport(id, callerContextOf(request))`.
+  - If `refused(response, result)` handles the result, it returns without doing anything else.
+  - Otherwise it sets `Location: /account/export` and sends `successResponse(response, result.data, result.status)`.
+  - Rejections go to `catchAs(response, 'postAccountExport')`.
 
 ## Relationships
-
-- **`src/modules/account/services/export.ts`** — source of `requestExport`, the function that actually initiates the background export. Imported directly rather than through the `accountService` barrel (the barrel deliberately excludes the data-export service; see that barrel's docblock for rationale).
-- **`src/modules/account/routes.ts`** — mounts `postAccountExport` behind `requireFreshAuth` (isAuth) middleware; the controller trusts `request.authContext` is populated.
-- **`src/infrastructure/http/controller.ts`** — provides the `catchAs` (error-to-HTTP) and `refused` (service-level rejection → 4xx) helpers.
-- **`src/infrastructure/http/response.ts`** — provides `successResponse` for the happy-path JSON body.
-- **`src/infrastructure/http/request.ts`** — provides `callerContextOf` to build the request-context object passed to the service.
+- **`../services/export`**: provides `requestExport`, which holds the actual logic. It is imported directly rather than through `accountService` because the data-export service is deliberately kept out of that barrel.
+- **`@infrastructure/http/controller`**: provides `catchAs`, the error handler used in `.catch`, and `refused`, which writes a refusal response if the service result is a refusal.
+- **`@infrastructure/http/request`**: provides `callerContextOf`, which builds the caller context passed to the service.
+- **`@infrastructure/http/response`**: provides `successResponse`, which formats the success reply.
+- **`src/modules/account/routes.ts`**: mounts this handler on the route, together with the `requireFreshAuth` middleware.
 
 ## Notes
-
-- The `Location` header is set via Express's `response.location()` purely as an informational poll target; the client does not follow it. The export file is built asynchronously and a download link is sent by e-mail when ready.
-- No additional auth or permission checks exist in this controller — `requireFreshAuth` on the route is the sole identity proof.
-- The `!` non-null assertion on `request.authContext` is safe only because the route is always mounted behind the auth middleware; calling this handler outside that route would be undefined behaviour.
+- `requireFreshAuth`, mounted on the route, is the only identity proof. The controller does no further checks.
+- `Location` points at `/account/export`, which is the status monitor the client should poll (RFC 9110 §15.3.3). Express's `response.location` only sets the header and does not follow it.
+- The handler returns the promise chain rather than being `async`.

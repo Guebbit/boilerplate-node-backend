@@ -1,40 +1,46 @@
 ---
 source: src/modules/orders/services/override.ts
-sha256: 09e91a8ba1ff1d500ed0304ebc111141beeff661716d025d64e2e3d6d95c3a67
-generated_at: 2026-11-14T20:44:14.548816+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a9b0670efc520dc66c1663dc0e3b2f22209f0d9bea80e8d1925a91a83efcdb3a
+context_sha256: 7bd8b0eae39eda1c18e35d322f0bba92e2ae38a7d06f9a88708e219f469e3d64
+generated_at: 2026-11-22T06:21:42.596581+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/override.ts
 
 ## Purpose
-
-Implements the admin status-override endpoint (`POST /orders/{id}/override-status`). It corrects an order's status in a single MongoDB transaction—writing the new status, the timeline row, the stock adjustment, the outbox events, and the audit record atomically—so that no partial state is ever observable. It exists as the "back door" for manual corrections where the normal lifecycle (shipped email, carrier tracking) would produce an incorrect consequence.
+Implements the admin "override" path for order status: `overrideStatus` (`POST /orders/{id}/override-status`). It lets a holder of `override:Order` correct an order's status with no shipped email and no carrier record. The status write, timeline entry, stock leaving the shelf, and events are committed in one transaction. It announces `order.status_overridden` so the `delivery` module can bring its own records in step. `orders` never touches a shipment itself.
 
 ## Key elements
-
-- **`overrideStatus`** (exported) — Public entry point. Loads the order, validates that the transition is legal via `canOverrideTo` and that the target doesn't require awaited stock, then delegates to `applyOverride`. Returns `ResponseSuccess` or a 404/409 `ResponseReject`.
-- **`applyOverride`** (internal) — Performs the single-transaction write. Builds a conditional status update scoped to the observed `from` status, wraps it with `withTimeline`, announces `statusChangedEvent` + `statusOverriddenEvent` via `announceInTransaction`, and routes stock through `announceMoveShippingStock` unless the target is `processing`. Records audit via `recordAudit` on success. Returns `null` if the conditional write lost a race.
-- **`notAllowed`** (internal) — Builds the shared 409 reject response for illegal transitions.
-- **`clock`** (local logic) — When overriding *to* `delivered`, computes a delivery/withdrawal deadline from the override timestamp (or payment date for digital orders) via `deliveryClockFor`, since `markDelivered` was never called.
+- **`overrideStatus(orderId, to, reason, context)`** (exported) loads the order with `findByIdScoped` and returns a `ResponseSuccess<OrderDocument>` or a `ResponseReject`.
+  - 404 (`orders.not-found`) if the order is missing.
+  - 409 `ORDER_OVERRIDE_NOT_ALLOWED` if `canOverrideTo(order.status, to, isDigitalOnlyOrder(order.items))` is false.
+  - 409 `ORDER_OVERRIDE_AWAITING_STOCK` if `shipsAwaitedStock(to, order.fulfillment)` is true.
+  - Otherwise calls `applyOverride`. A `null` result (lost race) becomes the same 409 "not allowed".
+- **`applyOverride`** (internal) performs the write.
+  - Rejects with an `Error` if `context.caller.id` is missing. This is an invariant violation, not a race.
+  - For `to === delivered`, computes a delivery clock via `deliveryClockFor(order, at, withdrawalPeriodDays())`, because no `markDelivered` timestamp exists.
+  - Wraps `orderRepository.applyStatusOverride(orderId, observedFrom, to, clock, session)` in `withTimeline`, adding a `status_overridden` row with `actor`, `text: reason`, and `data: {mode:'status', from, to}`.
+  - Emits `statusChangedEvent` and `statusOverriddenEvent`.
+  - On success, calls `recordAudit` with `ORDER_STATUS_OVERRIDDEN`.
+- **`notAllowed(from, to)`** (internal) builds the 409 reject with `details: {from, to}`.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — Uses `generateSuccess` / `generateReject` for all return shapes.
-- **`src/infrastructure/i18n/index.ts`** — Calls `t()` for user-facing error messages.
-- **`src/infrastructure/observability/audit.ts`** — Calls `recordAudit` after a successful write.
-- **`src/kernel/outbox.ts`** — Uses `announceInTransaction` to enqueue domain events within the same transaction as the status write.
-- **`src/modules/orders/audit.ts`** — Imports the `ordersAuditActions` enum; uses `ordersAuditActions.ORDER_STATUS_OVERRIDDEN` as the audit action discriminator.
-- **`src/modules/orders/config.ts`** — Reads `withdrawalPeriodDays()` for the delivery clock calculation.
-- **`src/modules/orders/domain/index.ts`** — Imports `canOverrideTo`, `isDigitalOnlyOrder`, `deliveryClockFor`, `shipsAwaitedStock` (re-exported from the domain sub-modules `rules`, `lifecycle`, `fulfillment`, `withdrawal`).
-- **`src/modules/orders/model.ts`** — Types the `OrderDocument` that is read and returned.
-- **`src/modules/orders/repository.ts`** — `findByIdScoped` for the scoped read; `applyStatusOverride` for the conditional write inside the session.
-- **`src/modules/orders/services/announce.ts`** — `statusChangedEvent` and `statusOverriddenEvent` factories consumed by the outbox announcement.
+- **`../repository`**: `findByIdScoped` for the read and `applyStatusOverride` for the conditional write.
+- **`../domain`** (`canOverrideTo`, `isDigitalOnlyOrder`, `deliveryClockFor`, `shipsAwaitedStock`): decides what is legal and computes the delivery clock.
+- **`../config`**: supplies `withdrawalPeriodDays`.
+- **`./announce`**: provides `statusChangedEvent` and `statusOverriddenEvent`.
+- **`@kernel/outbox`**: `announceInTransaction` publishes the events in the same transaction.
+- **`./ship-stock`**: `announceMoveShippingStock` handles stock leaving the shelf.
+- **`./timeline`**: `withTimeline` writes the history row.
+- **`../audit`** and **`@infrastructure/observability/audit`**: the action constant and `recordAudit`.
+- **`@infrastructure/http/response`**: `generateSuccess` and `generateReject`.
+- **`@infrastructure/i18n`**: `t(...)` for error messages.
+- **`../model`**: `OrderDocument` type.
 
 ## Notes
-
-- The conditional write (`observedFrom`) means a concurrent status change causes a 409, not a 404—the order still exists, it just isn't in the expected state.
-- `context.caller.id` is typed optional but is asserted non-null inside `applyOverride`; a missing id is treated as an invariant violation (rejected), not a race (null).
-- Overriding to `processing` skips stock movement entirely; overriding past dispatch still triggers `announceMoveShippingStock`.
-- Webhooks fire on override just as they do on normal status changes—subscribers see `order.status_changed` regardless of which "door" moved the status.
-- The `reason` parameter is required and validated at the schema layer before reaching this function.
+- The write is conditional on the order still being at the status that was read. If it moved, `applyOverride` returns `null` and the caller returns a 409, not a 404, because the order still exists.
+- Stock handling depends on the target status. `processing` uses plain `announceInTransaction`. Any other target goes through `announceMoveShippingStock`, since overriding past dispatch counts as a dispatch. A hold already `shipped` makes the stock half a no-op.
+- Webhooks still fire for overrides, because subscribers only care that the status moved.
+- The `reason` must be non-empty, but this file does not check it. The schema layer refuses an empty one.
+- Permission (`override:Order`) is enforced by the route's `requirePermission`, not here.

@@ -1,37 +1,39 @@
 ---
 source: src/modules/account/oauth/providers/github.ts
-sha256: fb17bd55a1b52880b6b5c618625978b069329283ef852890ec749cdc73b48007
-generated_at: 2026-11-08T04:12:46.653828+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f99bdc4cc598978c3040f06ad3a877ab20dc7e7dc70462a217e80a84a96a0371
+context_sha256: 9b967bd831ac2501d79fc597026616b7b05528abbab054687bcbe7e1554150d7
+generated_at: 2026-11-22T03:32:15.191040+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/oauth/providers/github.ts
 
 ## Purpose
-
-Implements the GitHub OAuth2 provider behind the shared `OAuthProvider` port. GitHub is plain OAuth 2.0 (no OIDC, no ID token), so after the code exchange the identity is assembled from two REST calls (`/user` + `/user/emails`) because a primary email marked private never appears on `/user`.
+Implements the GitHub OAuth provider behind the app's `OAuthProvider` port. GitHub is plain OAuth 2.0 with no ID token, so after the code exchange the identity is assembled from two REST calls: `/user` for the profile and `/user/emails`, because a private primary email never appears on `/user`.
 
 ## Key elements
-
-- **`PROVIDER_NAME`** (`'github'`) — registry key that lands on `OAuthAccount.provider`.
-- **`SERVER`** (`client.ServerMetadata`) — hard-coded endpoint metadata (issuer, authorization, token). No discovery; GitHub publishes no `/.well-known` document.
-- **`GithubUser` / `GithubEmail`** — narrow interfaces for the two REST responses this app actually reads.
-- **`githubApiGet<T>(path, accessToken)`** — typed bearer fetch to `api.github.com` with a `Timeout` signal and `redirect: 'error'`; body is size-capped via `readCappedJson`.
-- **`identityOf(user, emails)`** — maps the two responses to `OAuthIdentity`. Throws (rather than casting) when `id` is missing or no primary email exists, preventing a `"undefined"` providerId collision.
-- **`githubOAuthProvider`** (exported `OAuthProvider`) — the sole public export. Wires `authorizeUrl` (PKCE, scope `read:user user:email`) and `exchangeCode` (token redeem → parallel `/user` + `/user/emails` → `identityOf`) together.
+- `githubOAuthProvider` (exported): the `OAuthProvider` implementation, registered under the name `'github'` (this lands on `OAuthAccount.provider`).
+  - `authorizeUrl(state, redirectUri, codeChallenge)`: builds the authorization URL with scope `read:user user:email` and a PKCE code challenge.
+  - `exchangeCode(callbackUrl, expected)`: redeems the code, then fetches `/user` and `/user/emails` in parallel with the access token and maps them with `identityOf`.
+- `SERVER`: hard-coded `ServerMetadata` (authorization and token endpoints). `issuer` is only a label the library requires, since GitHub publishes no discovery document or keys.
+- `githubApiGet<T>(path, accessToken)`: bearer `fetch` against `https://api.github.com` with `Accept: application/vnd.github+json`. It uses an abort timeout (`OAUTH_FETCH_TIMEOUT_MS`) and `redirect: 'error'`. It throws on a non-OK status and reads the body through `readCappedJson` with `DEFAULT_BODY_CAP_BYTES`.
+- `identityOf(user, emails)`: validates and maps the responses into an `OAuthIdentity`.
+  - `providerId` is `String(user.id)`.
+  - `email` and `emailVerified` come from the entry marked `primary`.
+  - `name` is `user.name ?? user.login`.
+  - `imageUrl` is `avatar_url`.
+- `GithubUser` / `GithubEmail`: local interfaces for the fields read from the API.
 
 ## Relationships
-
-- **`./port.ts`** — imports the `OAuthProvider` and `OAuthIdentity` types that this file fulfils.
-- **`./client.ts`** — delegates URL construction (`authorizationUrlFor`, `configurationFor`) and token redemption (`redeemCode`) to the shared openid-client helpers.
-- **`../config.ts`** — reads `OAUTH_FETCH_TIMEOUT_MS` for the fetch abort signal.
-- **`@infrastructure/http/read-capped-body.ts`** — uses `readCappedJson` + `DEFAULT_BODY_CAP_BYTES` to prevent unbounded body reads on the API responses.
-- **`./index.ts`** — registers/exports this provider into the provider table.
-- **`src/modules/account/tests/unit/oauth-github.test.ts`** — unit-tests the identity mapping and error paths.
+- `./client`: supplies `configurationFor`, `authorizationUrlFor` and `redeemCode`. These do the library-level OAuth work, including rejecting GitHub's HTTP 200 responses that carry an `error` body.
+- `./port`: defines the `OAuthProvider` and `OAuthIdentity` types this file implements and returns.
+- `../config`: provides `OAUTH_FETCH_TIMEOUT_MS`.
+- `@infrastructure/http/read-capped-body` (`src/infrastructure/http/read-capped-body.ts`): provides `readCappedJson` and `DEFAULT_BODY_CAP_BYTES`, which bound the size of API responses.
+- `./index`: the providers registry; it is expected to consume `githubOAuthProvider` (the key comment refers to "this registry").
+- `src/modules/account/tests/unit/oauth-github.test.ts`: the unit test for this provider.
 
 ## Notes
-
-- PKCE is passed through `codeChallenge` in `authorizeUrl`; GitHub has supported PKCE since July 2025.
-- The `Accept: application/vnd.github+json` header is required by the GitHub REST API; versioning is header-based, not URL-segment-based.
-- `readCappedJson` returns a `Promise<T>` cast; the generic is an annotation, not a runtime check — callers are responsible for reading only the fields they expect (hence `identityOf`'s explicit guards).
-- A failed code exchange from GitHub can return HTTP 200 with an `error` body; the `redeemCode` helper in `client.ts` handles that rejection — this file does not.
+- `identityOf` checks that `user.id` is a number instead of casting. Otherwise a malformed response would yield the providerId `"undefined"` and collide accounts onto one identity.
+- It throws if no email is marked primary. It uses only the primary address, and a non-primary verified address is deliberately not treated as the same claim. `emailVerified` reflects the primary's `verified` flag.
+- The generic type argument on `githubApiGet` is only an annotation. The response is not validated at that point.
+- PKCE is used; the source notes GitHub has supported it since July 2025.

@@ -1,36 +1,33 @@
 ---
 source: docker/backup/restore-drill.sh
-sha256: bde576a6067590e9224788ff7881f3a55ae166f3d8b8693815232123febba018
-generated_at: 2026-11-08T02:19:16.293699+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T01:28:47.289328+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/backup/restore-drill.sh
 
 ## Purpose
-End-to-end restore verification script: restores the latest database and files snapshots into a throwaway environment, validates collection counts and file integrity, runs a partial `restic check`, and reports elapsed time as a proxy for worst-case shop downtime. Exits 0 only if every step succeeds. Never touches the live database.
+A bash script that proves the latest backup can be restored and reports how long it took. It restores the newest database snapshot into a throwaway Mongo and compares per-collection counts with those saved at backup time. It then restores the newest files snapshot with verification and runs a partial `restic check`. It exits 0 only if every step passes, and it never touches the live database. The elapsed time is printed as the expected downtime on a bad day. The script's header comment points to a design document on the restore drill.
 
 ## Key elements
-
-- **`drill()`** — Top-level orchestrator. Resolves the latest `db`-tagged snapshot, finds its paired counts snapshot via the `run:` tag, then sequentially calls `restore_database`, `compare_counts`, `restore_files`, and `restic check --read-data-subset`.
-- **`restore_database(snapshot)`** — Streams a `mongodump.archive` from restic into `mongorestore --oplogReplay` targeting the throwaway Mongo. Oplog replay ensures cross-collection consistency.
-- **`compare_counts(counts_snapshot)`** — Dumps the restored copy to `/dev/null` via `mongodump` to harvest per-collection document counts, then `awk`-compares against the TSV saved at backup time. Tolerates up to `max(5, 1%)` drift per collection (oplog lag); a missing or zeroed collection always fails.
-- **`restore_files()`** — Restores the latest `files`-tagged snapshot with `--verify` (byte-level re-read against the repository). Skipped gracefully if no files snapshot exists.
-- **`latest_snapshot(tag)`** — Returns the restic snapshot ID with the newest timestamp for a given tag, or empty.
-- **`run_tag(snapshot)`** — Extracts the `run:*` tag from a snapshot to pair a dump with its counts file.
-- **`wait_for_throwaway()`** — TCP-connects to the throwaway Mongo up to 60 s before giving up.
-- **`fail(msg)`** — Logs the reason and exits 1.
-- **Configurable via env vars** — `DRILL_MONGO_HOST` (default `restore-drill-db`), `DRILL_MONGO_PORT` (default `27017`), `DRILL_RESTORE_DIR` (default `/restore`), `DRILL_RESTORE_FILES` (default `true`), `DRILL_CHECK_SUBSET` (default `10%`), plus inherited `RESTIC_REPOSITORY`, `BACKUP_HOST`, `BACKUP_DATABASE` from `common.sh`.
+- **Config variables**: `DRILL_MONGO_HOST` (default `restore-drill-db`), `DRILL_MONGO_PORT` (27017), `DRILL_RESTORE_DIR` (`/restore`), `DRILL_RESTORE_FILES` (true), `DRILL_CHECK_SUBSET` (10%). `BACKUP_DATABASE` (default true) toggles the database part. `WORK` is a temp dir removed on exit.
+- `fail`: logs `DRILL FAILED: <reason>` and exits 1.
+- `wait_for_throwaway`: polls the throwaway Mongo over `/dev/tcp` for up to 60 tries, one second apart, and fails if it never answers.
+- `latest_snapshot <tag>`: returns the newest restic snapshot id for the backup host and tag, or empty.
+- `run_tag <snapshot>`: extracts the snapshot's `run:` tag, which pairs a dump with its counts snapshot.
+- `restore_database`: streams `mongodump.archive` out of restic into `mongorestore --archive --oplogReplay` against the throwaway host.
+- `compare_counts`: restores `counts.tsv` from the counts snapshot and counts the restored copy with `mongodump --archive=/dev/null`. It parses the output with `count_lines` and compares the two sets with `awk`.
+- `restore_files`: restores the latest `files` snapshot to `RESTORE_DIR` with `--verify`. It is skipped, not failed, if no files snapshot exists.
+- `drill`: orchestrates the steps. It checks that the repository is set, then runs the database restore and count comparison, the optional files restore, and `restic check --read-data-subset`.
+- The last line logs `DRILL PASSED` with the elapsed time from the shell's `SECONDS` variable.
 
 ## Relationships
-
-No graph-neighbor files are recorded. The script sources `/usr/local/lib/backup/common.sh` at runtime (provides `log`, `restic_run`) and references the design doc `docs/tools/backups.md#the-restore-drill`.
+Sources a shared helper script at the fixed path `/usr/local/lib/backup/common.sh`. From it the script uses `log`, `restic_run`, `count_lines`, `RESTIC_REPOSITORY` and `BACKUP_HOST`. It needs `restic`, `jq`, `mongorestore`, `mongodump` and `awk` on the path. No dependency-graph neighbors are listed.
 
 ## Notes
-
-- The throwaway Mongo is expected to have **no auth and no published port**; it is typically a sibling container (`restore-drill-db`) started by the calling compose profile.
-- `restic` tag semantics matter here: multiple tags in one `--tag` flag are ANDed; separate `--tag` flags are ORed. The counts lookup exploits this (`--tag "counts,$run"`).
-- The count comparison deliberately skips `local.*` namespaces (oplog, admin internals).
-- Elapsed time is reported in seconds via bash's built-in `$SECONDS`; it is the "downtime" figure, not a CI metric.
-- `WORK` is a `mktemp -d` directory cleaned up on any exit (trap), holding restore logs, expected/actual TSVs, and file-restore logs.
-- The script is designed to be run *outside* the live container (it talks to Mongo over TCP), so it can be invoked from a separate drill container or CI job.
+- The snapshot tags used are `db`, `files`, `counts` and `run:<id>`. Restic ANDs tags inside one `--tag a,b`, so `--tag "counts,$run"` selects the counts snapshot of the same run as the dump.
+- Count comparison allows drift of max(5, 1%) per collection, because the oplog replay can land writes made later in the dump window. A collection that is missing, or empty when it was expected to have documents, always fails. `local.*` namespaces are ignored.
+- The drill only counts collections listed in the backup's saved counts. Extra collections in the restored copy are not flagged.
+- The throwaway Mongo must have no auth and no published port. The script has no guard against pointing `DRILL_MONGO_HOST` at a live instance, so this relies on configuration.
+- The script has no `set -e` of its own. Failures are handled through explicit `fail` calls, so any `set` options come from the sourced helper.
+- The partial `restic check` reads only a subset of the repository data (default 10%), so it is a sampling check rather than a full verification.

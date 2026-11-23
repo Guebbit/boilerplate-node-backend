@@ -1,40 +1,44 @@
 ---
 source: src/modules/observability/services/stream.ts
-sha256: dd361b9e3ae2ef094f1a2a859bc899ad3778b602c938d9330078c3b421cd88fe
-generated_at: 2026-11-14T20:29:45.453347+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ee9478909ca87b4dea2ed5fa4bcb03738c15c5e30c81e6494283bce3479dd3e9
+context_sha256: 80a86ff3ee8d15c88088bc638928b1f7d2e37f6c583cd947e942439dec8a4499
+generated_at: 2026-11-22T06:03:58.624928+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/services/stream.ts
 
 ## Purpose
-
-Implements the server side of a one-way Server-Sent Events (SSE) stream that pushes live process and HTTP metrics to a dashboard every 5 seconds. SSE was chosen over WebSockets because the data flow is strictly server→client, it rides plain HTTP (no protocol upgrade), and browsers reconnect automatically via `EventSource`.
+Streams live process and HTTP metrics to dashboards over Server-Sent Events (SSE). SSE was chosen over WebSockets because the data flows one way (server to dashboard) over plain HTTP, needs no protocol upgrade or extra dependency, and the browser's `EventSource` reconnects automatically.
 
 ## Key elements
-
-- **`sseClients`** (module-level `Set<Response>`) — tracks active SSE connections per process; enables O(1) removal on disconnect and exposes the count in the metrics payload itself.
-- **`UPDATE_INTERVAL_MS`** (5 000) / **`HEARTBEAT_INTERVAL_MS`** (15 000) — push cadence for data frames and keep-alive frames respectively.
-- **`writeEvent(response, event, payload)`** — serialises a single SSE frame (`event:` + `data:` + `\n\n`) onto the response stream.
-- **`buildObservabilityPayload()`** *(exported)* — assembles one `ObservabilityMetricsPayload` by merging `processSnapshot()` (memory, uptime) with async HTTP counters; returns a `Promise`.
-- **`writeMetricsEvent(response, eventName)`** — fire-and-forget wrapper around `buildObservabilityPayload` → `writeEvent`; swallows all errors so a dropped socket or slow read never crashes the interval.
-- **`streamObservabilityMetrics(response, userId, reverify)`** *(exported)* — public entry point: opens the SSE stream via `openSseStream`, sends an immediate `SNAPSHOT` frame, schedules `UPDATED` and `HEARTBEAT` intervals, and wires `onClose` to clear both intervals and remove the response from `sseClients`.
+- `buildObservabilityPayload()` (exported): returns a `Promise<ObservabilityMetricsPayload>` for one frame. The payload contains:
+  - an ISO timestamp;
+  - `uptimeSeconds` and `memory` (in bytes) from `processSnapshot()`;
+  - `http.totalRequests` and `http.totalErrors` from `getHttpRequestCounters()`;
+  - `realtime.sseClients`, the current client count.
+- `streamObservabilityMetrics(response, userId, reverify)` (exported): opens the stream via `openSseStream`. It returns silently if `openSseStream` returns a falsy value, meaning a cap refused the open and already answered. Otherwise it:
+  - registers the response in `sseClients`;
+  - immediately sends a `METRICS_SNAPSHOT` event;
+  - sends `METRICS_UPDATED` every 5 s (`UPDATE_INTERVAL_MS`);
+  - sends `HEARTBEAT` every 15 s (`HEARTBEAT_INTERVAL_MS`);
+  - on `stream.onClose`, clears both intervals and removes the response from `sseClients`.
+- `writeEvent`: writes one SSE frame as `event: <channel>\ndata: <json>\n\n`. The trailing blank line is required, or the client buffers indefinitely.
+- `writeMetricsEvent`: fire-and-forget wrapper that builds a payload and writes it. It swallows errors from a failed metrics read or a write to an already-dropped socket, so an interval callback never causes an unhandled rejection.
+- `sseClients` (module-private `Set<Response>`): the active connections. It is per-process, so with several copies each tracks only its own clients.
 
 ## Relationships
-
-- **`src/infrastructure/http/sse.ts`** — provides `openSseStream`, which sets SSE headers, enforces the per-account stream cap, and polls the `reverify` callback for ongoing authorization. Returns `null` if the cap is hit (stream aborts early).
-- **`src/modules/observability/http-readback.ts`** — source of cumulative `totalRequests` / `totalErrors` counters merged into every payload.
-- **`src/modules/observability/services/process-snapshot.ts`** — source of `uptimeSeconds` and the four memory fields in each payload.
-- **`src/types/index.ts`** — defines `OBSERVABILITY_CHANNELS` (channel-name constants), `ObservabilityMetricsPayload`, and `ObservabilityChannel`.
-- **`src/modules/observability/services/index.ts`** — re-exports the public API of this module.
-- **`src/modules/observability/tests/unit/stream.test.ts`** — unit tests covering this file's behaviour.
+- `src/infrastructure/http/sse.ts`: `openSseStream` handles headers, the per-account stream cap, re-verification via the `reverify` callback, and the `onClose` hook.
+- `src/modules/observability/http-readback.ts`: supplies `getHttpRequestCounters()`, whose counters are cumulative since boot.
+- `src/modules/observability/services/process-snapshot.ts`: supplies `processSnapshot()` for uptime and memory.
+- `src/types/index.ts`: provides `OBSERVABILITY_CHANNELS`, `ObservabilityChannel` and `ObservabilityMetricsPayload`. The channel names are shared with an AsyncAPI spec, so event names are contractual.
+- `src/modules/observability/services/index.ts`: a graph neighbor; this file's content shows no direct interaction with it.
+- `src/modules/observability/tests/unit/stream.test.ts` and `tests/integration/kernel/outbox.test.ts`: test neighbors. The file content shows no direct interaction with the outbox.
 
 ## Notes
-
-- **Per-process, not cluster-wide.** Under `cluster` each worker tracks only its own `sseClients`; there is no cross-worker aggregation.
-- **Self-referential leak canary.** `realtime.sseClients` is the live size of the in-memory `Set`. A connection that is added but never removed will show as a steadily climbing number on the very dashboard that connection feeds.
-- **Trailing `\n\n` is mandatory.** The SSE spec requires it to delimit a frame; omitting it causes the client to buffer indefinitely. `writeEvent` always appends it.
-- **`void` on the promise in `writeMetricsEvent`** is deliberate: the interval must not `await` the write, and the `void` keyword documents that the floating promise is intentional (avoids `no-floating-promises` lint noise while still surfacing it to readers).
-- **Heartbeat carries a real payload**, not an SSE comment (`: ping`). This lets the client treat a missing heartbeat as a liveness failure without needing a separate ping/pong mechanism.
-- **`reverify` is an opaque `() => Promise<boolean>` callback**, not a direct auth call. The wiring lives in the route layer (e.g. `kernel/middlewares/authorizations.ts#stillHoldsRuleViaCookie`), keeping this module agnostic of the authentication mechanism.
-- **Initial `SNAPSHOT` vs periodic `UPDATED`.** The first frame uses a distinct channel so the client can treat it as "initial state" rather than a delta, avoiding a 5-second blank dashboard.
+- The snapshot is read synchronously before the async counter read, so all values in a frame describe roughly the same instant.
+- Counters are cumulative and memory values are raw bytes. Clients derive rates by differencing consecutive frames.
+- The heartbeat carries a real metrics payload rather than an SSE comment, so clients can use it as a liveness signal. 15 s stays under typical proxy idle timeouts of 30–60 s.
+- `realtime.sseClients` is self-referential on purpose. A leak in `sseClients` appears as a climbing number on the dashboard it feeds.
+- `reverify` is a plain callback so this module stays independent of how callers authenticate. The route wires it to `src/kernel/middlewares/authorizations.ts#stillHoldsRuleViaCookie`.
+- Cleanup in `onClose` is essential. Uncleared intervals would keep writing to a dead socket, and a leftover `Set` entry would pin the `Response` in memory.

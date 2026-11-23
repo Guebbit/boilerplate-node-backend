@@ -1,38 +1,35 @@
 ---
 source: scripts/docs/generate-jobs.ts
-sha256: 725971f786cd14994c62dc0e5db1f4ed38cce8e9ae5313a8b07bca714b81cd42
-generated_at: 2026-11-08T02:47:39.395244+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 62561948b6f8ec505ffb03db4687281d0ede405d3c7e2f3ecbd134aae19846cf
+context_sha256: b452c94ca15866ce40b645037364dc5567d4c2d21950bcb6fef470ba446d23f1
+generated_at: 2026-11-22T02:03:07.971517+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/docs/generate-jobs.ts
 
 ## Purpose
-
-Generates two derived artifacts from job declarations — the `docker/crontab` file and the jobs table inside `docs/reference/ops.md` — as a step of `npm run regenerate`. In `--check` mode it reports drift instead of writing, which is what `npm run check` invokes. It exists so that a schedule declared once in code is never left stale in the files that actually schedule it.
+A `tsx` script, run as a step of `npm run regenerate`, that derives everything dependent on declared jobs: the `docker/crontab`, its Kubernetes copy `k8s/base/crontab`, and the jobs table in the ops reference page. Jobs are declared once and written to all three places, so a hand-kept schedule can't be missed. With `--check` it reports drift instead of writing, which is what `npm run check` runs.
 
 ## Key elements
-
-- **`jobs`** (const) — Ordered list of all jobs: `appJobs` first, then jobs resolved from each enabled module via `resolveJobs(enabledModules)`.
-- **`CRONTAB`** (const) — Repo-relative path `'docker/crontab'`, the whole-file rewrite target.
-- **`settle(relative, expected, current)`** — Compares expected vs. current content. In check mode it logs drift and returns `1`; otherwise it writes the file and returns `0`.
-- **`main()`** — Reads the existing crontab, calls `settle` with `renderCrontab(jobs)`, then calls `applyMarkerBlocks` on `docs/reference/ops.md` with a `<!-- jobs:start/end -->` block containing `renderJobsTable(jobs)`. Returns a single exit code (0 or 1).
-- **`checkOnly`** — Boolean from `hasFlag('check')`; gates write-vs-report behavior across both targets.
-- **Script entry** — `main().then(set process.exitCode).catch(failScript)`.
+- `checkOnly`: set from `hasFlag('check')`. It switches between writing files and reporting drift.
+- `jobs`: `[...appJobs, ...resolveJobs(enabledModules)]`. These are the jobs no module owns, followed by each enabled module's jobs.
+- `CRONTABS`: `['docker/crontab', 'k8s/base/crontab']`. Both are generated whole.
+- `settle(relative, expected, current)`: returns 0 if the content matches. Otherwise, in check mode it prints an error ("Run: npm run regenerate") and returns 1. Otherwise it writes the file, logs `✓ Generated …`, and returns 0.
+- `settleCrontab(relative)`: renders the crontab from `jobs`, reads the existing file (or `''` if missing), and passes both to `settle`.
+- `main()`: settles both crontabs, then updates the `<!-- jobs:start -->` / `<!-- jobs:end -->` block in the ops reference page with the jobs table. It returns 0 or 1. The result is assigned to `process.exitCode`, and rejections go to `failScript`.
 
 ## Relationships
-
-- **`src/app/jobs.ts`** — Supplies `appJobs`, the jobs no module owns.
-- **`src/modules.ts`** — Supplies `enabledModules`, the module set whose jobs are included.
-- **`src/kernel/registry.ts`** — `resolveJobs` extracts the declared jobs from each enabled module.
-- **`scripts/docs/jobs-render.ts`** — Provides `renderCrontab` (whole-file text) and `renderJobsTable` (Markdown table for the ops page).
-- **`scripts/docs/marker-block.ts`** — `applyMarkerBlocks` updates only the delimited region in `docs/reference/ops.md` without touching surrounding content.
-- **`scripts/modules-on-disk.ts`** — Provides `REPO_ROOT` (aliased `ROOT`) for all file-system paths.
-- **`scripts/cli.ts`** — `hasFlag('check')` parses the `--check` flag.
-- **`scripts/fail-script.ts`** — `failScript` is the unhandled-rejection handler that prints a useful error and exits non-zero.
+- `src/app/jobs.ts` supplies `appJobs`, the app-level jobs.
+- `src/kernel/registry.ts` supplies `resolveJobs`, which collects jobs from the modules.
+- `src/modules.ts` supplies `enabledModules`, the modules whose jobs are included.
+- `scripts/docs/jobs-render.ts` supplies `renderCrontab` and `renderJobsTable`, which produce the file content.
+- `scripts/docs/marker-block.ts` supplies `applyMarkerBlocks`, which handles the marker-delimited section of the ops page.
+- `scripts/modules-on-disk.ts` supplies `REPO_ROOT`, used as `ROOT` for resolving paths.
+- `scripts/cli.ts` supplies `hasFlag`, used to parse `--check`.
+- `scripts/fail-script.ts` supplies `failScript`, the top-level error handler.
+- `scripts/contracts/build-bundles.ts` is a graph neighbor, but this file has no visible import or call to it.
 
 ## Notes
-
-- The crontab is rewritten **whole** (no marker blocks); the ops.md table uses marker blocks so other content in that file is preserved.
-- Job order is significant: app-level jobs precede module jobs, and this order is what appears in both the crontab and the table.
-- The script is a `tsx` shebang script (`#!/usr/bin/env tsx`), not a compiled build artifact.
+- The Kubernetes crontab is a copy, not a reference, because kustomize refuses files outside its own directory. A hand-kept copy would drift, and `check:generated` guards both copies.
+- Exit code is 1 if any target has drifted (check mode) and 0 otherwise.

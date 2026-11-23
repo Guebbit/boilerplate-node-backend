@@ -1,44 +1,53 @@
 ---
 source: src/modules/account/tests/unit/jwt-strategy.test.ts
-sha256: 7c6d8004f7cf9c53d587651e8e1a78b71b43a6041372af4aef4e6891e82c1b52
-generated_at: 2026-11-08T04:47:30.699098+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cb86a744991388105d6897f2298cca9f736ab2bb7b8bc918d54d6214d3be77a4
+context_sha256: 8aa39569ab869504197765f5b0302b03f33084035263f7623bd5cc64dfab040a
+generated_at: 2026-11-22T04:06:10.247544+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/jwt-strategy.test.ts
 
 ## Purpose
-
-Unit-level tests for the `jwtStrategy` adapter (`session/jwt-strategy.ts`), verifying the wiring between the strategy port and the token layer: which mint path a login vs. re-mint takes, what lands in which cookie, and how a token refusal becomes a resolver miss while an infrastructure outage stays a thrown rejection. The token layer itself is replaced (mocked) here; its own behavior is covered by `session-jwt.test.ts`.
+Unit tests for the `jwt` mode session adapter (`src/modules/account/session/jwt-strategy.ts`). They check the wiring between the session strategy port and the token layer. The cases cover which mint a login uses versus a re-mint, which value goes into which cookie, and how a token refusal becomes a resolver miss while an outage stays a rejection. The token layer itself is tested elsewhere (`./session-jwt.test.ts`) and is mocked out here.
 
 ## Key elements
-
-- **`tokens`** – typed stub over the mocked `@modules/account/session/jwt` module (`startSession`, `continueSession`, `createAccessToken`, `rememberOfRefreshToken`, `verifyAccessToken`, `verifyRefreshToken`, `verifyRefreshWithRow`).
-- **`sessions`** – typed stub over the mocked `sessionRepository` (`removeByHash`, `removeFamilyByHash`, `removeFamilyExcept`, `findByHash`, `familyActivity`, `touchFamily`, `removeFamily`, `listLive`).
-- **`proof`** – typed stub over the mocked `resolveProof` from `auth-context`.
-- **`USER_ID`, `SHOPPER`, `FAMILY_ID`** – shared fixture constants for the account, its resolved identity, and its session family.
-- **`describe('issue')`** – asserts the guarded login path: `startSession` → `createAccessToken`, refresh cookie set, tier/maxAge propagation, and that `bearer` transport still sets cookies.
-- **`describe('reissue')`** – asserts the unguarded rotation path: `rememberOfRefreshToken` → `continueSession`, old-token retirement via `removeByHash` (hashed), family cleanup via `removeFamilyExcept`, snapshot fallback when the row is gone, and graceful handling when retirement fails.
-- **`describe('remint')`** – asserts a fresh refresh cookie is set, no access token is returned, and a failed re-mint resolves to `{}` (degrade to "sign in again").
-- **`describe.each(['resolveBearer', 'resolveCookie'], …)`** – parametrized verification tests: correct verifier called, claims passed to `resolveProof`, `TokenRejection` → `{ miss }`, generic `Error` → re-thrown.
-- **`describe('resolveBearer and the session it names')`** – checks liveness of the token's own session family via `findByHash` / `familyActivity` before resolving proof.
+- **Module mocks:**
+  - `@modules/account/session/jwt` is replaced with `jest.fn()` doubles. The real `TokenRejection` class is kept.
+  - `@modules/account/repository` keeps the real exports but swaps the `sessionRepository` methods the strategy uses for mocks.
+  - `@modules/account/session/auth-context` has `resolveProof` mocked.
+- **Typed handles:** `tokens`, `sessions` and `proof` are created with `asStub` for typed access to the mocks. `USER_ID`, `SHOPPER` and `FAMILY_ID` are shared fixtures.
+- **`beforeEach`:** resets all mocks, sets `NODE_SESSION_TIME_MEDIUM=86400` via `setEnvironment`, and installs default resolved values for the mints and the store calls.
+- **`describe('issue')`:**
+  - Mints through `startSession`, not `continueSession`.
+  - Sets the refresh cookie `__Host-session` and the `isAuth` cookie.
+  - Returns `{ token: 'access-token' }`.
+  - The cookies are session-scoped unless a remember tier is given. A medium tier gives `maxAge` 86,400,000 ms.
+  - The `bearer` transport makes no difference.
+- **`describe('reissue')`:**
+  - Re-mints through `continueSession`.
+  - Takes the remember tier from the presented refresh cookie (`rememberOfRefreshToken`), or from `snapshot` when the row is already deleted.
+  - Retires the old session with `removeByHash(hashToken(old))`.
+  - When a session row is found, it continues the same family and expiry, then calls `removeFamilyExcept`.
+  - Still answers with the new session if retiring the old one fails.
+- **`describe('remint')`:**
+  - Sets a fresh refresh cookie and returns `{}` with no access token.
+  - A failed re-mint is swallowed: it returns `{}` and sets no cookie.
+- **`describe.each` for `resolveBearer` / `resolveCookie`:**
+  - These use `verifyAccessToken` and `verifyRefreshToken` respectively.
+  - Claims (`sub`, `auth_time`, `amr`, `sid`) are passed to `resolveProof` as `{ authTime, amr }`.
+  - A `TokenRejection` becomes `{ miss: <reason> }`.
+  - Any other error is rethrown.
+- **`describe('resolveBearer and the session it names')`:** sets up a valid access token and a resolved proof. Its cases are cut off in the provided content.
 
 ## Relationships
-
-- **`session/jwt-strategy.ts`** – the system under test; all assertions target its exported `jwtStrategy` object.
-- **`session/jwt.ts`** – fully mocked (all functions replaced with `jest.fn`); `TokenRejection` is re-exported from the real module for use in tests.
-- **`repository.ts`** – `sessionRepository` is partially mocked (spreads actual, overrides methods with `jest.fn`).
-- **`session/auth-context.ts`** – `resolveProof` is mocked out entirely.
-- **`infrastructure/security/hash-token.ts`** – `hashToken` is called in assertions to verify the repository receives a hashed token, not the raw value.
-- **`tests/strategy-doubles.ts`** – supplies `cookieSet`, `recordingResponse`, and `requestWith` helpers for cookie assertion and request construction.
-- **`types/index.ts`** – provides the `RememberTier` enum used in fixtures and expected cookie `maxAge` calculations.
-- **`tests/support/environment.ts`** – `setEnvironment` configures `NODE_SESSION_TIME_MEDIUM` for tier-expiry assertions.
-- **`tests/support/stub.ts`** – `asStub` casts the mock objects into typed `jest.Mock` fields without repeating type annotations.
+- Targets `src/modules/account/session/jwt-strategy.ts` (`jwtStrategy`).
+- Replaces `src/modules/account/session/jwt.ts`, `src/modules/account/repository.ts` (`sessionRepository`) and `src/modules/account/session/auth-context.ts` (`resolveProof`) with mocks.
+- Uses `hashToken` from `src/infrastructure/security/hash-token.ts` to compute expected hashes.
+- Uses `cookieSet`, `recordingResponse` and `requestWith` from `src/modules/account/tests/strategy-doubles.ts`.
+- Uses `RememberTier` from `src/types/index.ts`.
+- Uses `asStub` (`tests/support/stub.ts`) and `setEnvironment` (`tests/support/environment.ts`).
 
 ## Notes
-
-- The file explicitly does **not** test token minting/verification logic; that is delegated to a sibling test (`session-jwt.test.ts`). Everything here is about *wiring and adapter behavior*.
-- `jest.mock` for `session/jwt` uses `jest.requireActual` to preserve the real `TokenRejection` class while stubbing all functions—tests can throw the real error type and still assert on it.
-- The distinction between "token is bad" (`TokenRejection` → `{ miss: reason }`) and "infrastructure is down" (generic `Error` → re-thrown) is a core contract tested in both the resolve and reissue/remint paths.
-- `remember: 'medium'` appears as a string in `continueSession` call assertions while the fixture uses `RememberTier.medium`—the adapter serialises the enum before calling the token layer.
-- The `bearer` transport test exists to lock in the (non-obvious) fact that cookies are *still* set even when the client isn't expected to use them.
+- The `jest.mock` calls come before the imports of the modules under test, and they use `requireActual` to keep the real `TokenRejection` and the rest of the repository.
+- The tests distinguish a refused token (a miss) from an outage (a rejection), so the guard can tell the two apart.

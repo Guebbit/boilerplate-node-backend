@@ -1,30 +1,32 @@
 ---
 source: src/modules/orders/controllers/update-order.ts
-sha256: 66f9afe3c954ec21785f3727f9f51587a9b609a01ec466f30fef8cb4843956f3
-generated_at: 2026-11-08T06:47:45.665939+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 66f9afe3c954ec21785f3727f9f51587a9b609a01ec466f30fef8cb4843956f3
+context_sha256: a1ad6b7e25208c202661d507f807688e5aa620b1a3900ad8a7f4d6ae98f7185a
+generated_at: 2026-11-22T06:10:24.770583+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/controllers/update-order.ts
 
 ## Purpose
-
-Builds the two HTTP handlers for `PUT /orders/:id` (full replace) and `PATCH /orders/:id` (partial merge) by delegating to the shared `createUpdateController` factory. The only writable field exposed through either verb is `email`; `status` transitions are intentionally excluded from the request body and must go through a dedicated action endpoint.
+Defines the HTTP controllers for `PUT /orders/:id` (replace) and `PATCH /orders/:id` (merge). Both are produced by the shared `createUpdateController` factory and delegate to the order service. `email` is the only writable field on either verb; `status` changes only through an action endpoint, not through this body.
 
 ## Key elements
-
-- **`replaceOrderById`** — The `PUT` handler. Accepts a `ReplaceOrderByIdBody` (full body), delegates to `orderService.updateById`, and returns the order decorated with its available actions.
-- **`updateOrderById`** — The `PATCH` handler. Accepts an `UpdateOrderByIdBody` (partial body) with the same downstream flow.
-- Both are produced in a single `createUpdateController` call configured with `versioned: true`, entity key `'orderById'`, not-found message key `'orders.not-found'`, and the two Zod schemas that gate the request shapes.
+- `replaceOrderById` — the `PUT` handler, validated against `ReplaceOrderByIdBody`.
+- `updateOrderById` — the `PATCH` handler, validated against `UpdateOrderByIdBody`.
+- Both are destructured from a single `createUpdateController` call configured with:
+  - `versioned: true`
+  - `entity: 'orderById'`
+  - `notFoundKey: 'orders.not-found'`
+  - `update`: calls `orderService.updateById(id, changes, callerContextOf(request))`
+  - `present`: calls `orderService.withActions(order, request.authContext)` to shape the response
 
 ## Relationships
-
-- **`create-update-controller.ts`** — Supplies the `createUpdateController` factory that assembles the replace/update handler pair, handles 404s, and wires schema validation.
-- **`services/index.ts`** — Provides `orderService.updateById` (performs the write, 404 check, and audit emit) and `orderService.withActions` (attaches the list of permissible actions to the response given the caller's auth context).
-- **`request.ts`** — Provides `callerContextOf(request)`, which extracts the authenticated caller's context and passes it into the service call.
-- **`routes.ts`** — Imports `replaceOrderById` / `updateOrderById` and registers them against the `PUT`/`PATCH /orders/:id` routes.
+- `src/infrastructure/surfaces/create-update-controller.ts` — supplies the factory that builds both handlers from the schemas and callbacks given here.
+- `src/modules/orders/services/index.ts` — supplies `orderService`. `updateById` does the update and `withActions` decorates the result for the response.
+- `src/infrastructure/http/request.ts` — supplies `callerContextOf`, which derives the caller context passed to `updateById`.
+- `src/modules/orders/routes.ts` — the neighboring routes module. The handlers are exported here for it to use, though the controller file itself does not reference it.
 
 ## Notes
-
-- The `present` callback calls `orderService.withActions(order, request.authContext)`, so the response shape includes a per-user `actions` array; the controller itself adds no business logic beyond routing the request to the service.
-- `status` is deliberately absent from both `ReplaceOrderByIdBody` and `UpdateOrderByIdBody`; attempting to set it via this endpoint will be rejected at schema validation. Status changes belong to a separate action route.
+- `orderService.updateById` already handles the 404 check and the audit emit, so the controller adds neither.
+- The request body schemas (`ReplaceOrderByIdBody`, `UpdateOrderByIdBody`) come from `@api/schemas.zod`.

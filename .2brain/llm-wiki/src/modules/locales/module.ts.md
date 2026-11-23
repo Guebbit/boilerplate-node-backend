@@ -1,43 +1,46 @@
 ---
 source: src/modules/locales/module.ts
-sha256: 3ce96315508ce52e3bf9a1de583211ef4e5fbdc3d1409bb5327157dbf369f6b5
-generated_at: 2026-11-08T06:23:29.776789+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b55e55397d0e58ca9a5d756ec90c1bf6048c07f31233bc2f7220a3fe4007546a
+context_sha256: 5e507b2d13a6c39530953a3ce2d033b331ac123c1be874c1e6fa8e2ea321fa47
+generated_at: 2026-11-22T05:45:26.499375+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/module.ts
 
 ## Purpose
-
-Module manifest and bootstrap wiring for the **locales** module. Declares the module's identity (name, routes, config, i18n files, personal-data hooks) and defines the `onRegistered` callback that installs two kernel ports — a locale-override provider and a translation port — only when the module is actually registered, not at import time.
+Manifest entry for the `locales` module. It declares the module's routes, config slice, own locale files and personal-data handling. Its `onRegistered` hook installs the module's two kernel ports and wires up its `translatables` lookup. Per the file's doc comment, the module covers which languages a deployment speaks and the dictionaries a client downloads. Deployed files and runtime overrides stay as separate tiers, and neither is awaited on the request path.
 
 ## Key elements
-
-- **`onRegistered(modules)`** — Called by the registry once all enabled modules are known. Performs three installations:
-  - `registerLocaleOverrideProvider(() => localeService.readLocaleOverlay())` — hands a lazy override reader to `@infrastructure/i18n`.
-  - `registerTranslationPort({…})` — wires the module's translation implementation to the kernel port (see below).
-  - `localeService.setTranslatables(resolveTranslatables(modules))` — gives the service the per-module translatable-key list it cannot collect on its own.
-- **Translation port object** — The concrete implementation registered via `registerTranslationPort`. Methods: `resolve`, `removeAll`, `search`, `plan`, `write`, `readAll`, `canPreviewDrafts`, `readServed`. All delegate to `translationRepository` or `planForPort`/`writeForPort`.
-- **`export default` (AppModule manifest)** — Exports `name: 'locales'`, `mounts` (router at `/locales`), `config` (`localesConfig.slice`), `onRegistered`, `locales` (path to the module's own i18n JSON), and `personalData`.
-- **`personalData`** — Single section `translationAttribution`. `collect` always resolves `undefined` (nothing is exported to the subject); `erase` calls `translationRepository.forgetTranslator(userId, session)` to clear the `translatedBy` pointer on a staff-account deletion.
+- **`onRegistered(modules)`** runs once all enabled modules are known. It does three things:
+  - Calls `registerLocaleOverrideProvider(() => localeService.readLocaleOverlay())`. This feeds runtime overrides and language on/off state to `@infrastructure/i18n`.
+  - Calls `registerTranslationPort({...})`, backed by `translationRepository`, `planForPort` and `writeForPort`:
+    - `resolve`, `removeAll`, `search`, `plan`, `write`, `readAll` and `readServed`.
+    - `canPreviewDrafts`, which is `!hasAnonymousReadScope(localeService.callerScope, caller)`.
+  - Calls `localeService.setTranslatables(resolveTranslatables(modules))`.
+- **Default export** is the manifest, typed with `satisfies AppModule`:
+  - `name: 'locales'`.
+  - `mounts`: the `router` at `/locales`.
+  - `config`: `[localesConfig.slice]`.
+  - `onRegistered`.
+  - `locales`: the `locales` directory next to the file, so the module's own error messages are translated.
+  - `personalData`: one entry, section `translationAttribution`.
 
 ## Relationships
-
-- **`@infrastructure/i18n`** — Consumes `registerLocaleOverrideProvider`; this module is the *only* provider of the runtime override layer.
-- **`@kernel/translation`** — Consumes `registerTranslationPort`; after registration, all other modules reach translation through this port rather than importing this module directly.
-- **`@kernel/registry`** — Imports `AppModule` type and `resolveTranslatables` to build the translatables map from the full module list.
-- **`@kernel/access/query`** — Imports `hasAnonymousReadScope` to implement the `canPreviewDrafts` predicate on the translation port.
-- **`./routes`** — Mounts the HTTP router at `/locales`.
-- **`./services`** (`localeService`) — Source of `readLocaleOverlay` and the target of `setTranslatables`.
-- **`./repository`** (`translationRepository`) — Backing store for every port method (`resolveEntityFields`, `removeEntityTranslations`, `findEntityIdsByFieldMatch`, `findEntityTranslations`, `findServedEntityTranslations`, `forgetTranslator`).
-- **`./services/translations`** — Provides `planForPort` / `writeForPort` used by the port's `plan` and `write` methods.
-- **`./config`** — Supplies the module's config slice included in the manifest.
-- **`src/notifications/module.ts`** — Peer module; likely a consumer of the translation port registered here.
-- **`tests/integration/erasure.test.ts`, `tests/integration/erased-staff-attribution.test.ts`** — Exercise the `personalData.erase` path (`forgetTranslator`) in integration scenarios.
+- `src/kernel/registry.ts`: provides the `AppModule` type and `resolveTranslatables`.
+- `src/kernel/translation.ts`: provides `registerTranslationPort`, the port this file implements.
+- `src/infrastructure/i18n/index.ts` (`@infrastructure/i18n`): receives the override provider through `registerLocaleOverrideProvider`. The doc comment says the rest of the codebase reaches i18n through this package, not through the module's own index.
+- `src/kernel/access/query.ts`: provides `hasAnonymousReadScope`, used for draft preview.
+- `src/modules/locales/routes.ts`: supplies the `router` that is mounted.
+- `src/modules/locales/services/index.ts`: supplies `localeService`.
+- `src/modules/locales/services/translations.ts`: supplies `planForPort` and `writeForPort`.
+- `src/modules/locales/repository.ts`: supplies `translationRepository`, which backs most port methods and `forgetTranslator`.
+- `src/modules/locales/config.ts`: supplies `localesConfig`, whose `slice` is listed under `config`.
+- `src/modules.ts`: the doc comment says the `app` tier is the only one that sees which modules exist.
+- The integration tests `erasure`, `erased-staff-attribution` and `product-write` are neighbors in the graph.
 
 ## Notes
-
-- Ports are registered inside `onRegistered`, **not** at import time. Importing this file (for a type, a test helper, etc.) has no side-effects; only a `registerModules` call that includes this module triggers installation.
-- The `canPreviewDrafts` predicate inverts the anonymous-read check: a caller *without* anonymous read scope (i.e., authenticated staff) can preview draft translations.
-- The module ships its **own** i18n directory (`locales/`) so that its error messages (e.g., the 409 on key collision) are themselves localisable — it does not rely on another module's strings for this.
-- `personalData.collect` is intentionally a no-op; `translatedBy` is a staff-id pointer, not customer PII, so it is excluded from account exports by design.
+- Ports are registered in `onRegistered`, not at import time. Importing this file, for a type or in a test, installs nothing.
+- `translatedBy` is the caller's user id, stored as a pointer. The `translationAttribution` personal-data section has `collect` resolving `undefined`, so it appears in no export. Its `erase` calls `translationRepository.forgetTranslator(userId, session)`.
+- The `readAll` and `readServed` callbacks both convert repository rows into a `Map` of locale to fields.
+- A comment says the override provider "touches no database", because `readLocaleOverlay` only runs on the refresh.

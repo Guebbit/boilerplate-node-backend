@@ -1,32 +1,27 @@
 ---
 source: src/modules/example/services/index.ts
-sha256: 5cdbb866bb1ef8f8daec2949a0f38738a7e8efa9692ed94afed483bf19d7480a
-generated_at: 2026-11-08T05:53:35.040711+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:12:18.210186+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/services/index.ts
 
 ## Purpose
-
-Barrel/facade for the example module's service layer. It aggregates the individual capability files (CRUD, cover, status transitions) into a single `exampleService` object, which is the **only** entry point controllers are expected to call. The folder structure exists so each optional capability keeps its own file; this index is the one door.
+The service layer's single entry point for the `example` module. It assembles the individual operation files (`crud.ts`, `cover.ts`, `transition.ts`) into one `exampleService` object, which controllers call and the module barrel publishes. Each capability stays in its own file, and this file only composes them.
 
 ## Key elements
-
-- **`exampleService`** — the sole export. A plain object whose keys are the nine operations:
-  - `create`, `getById`, `search`, `updateById`, `removeById` (from `./crud`)
-  - `setCover` (from `./cover`)
-  - `publishById`, `archiveById`, `unarchiveById` (from `./transition`)
+- `exampleService`: the exported object exposing every operation:
+  - CRUD (from `./crud`): `create`, `getById`, `search`, `updateById`, `removeById`
+  - Cover (from `./cover`): `setCover`
+  - Status transitions (from `./transition`): `publishById`, `archiveById`, `unarchiveById`
 
 ## Relationships
-
-- **`./crud.ts`, `./cover.ts`, `./transition.ts`** — direct import sources; each provides the individual functions that `exampleService` re-exposes.
-- **Controllers** (`post-example`, `get-example`, `get-examples`, `update-example`, `delete-example`, `put-example-cover`, `post-example-event`) — consumers; they call operations *through* `exampleService` rather than importing the bare functions.
-- **`src/modules/example/index.ts`** — module-level barrel; re-exports `exampleService` outward.
-- **`tests/integration/service.test.ts` / `capabilities.test.ts`** — exercise the `exampleService` object directly.
+- Imports the operations from `src/modules/example/services/crud.ts`, `src/modules/example/services/cover.ts` and `src/modules/example/services/transition.ts`.
+- The controllers (`delete-example`, `get-example`, `get-examples`, `post-example`, `post-example-event`, `put-example-cover`, `update-example`) are the intended callers, going through `exampleService`.
+- `src/modules/example/index.ts` (the module barrel) publishes the service object.
+- The integration tests `service.test.ts` and `capabilities.test.ts` sit among its graph neighbors.
 
 ## Notes
-
-- The doc comment is explicit: *"controllers call through this, never the bare functions."* Do not import `create` from `./crud` in a controller; go via `exampleService.create`.
-- The object is a plain const, not a class—no `this` binding, no instantiation.
-- Adding a new capability means (1) a new file in `services/`, (2) an import + key here. No other file in the module should gain knowledge of the new function.
+- Operations are exposed only as properties of `exampleService`. The bare functions are not re-exported by name here, and the doc comment says controllers should never call them directly.
+- Adding a new capability means adding its file and registering it on this object.
+- The header comment references a layering doc (the `example-from-this-repo` section of a `layers.md` page) for the rationale.

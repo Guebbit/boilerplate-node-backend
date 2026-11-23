@@ -1,27 +1,24 @@
 ---
 source: src/modules/analytics/index.ts
-sha256: 100850322387c22d65709ab313e601547dd5a4abd9d89aebfed9095ee8013010
-generated_at: 2026-11-08T04:58:43.754538+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e4a3c8da588b0bb0de03f65c2c0e587f5aec78f7cf00e57420f63f71cf308e8d
+context_sha256: 5b83c6aff06721716a7264a7c35d7d87b2d8dcfd202a174553da8ce851ad441d
+generated_at: 2026-11-22T04:17:45.962014+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/analytics/index.ts
 
 ## Purpose
-
-Public barrel for the analytics module. It exists as the single, mandated import surface for any sibling module, enforcing the architectural rule (see `docs/theory/strategic-ddd.md` §5) that cross-module access goes only through the relay service and never through internal wiring (routes, controllers, module registration).
+Public barrel for the analytics module. It is the only surface that sibling modules may import from this module, and it publishes only the relay service. The module's internal wiring (`module.ts`, `routes.ts`, `controllers/`) is deliberately not exported.
 
 ## Key elements
-
-- `export * from './services'` — Re-exports every public symbol from `./services/index.ts`. This is the file's sole statement; it publishes the relay service surface and nothing else.
+- `export * from './services'` — the single statement in the file. It re-exports everything the services barrel exposes, which the file's doc comment describes as the analytics relay service.
 
 ## Relationships
-
-- **`src/modules/analytics/services/index.ts`** — Sole dependency. The barrel re-exports its entire public API, making whatever `services/index.ts` declares the de facto public contract of the analytics module to the rest of the codebase.
-- **`infrastructure/observability/analytics`** (referenced in docblock) — The provider port that the relay service ultimately feeds. Not imported here; relevant as context for where analytics data flows.
+- `src/modules/analytics/services/index.ts` — the only dependency. This barrel re-exports its public API wholesale, so the exported surface is whatever that file exports.
+- The doc comment says the provider port the relay feeds lives in `infrastructure/observability/analytics`. This file does not import it.
 
 ## Notes
-
-- **Import rule:** Sibling modules must import from this barrel, not from `./services`, `./routes`, `./controllers`, or any other internal path. Direct internal imports bypass the architectural boundary.
-- **What is *not* published:** `module.ts`, `routes.ts`, and everything under `controllers/` are internal wiring and are deliberately excluded from this barrel. Adding them here would violate the module's public-contract intent.
-- **Single source of truth for public API:** To discover what the analytics module exposes, read `src/modules/analytics/services/index.ts`; this file adds nothing.
+- Because of the `export *`, anything newly exported from the services barrel becomes part of the module's public surface automatically. Keep it limited to what should be published.
+- Sibling modules should import from this barrel, not from `services/`, `controllers/`, or other internals.
+- The doc comment references two documentation pages (an analytics module page and a strategic-DDD page, section "the barrel") for the module's neighbourhood and the barrel rule; neither is part of this repository.

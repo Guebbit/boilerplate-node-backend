@@ -1,42 +1,35 @@
 ---
 source: src/modules/orders/domain/timeline.ts
-sha256: cbb43dc9897c4e4df30fcd08a9c08392ad99a744553b26ed065bb55aa4280a26
-generated_at: 2026-11-14T20:35:32.237250+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e83986e5a40fd42230bd816252e6ed92408a54cd4b2b7474a981ebc8ab490c3c
+context_sha256: 8c8e6b8f3569bef8126f9d071add12483794376f99e93f6f32699e9492529f1e
+generated_at: 2026-11-22T06:13:40.269755+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/domain/timeline.ts
 
 ## Purpose
-
-Defines the closed set of order-timeline entry types and assigns each one a fixed audience (`buyer` or `staff`). It provides the compile-time guard that no type can exist without an audience decision, and the type-safe input shape (`TimelineEntryInput`) that writers must use when creating a timeline row. Visibility is decided here, up front, rather than by stripping fields at read time.
+Defines what an order's timeline may say and to whom. The set of timeline entry types comes from the generated contract; this file adds the audience (`buyer` or `staff`) for each type, so no type can exist without a decision about who reads it. Visibility is decided per type, never by stripping fields at read time: a private row is hidden whole.
 
 ## Key elements
-
-- **`OrderTimelineType`** — union of every `type` literal across the generated `OrderTimelineEntry` variants.
-- **`OrderTimelineEntryAudience`** — the audience literal type drawn from the entry.
-- **`TIMELINE_AUDIENCE`** — `Readonly<Record<OrderTimelineType, OrderTimelineEntryAudience>>`; the single source of truth mapping each type to `buyer` or `staff`. A new type added to the contract without a row here is a compile error.
-- **`isBuyerVisible(type)`** — predicate that returns a boolean based on whether the row's audience is `'buyer'`.
-- **`BUYER_VISIBLE_TYPES`** — `readonly OrderTimelineType[]` of every buyer-visible type; used to narrow buyer-facing queries.
-- **`TimelineEntryInput`** — distributive conditional type (`InputOf<OrderTimelineType>`) that pairs a given `type` with exactly that variant's optional `data` shape and (if the variant declares one) an optional `text` field. Accepts `actor`, `at`, and `type` on every row.
-- **`VariantOf<T>`, `DataField<T>`, `TextField<T>`** — internal type utilities used to build `InputOf`; not exported.
+- `OrderTimelineType`: union of all entry `type` values, read off `OrderTimelineEntry['type']`.
+- `OrderTimelineEntryAudience`: the entry's own `audience` type.
+- `TIMELINE_AUDIENCE`: `Readonly<Record<OrderTimelineType, OrderTimelineEntryAudience>>` mapping every type to its audience. Staff-only types include `status_overridden`, `fulfillment_held`/`fulfillment_released`, `address_corrected`, `billing_corrected`, `refund_failed`/`refund_canceled`/`refund_reversed`, `dispute_opened`/`dispute_closed` and `note_added`. All others are `buyer`.
+- `isBuyerVisible(type)`: true when the type's audience is `buyer`.
+- `BUYER_VISIBLE_TYPES`: array of all buyer-audience types, derived from `TIMELINE_AUDIENCE`. It is what a buyer's timeline query narrows to, so the page and its count contain only visible rows.
+- `TimelineEntryInput`: the type for one row as `orders` writes it, from any module. Each member pairs a `type` with exactly that type's `data`, plus optional `actor` (absent for the system), `at` (defaults to the write's own instant) and `text`.
+- Internal helper types `VariantOf`, `DataField`, `TextField` and `InputOf` derive the input shape from the generated variants.
 
 ## Relationships
-
-- **`src/types/index.ts`** — supplies the `OrderTimelineEntry` generated type from which `OrderTimelineType` and `OrderTimelineEntryAudience` are derived.
-- **`src/modules/orders/domain/index.ts`** — barrel re-export; consumers import through this rather than the file directly.
-- **`src/modules/orders/services/timeline.ts`** — consumes `TimelineEntryInput` for writes and `TIMELINE_AUDIENCE` / `isBuyerVisible` for read-time filtering.
-- **`src/modules/orders/repository.ts`** — uses `BUYER_VISIBLE_TYPES` to constrain buyer-facing timeline queries.
-- **`src/modules/orders/presenter.ts`** — relies on the audience mapping to decide what to render for the buyer view.
-- **`src/modules/orders/services/status.ts`** — writes timeline rows using `TimelineEntryInput`.
-- **`src/modules/orders/tests/contract/timeline-variants.contract.test.ts`** — asserts the contract's `OrderTimelineType` schema is split exactly by the variants.
-- **`src/modules/orders/tests/unit/timeline.test.ts`** — unit-tests the audience table and input types.
+- Imports `OrderTimelineEntry` from `@types` (`src/types/index.ts`), the generated contract type that all types here derive from.
+- A contract test (`src/modules/orders/tests/contract/timeline-variants.contract.test.ts`) checks that the contract's `OrderTimelineType` schema is split exactly by the variants.
+- The neighbors `src/modules/orders/domain/index.ts`, `src/modules/orders/services/timeline.ts`, `src/modules/orders/repository.ts`, `src/modules/orders/presenter.ts`, `src/modules/orders/services/status.ts` and `src/modules/orders/model.ts`, plus `src/modules/orders/tests/unit/timeline.test.ts`, are in the dependency graph. The file's own comments only imply the writer and query roles, and the other links are not visible in this file.
 
 ## Notes
-
-- Audience is a per-type constant, **not** a per-row override. A `staff`-audience row is hidden whole; no field-level stripping is performed at read time.
-- `TIMELINE_AUDIENCE` is deliberately a `Record` over the generated enum so the compiler enforces exhaustiveness in both directions (missing type → error; orphan row → error).
-- `BUYER_VISIBLE_TYPES` requires a `type as OrderTimelineType` cast because `Object.entries` widens keys to `string`.
-- `VariantOf` uses a distributive `extends infer` chain rather than `Extract` so it still resolves correctly when a variant's `type` enum is a *subset* of the full union (where `Extract` would yield `never`).
-- A variant whose `data` is an open index signature (`{ [key: string]: unknown }`) maps to `{ data?: undefined }` in `TimelineEntryInput`, meaning writers simply omit the field.
-- The `text` field is accepted **only** on variants that declare it in their own schema; all other types get `unknown` (i.e. the key is rejected).
+- Adding a type to the contract without a `TIMELINE_AUDIENCE` row fails to compile, and so does a row with no type.
+- `text` is accepted only on variants that declare it, and only when `orders` owns the text (it has its own retention clock). Ids, codes and numbers go in `data`.
+- `data` is required unless the variant's generated `data` is an open index signature (an empty object), in which case it must be omitted.
+- `BUYER_VISIBLE_TYPES` uses a cast because `Object.entries` loses the key type.
+- `VariantOf` is distributive because `Extract` would return `never` for a variant whose `type` is a subset of a wider enum.
+- Some staff-only rows have buyer-facing counterparts. The buyer sees the new address on the order itself, and `invoice_corrected` is buyer-visible while `billing_corrected` is not. `note_added` is readable by the buyer only in their data export.
+- The file's header comment points to the `orders` module documentation's "the timeline" section.

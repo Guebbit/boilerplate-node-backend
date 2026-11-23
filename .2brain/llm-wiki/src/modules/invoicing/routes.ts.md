@@ -1,37 +1,33 @@
 ---
 source: src/modules/invoicing/routes.ts
-sha256: 656c878eae7b5a7cb977ddd3c3bfdf868817c4d0559bf0c4fea03504ae6cd434
-generated_at: 2026-11-08T06:13:47.784140+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ef8cfec32236d23ddb8d0600b67fcfb3ddae6ac35af05f32a5797c64310202e5
+context_sha256: 8b072cb6de3c2ea7e4b554d81f315e1c3f757c77a6563d4f81f09c1f3714cd1e
+generated_at: 2026-11-22T05:34:06.529749+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/routes.ts
 
 ## Purpose
-
-Defines the Express router that exposes three invoicing download endpoints (invoice PDF, credit-note list, single credit-note PDF) under `/orders`. It exists so these read-only file-serving routes can be mounted alongside the `orders` module's own router without path collisions, while sharing the same auth and rate-limiting concerns.
+Defines the Express router for invoicing's three download routes: the order invoice, the list of credit notes, and a single credit note. The router is mounted at `/orders` and shares that prefix with the `orders` module's own router (see `./module.ts`).
 
 ## Key elements
-
-- **`router`** (exported) — the `express.Router` instance carrying all three routes.
-- **`GET /:id/invoice`** → `getOrderInvoice` — returns a rendered PDF; guarded by `invoicingLimiter` (Chromium launch cost).
-- **`GET /:id/credit-notes`** → `getOrderCreditNotes` — returns the list of credit notes for an order; no PDF limiter needed.
-- **`GET /:id/credit-notes/:creditNoteId`** → `getOrderCreditNote` — returns a single credit-note PDF; guarded by `invoicingLimiter`.
-- **`router.use(getAuth, isAuth)`** — applies session resolution and signed-in check to every route in this router.
+- `router`: the exported Express `Router`.
+- `router.use(getAuth, isAuth)`: applies authentication to every route below it. `getAuth` resolves the session and `isAuth` requires a signed-in user.
+- `GET /:id/invoice`: runs `invoicingLimiter`, then `getOrderInvoice`.
+- `GET /:id/credit-notes`: runs `getOrderCreditNotes` with no limiter, because it is a plain read.
+- `GET /:id/credit-notes/:creditNoteId`: runs `invoicingLimiter`, then `getOrderCreditNote`.
 
 ## Relationships
-
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth` and `isAuth`, wired as router-level middleware on every route here.
-- **`src/modules/invoicing/controllers/get-order-invoice.ts`** — handler for the invoice PDF route.
-- **`src/modules/invoicing/controllers/get-order-credit-notes.ts`** — handler for the credit-note list route.
-- **`src/modules/invoicing/controllers/get-order-credit-note.ts`** — handler for the single credit-note PDF route.
-- **`src/modules/invoicing/rate-limits.ts`** — exports `invoicingLimiter`, applied per-route on the two PDF-rendering endpoints.
-- **`src/modules/invoicing/module.ts`** — mounts this router at `/orders` (shared path with the `orders` module's router).
-- **`src/modules/invoicing/tests/unit/routes.test.ts`** — unit tests for the routes defined here.
+- `src/kernel/middlewares/authorizations.ts`: provides `getAuth` and `isAuth`, applied router-wide.
+- `src/modules/invoicing/controllers/get-order-invoice.ts`, `get-order-credit-note.ts` and `get-order-credit-notes.ts`: the handlers for the three routes.
+- `src/modules/invoicing/rate-limits.ts`: provides `invoicingLimiter`, applied to the two PDF routes.
+- `src/modules/invoicing/module.ts`: mounts this router at `/orders`.
+- `src/modules/invoicing/tests/unit/routes.test.ts`: unit tests for this router.
 
 ## Notes
-
-- This router is mounted **at `/orders`**, the same prefix the `orders` module uses. Collisions are avoided by path-segment count: these routes have 2–3 segments while `orders`' own `/:id` has 1.
-- `invoicingLimiter` is applied **only** to the two routes that spawn a Chromium render. The list route is a plain DB read and skips the limiter.
-- PDF bytes are deliberately **not** placed in the JSON response cache; the PDF store (`services/render.ts`) is the persistence layer for rendered documents.
-- `getAuth` is idempotent — if an upstream router already resolved the auth context, it returns early, so re-applying it here has zero runtime cost.
+- `getAuth` returns early if the request already has a resolved auth context. Mounting it here after another router has run it costs nothing.
+- The invoicing paths have two or more segments, so they never collide with `orders`' single-segment `/:id`, whichever router runs first.
+- The invoice route is deliberately kept out of the JSON cache. Caching PDF bytes there would only hold the first byte range Express flushed. The PDF store in `src/modules/invoicing/services/render.ts` holds the bytes instead.
+- `invoicingLimiter` guards the Chromium launch that a PDF render spawns.
+- The file's header comment points to `scripts/contracts/fragments.ts` (section "which-fragment-owns-which-operation").

@@ -1,34 +1,31 @@
 ---
 source: src/modules/account/services/refresh.ts
-sha256: 2efefa3314473b9881aacfc8262348a570274e845a4cd79526a7f4acff88774a
-generated_at: 2026-11-08T04:22:29.793646+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f7a1473e3409b4b70019acaa51ee5d54b8b285c859ebc5bab0139be0e3ee43d0
+context_sha256: 6a9760adacde2d758a7fda9e629ed81cdaeaadda7a9d9e9ff4b3d79a28bd9e25
+generated_at: 2026-11-22T03:41:25.112472+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/refresh.ts
 
 ## Purpose
-
-Orchestrates the refresh-token → access-token exchange: accepts an optional refresh cookie, delegates the actual rotation to the JWT session module, classifies the outcome (success, missing token, invalid, reuse), and records the appropriate audit row and metric before returning the new token pair to the controller. It exists to keep the "what to audit and how" policy separate from the "how to rotate" mechanics.
+Implements the refresh-token exchange: given a refresh cookie (possibly absent), it obtains a rotated session from `../session/jwt` and records an audit entry for every outcome. It decides and records all outcomes in one place: success, missing token, invalid token, and reuse of an already-rotated token.
 
 ## Key elements
-
-- **`refreshAccessToken(refreshToken, context)`** — the sole export. Accepts `string | undefined` for the refresh cookie and a `CallerContext`. Resolves with a `RotatedSession` (new access/refresh tokens + `maxAge`) or rejects. Every path—success, missing, invalid, reuse—is audited exactly once inside this function.
-- **`MissingRefreshTokenError`** — internal (non-exported) sentinel error thrown when the cookie is absent. Lets the single `.catch` distinguish "no token" from other rejections without branching the happy path.
-- **`failureReason(error)`** — private mapper that translates non-reuse errors into the audit `metadata.reason` string (`missing_token`, `session_idle`, `invalid_token`).
+- `refreshAccessToken(refreshToken, context)`: the sole export. It takes `string | undefined` plus a `CallerContext` and returns `Promise<RotatedSession>`: new access/refresh tokens and the refresh cookie's new `maxAge`, for the controller to set. It calls `rotateRefreshToken` if a token is present, otherwise rejects with `MissingRefreshTokenError`.
+  - On success it audits `AUTH_TOKEN_REFRESHED` with outcome `success`.
+  - On failure it audits with outcome `failure`, then rethrows the original error.
+- `MissingRefreshTokenError` (module-private): represents the absent cookie so a single `catch` can distinguish it from other failures.
+- `failureReason(error)` (module-private): maps a failure to the audit `metadata.reason`: `missing_token`, `session_idle` (a `TokenRejection` with reason `idle`), or `invalid_token` (anything else).
 
 ## Relationships
-
-- **`src/modules/account/session/jwt.ts`** — provides `rotateRefreshToken` (the actual rotation), plus `TokenReuseError`, `TokenRejection`, and the `RotatedSession` type consumed here.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` is called on every outcome.
-- **`src/modules/account/audit.ts`** — supplies the `accountAuditActions` enum values used as audit `action` fields.
-- **`src/modules/account/metrics.ts`** — `authRefreshReuseTotal.inc()` is called when a `TokenReuseError` is caught.
-- **`src/types/index.ts` / `src/types/auth-context.ts`** — source of the `CallerContext` type.
-- **`src/modules/account/services/index.ts`** — barrel file that re-exports `refreshAccessToken` for consumers.
+- `../session/jwt`: provides `rotateRefreshToken`, `TokenReuseError`, `TokenRejection` and the `RotatedSession` type. The rotation logic lives there, not here.
+- `@infrastructure/observability/audit`: `recordAudit(context, {...})` writes the audit rows.
+- `../audit`: supplies `accountAuditActions` (`AUTH_TOKEN_REFRESHED`, `AUTH_REFRESH_TOKEN_REUSE_DETECTED`).
+- `../metrics`: `authRefreshReuseTotal` counter, incremented on reuse detection.
+- `@types` (`src/types`): supplies the `CallerContext` type. `src/types/index.ts` is the neighbor in the graph for this import.
 
 ## Notes
-
-- **Reuse vs. ordinary failure is intentionally distinct in the audit trail.** A `TokenReuseError` produces a different `action` (`AUTH_REFRESH_TOKEN_REUSE_DETECTED`), carries the real `actorUserId` from the error, and omits `metadata.reason`. Ordinary failures use `AUTH_TOKEN_REFRESHED` with `actorUserId: 'anonymous'` and a `reason` string.
-- **`actorRole` is never set** (defaults to `anonymous`) because this request never carried a verified access token; the file's comment notes that guessing admin status would misreport a fact the user-id already pinpoints.
-- The function is fully async in effect (returns a `Promise`) but declared as a promise-chain rather than `async/await`, so the rotation and audit recording are sequenced via `.then`/`.catch`.
-- `MissingRefreshTokenError` is never exported; it is a private control-flow device, not a public API surface.
+- Reuse is handled separately from ordinary failures. It uses its own audit action, increments `authRefreshReuseTotal`, and carries no `metadata.reason`. It sets `actorUserId` to `error.userId`, since the account is known.
+- Other failures set `actorUserId: 'anonymous'` and include `metadata.reason`. `actorRole` is deliberately left at its default (`anonymous`), because no verified access token accompanied the request.
+- Errors are always rethrown after auditing, so callers still handle failures. The audit is recorded as a side effect, not a replacement for error handling.

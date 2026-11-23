@@ -1,30 +1,32 @@
 ---
 source: src/modules/returns/services/projection.ts
-sha256: 688858c02faa92139781a81531a32f421eecec0a3f93e735f9f9221333d1375b
-generated_at: 2026-11-08T08:05:22.772914+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:31:16.022936+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/projection.ts
 
 ## Purpose
-Keeps the `orders` module's `returnStatus` field in step with the returns attached to an order. Because `orders` cannot import this module, this file acts as the bridge: after any state-changing return operation, it reads the order's returns, computes the correct status word, and reports it back through the orders module's own public API (`orderService.markReturnStatus`).
+Keeps the `returnStatus` shown on an order in step with the returns attached to it. The `orders` module cannot read the returns module, so after any change to a return the returns module works out the status itself and reports it to `orders` through `orders`' public API. The report is a projection of a fact that has already been decided. A failed report is logged and never thrown.
 
 ## Key elements
-- **`syncReturnStatus(orderId: string): Promise<void>`** — The sole export. Loads the order's returns and the order itself in parallel, filters out cancellation lines, computes the projected status via the domain helpers, and writes it back through `orderService.markReturnStatus`. Always resolves; on failure it logs and swallows the error.
+- `syncReturnStatus(orderId: string): Promise<void>` is the only export.
+  - It loads the order's returns and the order in parallel.
+  - If the order is not found, it does nothing.
+  - It collects the lines of `cancellation`-kind returns as "canceled" quantities.
+  - It computes returnable quantities from the order items, excluding goods for which `isExcludedFromWithdrawal` is true, minus the canceled quantities.
+  - It passes the returns (status, kind, remedy, wire-format lines) and the returnable quantities to `projectReturnStatus`.
+  - It reports the result to `orders` through `orderService.markReturnStatus`.
+  - The returned promise never rejects.
 
 ## Relationships
-- **`src/infrastructure/adapters/logger.ts`** — Imported as `logger`; used in the `catch` block to record projection failures.
-- **`src/modules/orders/index.ts` / `src/modules/orders/services/index.ts`** — Provides `orderService` (`getById`, `markReturnStatus`) and `isExcludedFromWithdrawal`. This is the "own door" through which the status word is reported.
-- **`src/modules/orders/domain/withdrawal.ts`** — Source of `isExcludedFromWithdrawal`, used to determine which order items are returnable.
-- **`src/modules/returns/domain/index.ts`** — Barrel export supplying `projectReturnStatus`, `returnableLinesOf`, `returnableQuantities`, and `wireLines`.
-- **`src/modules/returns/domain/status-projection.ts`** — Likely origin of `projectReturnStatus`, the function that turns a set of returns into the status word.
-- **`src/modules/returns/domain/quantities.ts`** — Likely origin of `returnableLinesOf` and `returnableQuantities`.
-- **`src/modules/returns/repository.ts`** — Provides `returnRepository.findByOrderId` to load the order's current returns.
-- **`src/modules/returns/services/cancel.ts` / `cancel-remainder.ts` / `close.ts` / `create.ts` / `decide.ts` / `receive.ts`** — The six operations that mutate a return and therefore call `syncReturnStatus` to re-stamp the order's status.
+- **`src/modules/returns/repository.ts`**: `returnRepository.findByOrderId` supplies the returns.
+- **`src/modules/returns/domain/index.ts`** (with `quantities.ts` and `status-projection.ts` behind it): provides the pure logic. `projectReturnStatus` computes the status word. `returnableLinesOf` and `returnableQuantities` compute what can still be returned. `wireLines` converts lines to the wire format.
+- **`src/modules/orders/index.ts`** (with `src/modules/orders/services/index.ts` and `src/modules/orders/domain/withdrawal.ts` behind it): the order module's public entry point. This file imports `orderService` (used for `getById` and `markReturnStatus`) and `isExcludedFromWithdrawal` from it. `isExcludedFromWithdrawal` comes from the withdrawal domain.
+- **`src/infrastructure/adapters/logger.ts`**: its `logger` records failed reports via `error`.
+- **`cancel-remainder.ts`, `cancel.ts`, `close.ts`, `create.ts`, `decide.ts`, `receive.ts`** are sibling services. They are the moves that change what a return holds (opened, decided, received, closed, canceled). The header comment says the sync runs after such moves.
 
 ## Notes
-- **Never throws.** The `catch` block logs via `logger.error` and resolves `undefined`. Rationale (stated in the module docblock): the projection is a *report* of an already-decided fact; the next state-changing move will re-stamp it, so a transient failure is non-fatal.
-- **Idempotent.** The same set of returns always produces the same status word, so safe to call repeatedly.
-- **Cancellation lines are special-cased.** Returns with `kind === 'cancellation'` are extracted and passed as the `canceled` argument to `returnableQuantities`, meaning they do *not* block the order from reading `returned`. Excluded-from-withdrawal items are likewise excluded from the returnable set.
-- **Stryker mutation testing is disabled** on the `logger.error` call in the `catch` block (explicit `Stryker disable all` / `Stryker restore all` markers).
+- It is idempotent: the same returns always produce the same status. A failed report is therefore recovered by the next move, which re-stamps the status.
+- Excluded goods, and units canceled before they shipped, are left out of the returnable quantities. Neither can stop an order from reading `returned`.
+- Errors from any step, including loading the returns, are swallowed and logged. The logging block is wrapped in `Stryker disable all` / `Stryker restore all`, so mutation testing skips it.

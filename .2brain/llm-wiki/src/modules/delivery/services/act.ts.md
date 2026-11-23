@@ -1,39 +1,38 @@
 ---
 source: src/modules/delivery/services/act.ts
-sha256: a88b7a1fc2695f8c93b56a2017354ce2b2fca5b04c52a19ff1dcf36b36f268fa
-generated_at: 2026-11-08T05:33:13.261396+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 11a6f7a3ab748909306e864004e09cfea7c4f3bcd167a4e2db921cbd677b3718
+context_sha256: 24c2199596d824fb0fdcea161e79f80946df2e8532947a178adb62c1978e7ec0
+generated_at: 2026-11-22T04:52:27.059355+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/act.ts
 
 ## Purpose
-
-Provides the transactional envelope for every delivery fulfillment act (ship, deliver, fulfill, hold, release, remainder-cancel). It guarantees that the fulfillment order write, the parent order's status/summary update, and the outbox events commit atomically, and gives the act a single mechanism (`ActRefusal`) to abort the transaction and surface a structured `ResponseReject` at the HTTP boundary.
+Provides the transaction wrapper for delivery "acts" (ship, deliver, fulfill, hold, release, remainder cancel). Each act writes the fulfillment order or shipment, the order summary, any order status move, and outbox events together in one transaction. Refusals are decided before the first write, from the same snapshot the writes land in, and are thrown as `ActRefusal` to abort the transaction.
 
 ## Key elements
-
-- **`ActRefusal`** – Error subclass carrying a `ResponseReject`. Throwing it inside a transaction both aborts the transaction and encodes the HTTP response the door should return.
-- **`refuse(status, code, messageKey)`** – Convenience that throws `ActRefusal` with a structured reject (status, error code, translated message).
-- **`refuseMissing(messageKey)`** – Shortcut for a 404 refusal.
-- **`ActResult<T>`** – Discriminated union: `{ refused: false; value }` on success, `{ refused: true; reject }` on refusal.
-- **`runAct(work)`** – Runs `work(session)` inside `withTransaction`. On commit, nudges the outbox relay and resolves with the produced value. On `ActRefusal`, resolves (not rejects) with the refusal. Any other error re-throws.
-- **`readWithOrder(fulfillmentOrderId, session)`** – Reads the fulfillment order and its parent order within the act's snapshot (same transaction session). Refuses 404 if either is missing. Eliminates a redundant door-level read.
+- `ActRefusal` – an `Error` subclass carrying a `reject: ResponseReject`. Its message lists the error codes.
+- `refuse(status, code, messageKey)` – throws an `ActRefusal` with a 404, 409 or 422 reject built from an error code and a translated message. Returns `never`.
+- `refuseMissing(messageKey)` – throws an `ActRefusal` with a 404 reject carrying a translated message and no error code.
+- `ActResult<T>` – a discriminated union: `{ refused: false, value }` or `{ refused: true, reject }`.
+- `runAct(work)` – runs `work(session)` inside `withTransaction`. On commit it calls `nudgeOutbox()` and resolves `{ refused: false, value }`. A thrown `ActRefusal` becomes `{ refused: true, reject }`. Any other error is rethrown, wrapped in an `Error` if it isn't one.
+- `runActOrThrow(work)` – the same as `runAct`, but a refusal is rethrown as `ActRefusal`. It is meant for listeners, so the outbox sees the failure, retries it, and fires dead-letter alerts when retries run out.
+- `readWithOrder(fulfillmentOrderId, session)` – reads the fulfillment order and its order inside the act's session. It refuses with a 404 (`delivery.fulfillment-order-not-found` or `delivery.order-not-found`) if either is missing. Returns `{ fulfillmentOrder, order }`.
 
 ## Relationships
-
-- **`@kernel/outbox`** – `runAct` calls `nudgeOutbox()` after a successful commit so the relay picks up the events just written.
-- **`@infrastructure/runtime/database`** – `runAct` delegates transaction management to `withTransaction`.
-- **`@infrastructure/http/response`** – `refuse` / `refuseMissing` build the `ResponseReject` payload via `generateReject`.
-- **`@infrastructure/i18n`** – Refusal messages are translated with `t(messageKey)` before being embedded in the reject.
-- **`../repository`** – `readWithOrder` calls `fulfillmentOrderRepository.findInSession` to load the fulfillment order inside the act's session.
-- **`../model`** – Consumes the `FulfillmentOrderDocument` type as the shape `readWithOrder` returns.
-- **`@modules/orders`** – `readWithOrder` calls `orderService.readOrder` to fetch the parent order in the same session.
-- **Sibling delivery services** (`cut`, `deliver`, `fulfill`, `holds`, `cancel-remainder`, `ensure`, `found`) – Depend *on* this module: they import `runAct`, `refuse`/`refuseMissing`, and `readWithOrder` to structure their own transactional work. This file imports none of them.
+- `src/infrastructure/runtime/database.ts`: `withTransaction` supplies the transaction and session.
+- `src/kernel/outbox.ts`: `nudgeOutbox` wakes the relay after commit, because the events become visible to it only then.
+- `src/infrastructure/http/response.ts`: `generateReject` and the `ResponseReject` type build and carry refusals.
+- `src/infrastructure/i18n/index.ts`: `t` translates the message keys.
+- `src/modules/delivery/repository.ts`: `fulfillmentOrderRepository` loads the fulfillment order inside the session.
+- `src/modules/delivery/model.ts`: supplies the `FulfillmentOrderDocument` type.
+- The sibling services (`cancel-remainder`, `cut`, `deliver`, `ensure`, `found`, `fulfill`, `holds`) are the acts and helpers that build on these exports. This file itself imports none of them.
+- The order is loaded through the orders module (`@modules/orders`), which supplies the `OrderDocument` type.
 
 ## Notes
-
-- `runAct` **resolves** (not rejects) on refusal. Callers must check `result.refused` rather than wrapping in a try/catch for business errors; only infrastructure errors propagate as thrown exceptions.
-- Refusals are decided *before* any write lands in the snapshot, so a refused act leaves zero partial writes.
-- `refuse` accepts only a closed set of statuses (`404 | 409 | 422`); other codes require constructing an `ActRefusal` directly.
-- The `session` parameter threaded through `readWithOrder` ensures reads and subsequent writes see the same snapshot — do not issue a separate read outside the act.
+- Refusals must be thrown before the first write, inside the transaction. `ActRefusal` aborts it, and the door converts it back into a `ResponseReject`.
+- `runAct` is for request handlers that answer a client. Use `runActOrThrow` from listeners, where a swallowed refusal would never be retried or reported.
+- `readWithOrder` is meant to be the only read for acts that start from a fulfillment order, so the door needs no separate read.
+- `nudgeOutbox` runs only on success, after commit.
+- `src/infrastructure/adapters/logger.ts` and `src/infrastructure/i18n/context.ts` are not imported in the visible content.

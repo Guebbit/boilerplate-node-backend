@@ -1,31 +1,32 @@
 ---
 source: src/modules/example/factories.ts
-sha256: 6e8ab0ee9005f629ed9c5b0cef61a3287ad5ab604a6f6b12000b89a42f05c0f1
-generated_at: 2026-11-08T05:50:19.455217+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d5d48ce67645f63e0ae9dc484618538b11fa604a44e4f701c93264ff8ee2fabf
+context_sha256: 0eb0deffa4745b8f9a9f1f761258dbd0613f23f240d4da8202c881c19a773db8
+generated_at: 2026-11-22T05:08:56.587116+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/factories.ts
 
 ## Purpose
-
-Builds ready-to-insert `ExampleDocument` fixtures for tests and seeds. It exists outside the service layer so callers can write rows directly via `exampleRepository.create`, bypassing the validation and invariants a service would enforce.
+Test and seed fixture builder for the `example` module. It builds a draft example row with every field defaulted, so callers only specify what matters to their case. It is reachable at `@modules/<name>/factories` and deliberately not exported from the module barrel, because it writes past the rules a service enforces.
 
 ## Key elements
-
-- **`ExampleOverrides`** — Input interface for `makeExample`. `userId` is required; `title`, `body`, `status`, `id`, and `publishedAt` are optional with sensible defaults.
-- **`PinnedExample`** — A convenience type alias for a fixture whose `_id` is fixed, used when a seed must look the row up later.
-- **`makeExample(overrides)`** — Returns a `Partial<ExampleDocument>` with every field defaulted (status → `draft`, title/body → fixed strings). Conditionally includes `_id` and `publishedAt` only when the caller supplies them, avoiding `undefined` keys on the document.
+- `ExampleOverrides` — input shape. `userId` (24-char hex) is required. Optional fields: `title`, `body`, `status`, `id` (pins `_id`) and `publishedAt`.
+- `PinnedExample` — `Partial<ExampleDocument>` with a required `_id: Types.ObjectId`. It is for fixtures whose id must stay stable so a seed can find the same row again.
+- `makeExample(overrides)` — returns a `Partial<ExampleDocument>` ready for `exampleRepository.create`. Defaults:
+  - `title`: `'An example'`
+  - `body`: `'What this example says.'`
+  - `status`: `ExampleStatus.draft`
+  - `_id` and `publishedAt` are included only when supplied.
+  - `userId` and `id` are converted to `Types.ObjectId`.
 
 ## Relationships
-
-- **`src/modules/example/model.ts`** — Provides the `ExampleDocument` type that shapes both the return value of `makeExample` and the `PinnedExample` alias.
-- **`src/types/index.ts`** — Source of the `ExampleStatus` enum used as the default `status` value.
-- **`src/modules/example/tests/factories.ts`** — Consumes `makeExample` (and `ExampleOverrides`) to build fixtures inside test suites.
-- **`scenarios/example.ts`** — Builds seed rows via `makeExample`, relying on the `id` override to pin `_id` for later lookups.
+- `src/modules/example/model.ts` — supplies the `ExampleDocument` type that the factory output is shaped against (type-only import).
+- `src/types/index.ts` — supplies the `ExampleStatus` enum, used for the `draft` default.
+- `src/modules/example/tests/factories.ts` and `scenarios/example.ts` — neighbors in the dependency graph. The file's own comments describe it as built for tests and seeds, so these are presumably the consumers. The file itself doesn't reference them.
 
 ## Notes
-
-- This file is intentionally **not** re-exported from the module barrel. Import it directly via `@modules/example/factories`.
-- `makeExample` never sets `publishedAt` unless the caller passes it; a `draft` row has no publish timestamp by design.
-- `PinnedExample` is a standalone alias and is **not** returned by `makeExample`; it exists as a type annotation for consumers that need to reference the pinned shape without calling the factory again.
+- The output is a plain partial document, not a persisted one. Persisting is left to the caller (`exampleRepository.create`).
+- Passing an invalid hex string for `userId` or `id` would make `new Types.ObjectId` throw. The factory does no validation of its own.
+- Leave out `publishedAt` for a draft. The factory does not tie it to `status`, so a caller can set the two inconsistently.

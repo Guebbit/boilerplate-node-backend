@@ -1,53 +1,52 @@
 ---
 source: src/modules/locales/repository.ts
-sha256: 7313023172cc9496399853cec087b9f04ed15fdae1b333bc8860f2d74af60cea
-generated_at: 2026-11-14T20:20:24.745752+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c940e293589bf6614338a54b2dda62490905f29dabd7e575168f8b40a19359f3
+context_sha256: 1b9699be357af5e0a010425c253238ff469ba801cd6c97f30c2b52bdc4de013d
+generated_at: 2026-11-22T05:46:13.063997+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/repository.ts
 
 ## Purpose
-
-Data-access layer for the locales module. Wraps every MongoDB query against the `locales`, `localeentries`, and `translations` collections behind a set of narrow, purpose-named functions. Its central invariant: every write to `localeentries` runs inside a transaction that also atomically bumps the owning language's `revision`, so a client can never observe changed entries without a changed revision, and an import's `If-Match` fence can never slip past a partially-written row.
+The query layer for the locales module's two collections: languages (`locale`) and dictionary entries (`localeentries`). It enforces one invariant: every write to `localeentries` goes through a function here that also bumps the language's `revision`, in the same transaction. The revision is what clients use to know when to re-download, and it is also the `If-Match` fence for bulk imports. Writing a row before its bump would let a stale import slip past the fence.
 
 ## Key elements
-
-- **`EntryInput` / `EntryChange` / `ImportCounts`** — small interfaces describing single-entry writes, bulk-import rows (value or `null` to delete), and import result counts.
-- **`localeBase` / `entryBase`** — base CRUD+search repositories built via `createRepository`; define searchable fields (exact, boolean, text) used by higher-level services.
-- **`findByTag`** — primary lookup: one language row by normalized tag.
-- **`listInactiveTags` / `listActiveTags`** — `distinct('tag')` queries feeding the public manifest's on/off language sets.
-- **`list`** — unpaginated, tag-sorted language list (deliberately bypasses `findAll`'s default limit of 10).
-- **`countEntriesByLocale`** — single aggregation counting only frontend-app entries per locale (for manifest `entryCount`).
-- **`listEntries(locale, app)`** — all entries for one (locale, app) pair, key-sorted for byte-stable builds.
-- **`listEntriesByApp(app)`** — all entries for one app across locales, sorted `(locale, key)`.
-- **`listKeys(locale, app)`** — projection of key-only rows for collision checks on every write.
-- **`bumpRevision(tag, session?)`** — atomic `$inc` on the language's `revision`; returns the new number. Uses `timestamps: false` so dictionary writes don't disturb a name-edit's `If-Match`.
-- **`fenceRevision(tag, session)`** — reads the language row inside the import's transaction and throws `PreconditionFailedError` (412) if the open `If-Match` no longer matches `revision`.
-- **`valuesByKey`** — reads `(key → value)` map for diffing before an import writes.
-- **`currentRevision(tag, session?)`** — reads `revision` without bumping (returned when a write is a no-op).
-- **`createEntry`** — insert one entry + bump in one `withTransaction` call.
-- **`saveEntryValue`** — update one entry's value + bump (or return current revision if value unchanged). Uses `findOneAndUpdate` with `runValidators` instead of `save()` to survive Mongoose's transient-conflict retry.
-- **`removeEntry`** — delete one entry + bump in one transaction.
-- *(truncated in source)* A bulk-import function that diffs `valuesByKey`, applies creates/updates/deletes, bumps once, and returns `ImportCounts`.
+- **Types**: `EntryInput` (`key`, `value`), `EntryChange` (`value: string | null`, where `null` deletes the key), `ImportCounts` (`created`, `updated`, `removed`).
+- **`localeBase` / `entryBase`**: generic repositories built with `createRepository`. Languages are searchable by exact `tag` and boolean `active`. Entries are searchable by a text filter over both `key` and `value`, plus exact `app`.
+- **Language reads**:
+  - `findByTag` looks up a language by normalized tag.
+  - `listActiveTags` and `listInactiveTags` return the tags of languages switched on or off.
+  - `list` returns all languages sorted by tag, deliberately unpaginated.
+  - `countEntriesByLocale` is a single aggregate that counts entries per language, frontend apps only (via `frontendAppIds()`), for the manifest's `entryCount`.
+- **Entry reads**:
+  - `listEntries(locale, app)` is sorted by key for byte-stable builds.
+  - `listEntriesByApp(app)` spans all languages, sorted by `(locale, key)`, for the override overlay.
+  - `listKeys` is a keys-only projection for the per-write collision check.
+  - `valuesByKey` returns a key→value map that an import diffs against. It optionally takes a session.
+- **Revision helpers**:
+  - `bumpRevision` uses an atomic `$inc` with `timestamps: false`, so a dictionary write does not change the language's edit counter.
+  - `fenceRevision` checks the open precondition (`preconditionFilter(tag, 'revision')`) inside the import's transaction. It throws `PreconditionFailedError` if nothing matches, and does no query when there is no precondition.
+  - `currentRevision` reads the revision without bumping it.
+- **Entry writes** (each runs in `withTransaction`):
+  - `createEntry` inserts an entry and bumps.
+  - `saveEntryValue` changes a value with `findOneAndUpdate` and `runValidators`. If the value is unchanged, it returns the current revision with no bump.
+  - `removeEntry` deletes an entry and bumps.
+- The file also contains a bulk-write function that bumps once per batch, unless nothing changed. Its body is cut off in the source I was given, so it is not described here.
 
 ## Relationships
-
-- **`src/modules/locales/model.ts`** — supplies `localeModel`, `localeEntryModel`, `translationModel`, the `apply*Transform` functions, `normalizeTag`, and document types.
-- **`src/infrastructure/persistence/create-repository.ts`** — provides `createRepository` and the `Repository` type used to build `localeBase`/`entryBase`.
-- **`src/infrastructure/persistence/versioning.ts`** — provides `preconditionFilter`, `PreconditionFailedError`, `fencedSave`, `rearmPrecondition` for the `If-Match` fence logic.
-- **`src/infrastructure/persistence/changes.ts`** — provides `setAndUnset` (used in the bulk-import write path).
-- **`src/infrastructure/runtime/database.ts`** — provides `withTransaction`, the session wrapper for all multi-write operations.
-- **`src/infrastructure/i18n/index.ts`** (barrel) — re-exports `canonicalLocale` and `getFallbackLocale` from `catalog.ts` / `locale-tag.ts`.
-- **`src/modules/locales/apps.ts`** — provides `frontendAppIds()` used to scope entry counts and queries to client-facing apps.
-- **`src/modules/locales/services/entries.ts`, `keys.ts`, `capabilities.ts`** — the service layer that calls the functions exported here.
-- **`src/modules/locales/module.ts`** — wires this repository into the module's DI/lifecycle.
-- **`scenarios/locales.ts`** — integration/test scenarios that exercise the repository's public API.
+- **`./model`**: supplies the Mongoose models, the transform appliers, and `normalizeTag`.
+- **`./apps`**: `frontendAppIds()` scopes the entry count.
+- **`@infrastructure/persistence/*`**:
+  - `create-repository` builds the base repositories.
+  - `versioning` supplies `preconditionFilter`, `PreconditionFailedError`, `fencedSave` and `rearmPrecondition`.
+  - `changes` supplies `setAndUnset`.
+- **`@infrastructure/runtime/database`**: `withTransaction` provides the sessions used for atomic entry writes and revision bumps.
+- **`@infrastructure/i18n`**: `canonicalLocale` and `getFallbackLocale` are imported. The visible portion does not show how they are used.
+- **`src/modules/locales/services/entries.ts`, `src/modules/locales/services/keys.ts`, `src/modules/locales/services/capabilities.ts`, `src/modules/locales/module.ts`, `scenarios/locales.ts`**: these are graph neighbors. They presumably consume the exported repository functions, but the visible portion does not show it.
 
 ## Notes
-
-- **Revision is the contract.** Any new write path that touches `localeentries` must go through one of the transactional functions (`createEntry`, `saveEntryValue`, `removeEntry`, bulk import) so the bump is guaranteed. A bare `entryBase.save()` or direct model write bypasses the fence.
-- **`timestamps: false` on `bumpRevision`.** The language row's `updatedAt` is reserved for name/metadata edits; a dictionary write must not advance it or it will invalidate a concurrently open name-edit form's `If-Match`.
-- **`list` is intentionally unpaginated.** Mongoose `findAll` defaults to a limit of 10; a deployment with >10 languages would silently truncate. If a future need for pagination arises, a separate paginated function should be added rather than modifying `list`.
-- **`saveEntryValue` uses a query update, not `save()`.** Mongoose re-invokes the transaction callback on a transient write-conflict (the hot row is the language's `revision`). A document already persisted by the first attempt would make a retry's `save()` a silent no-op that still bumps the revision.
-- **`entryBase` text search covers both `key` and `value`.** Callers do not need to know whether a query term is a key or a translation; the repository handles the disambiguation.
+- `bumpRevision` takes an optional session. Omitted, the bump stands alone and is not part of the entry write's transaction. Entry writes always pass the session.
+- `saveEntryValue` uses a query update rather than `save()`. The driver can re-run the transaction callback on a transient conflict, and a document already saved by the first run would make a retry's `save()` a silent no-op that still bumps.
+- `listEntries` is narrowed by app in the query. Apps share key names, so otherwise a build would nest the API's `generic` entries over a client's.
+- `list` and `listKeys` are unpaginated or keys-only for performance and correctness reasons stated in their comments, such as the default `findAll` limit of ten silently truncating a manifest.

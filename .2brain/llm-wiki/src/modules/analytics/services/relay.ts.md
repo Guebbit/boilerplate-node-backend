@@ -1,33 +1,30 @@
 ---
 source: src/modules/analytics/services/relay.ts
-sha256: f76a60dbe664360015fcb414866d14cf733bcaf752631ab0ca6ed6e8c544b078
-generated_at: 2026-11-14T19:20:12.110571+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 500111bb59ec96d4bfd3447dfa33a3c46e37d079578a300feb0ba2d9edd55e43
+context_sha256: 05b2b8f60f3fe16fb2c2a0cc0fd8a2c6022938d733d4b5beb40056d858a46d30
+generated_at: 2026-11-22T04:18:34.422789+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/analytics/services/relay.ts
 
 ## Purpose
-
-Relays a validated browsing event to the analytics port by name. It holds no knowledge of individual event types; instead it looks up a registered `BrowserEventTarget` and delegates the shaping to that target's `toReport`. It exists so that the analytics module can remain decoupled from whichever feature modules define the events.
+Hands a relayed browsing event (sent from the browser) to the analytics port. It is deliberately generic: it knows no event names. Each module declares its own browser events and how they map to provider events, and this file only looks up the matching target and emits. The consent gate lives in the analytics port, so visitors who haven't agreed are dropped there, not here.
 
 ## Key elements
-
-- **`browserEvents`** (module-level `let`) — a `Record<string, BrowserEventTarget | undefined>` map used for name → target lookup. Replaced wholesale by `registerBrowserEvents`.
-- **`registerBrowserEvents(events)`** — installs the lookup table. Called once from the registry's `onRegistered` hook after all enabled modules have been collected.
-- **`relayEvent(event, context)`** — the public entry point. Resolves the target for `event.event`, calls `target.toReport(event)`, merges the result with `buildAnalyticsBase(context)`, and hands the payload to `emitAnalyticsEvent`. Silently returns if no module owns the event name.
+- `registerBrowserEvents(events)` — installs the module-level lookup (event name → `BrowserEventTarget | undefined`). Meant to be called once from `onRegistered`, when every enabled module is known.
+- `relayEvent(event, context)` — looks up the target for `event.event`, and if one exists, calls `emitAnalyticsEvent` with `buildAnalyticsBase(context)` spread together with `target.toReport(event)`. Returns `void`; unknown events are silently dropped.
+- `browserEvents` (private) — mutable module-level lookup, empty until registered.
 
 ## Relationships
-
-- **`@infrastructure/observability/analytics`** (`src/infrastructure/observability/analytics/index.ts`) — source of `buildAnalyticsBase` (assembles the shared envelope from `CallerContext`) and `emitAnalyticsEvent` (the analytics port that actually dispatches and enforces the consent gate).
-- **`@kernel/registry`** (`src/kernel/registry.ts`) — provides the `BrowserEventTarget` type that values in the lookup table must conform to.
-- **`@types`** (`src/types/index.ts`, which re-exports from `src/types/auth-context.ts` among others) — provides the `AnalyticsEventRequest` and `CallerContext` types used in the public signatures.
-- **`src/modules/analytics/services/index.ts`** — barrel that re-exports this module's public API (`registerBrowserEvents`, `relayEvent`) to the rest of the analytics service layer.
-- **`src/modules/analytics/tests/unit/relay.test.ts`** — unit tests for the lookup and relay logic.
+- `@kernel/registry` (`src/kernel/registry.ts`) — supplies the `BrowserEventTarget` type used for the lookup's values.
+- `@infrastructure/observability/analytics` (`src/infrastructure/observability/analytics/index.ts`) — provides `buildAnalyticsBase` (builds the base payload from the caller context) and `emitAnalyticsEvent` (emits to the analytics port, where consent is enforced).
+- `@types` (`src/types/index.ts`, `src/types/auth-context.ts`) — supplies the `AnalyticsEventRequest` and `CallerContext` types.
+- `src/modules/analytics/services/index.ts` — the services module that sits alongside this file in the graph.
+- `src/modules/analytics/tests/unit/relay.test.ts` — unit tests for this file.
 
 ## Notes
-
-- **Consent is not enforced here.** The file explicitly defers to the analytics port (`emitAnalyticsEvent`) for the consent gate. A non-consenting visitor is dropped downstream, not by this function.
-- **No event names are hardcoded.** The set of valid events is entirely data-driven via the `browserEvents` map populated at registration time. Adding a new event requires no change to this file.
-- **Ordering dependency:** `relayEvent` will always no-op until `registerBrowserEvents` has been called. In practice this is guaranteed by the registry calling `onRegistered` before any request can arrive.
-- **The `toReport` spread is type-safe by construction:** the target was registered under the exact event name in the request, so the shape it returns matches what the target's own module fragment declares.
+- Until `registerBrowserEvents` runs, the lookup is empty and every event is dropped.
+- The lookup uses `Object.hasOwn`, so inherited keys such as `constructor` or `__proto__` in an event name cannot match a target.
+- Dropping an unowned event is a fallback: the request contract already refuses such events, so this only happens if the contract and the registry disagree.
+- The `CallerContext` is built once in the controller and passed in; the emitted event is attributed to the caller who sent it.

@@ -1,40 +1,50 @@
 ---
 source: src/modules/notifications/tests/contract/api.contract.test.ts
-sha256: 11157c6a01610e53eeaf932dcccda5f3ad0b517fcc66b84d5f6bf11dcad7765f
-generated_at: 2026-11-14T20:26:26.714706+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 11157c6a01610e53eeaf932dcccda5f3ad0b517fcc66b84d5f6bf11dcad7765f
+context_sha256: 433b12513194471f2180c6d66262da2a4fc28906ca070fcd5c2cd2a476654d74
+generated_at: 2026-11-22T05:57:09.878155+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/tests/contract/api.contract.test.ts
 
 ## Purpose
-
-Contract tests for the `/notifications` REST API. Each test asserts a specific HTTP status code and response shape (200 with an items array, 204 with no body, 404, 422) so that every contract branch — including refusals — is verified over a real HTTP round-trip. Ownership and capacity rules are deferred to the integration suite.
+Contract tests for the `/notifications` HTTP routes. Every route answers either the inbox shape or a 204 with no body, so the tests make sure each contract branch, including the refusals, is reached over HTTP. Ownership and cap rules are covered in the integration suite instead. `GET /notifications/stream` is an endless SSE stream, and the tests read it only as far as the one frame each needs.
 
 ## Key elements
-
-- **`MALFORMED_ID`** — a sentinel string (`'not-an-object-id'`) used to exercise the "malformed ObjectId" branch; expected to be handled identically to a valid-but-unknown id (404).
-- **`untilEvent(event, onOpen)`** — helper that consumes an endless SSE response stream as a Node `IncomingMessage`, accumulates data until the named event frame (terminated by `\n\n`) appears, then destroys the stream. `onOpen` fires once headers arrive, allowing the test to create the notification that must be delivered.
-- **`sessionCookie(identity)`** — performs a real `POST /account/login` and extracts the `__Host-session` cookie value, because `EventSource` can only carry cookie credentials (not a bearer header).
-- **`describe` blocks** — one per endpoint: `GET /notifications`, `POST /notifications/read-all`, `DELETE /notifications`, `DELETE /notifications?audience=`, `GET /notifications/{id}`, `DELETE /notifications/{id}`, `GET /notifications/stream`.
+- `setupTestDb()`: called at module level to set up the test database.
+- `MALFORMED_ID`: an id no ObjectId can be built from. Id-taking routes answer it the same way as an unknown id.
+- `describe` blocks, by route:
+  - `GET /notifications`: covers an empty inbox, an inbox with a read and an unread notification, and each variant of the notification union with its own params.
+  - `GET /notifications for a work notice`: covers staff-audience notices.
+    - A member holding the required sets sees both staff variants. Each item has `audience: 'staff'`, and the response does not leak the set names such as `TaskManagement`.
+    - When the caller no longer holds the sets, the list is empty and fetching the notice by id returns 404.
+  - `POST /notifications/read-all`: returns 204 and sets `readAt` on the caller's notifications.
+  - `DELETE /notifications`: returns 204 and empties the caller's inbox.
+  - `DELETE /notifications?audience=`: `own` empties only that audience and leaves the staff row. An unknown value such as `everyone` returns 422.
+  - `GET /notifications/{id}`: returns 200 for the caller's own notification. It returns 404, never 403, for someone else's notification, an unknown id, or a malformed id.
+  - `DELETE /notifications/{id}`: returns 204 for the caller's own notification and 404 for someone else's or an unknown one.
+- `untilEvent(event, onOpen)`: a supertest response parser for the SSE stream.
+  - It accumulates chunks and destroys the stream once a frame for `event` has fully arrived (text ending in a blank line).
+  - `onOpen` runs once the headers are in, which is when the stream is registered. A notification written from it must be delivered by the stream.
+  - A rejected `onOpen` is passed to the callback as the error.
+- `sessionCookie(identity)`: creates a `customer` user, logs in via `POST /account/login`, and returns the user and the `__Host-session` cookie. This is the credential `EventSource` can carry.
+- `describe('GET /notifications/stream')`: starts with a session-cookie test that expects an event stream carrying a new notification. The prompt cuts the file off partway through this test.
 
 ## Relationships
-
-- **`tests/support/contract.ts`** — imported for side-effect (likely registers global matchers or contract helpers).
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module level to provision a fresh database before any test runs.
-- **`tests/support/http.ts`** — provides `api()` (supertest instance) and `authenticateAs()` (bearer-token auth for non-SSE routes).
-- **`tests/support/cookies.ts`** — `setCookie` extracts a named cookie from a login response.
-- **`tests/support/ids.ts`** — `MISSING_ID` sentinel for "id not found" assertions.
-- **`src/kernel/access/tenant.ts`** — `DEPLOYMENT_TENANT_ID` used when seeding staff-audience notifications with a tenant/sets binding.
-- **`src/modules/users/tests/factories.ts`** — `createUser` and `PLAIN_PASSWORD` for spinning up test accounts.
-- **`src/modules/notifications/services/index.ts`** — `notificationsService` imported (available for direct service calls if needed).
-- **`src/modules/notifications/tests/factories.ts`** — `createNotification` seeds rows directly into the DB.
-- **`src/modules/notifications/model.ts`** — `notificationModel` used to assert post-condition row counts after audience-scoped deletes.
+- `tests/support/http.ts`: provides `api()` (the HTTP client) and `authenticateAs(role)`, which returns `bearer` and `user`.
+- `tests/support/setup-test-db.ts`: provides `setupTestDb`.
+- `tests/support/cookies.ts`: `setCookie` reads the `__Host-session` cookie from the login response.
+- `tests/support/ids.ts`: `MISSING_ID` is a well-formed id that matches no record.
+- `tests/support/contract.ts`: imported for its side effects via `@tests/contract`, which presumably registers the contract matchers.
+- `src/modules/notifications/tests/factories.ts`: `createNotification` seeds inbox rows with options such as `userId`, `readAt`, `body` and `staff`.
+- `src/modules/users/tests/factories.ts`: `createUser` and `PLAIN_PASSWORD` create other users and perform logins.
+- `src/modules/notifications/model.ts`: exports `notificationModel`, which the audience-delete test uses to count remaining documents per audience.
+- `src/kernel/access/tenant.ts`: `DEPLOYMENT_TENANT_ID` is used as the tenant on staff notices.
+- `src/modules/notifications/services/index.ts`: `notificationsService` is imported. It is not used in the visible portion, which is presumably the part that writes notifications for the stream tests.
+- `src/infrastructure/adapters/logger.ts`: no use is visible in the shown portion.
 
 ## Notes
-
-- **Ownership = 404, never 403.** Both `GET /notifications/{id}` and `DELETE /notifications/{id}` return 404 when the notification belongs to another user. This is an intentional information-leak guard, not a permission denial.
-- **SSE stream is read and then destroyed.** The `untilEvent` helper tears down the socket (`stream.destroy()`) after the first matching frame; the test never relies on the stream staying open.
-- **`audience` query param is validated.** `DELETE /notifications?audience=everyone` returns 422; only `own` and `staff` are accepted.
-- **Staff notifications with lost sets are invisible, not 403.** A user who no longer holds the `sets` referenced by a staff notification sees 404 on single-fetch and an empty inbox on list — the record still exists in the DB.
-- **The SSE test** sets the `Cookie` header (not `Authorization`) because browser `EventSource` cannot send bearer tokens.
+- Cross-user access answers 404 rather than 403, so the existence of other users' notifications is not revealed.
+- The `sessionCookie` doc comment mentions a `jwt` cookie, but the code uses `__Host-session`.
+- A single `describe` titled "GET /notifications" covers several shapes. Within it, `toSorted()` is used to make the union-variant assertion order-independent.

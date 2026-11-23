@@ -1,33 +1,30 @@
 ---
 source: src/modules/locales/controllers/delete-locale.ts
-sha256: c18c2089aa065da7c1d1279de123e6180b2fcd4db36a3bfed4f7de38935ba126
-generated_at: 2026-11-08T06:20:37.986567+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c18c2089aa065da7c1d1279de123e6180b2fcd4db36a3bfed4f7de38935ba126
+context_sha256: 58c793460d047ce61149f4822959739d3fd3cf56fa7e9f78733e273ba1dbc487
+generated_at: 2026-11-22T05:42:00.914126+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/controllers/delete-locale.ts
 
 ## Purpose
-
-Thin HTTP adapter that handles `DELETE /locales/:locale` (admin). It translates the Express request into a call to `localeService.removeLanguage`, maps the service result to an HTTP status (204 on success, 409 on refusal), and delegates error formatting to the shared controller helpers. It exists to keep route wiring in `routes.ts` free of business logic.
+Controller for `DELETE /locales/:locale` (admin). It is a thin HTTP adapter over `localeService.removeLanguage`, which removes a language and every string translated into it. On success it returns an empty 204 response.
 
 ## Key elements
-
-- **`deleteLocale(request, response)`** — the sole export. Reads `request.params.locale`, invokes `localeService.removeLanguage` with the caller context, then:
-  - returns **204 No Content** (`noContentResponse`) on success,
-  - returns **409 Conflict** via `refused` when the service signals the language is still active,
-  - delegates unexpected errors to `catchAs(response, 'deleteLocale')` for a uniform error envelope.
+- `deleteLocale(request, response)` — the only export. Calls `localeService.removeLanguage(request.params.locale, callerContextOf(request))` and handles the outcome:
+  - If `refused(response, result)` is true, it returns without further action (the refusal response is written by that helper).
+  - Otherwise it responds with `noContentResponse(response)`.
+  - Rejections are handled by `.catch(catchAs(response, 'deleteLocale'))`.
 
 ## Relationships
-
-- **`src/modules/locales/routes.ts`** — registers `deleteLocale` as the handler for the `DELETE /locales/:locale` route (admin-gated).
-- **`src/modules/locales/services/index.ts`** — source of `localeService.removeLanguage`; this file is its only HTTP-facing consumer. The service also performs the cascade delete and refreshes the overlay (see `services/overlay.ts`).
-- **`src/infrastructure/http/controller.ts`** — supplies `catchAs` (error → HTTP mapping) and `refused` (detects the 409 guard result and writes the response).
-- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf` to extract identity/tenant metadata from the request for audit purposes.
-- **`src/infrastructure/http/response.ts`** — supplies `noContentResponse`, the standard 204 writer.
+- `src/infrastructure/http/controller.ts` — provides `refused` (turns a refused service result into a response) and `catchAs` (error handler labelled `'deleteLocale'`).
+- `src/infrastructure/http/request.ts` — provides `callerContextOf`, which builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts` — provides `noContentResponse`, used for the success reply.
+- `src/modules/locales/services/index.ts` — exports `localeService`; `removeLanguage` holds the business logic.
+- `src/modules/locales/routes.ts` — the route layer that wires this handler to `DELETE /locales/:locale`.
 
 ## Notes
-
-- No response body is ever written on success; the number of removed entries is recorded only in the audit trail (inside the service).
-- The 409 guard ("language still active") is enforced **in the service**, not here — this controller only checks the returned flag via `refused`.
-- The overlay refresh after a successful delete is the service's responsibility, not the controller's.
+- The 409 refusal when the language is still active is enforced in the service, next to the cascade it protects, not in this controller.
+- The response has no body. The number of entries removed goes into the audit trail rather than the response.
+- Per the doc comment, the service refreshes the overlay on success (see `src/modules/locales/services/overlay.ts`), so the controller does nothing for that.

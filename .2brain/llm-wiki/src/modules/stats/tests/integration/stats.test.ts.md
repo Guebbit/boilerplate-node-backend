@@ -1,43 +1,47 @@
 ---
 source: src/modules/stats/tests/integration/stats.test.ts
-sha256: d58b9b1fcb1aaa970e15c45f2c6f31e0d6a457ea25132c2b1bc2ccc3690b6168
-generated_at: 2026-11-08T08:26:40.975766+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b31a6b40ea5b187326525850f3f44e8ccc28f35d95454450c4550363b238845b
+context_sha256: 6b1068d658fc002b80c1b444f8321ae3a0b178093ce1b0661933389fd982703b
+generated_at: 2026-11-22T07:52:42.518658+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stats/tests/integration/stats.test.ts
 
 ## Purpose
-
-Integration tests for the stats service (`statsService`), run against a real MongoDB instance. Verifies that sales figures are bucketed by shop-local day (`Europe/Rome`), currencies are never mixed, credit notes land on their own day, period totals are bucket-size invariant, previous-period comparison works, empty periods return zeroed buckets, and product/category breakdowns are correct. Also the only test that passes a real IANA zone name through `$dateTrunc` on the Mongo binary.
+Integration test for the stats module's service layer, run against a real test database. It seeds paid orders, invoices and a credit note under a frozen clock, then reads them back through `statsService`. It focuses on edge cases: shop-local day boundaries (`NODE_SHOP_TIMEZONE` is `Europe/Rome`, so this is also the one test that passes a real zone name through `$dateTrunc` on the Mongo binary), refunds landing on their own day, customers counted as new once, and composed figures agreeing with the underlying documents.
 
 ## Key elements
-
-- **`setupTestDb()`** (top-level call) — boots a real Mongo for the test run.
-- **`beforeEach` / `afterEach`** — registers all five domain modules (`users`, `products`, `inventory`, `orders`, `invoicing`) via `registerModules`; resets domain events after each case.
-- **`issuedAt(at, issue)`** — helper that freezes the system clock at `at`, awaits the issue callback (invoice or credit note), then restores real timers. Needed because the *issue date* is stamped by the listener's own clock, not the document field.
-- **`customer()`** — returns a uniquely-emailed user (global `sequence` counter) so a test can hand the same customer two orders.
-- **`paidOrder(options)`** — creates a paid order (122.00 = 100.00 net + 22.00 VAT) and immediately issues its invoice, both stamped at `paidAt`.
-- **`periodOf(from, to, interval?)`** — wraps `resolvePeriod`; throws on refusal so assertions stay clean.
-- **`seedScenario()`** — seeds the shared fixture: order A (23:30 Rome / 22:30 UTC), order B (00:30 Rome next day / 23:30 UTC), order C (February, out of period), a full credit note for A on the 12th, a canceled order, and an unpaid bank-transfer order.
-- **`describe('getSalesStats')`** — 7 cases covering timezone bucketing, currency isolation, soft-deleted orders, full totals (gross / reversals / net / VAT / refunds / AOV), bucket-size invariance (day = week = month), previous-period read, and empty-period zeros.
-- **`describe('the breakdowns')`** — product and category stats (net sales, units, VAT) and per-day unit series (truncated in the listing).
+- `setupTestDb()` plus a `beforeEach` that calls `registerModules` with the users, products, inventory, orders and invoicing modules. An `afterEach` calls `resetDomainEvents()`.
+- `issuedAt(at, issue)`: freezes the clock at `at` with `freezeDate`, runs `issue`, then restores real timers. It exists because the issue date comes from the listener's own clock.
+- `customer()`: creates a user with a unique email from a module-level `sequence` counter.
+- `paidOrder({ user, product, quantity, paidAt, currency? })`: creates a paid order (`paidAt` and `createdAt` both set to `paidAt`) and issues its invoice via `invoicingService.issueInvoice` under a frozen clock. A 122.00 unit is 100.00 net plus 22.00 VAT.
+- `periodOf(from, to, interval = 'day')`: wraps `resolvePeriod` and throws if the period is refused.
+- `seedScenario()`: builds the shared fixture and returns `{ product, firstCustomer, regular }`:
+  - A: first-time customer, paid 22:30 UTC on 10 March, which is 23:30 in Rome.
+  - B: a returning customer, 2 units, paid 23:30 UTC on 10 March, which is 00:30 in Rome on the 11th.
+  - C: B's customer, paid in February, outside the period.
+  - A full credit note for A issued on 12 March.
+  - F: a canceled order in the period.
+  - E: an unpaid bank-transfer order.
+- `describe('getSalesStats')` cases:
+  - Day bucketing by shop day: buckets start at shop-local midnight, e.g. `2026-03-09T23:00:00.000Z`.
+  - Currencies kept in separate groups (EUR and USD are never summed).
+  - A soft-deleted order's invoice money stays in net sales while its order count drops.
+  - Period totals: gross, reversals, net, VAT, refunds, average order value.
+  - Totals are identical across day, week and month intervals. Weeks start on Monday.
+  - `previous` carries the equal-length period before.
+  - An empty period returns zeros in the shop currency with all buckets present.
+- `describe('the breakdowns')` covers `getProductStats` and `getCategoryStats`, ranked by net sales excluding VAT. A per-product units-per-day case follows; the rest of the file is not visible here.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** → `registerModules` wires all domain modules into the app for each test.
-- **`src/kernel/events.ts`** → `resetDomainEvents` clears the event bus between cases.
-- **`src/modules/orders/tests/factories.ts`** → `createOrder`, `toOrderItem` build the order documents and line items.
-- **`src/modules/products/tests/factories.ts`** → `createProduct` seeds catalog items with price and categories.
-- **`src/modules/invoicing/index.ts`** → exports `invoicingService` used to issue invoices inside `paidOrder`.
-- **`src/modules/invoicing/tests/factories.ts`** → `issueCreditNote` creates the credit-note document under a frozen clock.
-- **`src/modules/invoicing/module.ts`**, **`src/modules/orders/module.ts`**, **`src/modules/products/module.ts`**, **`src/modules/inventory/module.ts`**, **`src/modules/users/module.ts`** (via `@modules/users/module`) → registered in `beforeEach` so listeners and repositories are active.
-- **`src/modules/stats/services/index.ts`** → exports `statsService`, the system under test.
+- `@kernel/registry` (`registerModules`) and `@kernel/events` (`resetDomainEvents`) wire up and reset the module graph and event listeners around each test.
+- The products, inventory, orders and invoicing `module.ts` files are registered so the invoice listeners work. The invoicing listener issues invoices when orders are paid.
+- `@modules/invoicing` (its `index.ts`, which the file imports `invoicingService` from) is used to issue invoices; `@modules/invoicing/tests/factories` provides `issueCreditNote`.
+- The products and orders test factories supply `createProduct`, `createOrder`, `toOrderItem` and `detachOrderUserId`. `OrderDocument` is imported from `@modules/orders`.
+- `../../services` (`src/modules/stats/services/index.ts`) provides `statsService`, the subject under test. `../../services/range` provides `resolvePeriod` and `Period`.
 
 ## Notes
-
-- The module-level doc comment states `NODE_SHOP_TIMEZONE` is `Europe/Rome` for this file; bucket boundaries therefore fall at 23:00 UTC (winter time, +01:00).
-- `issuedAt` restores timers in a `finally` block — if the issue callback throws, the clock is still unfrozen.
-- The `sequence` counter is module-scoped and never reset; it only guarantees uniqueness, not starting at 1.
-- A price of `122.00` is used throughout so that net (100.00) and VAT (22.00) are cleanly separable in assertions.
-- The `periodOf` helper throws on a *refused* period rather than returning a sentinel, so a malformed `from`/`to` pair fails the test immediately.
+- Expected bucket starts are UTC instants of Rome midnight and assume winter time (+01:00) in March.
+- Each test seeds its own data. The `sequence` counter is module-level, so emails stay unique across tests in the file.
+- Net sales deliberately keeps a deleted order's invoice, which is right for accounting, while order counts and product tables lose it.

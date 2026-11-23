@@ -1,29 +1,26 @@
 ---
 source: scripts/testing/demo-module-names.ts
-sha256: ddfe2f31d14f06aa60728e942b94aed1d65a92b768d34dd1abfb987dd2933107
-generated_at: 2026-11-08T03:02:25.878202+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0232505680a12db33adbbd8f33a9257daeef472307c4cc2e4ba04aeb4e190eaa
+context_sha256: c832de57e774761a26b28a348c954cedbcafaf2ee78dd02ce42169cb3739785c
+generated_at: 2026-11-22T02:18:31.716359+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/testing/demo-module-names.ts
 
 ## Purpose
-
-Provides a single discovery function that tells `demo:remove` *which* module folders to delete (those whose `module.yaml` says `group: shop` or `group: example`). Reading from each module's own descriptor means a relabelled module changes the removal set without editing this file.
+Provides a single shared reader that answers "which module folders does `demo:remove` delete?" It derives the list from each module's own `module.yaml` (`group` field) instead of a hand-maintained list, so relabelling a module changes the script's behavior without editing the script.
 
 ## Key elements
-
-- **`REMOVABLE_GROUPS`** – module-private `ReadonlySet<string>` holding `'shop'` and `'example'`; everything except `foundation` is removable.
-- **`readDemoModuleNames(repoRoot: string): string[]`** – exported function. Joins `repoRoot/src/modules`, calls `readAllModuleDescriptors`, filters entries to those whose descriptor `group` is in `REMOVABLE_GROUPS`, and returns the array of module folder names.
+- `readDemoModuleNames(repoRoot)` — the only export. Joins `repoRoot/src/modules`, loads all descriptors via `readAllModuleDescriptors`, keeps those whose `group` is removable, and returns their folder names as `string[]`.
+- `REMOVABLE_GROUPS` (private) — a `ReadonlySet` of `'shop'` and `'example'`; effectively "everything but `foundation`".
 
 ## Relationships
-
-- **`scripts/docs/module-descriptor.ts`** – imports `readAllModuleDescriptors` to read every `module.yaml` under `src/modules/` in one pass.
-- **`scripts/scaffold/demo-remove.ts`** – the sole consumer; calls `readDemoModuleNames` to get the list of folders to strip during the scaffold teardown.
-- **`tests/unit/scripts/testing/demo-module-names.test.ts`** – unit tests exercising `readDemoModuleNames` against fixture `module.yaml` files.
+- `scripts/docs/module-descriptor.ts` — supplies `readAllModuleDescriptors(modulesRoot)`, which returns a name-to-descriptor map of module descriptors. This file filters that map by each descriptor's group.
+- `scripts/scaffold/demo-remove.ts` — the consumer, which asks this module for the names of the folders to remove.
+- `tests/unit/scripts/testing/demo-module-names.test.ts` — the unit test for this reader.
 
 ## Notes
-
-- The `example` module is included because it is the copy-template: a deployment that has duplicated it removes the original, and it is mounted in production (public note creation), so the strip covers it too.
-- `repoRoot` may be a scratch copy (tests) or the real checkout; the function only reads, never writes.
-- See `docs/theory/strategic-ddd.md#4a-foundation-and-shop` for the group taxonomy this filter encodes.
+- `repoRoot` can be a scratch copy or the real checkout, so the function is not tied to the current working directory.
+- The `example` module is removed too. It is the template to copy, a deployment that has copied it deletes it, and it is mounted in production (anyone can create a note).
+- The source's doc comment points to a "foundation and shop" section of a strategic-DDD document for background on the group split.

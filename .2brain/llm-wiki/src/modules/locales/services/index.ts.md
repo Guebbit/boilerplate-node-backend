@@ -1,39 +1,35 @@
 ---
 source: src/modules/locales/services/index.ts
-sha256: 4d7972027092bfdfdd4f69286b577afc74953d32260dea8b31fd62d9ae618368
-generated_at: 2026-11-14T20:21:46.158046+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 698dc2e04270c45fdb8926bafc0b8a83829daeb92c269154ade7ba82cd87f302
+context_sha256: bbe04f7a94468d748222f57fb8eb1c901b6bbd0e0a98e76b14a4ae6b6991cbc9
+generated_at: 2026-11-22T05:47:35.336395+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/services/index.ts
 
 ## Purpose
-
-Barrel file that aggregates every function under `src/modules/locales/services/` into a single `localeService` namespace object. It is the **only** import surface for controllers, `module.ts`, and tests—no file outside `services/` reaches the individual sub-modules directly. It exists so the persistence wall (controllers must not import `../model` or raw sub-service files) stays intact.
+Barrel file for the locale service layer (the "override tier"). It gathers the per-flow functions from sibling files into a single `localeService` namespace object. Controllers, `module.ts` and tests all import that one name rather than individual functions. The header notes that `t()` and the locale middleware never await these functions. The overrides they write reach `t()` only through an overlay rebuilt off the request path.
 
 ## Key elements
-
-- **`localeService`** (exported const) — a plain object whose keys are the full public API of the locale service. Every function listed below is a key on this object; there are no individual named re-exports.
-  - *Capabilities & language* — `isRightToLeft`, `describeLanguage`, `staticCapability`, `dynamicCapability`, `mergeCapabilities`, `readDynamicTier`, `callerScope`, `readStanding`, `listCapabilities`, `readLanguage`, `describeStoredLanguage` (from `./capabilities`).
-  - *Standing & actions* — `standingOn`, `languageActions` (from `./actions`).
-  - *Apps* — `listApps` (from `../apps`).
-  - *Keys / message tree* — `buildMessageTree`, `findUnsafeKeySegment`, `findKeyCollision`, `findBatchCollision`, `findDuplicateKey` (from `./keys`).
-  - *Messages / overrides* — `readMessages`, `readApiOverrides`, `readLocaleOverlay` (from `./messages`).
-  - *Languages* — `createLanguage`, `updateLanguage`, `activateLanguage`, `deactivateLanguage`, `removeLanguage` (from `./languages`).
-  - *Entries* — `searchEntries`, `getEntry`, `createEntry`, `updateEntry`, `removeEntry`, `importEntries` (from `./entries`).
-  - *Translatables* — `setTranslatables` (from `./translatables`).
-  - *Entity translations* — `getEntityTranslations`, `updateEntityTranslations`, `replaceEntityTranslations` (from `./translations`).
-  - *Model helpers* — `localeDisplayName`, `normalizeTag` (from `../model`; proxied here because controllers cannot import `../model` directly).
+- `localeService` is the only export. It is a plain object that re-exposes every service function. The functions are grouped by source:
+  - **Capabilities:** `isRightToLeft`, `describeLanguage`, `staticCapability`, `dynamicCapability`, `mergeCapabilities`, `readDynamicTier`, `callerScope`, `readStanding`, `listCapabilities`, `readLanguage`, `describeStoredLanguage`.
+  - **Actions:** `standingOn`, `languageActions`.
+  - **Apps:** `listApps`, imported from `../apps`.
+  - **Keys:** `buildMessageTree`, `findUnsafeKeySegment`, `findKeyCollision`, `findBatchCollision`, `findDuplicateKey`.
+  - **Messages:** `readMessages`, `readApiOverrides`, `readLocaleOverlay`.
+  - **Languages:** `createLanguage`, `updateLanguage`, `activateLanguage`, `deactivateLanguage`, `removeLanguage`.
+  - **Entries:** `searchEntries`, `getEntry`, `createEntry`, `updateEntry`, `removeEntry`, `importEntries`.
+  - **Translatables and translations:** `setTranslatables`, `getEntityTranslations`, `updateEntityTranslations`, `replaceEntityTranslations`.
+  - **Model helpers:** `localeDisplayName` and `normalizeTag`, imported from `../model`.
 
 ## Relationships
-
-- **Controllers** (`get-locales`, `get-locale-entries`, `get-locale-messages`, `get-locale-apps`, `get-entity-translations`, `post-locale`, `post-locale-entry`, `post-locale-activation`, `put-locale-entry`, `update-locale-entries`, `update-entity-translations`, `delete-locale`, `delete-locale-entry`) all import `localeService` from this file and call its methods. No controller imports the sub-service files directly.
-- **`../apps`** — `listApps` is re-exported through this namespace so controllers can reach it without crossing into the persistence layer.
-- **`../model`** — `localeDisplayName` and `normalizeTag` are proxied here specifically to give `post-locale` and `put-locale-entry` a legal path to those two helpers without importing `../model` themselves.
-- **`src/modules/example/tests/integration/translations.test.ts`** — exercises the entity-translation methods exposed on `localeService`.
+- The controllers listed as neighbors (`get-locales`, `post-locale`, `delete-locale`, `post-locale-activation`, the locale-entry controllers, `get-locale-messages`, `get-locale-apps`, and the entity-translation controllers) reach the service layer through this namespace.
+- `../apps` is imported here, and `listApps` is exposed through the namespace.
+- `src/modules/example/tests/integration/translations.test.ts` is a neighbor, and the header says tests import `localeService` too.
+- `../model` is imported only for the two helpers above. The inline comment explains this: controllers may not import `../model` directly (the persistence wall), so the two controllers that validate a display name use these helpers through the service.
 
 ## Notes
-
-- Nothing in this file (and none of the functions it exposes) is **awaited** by `t()` or the locale middleware at runtime. Overrides written by these functions reach `t()` only via an overlay that is rebuilt on the request path. Treating them as synchronous "write to store" operations, not as part of the translation hot path, is intentional.
-- There is deliberately **no** second list of named re-exports beside `localeService`. The file comment warns that a parallel `export { foo, bar, … }` list would duplicate the key list and drift out of sync as functions are added or removed.
-- `localeService` is a plain object, not a class or a proxy—callers destructure or dot-access properties directly (e.g. `localeService.createEntry(…)`).
+- Do not add loose re-exports beside `localeService`. The file comment says a second list of every function would have to be kept in step with the folder.
+- A new service function must be both imported and added to the `localeService` object to be reachable.
+- The layout follows a "one file per flow" convention, per the file's header comment.

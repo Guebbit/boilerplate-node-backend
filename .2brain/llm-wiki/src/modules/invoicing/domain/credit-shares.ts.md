@@ -1,37 +1,34 @@
 ---
 source: src/modules/invoicing/domain/credit-shares.ts
-sha256: 85e76055eb4df8cb76b19140ad0b6fd0a2c5164fead87764a8985189f98d3d4a
-generated_at: 2026-11-08T06:10:19.436277+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2c3e045655ce1a2403c83e2139934e6628416af32fc0a1d02d18ec5dad81590b
+context_sha256: 54dba0670cfc6fdea3780b04bae5286577878cdfae0543711c1d2a026be9ff27
+generated_at: 2026-11-22T05:30:26.932638+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/domain/credit-shares.ts
 
 ## Purpose
-
-Pure domain logic that splits a partial refund across an invoice's distinct VAT rates, producing one credit-note line per rate. It exists so the apportionment arithmetic can be tested and reused without a database, ORM model, or tax-calculation dependency.
+Pure arithmetic for the lines of a credit note that reverses only part of an invoice. It spreads a refunded gross amount across the VAT rates the invoice charged, producing one line per rate. It has no database, model or tax-function dependency, so it can be tested in isolation. VAT is extracted from the resulting lines later by `src/modules/invoicing/services/credit-breakdown.ts`.
 
 ## Key elements
-
-- **`CreditableInvoice`** (interface) — plain-data view of the parts of an invoice the split needs: currency, lines (with `productId`, `unitPrice`, `taxRate`), `shippingByRate`, and `taxSummary`.
-- **`RefundedGoods`** (interface) — the specific goods and delivery portion a refund pays back; absent for goodwill refunds.
-- **`CreditLine`** (interface) — a single credit-note line: `title`, `quantity: 1`, gross `unitPrice` (decimal string), and `taxRate`.
-- **`creditShares`** (exported function) — main entry point. Takes an invoice, a refunded decimal amount, a line title, and optional goods. Returns one `CreditLine` per rate that received a non-zero share.
-- **`goodsWeights`** (module-private) — computes per-rate weights in minor units for a goods-specific refund: matches returned product lines to their rate, apportions the refunded shipping across `shippingByRate`, and sums per rate.
+- `CreditableInvoice` – plain-data view of the invoice: `currency`, `lines` (with optional `productId`, `unitPrice`, `taxRate`), `shippingByRate`, and `taxSummary` (one row per distinct rate).
+- `RefundedGoods` – the goods a refund pays back: `lines` (`productId`, `quantity`) and a decimal `shipping` amount.
+- `CreditLine` – output line: `title`, `quantity: 1`, gross `unitPrice` (decimal string), and `taxRate`.
+- `creditShares(invoice, amount, lineTitle, goods?)` – the only exported function. It builds weights per `taxSummary` rate, apportions the refund amount by them, and returns a `CreditLine` for each rate whose share is greater than 0.
+- `goodsWeights` (private) – computes per-rate weights, in `taxSummary` order, from the returned goods and their delivery:
+  - Each returned line is matched by `productId` and weighs `unitPrice × quantity` at that line's `taxRate`.
+  - Shipping is apportioned across `shippingByRate` in the invoice's own proportions and added to those rates.
 
 ## Relationships
-
-- **`src/domain-primitives/money.ts`** — sole source of money primitives (`addMoney`, `apportion`, `scaleMoney`, `toDecimalString`, `toMinorUnits`, `NO_MONEY`, `Money`). All arithmetic is delegated here.
-- **`src/modules/invoicing/domain/index.ts`** — barrel file that re-exports the public API of this module for consumers.
-- **`src/modules/invoicing/services/issue-credit-note.ts`** — caller that invokes `creditShares` to build the line items of a partial credit note, then persists the document.
-- **`src/modules/invoicing/services/credit-breakdown.ts`** — downstream consumer: after `creditShares` produces lines at their gross amounts, this service extracts VAT from them (the same way the original invoice did).
-- **`src/modules/invoicing/tests/unit/credit-shares.test.ts`** — unit tests exercising `creditShares` and the goods-vs-goodweighting logic in isolation.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — verifies that delivery amounts surfaced through `CreditableInvoice.shippingByRate` are consistent with the fulfillment module's own calculations.
+- `src/domain-primitives/money.ts` (imported as `@domain-primitives/money`) supplies `Money`, `NO_MONEY`, `addMoney`, `apportion`, `scaleMoney`, `toMinorUnits` and `toDecimalString`. All amounts are handled in minor units and converted back to decimal strings at the end.
+- `src/modules/invoicing/services/credit-breakdown.ts` extracts VAT from the lines this module produces. The module docs name it explicitly.
+- Other neighbors (`src/modules/invoicing/services/issue-credit-note.ts`, `src/modules/invoicing/services/figures.ts`, `src/modules/invoicing/domain/index.ts`, `src/modules/invoicing/domain/remainder.ts`) and the tests (`src/modules/invoicing/tests/unit/credit-shares.test.ts`, `src/modules/invoicing/tests/unit/credit-breakdown.test.ts`, `src/modules/delivery/tests/unit/fulfillment.test.ts`) are graph neighbors. The file itself does not show how they use it.
 
 ## Notes
-
-- **Two weighting modes.** When `goods` is provided the split is proportional to the specific lines + shipping returned (VAT Directive Art. 90). When `goods` is omitted (or no line matches), it falls back to a pro-rata split weighted by each rate's gross amount in `taxSummary`.
-- **Fallback path.** If goods are supplied but none match an invoice line, `goodsWeights` returns all-zero weights; `creditShares` detects this (`addMoney(...weighted) === NO_MONEY`) and silently switches to the pro-rata path.
-- **Zero-share lines are dropped.** `flatMap` filters out rates whose share is `0`, so the returned array may be shorter than `taxSummary`.
-- **All monetary values are decimal strings** (e.g. `"12.50"`) until converted internally to minor units via `toMinorUnits`. Consumers must not parse these as `number`.
-- **`quantity` is always `1`** on every `CreditLine`; the split is expressed entirely through `unitPrice`.
+- **Goods vs goodwill:** with `goods`, only the matched lines and their delivery are weighted, per VAT Directive Art. 90 (credited at the rate the goods were sold at). Without `goods`, every rate is weighted by its `taxSummary.grossAmount`, which is the pro-rata rule.
+- **Fallback:** if the goods match no invoice line and add up to zero weight, it falls back to the pro-rata weights.
+- **Refund size:** the weights decide only the split. The shares always sum to the actual refund `amount`, so a deduction or an earlier partial refund shrinks the credit and never inflates it.
+- Goods whose `productId` matches no invoice line are silently ignored.
+- Lines are emitted only for rates that took a positive share, so the output can have fewer lines than `taxSummary` rows.
+- `lineTitle` is used as-is on every line and should already be in the invoice's language.

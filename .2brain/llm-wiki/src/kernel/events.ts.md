@@ -1,37 +1,34 @@
 ---
 source: src/kernel/events.ts
-sha256: 06bd379cb8c72d575c6386e76c63689b7bb98567497400912ef1b4926bf98cab
-generated_at: 2026-11-08T03:53:25.638859+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e3ddfa3a521018d6c2d17b8a9f86dcd69b8d4f263732baa7df7a5fff29a728af
+context_sha256: b21dc06f8652c108d8db1ba21c4a9b668fd0c841162a10b66a078bb125a54e22
+generated_at: 2026-11-22T03:12:52.481272+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/kernel/events.ts
 
 ## Purpose
-
-In-process domain event bus that lets two modules communicate without a direct import, keeping the dependency graph acyclic. It is deliberately **not** a durable message broker — no retry, no replay, no persistence. Its role is to break mutual-dependency cycles (e.g. product ↔ cart) into a one-way arrow.
+In-process domain event bus. It lets two modules communicate when neither can import the other (the import graph must stay acyclic), so the dependency arrow points one way via an event rather than an import. It is explicitly not a broker: no durability, retry, or replay.
 
 ## Key elements
-
-- **`DomainEventMap`** — Empty `interface`; each module augments it via TypeScript declaration merging to register its event names → payload types. Intentionally has no members here.
-- **`DomainEventName`** — `Extract<keyof DomainEventMap, string>`; the string-union of all declared event names. Exported so `kernel/registry.ts` can cast runtime-discovered names back.
-- **`DomainEventMeta`** — Optional `{ eventId?: string }` carried alongside a payload. Only the outbox relay populates it, for deduplication across redeliveries.
-- **`onDomainEvent(name, handler)`** — Subscribe a (synchronous or async) handler to a named event. Called from each module's `subscribe()` hook, not at import time.
-- **`emitDomainEvent(name, payload, meta?)`** — Dispatch to all subscribed handlers **sequentially** (awaited one after another). A handler that throws is logged via `logger.error` and does not stop the remaining handlers. Returns `true` if every handler resolved, `false` otherwise.
-- **`markDomainEventsWired()` / `domainEventsWired()`** — Flag set by `registerModules` after every module's `subscribe()` has run. The outbox relay checks this before dispatching so it never marks a row "published" in a process with no listeners.
-- **`resetDomainEvents()`** — Clears all handlers and resets the `wired` flag. A test seam shipped to production; calling it from application code silently unsubscribes every module.
+- `DomainEventMap`, `DomainEventName` (type re-exports from `@types`): event name → payload map and the name union. They are generated from `asyncapi.yaml` (`domain-events` section), so new events are declared there, never in this file.
+- `DomainEventMeta`: metadata passed beside the payload. It has an optional `eventId`, the stable outbox row id, which lets consumers dedupe redeliveries. It is absent for a plain emit.
+- `onDomainEvent(name, handler)`: subscribes a handler (sync or async) to an event, in subscription order. Intended to be called from a module's `subscribe()` hook, not at import time.
+- `emitDomainEvent(name, payload, meta = {})`: runs the handlers sequentially, awaiting each. A throwing handler is logged via `logger.error` and doesn't stop later handlers or the emitter. It returns `true` if all handlers resolved and `false` if any threw.
+- `markDomainEventsWired()` / `domainEventsWired()`: set and read a process-local `wired` flag. `registerModules` sets it after every module's `subscribe()` has run.
+- `resetDomainEvents()`: clears all handlers and the wired flag. It is a test seam.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/logger.ts`** — Imports `logger` to record handler failures during `emitDomainEvent`.
-- **`src/kernel/outbox.ts`** — Populates `DomainEventMeta.eventId`, reads `domainEventsWired()` before dispatch, and inspects the boolean return of `emitDomainEvent` to decide whether to redeliver a row.
-- **`src/kernel/registry.ts`** — `resolvePublicEvents` collects event names from module manifests at runtime; it relies on the `DomainEventName` export for the cast back into `onDomainEvent`'s generic.
-- **Module files** (e.g. `modules/cart`, `modules/account`, `modules/api-keys`) — Call `onDomainEvent` in their `subscribe()` hook and `emitDomainEvent` after their own write commits. The cart services (`cleanup.ts`, `merge.ts`) subscribe to product-lifecycle events such as deletion.
-- **Integration tests** (e.g. `consent-withdrawal.test.ts`, `backorder.test.ts`) — Exercise the emit→subscribe flow and call `resetDomainEvents()` between cases to avoid handler accumulation.
+- `src/infrastructure/adapters/logger.ts`: provides the `logger` used to report handler failures.
+- `src/kernel/outbox.ts`: the outbox relay is the only caller that passes `meta` (`eventId`). It uses the boolean return to decide whether to redeliver a row, and reads `domainEventsWired()` so it doesn't dispatch into a process with no subscribers and mark the row published.
+- `src/kernel/registry.ts`: `registerModules` calls `markDomainEventsWired()` after the `subscribe()` hooks run. `resolvePublicEvents` learns event names at runtime and casts them to `DomainEventName` before calling `onDomainEvent`.
+- Module files (`src/modules/account/module.ts`, `src/modules/api-keys/module.ts`, `src/modules/cart/module.ts`, plus the `events.ts` files in account and cart, and `src/modules/cart/services/cleanup.ts`): the neighbor list shows these are connected to the bus. The visible source doesn't show how each one uses it, though the doc comments say modules subscribe through their `subscribe()` hooks.
+- The account and api-keys integration tests are also neighbors. `resetDomainEvents()` exists as a test seam so suites that register modules per case don't accumulate handlers.
 
 ## Notes
-
-- `DomainEventMap` is a **declaration-merging seam**: adding a new domain event means augmenting the interface in that domain's own file, never editing this one.
-- Handlers execute **sequentially, not in parallel**; the emitter awaits the whole cascade. This is a correctness choice (no two listeners race on the same payload), not a performance optimization.
-- The `wired` flag is a guardrail, not a feature: without it the outbox could mark a row published in a process where nothing is subscribed, silently losing the event.
-- `resetDomainEvents` exists solely for test isolation but is exported to production — there is no runtime guard preventing application code from calling it.
+- Handlers run sequentially and are awaited, so listeners on one payload never race. Emitters like `products` fire past-tense events (e.g. `product.deleted`) only after their own write lands.
+- A failing listener never rolls back an already-authorised operation, and the emitter ignores the boolean unless it needs it (as the outbox relay does).
+- `resetDomainEvents()` ships in production code, so application code could call it and silently unsubscribe every module.
+- Handlers are stored in a module-level `Map`, so the state is per process.
+- Do not add new event types here. Declare them in the AsyncAPI files.

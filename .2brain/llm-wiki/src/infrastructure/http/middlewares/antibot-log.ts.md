@@ -1,33 +1,28 @@
 ---
 source: src/infrastructure/http/middlewares/antibot-log.ts
-sha256: 183351dcfb1d5ce86a7e7e7587041e65f6a87747f5ffc4ee52cb5f605be0a170
-generated_at: 2026-11-08T03:29:53.912542+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 183351dcfb1d5ce86a7e7e7587041e65f6a87747f5ffc4ee52cb5f605be0a170
+context_sha256: 46dd82454c5804ad593381fbe608a06e053bcf0a4a43f7633afeea13813a4288
+generated_at: 2026-11-22T02:48:35.386620+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/http/middlewares/antibot-log.ts
 
 ## Purpose
-
-Single shared log-line and HTTP-refusal helper for every anti-automation "rung" (rate-limit, email-policy, human-challenge). Exists so the three rungs don't each invent their own message format, and so the email-policy check—which runs inside a service rather than a middleware—can still emit the identical log shape.
+Provides the single log line and the single HTTP-refusal shape shared by every anti-automation "rung". The `rung` field lets rate-limit, email-policy, and human-challenge refusals be told apart in one log stream, rather than each file formatting its own message.
 
 ## Key elements
-
-- **`AntibotRung`** — `type` union of `'rate-limit' | 'email-policy' | 'human-challenge'`. Mirrors the `rungs` key published on `GET /config` so log entries can be filtered by rung.
-- **`logAntibotRefusal(rung, method, path, status)`** — Emits one `logger.warn` line (`"Antibot refused {method} {path}"`) with structured fields `{ rung, method, route, statusCode }`. Accepts raw strings/number (not Express objects) so non-middleware callers (e.g. the signup service) can use it.
-- **`refuseAntibot(rung, request, response, status, errors)`** — Calls `logAntibotRefusal`, then returns `rejectResponse(response, status, errors)`. Keeps status and error payload caller-controlled (429 vs 403 remain distinct).
+- `AntibotRung` — type union `'rate-limit' | 'email-policy' | 'human-challenge'`. It matches the names `antibot` publishes under `rungs` on `GET /config`.
+- `logAntibotRefusal(rung, method, path, status)` — emits `logger.warn("Antibot refused <method> <path>")` with metadata `{ rung, method, route: path, statusCode: status }`. It takes plain strings and a number instead of `Request`/`Response`, so code that isn't a middleware (rung 2's email-policy check inside a service) can call it too.
+- `refuseAntibot(rung, request, response, status, errors)` — calls `logAntibotRefusal` using `request.method` and `request.path`, then returns `rejectResponse(response, status, errors)`.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/logger.ts`** — Imports `logger`; the sole consumer of the logger in this file (one `warn` call).
-- **`src/infrastructure/http/response.ts`** — Imports `rejectResponse` and the `ResponseErrorItem` type; `refuseAntibot` delegates all response-shaping to it.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Expected caller of `refuseAntibot` / `logAntibotRefusal` with `rung: 'rate-limit'`.
-- **`src/infrastructure/http/middlewares/human-challenge.ts`** — Expected caller with `rung: 'human-challenge'`.
-- **`src/modules/account/controllers/post-signup.ts`** — The "email-policy" rung; calls `logAntibotRefusal` from service context (not a middleware), which is why the function signature avoids full Express objects.
+- `@infrastructure/adapters/logger` — supplies the `logger` used for the warn line.
+- `@infrastructure/http/response` — supplies `rejectResponse` and the `ResponseErrorItem` type, so refusals use the shared error envelope.
+- `rate-limit.ts` and `human-challenge.ts` (sibling middlewares) correspond to the `'rate-limit'` and `'human-challenge'` rungs. This file's header says they share this logging and refusal shape.
+- `post-signup.ts` (account controller) is a graph neighbor. The file's comments mention rung 2's email-policy check, called from a service, and its 201 ruse, but the code doesn't show how `post-signup.ts` uses it.
 
 ## Notes
-
-- `status` is recorded as the caller *actually* answers. The email-policy rung intentionally sends a 201 "ruse" to the client but logs the true refusal status here—don't assume the logged `statusCode` equals the HTTP status the client sees.
-- The log object includes both `method` (in the message string) and `route: path` (structured field); `path` is not duplicated as a key, only `route`.
-- Stryker mutation testing is disabled around the `logger.warn` call (`// Stryker disable all` … `// Stryker restore all`) because the side-effect is intentionally untestable via mutation.
-- `refuseAntibot` is designed to replace express-rate-limit's built-in plain-text handler; don't also register the default `handler` on the rate-limit middleware alongside it.
+- `status` is whatever the caller actually answers with. For rung 2's 201 ruse, the true status is logged even though the response claims otherwise.
+- `refuseAntibot` deliberately avoids express-rate-limit's plain-text body. The caller chooses the status, code, and message, because a 429 and a 403 mean different things.
+- The log call is wrapped in `Stryker disable all` / `Stryker restore all`, so mutation testing skips it.

@@ -1,32 +1,29 @@
 ---
 source: src/modules/account/controllers/post-verify-request.ts
-sha256: b9f2d07d8c867ce1747a043e0823ea51f14e7b0e428dfffd7511bee702b1540c
-generated_at: 2026-11-08T04:08:13.197752+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b9f2d07d8c867ce1747a043e0823ea51f14e7b0e428dfffd7511bee702b1540c
+context_sha256: 35382f0d827ad11064190fc5a24ae13555fce8d66f4f999fc65ea0ea25a084aa
+generated_at: 2026-11-22T03:27:49.024322+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-verify-request.ts
 
 ## Purpose
-
-Thin HTTP adapter for `POST /account/email-verification/resend`. It extracts the authenticated user's ID, delegates to `accountService.requestEmailVerificationFor`, and maps the service result (success or refusal) onto the HTTP response. The controller contains no business logic itself.
+HTTP controller for `POST /account/email-verification/resend`. It is a thin adapter that re-sends the email verification link for the authenticated user (covering the case where the link sent at signup never arrived) by delegating to `accountService.requestEmailVerificationFor`.
 
 ## Key elements
-
-- **`postVerifyRequest(request, response)`** — The sole export. Handler for the resend-verification endpoint. Reads `request.authContext!.id`, calls the service, then either short-circuits via `refused()` or emits `successResponse()`. Errors are funnelled through `catchAs(response, 'postVerifyRequest')`.
-- **`callerContextOf(request)`** — Extracts caller metadata (IP, user-agent, etc.) from the request and passes it to the service.
-- **`refused(response, result)`** — If the service signals a refusal (e.g. account already verified), writes the appropriate HTTP error and returns `true`, skipping the success path.
+- `postVerifyRequest(request, response)` — the only export. It reads `id` from `request.authContext`, calls `accountService.requestEmailVerificationFor(id, callerContextOf(request))`, and writes the result.
+  - If `refused(response, result)` returns true, the handler stops, since the refusal response has already been handled.
+  - Otherwise it calls `successResponse(response, result.data, result.status)`.
+  - Any rejection is passed to `catchAs(response, 'postVerifyRequest')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs` (unified error-to-HTTP mapping) and `refused` (early-exit for domain rejections).
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf`, used to forward caller context to the service.
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse` for the happy-path reply.
-- **`src/modules/account/services/index.ts`** — Exports `accountService`; this controller calls its `requestEmailVerificationFor` method and depends entirely on its result shape.
-- **`src/modules/account/routes.ts`** — Wires `postVerifyRequest` to the `POST /account/email-verification/resend` route and applies the `isAuth` middleware that guarantees `authContext` is populated.
+- `src/infrastructure/http/controller.ts` — supplies `refused` (checks the service result and responds on refusal) and `catchAs` (error handler labelled with the controller name).
+- `src/infrastructure/http/request.ts` — supplies `callerContextOf`, which builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts` — supplies `successResponse` for the success reply.
+- `src/modules/account/services/index.ts` — exports `accountService`, which holds the business logic that decides which states can be verified.
+- `src/modules/account/routes.ts` — the route that wires this handler to the endpoint. The handler itself does not register the path.
 
 ## Notes
-
-- `request.authContext!` uses a non-null assertion because `isAuth` middleware (configured in `routes.ts`) is expected to run first. There is no runtime check in this file.
-- Which account states are eligible for a resend is decided inside the service (`services/verification.ts`), not here. Adding new state guards means touching the service, not this controller.
-- The `catchAs` tag string (`'postVerifyRequest'`) is used for logging/correlation; keep it in sync with the function name if you rename.
+- The handler relies on the `isAuth` middleware having populated `request.authContext`, and reads it with a non-null assertion (`!`). Mounting it on a route without `isAuth` would fail at runtime.
+- Which account states cannot be verified is decided only in the service, not in the controller. The comment gives the reason: a second caller cannot bypass that rule.

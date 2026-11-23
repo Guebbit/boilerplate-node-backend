@@ -1,47 +1,47 @@
 ---
 source: src/modules/returns/tests/integration/staff-opens.test.ts
-sha256: c142c9348c28960dc339235bf682b988fe42cbef0594894e16792ea4d10288cb
-generated_at: 2026-11-08T08:11:40.634709+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ebbda5dc047e5953f63d3056ccbbc54dfb30edda2a51c7296050f2fad0e46c87
+context_sha256: d047015bcd706f04c58804113db2b1feec0ec670f7afab06bffddd6a41711d2b
+generated_at: 2026-11-22T07:38:09.275259+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/tests/integration/staff-opens.test.ts
 
 ## Purpose
-
-Integration tests that exercise the staff-initiated return path (support or moderator opening a return on behalf of a buyer). Covers the happy path (approved return with single buyer notification), date and channel validation, authorization rejections (404 for warehouse/stranger), quantity guards, recovery from a prior declined return, and the policy-waiver surface (`window_closed`, `excluded_goods`) including the boundary of what staff *cannot* waive.
+Integration tests for staff (support/moderator) acting on behalf of a buyer in the returns module. They cover opening a return the way a phone call would request it, waiving the shop's own deadline and the Art. 16 exclusion with the waiver recorded on the return, and recording a withdrawal the buyer stated outside the shop, judged on the day it was sent rather than the day it was read.
 
 ## Key elements
-
-- **`buyerWithOrder(wanted)`** — Creates a customer, a shirt (30.00) and a mug (10.00, optionally `noWithdrawal`), an order with configurable `createdAt`/status, and reserves inventory. Returns the fixture for downstream steps.
-- **`deliveredOrder(wanted & { endsInDays })`** — Builds on `buyerWithOrder`, marks the order `delivered`, sets the withdrawal deadline, settles outbox nudges, and clears the email mock.
-- **`paidOrder()`** — Builds a pending order three days old, pays by card via `payByCard`, settles outbox.
-- **`staff(role)`** — Returns `[authContext, callerContext]` tuple for `'support'` or `'moderator'`.
-- **`describe('staff opening a return for the buyer')`** — Six tests: approved creation + side-effects (outbox events, single email, audit `onBehalfOfBuyer`, timeline actors, `order.returnStatus`); `requestedAt` bounds (future / before-order rejected, valid date preserved); `statedVia` on non-withdrawal reason rejected; 404 for warehouse and stranger; quantity guard (second return on same line rejected); declined-return recovery (new return succeeds, old one no longer decidable).
-- **`describe('what staff waive, and what they cannot')`** — Tests that a goodwill return past the deadline records `window_closed`; that a buyer's in-window ask opened late records no exception; that made-to-order goods are allowed with `excluded_goods` recorded.
-- **Mailer mock** — `enqueueEmail` is jest-mocked; calls are inspected per test to verify exactly one `returns.notice` with the expected subject.
-- **Audit sink** — `registerAuditSink` collects entries into `audited[]` (reset in `beforeEach`) for assertions on `metadata.onBehalfOfBuyer`.
+- **Mocks and setup**: `@infrastructure/adapters/mailer` is mocked so `enqueueEmail` is a `jest.fn` (`mockEnqueueEmail`). `setupTestDb()` provides the DB. `beforeEach` registers `paymentsModule` and `returnsModule` via `registerCheckoutModules`, installs an audit sink that collects `audited` entries, and clears the mail mock. `afterEach` calls `resetDomainEvents()` and `jest.restoreAllMocks()`.
+- **`buyerWithOrder(Wanted)`**: creates a user, a shirt (30.00) and a mug (10.00), an order with both, and reserves inventory. Options are `madeDaysAgo`, `excluded` (mug gets `noWithdrawal: true`) and `status` (default `processing`).
+- **`deliveredOrder`**: builds on `buyerWithOrder`, carries the order to `delivered`, sets the withdraw-until date (`endsInDays`, default 7), settles outbox nudges, and clears the mail mock.
+- **`paidOrder`**: a pending order 3 days old, paid by card via `payByCard`, with nudges settled and the mail mock cleared.
+- **`staff(role)`**: returns the `[auth, callerContext]` pair for `support` or `moderator`.
+- **Describe "staff opening a return for the buyer"**:
+  - The return opens `approved` with `openedBy: 'staff'` and empty `policyExceptions`, and has two lines.
+  - It emits `return.requested` and `return.decided` outbox events and sends exactly one mail of the `returns.notice` template ("We opened your return").
+  - The audit row carries `onBehalfOfBuyer: true`, the timeline actor is `test-support`, and `returnStatus` is `in_progress`.
+  - `requestedAt` sets the return's date; a future date or one before the order gives `RETURN_STATEMENT_INVALID`.
+  - `statedVia` on a non-withdrawal reason gives `RETURN_STATEMENT_INVALID`.
+  - Warehouse staff and strangers get 404.
+  - The quantity guard returns `RETURN_LINES_INVALID`.
+  - After a decline, staff can open a new return, while approving the declined one gives `RETURN_NOT_DECIDABLE`.
+- **Describe "what staff waive, and what they cannot"**:
+  - A goodwill return after the deadline records `policyExceptions: ['window_closed']`.
+  - If the buyer asked inside the window and staff opened it late, no exception is recorded.
+  - The remaining cases are not visible in the provided content.
 
 ## Relationships
-
-- **`src/modules/returns/module.ts`** — Registered via `registerCheckoutModules([paymentsModule, returnsModule])` so the service is available in the test container.
-- **`src/modules/returns/repository.ts`** — `returnRepository.findByOrderId` used to assert no row was written after a rejected call.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges` flushes queued domain events; `outboxEventModel` queried to assert `return.requested` / `return.decided` names.
-- **`src/kernel/events.ts`** — `resetDomainEvents` in `afterEach` to isolate event state between tests.
-- **`src/infrastructure/adapters/mailer.ts`** — Mocked module; the real implementation is never invoked.
-- **`src/infrastructure/observability/audit.ts`** — Real audit sink registered per test to capture `AuditEntry[]`.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `readOrder`, `setWithdrawUntil`, `timelineOf`, `toOrderItem`.
-- **`src/modules/delivery/tests/factories.ts`** — `carryOrderTo` advances order to `delivered`.
-- **`src/modules/inventory/index.ts`** — `inventoryService.reserveForOrder` called in the fixture setup.
-- **`src/modules/payments/module.ts`** / **`src/modules/payments/index.ts`** — `paymentsModule` registered; `paymentService` available.
-- **`src/modules/payments/tests/factories.ts`** — `payByCard` used by `paidOrder`.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` for fixture items.
+- `src/infrastructure/adapters/mailer.ts`: mocked, so the tests can assert which emails were enqueued.
+- `src/infrastructure/observability/audit.ts`: `registerAuditSink` and `AuditEntry` capture audit rows for assertions.
+- `src/kernel/events.ts`: `resetDomainEvents` is called after each test.
+- `src/kernel/outbox.ts`: `outboxEventModel` and `settleOutboxNudges` are used to flush and inspect emitted events.
+- `src/modules/orders/tests/factories.ts`, `src/modules/products/tests/factories.ts`, `src/modules/delivery/tests/factories.ts`, `src/modules/payments/tests/factories.ts`: build the orders, products, delivered state, and card payments.
+- `src/modules/inventory/index.ts` (`inventoryService`): reserves stock for the order lines.
+- `src/modules/payments/index.ts` and `src/modules/payments/module.ts`: `paymentService` is imported from the former, and `paymentsModule` from the latter is registered alongside `returnsModule`.
+- `src/modules/returns/module.ts` and `src/modules/returns/repository.ts`: `returnsModule` is registered, and `returnRepository` (via `findByOrderId`) checks that nothing was persisted on a refused request. `returnService` is imported from `../../services`.
 
 ## Notes
-
-- The test relies on a **real database** (`setupTestDb`) and real service wiring; only the mailer is mocked.
-- `settleOutboxNudges()` must be awaited **before** asserting on `mockEnqueueEmail` calls or outbox rows, otherwise events are still queued.
-- The `customers` counter guarantees unique emails across the whole file (no `beforeEach` reset), so parallel workers in the same process won't collide.
-- The `staff` helper is a plain function, not a jest factory; it always returns a 2-tuple typed as `[auth, callerContext]`.
-- Authorization negatives expect **404** (not 403), matching the convention that the resource is "invisible" to unauthorized callers.
-- `statedVia` is only valid for withdrawal-type reasons; passing it with `defective` yields `RETURN_STATEMENT_INVALID` and writes **no** repository row.
+- Customers get distinct emails (`staff-opens-N@example.com`) via a module-level counter.
+- Test helpers return caller pairs, so staff calls take `(auth, callerContext)` as separate arguments.
+- `paymentService` is imported but is not used in the visible portion of the file.

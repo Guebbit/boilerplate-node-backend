@@ -1,33 +1,28 @@
 ---
 source: src/modules/notifications/presenter.ts
-sha256: 3469048745570a1beb233f2f14afe58983b79713ad794c34d77cd11f667bd5aa
-generated_at: 2026-11-14T20:25:50.499204+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3469048745570a1beb233f2f14afe58983b79713ad794c34d77cd11f667bd5aa
+context_sha256: ad9dd75a75ad1c11d0be83b399f32d9ffff9dbabd8158f42ac6e6a5b58cbd909
+generated_at: 2026-11-22T05:54:38.777692+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/presenter.ts
 
 ## Purpose
-
-Transforms internal `NotificationDocument` objects into the exact wire shapes declared by `openapi.yaml`. Objects are **built** (field-by-field) rather than serialized, guaranteeing that any field not named in the contract can never leak into a response.
+Converts stored notification documents into the wire shape declared by `openapi.yaml`. The response is built field by field rather than serialized, so a field the contract doesn't name can never leak through.
 
 ## Key elements
-
-- **`NotificationsView`** (interface) — The inbox response envelope (`{ items: Notification[] }`), matching the `NotificationsResponse` schema in the OpenAPI contract.
-- **`bodyOf`** (private helper) — Re-reads the stored `code` + `params` pair and casts it back to the `NotificationBody` discriminated union. The cast is a deliberate *narrowing* step: writers (`NewNotification`) are already typed per-code, so this restores the pairing that mixed storage loses without a per-code switch.
-- **`presentNotification`** (exported) — Maps one `NotificationDocument` to the contract's `Notification`. Stringifies `_id`, spreads the resolved body, and conditionally includes `readAt` (omitted when unread, rather than `null`, because the stream payload cannot express null).
-- **`presentNotifications`** (exported) — Maps an array of documents to `NotificationsView` via `presentNotification`.
+- `NotificationsView`: interface for the inbox response (`NotificationsResponse`), containing `items: Notification[]`.
+- `bodyOf` (internal): re-reads a document's `code` and `params` as the `NotificationBody` variant for that code, using a single cast.
+- `presentNotification`: maps one `NotificationDocument` to the contract's `Notification`. It sets `id` (the stringified `_id`), `audience`, the spread `code`/`params` body, `severity`, and `createdAt` (ISO string). `readAt` is included as an ISO string only when set.
+- `presentNotifications`: maps an array of documents to `{ items }`.
 
 ## Relationships
-
-- **`src/modules/notifications/model.ts`** — Imports `NotificationBody` and `NotificationDocument`; those are the input types the presenter consumes.
-- **`src/types/index.ts`** — Imports the `Notification` type, which is the contract's wire shape the presenter must produce.
-- **`src/modules/notifications/services/inbox.ts`** — Upstream consumer that fetches documents and hands them to `presentNotifications` before returning a response.
-- **`src/modules/notifications/index.ts`** — Module barrel; re-exports the presenter's public surface.
-- **`src/modules/notifications/tests/unit/presenter.test.ts`** — Unit tests covering the mapping logic (including the `readAt` omission and the `bodyOf` narrowing).
+- `./model`: supplies the `NotificationDocument` and `NotificationBody` types this file consumes.
+- `@types` (`src/types/index.ts`): supplies the contract `Notification` type returned by the presenters.
+- `src/modules/notifications/tests/unit/presenter.test.ts`: the unit test for these presenters.
+- `index.ts` is a graph neighbor, but the file shows no direct interaction with it.
 
 ## Notes
-
-- The cast in `bodyOf` is **not** a safety escape hatch. It relies on the invariant that every writer already produces a valid `code`/`params` pair matching the `NotificationBody` union. If a new code is added, the writer must extend the union first; the cast simply recovers what the writers promised.
-- `readAt` is **absent** (key omitted) when the notification is unread. Downstream consumers must check for key presence, not `null`.
-- `createdAt` and `readAt` are serialized with `.toISOString()`; the wire format is always an ISO-8601 string, never a `Date`.
+- The `bodyOf` cast is deliberate. Mixed storage loses the code-to-params pairing, but writers are typed per code (`NewNotification` is built from the same union). One cast restores that pairing, so no per-code switch is needed and new codes can be added without editing this file.
+- Unread notifications omit `readAt` entirely instead of sending `null`, because the stream's payload cannot express null.

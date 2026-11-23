@@ -1,32 +1,28 @@
 ---
 source: src/modules/returns/rate-limits.ts
-sha256: e7394b78553359274219ea2c3dda0f9e63e3704249a8ec89b563abe66903b7e1
-generated_at: 2026-11-08T08:00:58.369359+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c0bdc2490a99a89934772c14a90f9a1fc151151a127db798ef628df2fa94d4ef
+context_sha256: 567b4f99de9808934a0c793b88a8f7d55d0b1f378d2cd695bb023ab9506f0524
+generated_at: 2026-11-22T07:26:54.423819+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/rate-limits.ts
 
 ## Purpose
-
-Declares the Returns module's rate-limit budget for `POST /returns` and converts it into a ready-to-use Express middleware. It is the module-local "source of truth" for how many return-openings a single authenticated account may perform per window.
+Defines the returns module's own rate-limit budget: a limiter for `POST /returns`. The budget is plain data (`RateLimitBudget`) that is turned into Express middleware by `buildRateLimiter`, the same factory all other modules' budgets use. Each opened return costs staff a row to read and the shop a mail to send, so the limit is set well above a real customer's handful of returns and well below the global brake.
 
 ## Key elements
-
-- **`RETURNS_WRITE_BUDGET`** (local const) — A `RateLimitBudget` built by spreading generated numeric data (`returnsRateLimitData.returnsWrite`) and overriding the keying strategy to `KEYED_BY_AUTHENTICATED_ACCOUNT` with `accountIdOf` as the key generator.
-- **`returnsWriteLimiter`** (exported `RequestHandler`) — The result of passing that budget through `buildRateLimiter`. Applied as middleware to `POST /returns`.
-- **`returnsRateLimits`** (exported `readonly RateLimitBudget[]`) — Array of this module's declared budgets; referenced by `module.ts`'s `rateLimits` list so the module can register/audit them in one place.
+- `RETURNS_WRITE_BUDGET` (not exported): a `RateLimitBudget` that spreads `returnsRateLimitData.returnsWrite` (imported from `./rate-limits.generated`) and adds `keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT` and `keyGenerator: accountIdOf`. It counts returns opened per window, per account.
+- `returnsWriteLimiter`: the `RequestHandler` built from that budget with `buildRateLimiter`. It is the middleware for `POST /returns`.
+- `returnsRateLimits`: a readonly array holding the module's declared budgets (currently just `RETURNS_WRITE_BUDGET`).
 
 ## Relationships
-
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Supplies the `buildRateLimiter` factory, the `accountIdOf` key generator, and the `KEYED_BY_AUTHENTICATED_ACCOUNT` constant that this file imports and uses to construct the limiter.
-- **`src/modules/returns/routes.ts`** — Consumes `returnsWriteLimiter` as the rate-limit middleware on the `POST /returns` route.
-- **`src/modules/returns/module.ts`** — Aggregates `returnsRateLimits` into the module-level `rateLimits` registry.
-- **`src/types/rate-limit-budget.ts`** (via `@types`) — Defines the `RateLimitBudget` shape that `RETURNS_WRITE_BUDGET` must satisfy.
-- **`./rate-limits.generated`** — Provides the numeric `returnsRateLimitData.returnsWrite` values (window size, max, etc.) spread into the budget.
+- `src/infrastructure/http/middlewares/rate-limit.ts`: supplies `buildRateLimiter`, `accountIdOf` and `KEYED_BY_AUTHENTICATED_ACCOUNT`, which this file uses.
+- `src/modules/returns/module.ts`: declares `returnsRateLimits` as its `rateLimits`.
+- `src/modules/returns/routes.ts`: the route layer. The `returnsWriteLimiter` middleware is intended for `POST /returns`.
+- `src/types/index.ts` and `src/types/rate-limit-budget.ts`: the `RateLimitBudget` type, imported via the `@types` alias.
 
 ## Notes
-
-- The numeric limits live in `./rate-limits.generated`, a generated file. To change a limit, update/regenerate that source rather than editing the spread here.
-- Keying is per **authenticated account**, not per IP. Unauthenticated requests will not be rate-limited by this limiter (there is no account to key on).
-- The JSDoc on `RETURNS_WRITE_BUDGET` intentionally explains the *business rationale* (staff read-time + email cost) rather than just the number—keep that context in mind when adjusting limits.
+- The numeric limits (window and max) are not in this file. They come from the generated `./rate-limits.generated` module, so change them at their source, not here.
+- Keying is per authenticated account, not per IP.
+- The same `RETURNS_WRITE_BUDGET` object feeds both the live limiter and the exported budget list, so the two cannot drift apart.

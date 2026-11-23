@@ -7,4 +7,5 @@
 # not gitignored (they are committed on purpose), so without this file
 # graphify would extract generated prose back into the next graph.
 .2brain/
+.codeboarding/
 # 2brain:end

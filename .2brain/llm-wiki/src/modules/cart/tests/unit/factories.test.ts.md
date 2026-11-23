@@ -1,33 +1,30 @@
 ---
 source: src/modules/cart/tests/unit/factories.test.ts
-sha256: 330bc9715fb8ab6b3743cf727fb2074b4724444f19f7f43ef32482a977fcb741
-generated_at: 2026-11-08T05:24:28.886533+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2f7cc72eb36375926c5fd4799ab584c03549af2f410b96743ca97f6d6ccfc869
+context_sha256: 83a230d59c9cd2cad3f71890d67549f1f91e21f22b8fa4ac037827e2ad2b4b02
+generated_at: 2026-11-22T04:43:00.169846+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/unit/factories.test.ts
 
 ## Purpose
-
-Unit tests for the `makeCart` fixture builder. The core concern they guard: `makeCart` must convert the hex-string product/owner IDs it receives into real `Types.ObjectId` values, because a string `productId` silently breaks the catalogue join at read time (the cart "looks populated and behaves as if empty"). The remaining tests pin down the items-omitted-vs-empty distinction and line ordering.
+Unit tests for `makeCart`, the cart fixture builder in `@modules/cart/factories`. The tests pin down the factory's main job: turning the string ids a seed file writes into real `ObjectId`s. A line whose `productId` stayed a string would match nothing when the service joins against the catalogue, so the cart would look populated but behave as empty.
 
 ## Key elements
-
-- **`USER`, `PRODUCT`** — module-level hex-string constants used as seed values in every test case.
-- **`describe('makeCart')`** — single describe block with five `it` assertions:
-  - *owner stored as ObjectId* — `cart.userId` is an instance of `Types.ObjectId` and round-trips to the input string.
-  - *items omitted when none given* — `Object.hasOwn(cart, 'items')` is `false`, leaving the schema default in charge of "empty".
-  - *product id converted, quantity preserved* — `items[0].productId` is an `ObjectId`; `quantity` passes through unchanged.
-  - *empty list distinct from absent* — `items: []` yields `cart.items` equal to `[]`, not an undefined key.
-  - *line order preserved* — a two-line input produces `items` in the same sequence.
+- `USER` and `PRODUCT` are string ids used as fixture inputs.
+- `describe('makeCart')` holds five tests:
+  - **Owner conversion:** `userId` becomes a `Types.ObjectId` whose string form equals the input.
+  - **Absent items:** when `items` is not passed, the result has no own `items` property (`Object.hasOwn(...)` is false), so the schema default applies.
+  - **Line conversion:** each line's `productId` becomes an `ObjectId` and its `quantity` is kept.
+  - **Empty vs. absent:** an explicit `items: []` stays `[]`, so it is distinct from omitting `items`.
+  - **Order:** the order of the supplied lines is preserved.
 
 ## Relationships
-
-- **`src/modules/cart/factories.ts`** — the sole SUT. Imports `makeCart` from `@modules/cart/factories` and exercises its return shape. No other module is touched.
-- **`mongoose`** — imported solely for `Types.ObjectId` in `expect(...).toBeInstanceOf(...)` checks.
+- Imports `makeCart` from `src/modules/cart/factories.ts` (via the `@modules/cart/factories` alias), the only unit under test.
+- Imports `Types` from `mongoose` to assert `ObjectId` instances.
 
 ## Notes
-
-- The `items`-absent test deliberately uses `Object.hasOwn` rather than a truthiness check to distinguish "key not present" from "key present with falsy value". A future refactor that injects `items: []` by default would fail this test, which is the point.
-- The empty-vs-absent distinction is semantically meaningful to the service layer (emptied cart vs. unspecified), so the fixture must not collapse the two; the test enforces that contract.
-- Test data uses literal hex strings rather than `Types.ObjectId` constructors, mirroring what a seed file would actually pass in.
+- Omitting `items` is deliberate. Writing `items: []` by default would make the fixture, rather than the schema, the authority on what an empty cart is, and the two would have to be kept in step.
+- `[]` means "this cart was emptied". Absent means "unspecified". The factory must keep these apart so tests can seed an existing cart that holds nothing.
+- The tests access `cart.items!` with a non-null assertion, which suggests `items` is optional on the returned type.

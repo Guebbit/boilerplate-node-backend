@@ -1,42 +1,50 @@
 ---
 source: src/modules/account/controllers/post-login-2fa.ts
-sha256: 244fdd4cb39e49b203ba5000717553670dbe55d96bf2f6076f384b39789b5e8b
-generated_at: 2026-11-14T18:32:58.809594+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d0d4c21369e32554cae520694586b293675d3a17870fe694d8de73aa6e47a79c
+context_sha256: bf8b980f43a471c8bcccfcd3139daa06b153d8e2ea0001c1858d3ff0c9766334
+generated_at: 2026-11-22T03:25:07.741990+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-login-2fa.ts
 
 ## Purpose
-
-HTTP adapter for `POST /account/login/2fa`, the second step of a two-factor login. It validates the challenge (obtained from the first `POST /account/login` response or from an OAuth-originated cookie), verifies the user-supplied code via `twoFactorService`, and on success mints a session with AMR proofs that include `otp`. It also handles the deletion-grace case where a verified code does not yield a session but a deletion-pending claim.
+Express controller for `POST /account/login/2fa`, the second step of a two-factor login. It verifies the challenge issued by `POST /account/login` together with the caller's code. On success it mints a session the same way `postLogin` does for accounts without a second factor, or returns a deletion-pending claim check if the account is in its deletion grace period.
 
 ## Key elements
-
-- **`postLoginTwoFactor`** (exported) — The sole handler. Accepts an Express `Request`/`Response`, parses the body with `LoginTwoFactorBody`, resolves the challenge from the body *or* the MFA cookie, calls `twoFactorService.verifyLoginChallenge`, then either:
-  - returns a deletion-pending payload (when `isRestorable(user)` is true), or
-  - issues a session via `issueSession`, records login success, attaches the account view, remembers the device cookie, and returns a `LoginTwoFactorOutcome`.
-- Incremented **`authTwoFactorChallengeTotal`** on every exit path (success or failure).
+- `postLoginTwoFactor(request, response)` is the only export. Its flow:
+  1. Parse the body with `LoginTwoFactorBody` via `parseBody`.
+  2. Resolve the challenge from `parsed.challenge`, falling back to `readMfaChallengeCookie(request)`. If neither exists, respond 401 with `account.two-factor.challenge-invalid`.
+  3. Capture `provedAt = Date.now()` before the code check. The comment says a password changed during verification must refuse the login.
+  4. Call `twoFactorService.verifyLoginChallenge(challenge, code, callerContextOf(request))`. Which factor (armed factor or backup code) was used is left to the service.
+  5. If `isRestorable(user)`, respond 200 with `buildDeletionPending(...)` and issue no session.
+  6. Otherwise:
+     - call `issueSession` with `remember`, `amr`, `provedAt` and `transport`;
+     - call `recordLoginSuccess`;
+     - build the body with `withAccountView`;
+     - call `rememberDevice` with the user's email;
+     - respond 200 with `LoginTwoFactorOutcome`.
+- `amr` is extended with `AMR.otp` through `withProofs`. The session therefore carries `['pwd', 'otp']`, which later guards that demand a second factor read unchanged.
+- Every failure path increments `authTwoFactorChallengeTotal{status:'failure'}` and every success path increments `{status:'success'}`.
 
 ## Relationships
-
-- **`src/modules/account/services/index.ts`** — source of `twoFactorService`, which performs the actual code/challenge verification.
-- **`src/modules/account/services/deletion-sign-in.ts`** — provides `buildDeletionPending` for the deletion-grace branch.
-- **`src/modules/account/domain/session-proof.ts`** — provides `AMR` enum and `withProofs` to tag the session with `['pwd', 'otp']`.
-- **`src/modules/account/oauth/mfa-redirect.ts`** — provides `readMfaChallengeCookie` / `destroyMfaChallengeCookie` for the OAuth-originated challenge path.
-- **`src/modules/account/session/account-view.ts`** — `withAccountView` shapes the response body with the account snapshot.
-- **`src/modules/account/metrics.ts`** — exports the `authTwoFactorChallengeTotal` counter incremented here.
-- **`src/infrastructure/http/controller.ts`** — `parseBody` (Zod validation) and `refused` (standard error-shape helper).
-- **`src/infrastructure/http/response.ts`** — `successResponse` / `rejectResponse` for uniform response envelopes.
-- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseError` for the `.catch` path.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf` extracts IP/UA metadata passed into the service.
-- **`src/infrastructure/i18n/index.ts`** — `t()` for the localized "invalid challenge" message.
-- **`src/modules/account/routes.ts`** — registers this handler on the `POST /account/login/2fa` route.
+- **`services` (`twoFactorService`)** verifies the challenge and code.
+- **`services/deletion-sign-in`** supplies `buildDeletionPending` for the grace-period branch.
+- **`oauth/mfa-redirect`** supplies `readMfaChallengeCookie` and `destroyMfaChallengeCookie`. OAuth-originated challenges never reach the client body, so they arrive via cookie.
+- **`domain/session-proof`** supplies `AMR` and `withProofs`.
+- **`session/account-view`** supplies `withAccountView`, which builds the success body.
+- **`session/session`, `session/device-cookie` and `session/login-observability`** supply `issueSession`, `rememberDevice` and `recordLoginSuccess`.
+- **`metrics`** supplies the `authTwoFactorChallengeTotal` counter.
+- **`infrastructure/http/*`:**
+  - `controller` supplies `parseBody` and `refused`.
+  - `response` supplies `successResponse` and `rejectResponse`.
+  - `errors` supplies `rejectDatabaseError`.
+  - `request` supplies `callerContextOf`.
+- **`infrastructure/i18n`** supplies `t` for the error message.
+- **`routes.ts`** is a graph neighbor but is not imported here. It is presumably where the handler is mounted, though this file doesn't show that.
+- `scripts/docs/generate-role-matrix.ts` and `src/infrastructure/adapters/logger.ts` appear as graph neighbors, but this file shows no direct interaction with them.
 
 ## Notes
-
-- The challenge is **not** always in the request body. For OAuth-originated MFA the challenge was never sent to the client; it lives in a cookie set by `oauth/mfa-redirect.ts`. The handler falls back to `readMfaChallengeCookie` when `parsed.challenge` is absent.
-- `provedAt` is captured **before** the async code check. This ensures a password change that lands mid-verification causes the service to refuse, rather than the controller silently accepting a stale timestamp.
-- AMR is stored as an **array** (`['pwd', 'otp']`) specifically so that downstream session guards can assert "second factor present" without knowing which factor it was.
-- `rememberDevice` is called only here (not in the first login step), making the 2FA-completion request the moment the browser becomes "familiar."
-- The `.catch` path routes through `rejectDatabaseError`, which logs internally; there is no explicit logger import in this file.
+- The challenge cookie is destroyed only on success, in both the session and deletion-pending branches. The comment says the challenge is spent either way, but the code does not destroy the cookie on failure.
+- `rememberDevice` runs only in the full-session branch, not in the deletion-pending branch. The comment says the browser becomes familiar only once the login is complete.
+- Any rejection in the promise chain goes to `rejectDatabaseError(response, 'postLoginTwoFactor', error)`, and the failure counter is incremented.

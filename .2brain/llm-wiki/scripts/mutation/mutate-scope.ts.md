@@ -1,38 +1,31 @@
 ---
 source: scripts/mutation/mutate-scope.ts
-sha256: d7421ee9991afa24dadcc97cb128a547234eb968a008d4763a62b5835dd1cd40
-generated_at: 2026-11-14T17:37:39.731475+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:09:37.887641+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/mutation/mutate-scope.ts
 
 ## Purpose
-
-Resolves which source files fall inside Stryker's mutation-testing scope by reading `stryker.json`'s own `mutate` glob patterns at call time, then exposes that scope (as a file list, with per-file line counts, or as a filtered intersection against a diff) to the CI sharding and diff pipelines. Reading the globs fresh from the config file avoids the drift that occurs when a module is added to `stryker.json` but not to a hand-maintained list.
+Computes the mutation-testing scope by reading the `mutate` globs directly from `stryker.json`, rather than mirroring the module list by hand. A hand-copied list drifts when modules are added (the header notes `src/infrastructure`, `src/kernel`, `webhooks`, `api-keys` and `antibot` went unmeasured for a month this way). It provides the file list, the line counts used to size shards, and helpers for filtering a diff down to mutable files.
 
 ## Key elements
-
-- **`isMutable(file, patterns?)`** — Returns `true` when a repo-root-relative POSIX path matches at least one non-negated `mutate` glob and no `!`-prefixed exclude glob (via `minimatch`, the same matcher Stryker uses). Defaults `patterns` to the live `stryker.json` value; tests inject their own array.
-- **`mutableFiles()`** — Walks `src/` recursively, collects every `.ts` file, and filters with `isMutable`. Returns repo-root-relative, forward-slash-separated paths.
-- **`lineCount(file)`** — Counts non-blank lines in a mutable file; used as the sizing unit for shards.
-- **`scopeWithLines()`** — Combines the two above into `{ file, lines }[]`, the shape expected by `packIntoShards`.
-- **`changedMutable(changed, mutable)`** — Pure set-intersection of a diff's changed files against the mutable scope. No filesystem or git calls; keeps `run-diff.ts`'s entrypoint thin and the function independently testable.
-- **`mutatePatterns()`** (internal) — Reads and parses `stryker.json` each call (short-lived CLI, no caching).
-- **`StrykerConfig`** (internal interface) — Narrows the parsed JSON to just the `mutate: string[]` field.
+- `isMutable(file, patterns?)` — gitignore-style check using `minimatch`: a path is mutable if it matches any plain pattern and no `!`-prefixed pattern. `patterns` defaults to `stryker.json`'s `mutate`; a test can supply its own.
+- `mutableFiles()` — walks `src/` recursively, collects every `.ts` file, converts it to a repo-root-relative POSIX path, and keeps those that pass `isMutable`.
+- `lineCount(file)` — number of non-blank lines in a file; an approximation of Stryker's mutable lines, used for shard sizing.
+- `scopeWithLines()` — `mutableFiles()` mapped to `{ file, lines }`, the shape `packIntoShards` expects.
+- `changedMutable(changed, mutable)` — pure set intersection of a diff's changed files with the mutable list. It does no git or filesystem access.
+- `mutatePatterns()` (private) — reads and parses `stryker.json` on each call, with no caching.
 
 ## Relationships
-
-- **`scripts/modules-on-disk.ts`** — Imports `REPO_ROOT` to anchor all file-system reads and path computations.
-- **`scripts/mutation/run-diff.ts`** — Calls `isMutable` (or `changedMutable`) to intersect a git diff against the mutable scope before spawning Stryker on the subset.
-- **`scripts/mutation/run-shards.ts`** — Consumes the `{ file, lines }[]` array produced by `scopeWithLines()` to split work into balanced shards.
-- **`scripts/mutation/ci/cli.ts`** — Orchestrates the CI entrypoint; relies on this module's exports to determine what to run and how to partition it.
-- **`tests/unit/scripts/mutation/mutate-scope.test.ts`** — Unit-tests `isMutable`, `mutableFiles`, `lineCount`, `scopeWithLines`, and `changedMutable` with injected pattern arrays.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — Tests wave/sharding logic that builds on the scope this module provides.
+- Imports `REPO_ROOT` from `scripts/modules-on-disk.ts` to resolve `stryker.json` and `src/`.
+- `scripts/mutation/run-diff.ts` uses it for the changed-files diff. `isMutable` and `changedMutable` let that entrypoint stay a thin wrapper.
+- `scripts/mutation/run-shards.ts` and `scripts/mutation/ci/cli.ts` are graph neighbors. The shard-sizing exports (`scopeWithLines`, `lineCount`) are presumably consumed there, though the file itself does not show its callers.
+- Tested by `tests/unit/scripts/mutation/mutate-scope.test.ts`. `tests/unit/scripts/mutation/ci/waves.test.ts` is also a graph neighbor.
 
 ## Notes
-
-- Paths are always repo-root-relative and POSIX-separated (`/`), even on Windows; `mutableFiles` explicitly converts `path.sep`.
-- `changedMutable` is intentionally pure (two arrays in, array out) so it can be tested without mocking the filesystem and so a file deleted after a branch point silently drops out (it won't appear in `mutableFiles()`).
-- The `minimatch` include-then-exclude logic mirrors Stryker's documented resolution order (includes applied first, `!` exclusions applied after), ensuring this script's scope matches what Stryker itself would mutate.
-- `stryker.json` is re-read on every call to `mutatePatterns()`; there is no caching. This is fine because the consumer is a short-lived CLI, but it means the function is not idempotent if the file changes mid-process (unlikely in practice).
+- Only `.ts` files under `src/` are walked. A pattern in `stryker.json` that covers files elsewhere would not appear in `mutableFiles()`.
+- `stryker.json` is read at runtime as the source of truth for the scope (it is not a graph neighbor, just a data file this module reads).
+- `changedMutable` deliberately does not re-apply the globs to the diff. It intersects with `mutableFiles()`, which has already applied them to the tree, so there is no second glob evaluation to drift. A file the diff names but the branch later deleted drops out without an explicit existence check.
+- `stryker.json` is read fresh on every call, which is fine for a short-lived CLI. `mutableFiles()` reads it once and passes the patterns to `isMutable`, so the file is not re-read per file.
+- Paths must be repo-root-relative and use `/` separators. `mutableFiles()` normalises `path.sep` to `/`.

@@ -1,42 +1,45 @@
 ---
 source: src/modules/account/controllers/post-signup.ts
-sha256: afac0b50a3b56a9e619298caec2634473b1c4d82e3cd96779dcd70291ada9a41
-generated_at: 2026-11-14T18:34:36.666574+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:27:27.022901+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-signup.ts
 
 ## Purpose
-
-Thin HTTP adapter that handles `POST /account/signup`. It forwards the raw request body to `accountService.signup`, then branches on the result to emit either a rejection, a disguised antibot refusal, or a real 201 with a session cookie and a fire-and-forget verification email. The controller intentionally performs no field-level validation itself; all parsing and business rules live in the service.
+Express controller for `POST /account/signup`. It is a thin HTTP adapter over `accountService.signup`. It accepts JSON only, with no image upload, because an unregistered caller writes nothing to the store. On success it also signs the new user in by issuing session cookies.
 
 ## Key elements
+- `postSignup(request, response)`: the exported handler.
+  - It passes `request.body ?? {}` unparsed to `accountService.signup(body, callerContextOf(request))`. Validation, including the unknown-field and repeat-password/terms rules, lives in the service. A missing body therefore gets the same 422 as empty fields.
+  - It builds a session proof `{ amr: [AMR.password], provedAt: Date.now() }` for the first session.
+- `SIGNUP_LOCATION = '/account'`: the location value sent with every 201. It is the same for everyone, because the caller's account is `/account` and never an id.
 
-- **`postSignup`** (exported) — The sole controller handler. Accepts `Request<unknown, unknown, SignupRequest | undefined>` and a `Response`. Returns `Promise<void>`.
-- **`SIGNUP_LOCATION`** (module-private const) — Fixed string `'/account'`, passed as the third argument to `createdResponse` on every 201 path. Deliberately identical for real and refused signups so the value cannot leak whether an account was created.
-- **`proof`** (local) — Session-proof object `{ amr: [AMR.password], provedAt: Date.now() }` passed to `issueSession`.
+Outcome branches:
+- **Service failure:** increments `authSignupTotal{status:'failure'}` and calls `rejectResponse(response, result.status, result.errors)`.
+- **`data.isNew` is true** (rung 2 email policy refused the address, so nothing was saved):
+  - It calls `logAntibotRefusal('email-policy', ...)` and increments `authSignupTotal{status:'refused'}`.
+  - It answers a normal-looking 201 with `accountUserService.toAccount(data, null)`, and sends no verification email.
+- **Real signup:**
+  - It increments `authSignupTotal{status:'success'}`.
+  - It fires `accountService.sendVerificationEmail` without awaiting it. A failure is only logged through `logger.error`.
+  - It calls `issueSession(request, response, data.id, proof)` and then sends a 201 with the `Account` body.
+- **Rejection or exception:** the final `.catch` increments the failure counter and calls `rejectDatabaseError(response, 'signup', error)`.
 
 ## Relationships
-
-- **`src/modules/account/services/index.ts`** — Imports `accountService` and calls its `signup` method with the raw body and caller context; on a successful result, calls `sendVerificationEmail` (fire-and-forget). All validation and persistence logic lives in this module.
-- **`src/infrastructure/http/response.ts`** — Uses `rejectResponse` for failure paths and `createdResponse<Account>` for 201 responses.
-- **`src/infrastructure/http/errors.ts`** — Imports `rejectDatabaseError` as the catch-all for unexpected exceptions in the promise chain.
-- **`src/infrastructure/http/request.ts`** — Imports `callerContextOf` to extract request metadata passed into the service and the email sender.
-- **`src/infrastructure/adapters/logger.ts`** — Imports `logger` to record a structured error if the verification-email queue call rejects.
-- **`src/infrastructure/http/middlewares/antibot-log.ts`** — Imports `logAntibotRefusal` to record rung-2 (email-policy) refusals for operational auditing.
-- **`src/modules/account/session/session.ts`** — Imports `issueSession` to set the session cookie on a successful signup.
-- **`src/modules/account/domain/session-proof.ts`** — Imports `AMR` (specifically the `password` member) to stamp the authentication method into the session proof.
-- **`src/modules/account/metrics.ts`** — Imports `authSignupTotal` Prometheus counter, incremented with `status: 'success' | 'failure' | 'refused'`.
-- **`src/modules/users/friends/account.ts`** — Imports `accountUserService` and calls its `toAccount` method to map the Mongoose document to the wire `Account` shape (role is always `null` for a fresh signup).
-- **`src/types/index.ts`** — Provides the `Account` and `SignupRequest` type imports used in the handler signature and response generics.
-- **`src/modules/account/routes.ts`** — Expected consumer that binds `postSignup` to the `POST /account/signup` route (referenced as a graph neighbor; no import is present in this file).
+- `../services` (`accountService`): performs the signup and queues the verification email.
+- `../session/session` (`issueSession`) and `../domain/session-proof` (`AMR`): create the first session cookies and record the password proof.
+- `src/modules/users/friends/account.ts` (`accountUserService.toAccount`): maps the user document to the `Account` response. The role is passed as `null`.
+- `@infrastructure/http/response` (`rejectResponse`, `createdResponse`) and `@infrastructure/http/errors` (`rejectDatabaseError`): shape the HTTP responses.
+- `@infrastructure/http/request` (`callerContextOf`): extracts the caller context for the service calls.
+- `@infrastructure/http/middlewares/antibot-log` (`logAntibotRefusal`): logs a refused address.
+- `../metrics` (`authSignupTotal`) and `@infrastructure/adapters/logger`: metrics and error logging.
+- `@types`: supplies the `Account` and `SignupRequest` types.
+- `../routes`: the route file that mounts this handler.
 
 ## Notes
-
-- **Body is typed `unknown` on purpose.** The controller passes it through as `request.body ?? {}` without parsing. The service validates against its own schema and enforces cross-field rules (password match, terms acceptance). Do not add schema validation here.
-- **`request.body` can be `undefined`.** Express 5 leaves it unset when no parser matches the `Content-Type`; multer also calls `next()` untouched on non-multipart bodies. The `?? {}` guard converts this into a normal 422 rather than a throw.
-- **Antibot (rung-2) refusal is intentionally indistinguishable.** The 201 body, status code, and the `SIGNUP_LOCATION` value are byte-identical to a real signup. The only observable difference is the absence of a `Set-Cookie` header. The verification email is also skipped. Do not "fix" this asymmetry without re-evaluating the security intent.
-- **Verification email is fire-and-forget.** A rejection is logged but does not affect the 201 response or the session. The 201 never waits on the email queue.
-- **No access token in the body.** `issueSession` sets cookies only; the frontend mints its own access token via `POST /account/refresh`. This keeps the refused-signup body shape identical to the real one.
-- **`Document#isNew` is the refusal signal.** When the service returns an unsaved Mongoose document, the controller treats it as an antibot refusal. This relies on the service contract, not on a separate flag.
+- **Indistinguishable refusal:** a refused address returns the same 201 body and `Location` as a real signup. The only difference is that no `Set-Cookie` is sent. The comments acknowledge that the 409 for an address already in use already leaks existence, and that rung 2 is off by default.
+- **Cookies only:** the body stays `Account`. The frontend's `POST /account/refresh` bootstrap mints the access token, as it does after the OAuth callback.
+- **Session role:** the user is signed in as `unverified`. Verification is informational and does not block the account.
+- **Express 5 body:** `request.body` can be unset when no parser matched the content-type, hence the `| undefined` type and the `?? {}` fallback.
+- **`isNew` check:** `Document#isNew` stays true until `.save()`. That is how the handler tells a refused signup from a real one.

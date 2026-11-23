@@ -1,27 +1,26 @@
 ---
 source: src/modules/inventory/tests/unit/stock-writes-name-a-caller.test.ts
-sha256: 3f8da699220cbda62d6e4a2bd4a1383094c92e416f3e56b4a6e9ed010b72520d
-generated_at: 2026-11-08T06:08:49.028972+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3f8da699220cbda62d6e4a2bd4a1383094c92e416f3e56b4a6e9ed010b72520d
+context_sha256: 5338b56d019e83a84ec645713b7a7014651effbe2914b044889685f305809386
+generated_at: 2026-11-22T05:28:52.463986+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/tests/unit/stock-writes-name-a-caller.test.ts
 
 ## Purpose
-
-Compile-time test that verifies `receive` and `adjust` on the inventory service **refuse** to be called without a caller identifier. It exists to pin down the type-level contract that every stock mutation must attribute itself to a named actor.
+A compile-time test asserting that `inventoryService.receive` and `inventoryService.adjust` cannot be called without a caller argument. The module doc states that these methods move stock, so each must name the caller who answers for it, and that the audit row is written against that caller.
 
 ## Key elements
-
-- **`describe('a stock write names who made it')`** — scopes the assertions to the caller-attribution rule.
-- **`it('is refused by the compiler when the caller is left out')`** — builds two arrow-function wrappers that call `inventoryService.receive` and `inventoryService.adjust` with only three arguments (skipping the caller). Each call site is annotated with `@ts-expect-error`; the test passes only if the TypeScript compiler actually *errors* on those calls. The array `attempts` is never executed—its length is checked to satisfy the test runner.
+- `describe('a stock write names who made it')`: the single test suite.
+- `it('is refused by the compiler when the caller is left out')`: builds an array of two arrow functions, one calling `receive('64b6…', 1, 'delivery note')` and one calling `adjust('64b6…', -1, 'stocktake')`, both without a caller.
+- `// @ts-expect-error` on each call: the real assertion. If the caller parameter became optional, the directive would be unused and the type check would fail.
+- `expect(attempts).toHaveLength(2)`: a runtime check that keeps the test valid. The functions are never invoked.
 
 ## Relationships
-
-- **`src/modules/inventory/services/index.ts`** — provides `inventoryService`, the object whose `receive` and `adjust` signatures are under test. The import is the sole runtime dependency of this file.
+- Imports `inventoryService` from `src/modules/inventory/services/index.ts` and exercises the type signatures of its `receive` and `adjust` methods. It does not execute them.
 
 ## Notes
-
-- This is a **type-level** test, not a runtime one. The arrow functions are never invoked; no database call occurs. The `@ts-expect-error` directives are the assertion: if the type check ever starts *allowing* the omitted caller, the compiler removes the expected-error, and the test fails.
-- The hex string `'64b64c4f4f4f4f4f4f4f4f4f'` stands in for a real inventory ID; its value is irrelevant since the function bodies never execute.
-- Adding a new stock-writing method to the service means adding a matching `@ts-expect-error` line here to keep the contract covered.
+- The test only verifies anything when type checking runs over it (for example `tsc` or ts-jest with diagnostics). If type errors are not enforced, it passes trivially.
+- The comment in the file says the attempts are never called, so no database is reached.
+- The test does not show what the caller parameter's type or position is. It only shows that omitting it is a type error.

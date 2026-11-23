@@ -1,47 +1,37 @@
 ---
 source: src/modules/delivery/domain/preorder.ts
-sha256: 3bb89917fad403206aaea1cfcbf49b69fa6ad0f0a40ab41d21833d8bac818f80
-generated_at: 2026-11-08T05:29:11.965827+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ce50c9c7370faaec1ded6bb6194066c8bea78e4c38f1f6958419e47769920a1c
+context_sha256: 64fd743050aa83fa7103f50ba4926dc617be295f7bc7b7ab4312e6bcaa4cd1c3
+generated_at: 2026-11-22T04:48:41.333959+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/domain/preorder.ts
 
 ## Purpose
-
-Pure domain rules for preorders whose release date slips. Given a current date, a new date, and a shop timezone, it decides whether the buyer must be told (email) or left in silence, computes the date a fulfillment order is now expected, and derives the board state and lateness a UI or sweep reads. All functions are side-effect-free; the clock is always an argument, so every branch is testable in isolation.
+Pure domain rules for a preorder whose release date slips. It decides what a moved date owes the buyer (an email or nothing), when the daily sweep should warn that a date will be missed, and how the staff board labels and flags fulfillment orders. A clock is always passed in as an argument, so every case is testable without waiting. The shop only informs the buyer; it never asks them anything and never cancels on its own. Silence means the buyer keeps waiting.
 
 ## Key elements
-
-- **`SlipVerdict`** — discriminated union: `'earlier'` (no email) or `'notify'` (buyer must be told).
-- **`judgeSlip(facts)`** — core decision: compare `next` vs `expectedAt` on the shop calendar; later or cleared → `notify`, earlier/same-day/no-date → `earlier`.
-- **`expectedDateOf(lines, releaseDateOf)`** — latest catalogue date among lines that still have remaining units; `undefined` if any waiting line has no date.
-- **`expectedDateOfWaiting(waiting, dateOf)`** — same rule but short-circuits for `defaulted` orders (they keep their original 30-day promise).
-- **`judgeMove(facts, next, timeZone)`** — wraps `judgeSlip` with the `agreedAt` guard; returns `undefined` when nothing was ever promised.
-- **`DUE_NOTICE_LEAD_MS`** — one day; the sweep must reach the buyer before the promised date (FTC mail-order rule).
-- **`needsDueNotice(facts, now)`** — whether the "you will miss the date" email is due; deduplicates via `dueNoticeFor`.
-- **`slippedDays(agreedAt, expectedAt, timeZone)`** — non-negative whole-day gap for the board's lateness column.
-- **`promisedAfterNotice(promisedAt, expectedAt)`** — three-way return (`Date` | `null` | `undefined`) encoding replace / remove / leave-unchanged for the buyer's held date.
-- **`boardStateOf(facts)`** — maps `FulfillmentOrderStatus` + `holdReason` to `PreorderFulfillmentState` (canceled, shipped, waiting, allocated).
-- **`isLate(facts, now)`** — units remain, date has passed, order is not closed/canceled; powers the Late board view.
+- `SlipVerdict` / `SlipFacts` / `judgeSlip` – compares the expected date with the new one as days in the shop's time zone. It returns `notify` when the date moves later or is cleared, and `earlier` (no email) when it moves earlier, stays on the same day, or there was no date to move.
+- `expectedDateOf(lines, releaseDateOf)` – the latest release date among lines that still have units remaining. It returns `undefined` if any waiting line has no date, or if nothing is left to wait for.
+- `expectedDateOfWaiting(waiting, dateOf)` – the same, except that an order promised the 30-day default (`defaulted === true`) keeps its own `expectedAt`.
+- `MoveFacts` / `judgeMove(facts, next, timeZone)` – wraps `judgeSlip` for one fulfillment order. It returns `undefined` when `agreedAt` is absent, because nothing was promised.
+- `DUE_NOTICE_LEAD_MS` – one day (`DAY_MS`). It is how far ahead of the expected date the sweep warns the buyer.
+- `SweepFacts` / `needsDueNotice(facts, now)` – true when `expectedAt` is within a day or already past, and no notice was already sent for that exact date (`dueNoticeFor`).
+- `slippedDays(agreedAt, expectedAt, timeZone)` – whole shop-calendar days between promised and expected, floored at 0. It is used for a board column.
+- `promisedAfterNotice(promisedAt, expectedAt)` – the date the buyer holds after a notice. It returns the new date when later, `null` to clear it, and `undefined` to leave it unchanged.
+- `BoardFacts` / `boardStateOf` – maps status and hold reason to `PreorderFulfillmentState`: canceled, shipped (closed), waiting (on hold for `awaiting_stock`), or otherwise allocated.
+- `isLate(facts, now)` – true when `expectedAt` is before `now`, the order is neither closed nor canceled, and units remain.
 
 ## Relationships
-
-- **`@domain-primitives/time`** — imports `DAY_MS` and `dayInZone` for all timezone-aware day arithmetic.
-- **`./fulfillment`** — imports `remainingOf`, `remainingOfLine`, and the `FulfillmentLine` type to filter lines and count remaining units.
-- **`@types`** — imports `FulfillmentHoldReason`, `FulfillmentOrderStatus`, `PreorderFulfillmentState` for board-state mapping.
-- **`services/notice.ts`** — consumes `judgeSlip` / `judgeMove` to decide whether and what to email.
-- **`services/preorder-sweep.ts`** — consumes `needsDueNotice` and `DUE_NOTICE_LEAD_MS` to drive the daily miss-date email.
-- **`services/release-date-impact.ts`** — consumes `judgeMove` and `expectedDateOfWaiting` when a catalogue date changes.
-- **`services/slip.ts`** — consumes `slippedDays` and `promisedAfterNotice` for the consent-reminder flow.
-- **`presenter.ts`** — consumes `boardStateOf` and `isLate` to render the staff board.
-- **`domain/index.ts`** — re-exports this module's public API for the rest of the delivery domain.
-- **`tests/unit/preorder.test.ts`** — unit-tests every exported function here.
+- Imports `DAY_MS` and `dayInZone` from `@domain-primitives/time` for the day-level comparisons.
+- Imports `remainingOf`, `remainingOfLine` and the `FulfillmentLine` type from `./fulfillment`.
+- Imports `FulfillmentHoldReason`, `FulfillmentOrderStatus` and `PreorderFulfillmentState` from `@types`.
+- `src/modules/delivery/tests/unit/preorder.test.ts` covers it, and `src/modules/delivery/tests/unit/fulfillment.test.ts` is also a neighbor.
+- The services in `services/` (`notice.ts`, `preorder-sweep.ts`, `release-date-impact.ts`, `slip.ts`) and `presenter.ts` are its neighbors in the graph. By the comments, the release-date listener and staff preview share `judgeMove` and `expectedDateOfWaiting`, and the daily sweep uses `needsDueNotice`. The board (state, lateness, slipped days) uses `boardStateOf`, `isLate` and `slippedDays`. The file itself does not show which neighbor calls which.
 
 ## Notes
-
-- Comparisons are **day-granular** on the shop's calendar, not instant-based. A date change that lands on the same shop day never triggers a notification.
-- `defaulted: true` orders (the 30-day default promise) **never** re-follow the catalogue; they keep the date they were originally promised.
-- `promisedAfterNotice` uses a three-state return: `Date` = store it, `null` = delete the stored value, `undefined` = leave whatever is there. Callers must distinguish all three.
-- The module is intentionally **pure and passive**: it never cancels, never sends mail, never mutates state. It only returns a verdict or a number that a service layer acts on.
-- `boardStateOf` maps `on_hold` + `awaiting_stock` → `waiting`, but any other hold reason still maps to `allocated`.
+- `judgeSlip` compares days, not instants, so a move within the same shop day notifies nobody.
+- `isLate` includes goods already allocated on the shelf, which the sweep deliberately leaves alone. The sweep only concerns goods not yet here, per the doc comments.
+- `DUE_NOTICE_LEAD_MS` exists so a daily sweep reaches the buyer before the date. The comment cites the FTC mail-order rule, which counts from the promised date.
+- `promisedAfterNotice` tracks the date the buyer holds, used to measure the next slip for the staff's consent reminder.

@@ -1,32 +1,32 @@
 ---
 source: src/app/static-assets.ts
-sha256: 4cfdb953c8d0af18f42565048477a1db867dbf28f6c136cc286a6ef82ef1409a
-generated_at: 2026-11-08T03:14:19.515272+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4cfdb953c8d0af18f42565048477a1db867dbf28f6c136cc286a6ef82ef1409a
+context_sha256: 8e0de5bde2ed12da05a91e330e6bf0f125927b597de9dde404889a934cb71fdf
+generated_at: 2026-11-22T02:31:40.918013+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/app/static-assets.ts
 
 ## Purpose
-
-Installs an `express.static` middleware that serves public assets (uploaded images, favicon, web manifest) from a configured directory. It exists in-process rather than behind a reverse proxy so that caching, security, and CORS behavior are covered by the project's own test suite.
+Installs the Express middleware that serves uploaded images and other public assets from disk. It is served by the app itself rather than a reverse proxy, so its safety and caching guarantees can be covered by the test suite.
 
 ## Key elements
-
-- **`installStatic(app: Express): void`** — the sole export. Registers `express.static` on the given Express app with:
-  - `dotfiles: 'ignore'` and `index: false` for security (no dotfile disclosure, no directory listing).
-  - `maxAge: '1y'` + `immutable: true` as the base, then a `setHeaders` callback overrides `Cache-Control` to a 1-day policy for any path **not** under the `images/` top-level directory.
-  - Sets `Cross-Origin-Resource-Policy: cross-origin` on every response (overriding helmet's default `same-origin`).
-- **`FIXED_NAME_CACHE_CONTROL`** — module-level constant (`public, max-age=86400`) applied to non-image assets whose names are stable across edits (favicon, `manifest.json`, etc.).
+- `installStatic(app: Express): void` — the only export. Reads `imageConfig().NODE_PUBLIC_PATH` as the root and mounts `express.static` on the app with these options:
+  - `dotfiles: 'ignore'` — files such as `.env` return 404.
+  - `index: false` — no directory index or listing.
+  - `maxAge: '1y'` with `immutable: true` — the default cache policy.
+  - `setHeaders` — sets `Cross-Origin-Resource-Policy: cross-origin` on every file. For any file whose top-level directory under the root is not `images`, it overrides `Cache-Control` with `FIXED_NAME_CACHE_CONTROL`.
+- `FIXED_NAME_CACHE_CONTROL` (private const) — `'public, max-age=86400'`, one day. It applies to fixed-name assets such as the favicon and web manifest, so edits to them reach clients.
 
 ## Relationships
-
-- **`src/app.ts`** — the caller; invokes `installStatic` during Express app construction to wire the static handler into the middleware chain.
-- **`src/infrastructure/adapters/config.ts`** — provides `imageConfig()`, whose `NODE_PUBLIC_PATH` property is the filesystem root that `express.static` serves.
-- **`package.json`** — declares the `express` (and `@types/express`) dependency used here.
+- `src/infrastructure/adapters/config.ts` — supplies `imageConfig()`, which provides `NODE_PUBLIC_PATH`, the directory being served.
+- `src/app.ts` — expected to call `installStatic` with the Express app. This is inferred from the dependency graph, not visible in this file.
+- `package.json` — the graph links it, presumably because of the `express` dependency. Nothing else in this file refers to it.
 
 ## Notes
-
-- The `images/` subdirectory is treated as content-addressed (random or hashed names), hence the aggressive 1-year immutable cache. Everything else at the top level uses a 1-day cache so edits to a favicon or web manifest propagate quickly.
-- The safety argument for using `express.static` (which sets `Content-Type` from the file extension) is documented in the comment: upstream, `resolveUploadFilename` restricts extensions to a closed set and byte-verification is performed, so an upload path can never yield `text/html`.
-- `path.relative(root, filePath).split(path.sep)` is used to identify the top-level directory name without importing a platform-agnostic helper; it assumes a single-segment top directory (`images` vs. everything else).
+- Safety against serving HTML from an upload path depends on upstream code, not on this file. According to the comments, stored extensions come from a closed set (`resolveUploadFilename`) and the file bytes are verified to match. `express.static` derives `Content-Type` from the extension.
+- `Cross-Origin-Resource-Policy: cross-origin` is set because helmet's default `same-origin` would block a paired frontend on another port from loading images.
+- The `images/` directory is treated as immutable because its filenames are random or content-hashed. Everything else gets the one-day cache.
+- The `Cache-Control` override in `setHeaders` works because `express.static` does not replace a `Cache-Control` header that is already set.
+- The root is read once when `installStatic` runs, so changing `NODE_PUBLIC_PATH` later has no effect.

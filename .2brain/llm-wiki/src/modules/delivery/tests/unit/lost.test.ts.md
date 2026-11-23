@@ -1,39 +1,51 @@
 ---
 source: src/modules/delivery/tests/unit/lost.test.ts
-sha256: beefa840c23f961237c766e1ff3a653b48fcef5ae5da11b8338853fc9957a1ee
-generated_at: 2026-11-08T05:46:06.711515+00:00
-model: ollama:qwen3.8:27b
+source_sha256: beefa840c23f961237c766e1ff3a653b48fcef5ae5da11b8338853fc9957a1ee
+context_sha256: 279f78c31a5b6bdaab7080996b65adae5c2eee249c74b56bc701da2991727ddf
+generated_at: 2026-11-22T05:04:38.801611+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/unit/lost.test.ts
 
 ## Purpose
-
-Unit tests for the pure domain arithmetic around a **lost parcel**: how the loss mutates the origin fulfillment order's lines (`withLoss`), when a later "turn-up" is allowed to be recorded (`planRestoration`), how the restoration re-applies to those lines (`withRestoration`), how a lost shipment is reported in summaries (`summarize`), and how the owed-shipment date is computed (`owedDateOf`). The file exists to pin down invariants—floor-at-zero, all-or-nothing eligibility, exact inverse of `withLoss`/`withRestoration`—without touching any service or I/O layer.
+Unit tests for the pure "lost parcel" arithmetic of the delivery domain. They cover what a loss does to the origin fulfillment order's lines, when a found parcel may be restored, what restoration puts back, and the date the owed units are promised for. No services or I/O are involved; everything is exercised through functions imported from `../../domain`.
 
 ## Key elements
-
-- **`line(productId, quantity, fields?)`** – test helper that builds a `FulfillmentLine` with `shippedQuantity: 0` and `canceledQuantity: 0` unless overridden.
-- **`shipment(...units)`** – test helper producing a `LostShipmentFacts` (id `s1`, fulfillmentOrderId `fo1`) from `[productId, qty]` pairs.
-- **`origin(lines)` / `owedOrder(lines)`** – test helpers building `RestorableFulfillmentOrder` fixtures (origin order `fo1`; owed order `fo2` linked via `sourceShipmentId: 's1'`).
-- **`describe('withLoss', …)`** – verifies subtraction of lost units from `shippedQuantity`/`quantity`, that untouched lines are preserved, that a fully-owed line is dropped and `statusOfLines` reports `'closed'`, and that quantities never go below zero.
-- **`describe('planRestoration', …)`** – verifies the eligibility gate: allowed when the shelf portion is open and nothing was owed; allowed when owed units are all still unshipped/uncanceled; counts owed units across multiple split-off orders; **returns `undefined`** (not throws) when the origin has shipped, canceled, is missing, or any owed unit has moved.
-- **`describe('withRestoration', …)`** – verifies the line-level write-back: re-ships units, pulls owed units back onto the origin, restores a previously-dropped line using the shipment's title, and confirms it is an **exact inverse** of `withLoss`.
-- **`describe('summarize …')`** – confirms a lost shipment counts as `shipped: true` but `undelivered: 0`.
-- **`describe('owedDateOf', …)`** – checks latest-future-restock-date selection, fallback to the default promise window (30 days) when a product has no future date or its date is already past, and the `defaulted` flag.
+- **Helpers**
+  - `line(productId, quantity, fields?)` builds a `FulfillmentLine` with nothing shipped or canceled unless overridden.
+  - `shipment(...units)` builds a `LostShipmentFacts` (id `s1`, from fulfillment order `fo1`).
+  - `origin(lines)` builds the origin order (`fo1`).
+  - `owedOrder(lines)` builds an order owed by the loss (`fo2`, `sourceShipmentId: 's1'`).
+- **`withLoss`**
+  - Every lost unit comes off `shippedQuantity`, and the owed units also come off `quantity`.
+  - Untouched lines are left alone.
+  - A line whose units are all owed elsewhere is dropped. The order then reads `closed`, not `canceled`, via `statusOfLines`.
+  - `shippedQuantity` never goes below zero.
+- **`planRestoration`**
+  - Returns a plan of `shipped`, `owed` and `owedFulfillmentOrderIds`.
+  - It succeeds when the shelf part is open on the origin and any owed units are still unshipped and uncanceled. Owed units are counted across several orders split off by a short delivery.
+  - It returns `undefined` in these cases:
+    - the replacement shipped, wholly or partly;
+    - the remainder was canceled;
+    - any owed unit was shipped or canceled;
+    - the origin order is missing.
+  - Orders whose `sourceShipmentId` belongs to a different loss are ignored.
+- **`withRestoration`**
+  - Re-ships the units and takes the owed ones back onto the origin.
+  - A line the loss dropped is brought back, titled from the shipment.
+  - It undoes `withLoss` exactly (round-trip test).
+- **`summarize` with a lost shipment**
+  - A lost shipment counts as `shipped: true` but `undelivered: 0`, with `remaining` still counted.
+- **`owedDateOf(dates, now, defaultDays)`**
+  - Takes the latest future restock date.
+  - It falls back to `now + default days` with `defaulted: true` if any product has no date, or if a date is already past.
 
 ## Relationships
-
-- **`src/modules/delivery/domain/index.ts`** – sole import target; provides all six tested functions (`withLoss`, `withRestoration`, `planRestoration`, `summarize`, `owedDateOf`, `statusOfLines`) and the three types (`FulfillmentLine`, `LostShipmentFacts`, `RestorableFulfillmentOrder`).
-- **`src/modules/delivery/domain/lost.ts`** – expected implementation home for `withLoss`, `withRestoration`, and `planRestoration` (the core subject of this file).
-- **`src/modules/delivery/domain/fulfillment.ts`** – expected implementation home for `statusOfLines`, `summarize`, `owedDateOf`, and the shared types.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** – sibling test file exercising the other domain functions; shares the same helper patterns and import path.
-- **`src/modules/delivery/services/lost.ts`** – the service layer that would call these domain functions in production; this test deliberately bypasses it to keep the tests pure.
+- Imports `owedDateOf`, `planRestoration`, `statusOfLines`, `summarize`, `withLoss`, `withRestoration` and the types `FulfillmentLine`, `LostShipmentFacts`, `RestorableFulfillmentOrder` from the domain barrel, `src/modules/delivery/domain/index.ts`. The logic under test lives in `src/modules/delivery/domain/lost.ts` and `src/modules/delivery/domain/fulfillment.ts`.
+- The sibling `src/modules/delivery/tests/unit/fulfillment.test.ts` covers the related fulfillment domain.
+- The service files listed as neighbors (`src/modules/delivery/services/lost.ts`, `cut.ts`, `deliver.ts`, `fulfill.ts`, `notify.ts`, `read.ts`, `digest.ts`) are not imported here, and neither are `src/app/error-handling.ts` or `tests/unit/scenarios/webhook-sink.test.ts`.
 
 ## Notes
-
-- **`planRestoration` signals rejection with `undefined`, not an exception.** Tests assert `toBeUndefined()` for every ineligible case. Callers in the service layer must null-check.
-- **All-or-nothing invariant:** a single shipped or canceled unit on the origin *or* on any owed order invalidates the entire restoration plan, even for other products. This is a deliberate design choice, not a per-line check.
-- **Inverse guarantee:** the `undoes withLoss exactly` test is the strongest contract in the file—any refactor of `withLoss` or `withRestoration` must keep them exact inverses.
-- **No mocks, no async, no service imports.** The file is intentionally self-contained at the domain level; it will not catch integration regressions in `services/lost.ts` or the cut/fulfill/digest pipeline.
-- **`owedDateOf` treats a past date identically to `undefined`**—both trigger the default-window fallback and set `defaulted: true`.
+- The tests use fixed dates (`now = 2026-10-26T10:00:00Z`) and a `DAY` constant, so they don't depend on the real clock.
+- Tests use the global `describe`/`it`/`expect` with no explicit import.

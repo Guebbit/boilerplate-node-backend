@@ -1,31 +1,41 @@
 ---
 source: src/modules/returns/tests/unit/refund-due.test.ts
-sha256: d85d2ffb74fe57c26dc48d121c2c1457b1cae8b81d5c4ae2d68fbd75d3679036
-generated_at: 2026-11-14T21:49:16.257569+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 65dabfb452f53807f2eb53d637c7e77ce7b957671d67b4a5604b88ec4515bfa7
+context_sha256: 3f7db2c4b12ad01e1a0454176c75a98e26a3cbcf5ee6d89e0d3d9a73c1f7c2d4
+generated_at: 2026-11-22T07:39:39.407124+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/tests/unit/refund-due.test.ts
 
 ## Purpose
-Unit tests for the refund-deadline computation (`refundDueByOf`) and the two proof-of-sending helpers (`proofOpensRefund`, `proofOpenedRefund`). They verify that the computed due date and `dueRule` conform to the EU directives (2011/83/EU for withdrawal, 2019/771 for faulty/wrong items) across all return-reason branches and edge cases (nothing arrived, proof only, goods after deadline, goodwill).
+Unit tests for the legal refund deadline of a return. They cover Directive 2011/83/EU Art. 13(1) and (3) for a withdrawal and Directive 2019/771 Art. 16(3)(b) for a faulty item, counted on the shop's calendar (`Europe/Rome`). The file pins down which date applies, and when no date applies, for each return reason.
 
 ## Key elements
-- **`refundDueByOf`** (imported from `../../domain`) — the function under test. Takes `{ reason, withdrawalDueBy?, receivedAt?, proofOfSendingAt? }` and returns `{ dueBy, dueRule }`; the tests assert it is absent (via `toBeUndefined`) for certain inputs.
-- **`proofOpensRefund(reason)`** (imported from `../../domain`) — returns `true` only for `'withdrawal'`; tested via `it.each` over all four reasons.
-- **`proofOpenedRefund(state)`** (imported from `../../domain`) — returns whether the current return state has been opened by a proof of sending; tested for withdrawal-with-proof, withdrawal-without-proof, and defective-with-proof.
-- **`withdrawalRefundDueBy(told, tz)`** (imported from `@modules/orders`) — computes the 14-day statutory withdrawal deadline; used to build test fixtures.
-- **`END_OF_DAY_15_WINTER`** — fixed timestamp (`2026-03-15T22:59:59.999Z`) representing end of day 15 in Rome (UTC+1), used as the expected deadline for withdrawal cases.
+- `ROME`: the zone the deadline is read in (`Europe/Rome`).
+- `END_OF_DAY_15_WINTER`: the expected deadline for a withdrawal told on 2026-03-01. It is `2026-03-15T22:59:59.999Z`, the end of day 15 in Rome (UTC+1).
+- `describe('refundDueByOf')`: the main suite. It checks the following:
+  - **Withdrawal:**
+    - The deadline is the end of day 15 when the goods arrive earlier (day 3).
+    - If the goods arrive after that date, the deadline is the arrival moment.
+    - A proof of sending alone leaves the deadline at the end of day 15.
+    - The earlier of the proof and the goods is the one counted against the date.
+    - With nothing back yet, the deadline is the withdrawal date alone.
+    - All of these (except the "earlier of the proof and the goods" case, which only checks `dueBy`) expect `dueRule: 'withdrawal'`.
+  - **Faulty items:**
+    - `defective` is due when the goods arrive.
+    - `wrong_item` is due at the proof-of-sending date if the proof came before the goods.
+    - Both expect `dueRule: 'faulty'`.
+  - **No date (asserted with `toBeUndefined`):**
+    - A `defective` return with nothing back.
+    - An `other` (goodwill) return, whatever came back.
+- `describe('proofOpensRefund')`: a table test. It expects `true` only for `withdrawal`, and `false` for `defective`, `wrong_item` and `other`.
+- `describe('proofOpenedRefund')`: expects `true` for a withdrawal with a proof, and `false` for a withdrawal with no proof or for a faulty item with a proof (the proof only records there).
 
 ## Relationships
-- **`src/modules/returns/domain/refund-due.ts`** — implements the three functions under test; this file exercises their public behavior.
-- **`src/modules/returns/domain/index.ts`** — barrel file that re-exports `refundDueByOf`, `proofOpensRefund`, `proofOpenedRefund`; the test imports from this barrel (`../../domain`).
-- **`src/modules/orders/index.ts`** — re-exports `withdrawalRefundDueBy`; the test imports it from `@modules/orders`.
-- **`src/modules/orders/domain/withdrawal.ts`** — where `withdrawalRefundDueBy` is implemented; supplies the 14-day deadline that feeds into the withdrawal test cases.
+- Imports `refundDueByOf`, `proofOpensRefund` and `proofOpenedRefund` from `src/modules/returns/domain/index.ts`, which exposes the implementation in `refund-due.ts`. These are the units under test.
+- Imports `withdrawalRefundDueBy` from `@modules/orders` (`src/modules/orders/index.ts`, with the logic in `src/modules/orders/domain/withdrawal.ts`). The tests use it to compute the `withdrawalDueBy` input from the date the withdrawal was told and `ROME`.
 
 ## Notes
-- All withdrawal deadlines are asserted against a **Rome / winter (UTC+1)** instant. If the system ever switches timezone handling or DST rules, the hardcoded `END_OF_DAY_15_WINTER` constant will break.
-- For `faulty` / `wrong_item` reasons the `dueRule` is `'faulty'` (not `'defective'` or `'wrong_item'`) — the test asserts this collapsed label.
-- `'other'` (goodwill) returns always yield an absent result (asserted with `toBeUndefined`), regardless of what dates are present.
-- The "earlier of proof and goods" rule means `proofOfSendingAt` and `receivedAt` compete; the test confirms the earlier one wins when both are present.
-- `proofOpenedRefund` is `false` for defective even when a proof date exists — the proof there is purely record-keeping, not deadline-opening.
+- The doc comment on `END_OF_DAY_15_WINTER` says "day after `day`'s 14th", while the test names and the value describe it as the end of day 15. The expected value is the same either way.
+- The fixtures are all in March (winter time, UTC+1), so the tests never exercise a daylight-saving transition.

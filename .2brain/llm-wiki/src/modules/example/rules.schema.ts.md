@@ -1,29 +1,25 @@
 ---
 source: src/modules/example/rules.schema.ts
-sha256: c67d6e5da34890fd2089d2b65d0edc1cc6172646e06131e4c7568e235242d6e8
-generated_at: 2026-11-14T20:00:11.367554+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:11:19.447132+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/rules.schema.ts
 
 ## Purpose
-
-Defines the Zod validation schema for this module's `rules.yaml` file and declares what the `npm run regenerate` codegen step should emit from it. Acts as the single source of truth for the audit-action and analytics-event vocabulary owned by the `example` module.
+Defines the schema of the example module's `rules.yaml` (audit action names and analytics event names, kept as data that the PHP twin copies) and declares what `npm run regenerate` writes from it. It is the module-local piece of the shared-rules system.
 
 ## Key elements
-
-- **`rulesSchema`** — A `z.strictObject` with two fields:
-  - `audit`: a `keyedListSchema` of dotted `noun.verb` strings (1–3 segments, lowercase/digits/underscores). Must be unique across all modules (enforced by `tests/cross-cutting/audit-actions.test.ts`).
-  - `analytics`: a `keyedListSchema` of snake-case event names (lowercase words separated by underscores).
-- **`rulesGenerate`** — A `GenerateSpec` telling the codegen pipeline to write `src/modules/example/rules.generated.ts` containing two keyed-list exports: `exampleAuditActions` (from `audit`) and `exampleAnalyticsEvents` (from `analytics`).
+- `rulesSchema` — strict Zod object (`z.strictObject`) describing `rules.yaml`, with two fields:
+  - `audit` — a keyed list whose names must match `^[a-z][\d_a-z]*(\.[a-z][\d_a-z]*){1,3}$`, i.e. dotted `noun.verb` strings with 2–4 segments. Names must be unique across modules (checked by `tests/cross-cutting/audit-actions.test.ts`).
+  - `analytics` — a keyed list whose names must be snake_case with at least two lowercase-letter words (`^[a-z]+(_[a-z]+)+$`).
+- `rulesGenerate` — a `GenerateSpec` whose output target is `rules.generated.ts` in this module's directory, with two `keyed-list` exports:
+  - `exampleAuditActions`, from the `audit` field.
+  - `exampleAnalyticsEvents`, from the `analytics` field.
 
 ## Relationships
-
-- **`src/infrastructure/config/shared-rules/generate-spec.ts`** — Provides the `keyedListSchema` helper (used to type both schema fields as ordered, unique-string lists) and the `GenerateSpec` interface that `rulesGenerate` conforms to. This file is the consumer; that file is the infrastructure contract.
+- Imports `keyedListSchema` and the `GenerateSpec` type from `src/infrastructure/config/shared-rules/generate-spec.ts`. `keyedListSchema` builds both list fields, and `GenerateSpec` types `rulesGenerate`, which the shared-rules generator consumes to produce the output file.
 
 ## Notes
-
-- This file is *declarative only*: it does not execute at runtime in the app. Its two exports are read by the codegen tool (`generate-spec.ts` consumer) and by the Zod validation test. The actual typed constants (`exampleAuditActions`, `exampleAnalyticsEvents`) live in the generated `rules.generated.ts`, not here.
-- The module docblock notes this file is the "data the PHP twin copies," so the schema doubles as a cross-language contract.
-- Naming conventions are enforced by regex, not by Zod's built-in helpers: audit keys use dotted `noun.verb` form; analytics keys use `_`-separated lowercase words. See `docs/tools/analytics.md#naming` for the broader convention.
+- `z.strictObject` rejects any key in `rules.yaml` other than `audit` and `analytics`.
+- The generated output is rewritten by `npm run regenerate`, so it should not be edited by hand.

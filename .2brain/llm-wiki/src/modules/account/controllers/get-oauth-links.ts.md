@@ -1,30 +1,27 @@
 ---
 source: src/modules/account/controllers/get-oauth-links.ts
-sha256: 75ab3a9f541d7934a231ea76806ccca54f9b46f1d981ed2db8a225611b813e71
-generated_at: 2026-11-08T04:01:59.478526+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 75ab3a9f541d7934a231ea76806ccca54f9b46f1d981ed2db8a225611b813e71
+context_sha256: 05bcd8267e5fefe450fab55b5f80f2a93d1513675014d1c7c4b734a99916a790
+generated_at: 2026-11-22T03:21:38.814622+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/get-oauth-links.ts
 
 ## Purpose
-
-Thin HTTP adapter for the `GET /account/oauth/links` endpoint. It extracts the caller's user ID from the auth context, delegates to `accountService.listOAuthLinks`, shapes the result with a presenter, and writes a standard success or error response. No business logic lives here.
+Controller for `GET /account/oauth/links`. It is a thin HTTP adapter that returns the authenticated caller's connected sign-in providers, with when each was connected, by delegating to `accountService.listOAuthLinks`.
 
 ## Key elements
-
-- **`getOAuthLinks(request, response)`** (exported) — Express handler. Calls `accountService.listOAuthLinks(request.authContext!.id)`, pipes the result through `presentOAuthLinks`, and sends it via `successResponse`. Errors are funneled to `catchAs(response, 'getOAuthLinks')`.
+- `getOAuthLinks(request, response)`: the only export. It reads the caller's id from `request.authContext!.id` and calls `accountService.listOAuthLinks(id)`. It maps the result through `presentOAuthLinks` and sends it with `successResponse<OAuthLinks>`. Any rejection goes to `catchAs(response, 'getOAuthLinks')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — provides `successResponse` for the 200 shape.
-- **`src/infrastructure/http/controller.ts`** — provides `catchAs`, the uniform error-catch helper used in the `.catch` branch.
-- **`src/modules/account/services/index.ts`** — source of `accountService`; the controller calls its `listOAuthLinks` method.
-- **`src/modules/account/presenter.ts`** — source of `presentOAuthLinks`, which transforms the raw service output into the wire-format `OAuthLinks` object.
-- **`src/types/index.ts`** — defines the `OAuthLinks` type used as the generic parameter of `successResponse`.
-- **`src/modules/account/routes.ts`** — registers `getOAuthLinks` as the handler for the `GET /account/oauth/links` route.
+- `src/modules/account/services/index.ts`: supplies `accountService`, which does the actual lookup of OAuth links.
+- `src/modules/account/presenter.ts`: supplies `presentOAuthLinks`, which shapes the service result for the response.
+- `src/infrastructure/http/response.ts`: supplies `successResponse`, which writes the success response.
+- `src/infrastructure/http/controller.ts`: supplies `catchAs`, which handles errors and uses the label `'getOAuthLinks'`.
+- `src/types/index.ts`: supplies the `OAuthLinks` type (imported as `@types`), used as the generic parameter of `successResponse`.
+- `src/modules/account/routes.ts`: the route module that registers this handler for the endpoint. This is inferred from the module doc and the neighbor graph, because the file itself doesn't reference it.
 
 ## Notes
-
-- `request.authContext!.id` uses a non-null assertion; the controller assumes an upstream auth middleware has already populated `authContext`. If that middleware is skipped, this will throw a TypeError before reaching the service.
-- The handler is a promise chain (`.then`/`.catch`) rather than `async/await`, consistent with the `catchAs` pattern used across the codebase's controllers.
+- `request.authContext!` is a non-null assertion. The handler assumes auth middleware has already populated `authContext`, and it does no check of its own.
+- The handler is promise-chained and not `async`. Errors are handled only through the trailing `.catch(catchAs(...))`.

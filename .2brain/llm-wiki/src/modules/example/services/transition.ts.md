@@ -1,47 +1,46 @@
 ---
 source: src/modules/example/services/transition.ts
-sha256: 40b7d77805a69151e21b5f9db4ccdd595ac3af2766051a4f263c755f04227262
-generated_at: 2026-11-08T05:54:24.339233+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ff50732e1974d1be1114ee5532e8101054471e474496b01bd6a62fba06dbb6dd
+context_sha256: e33ea3e610c644fb4543dbd355bbe0d9b2f6aaeb9c9ca70a3bebb5d550e6ab5f
+generated_at: 2026-11-22T05:13:15.221277+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/services/transition.ts
 
 ## Purpose
-Implements the lifecycle "door" for the Example entity — the single point where a draft, published, or archived example can change status. Each transition is a standalone service function (not a field on the update payload) that checks domain legality, performs a conditional write (so only one racer lands), and fires side effects (outbox announcement, analytics, audit) only for the winner.
+Implements the lifecycle "doors" for an example: moving it between `draft`, `published` and `archived`, one exported function per event. Each door checks the move against the domain, performs a conditional write so that only one of two racing requests lands, and runs side effects (audit, outbox announcement, analytics) only for the winner.
 
 ## Key elements
-
-- **`publishById(id, context)`** — Exports. Moves a draft to `published`. Triggers the outbox announcement (`EXAMPLE_PUBLISHED`) and an analytics event in the same transaction as the write.
-- **`archiveById(id, context)`** — Exports. Moves a draft or published example to `archived`.
-- **`unarchiveById(id, context)`** — Exports. Moves an archived example back to `draft`.
-- **`applyEvent(event, id, context)`** (internal) — Shared pipeline for all three: loads via `findScoped` with an access filter, checks domain legality via `canApply`, calls `writeMove`, then records audit and shapes the response.
-- **`writeMove(example, to, context)`** (internal) — Performs the conditional `moveFrom` write. When moving to `published`, wraps the write and outbox row in `announceInTransaction`; otherwise a plain conditional write. Stamps `publishedAt` only on the first transition into published (delegated to `shouldStampPublishedAt`).
-- **`notAllowed(event, status)`** (internal) — Builds the uniform 409 response using per-event error codes and i18n message keys from the `REFUSALS` table.
-- **`analysePublished(example, context)`** (internal) — Emits the `EXAMPLE_PUBLISHED` analytics event after a successful publish write.
-- **`REFUSALS`** — Static map of `ExampleEvent → { code, message }` used to produce localized 409 bodies.
-- **`TransitionResult`** — Union type `ResponseSuccess<Example> | ResponseReject` returned by every door function.
+- `publishById(id, context)`: applies the `publish` event.
+- `archiveById(id, context)`: applies the `archive` event (draft or published to archived).
+- `unarchiveById(id, context)`: applies the `unarchive` event (archived back to draft).
+- `applyEvent` (private): shared flow.
+  1. It loads the example with `findScoped`, filtered by `accessibleFilterFor(caller, 'Example', 'update')`. A miss returns 404.
+  2. It checks `canApply(event, status)`. If the check fails, it returns 409.
+  3. It computes the target status with `statusAfter` and calls `writeMove`. A `null` result returns 409.
+  4. On success it records an audit entry and returns the example through `presentForCaller` with a 200.
+- `writeMove` (private): builds the fields `{status, publishedAt}`. `publishedAt` is stamped only when `shouldStampPublishedAt` says so; otherwise the existing value is kept. For non-published targets it calls `exampleRepository.moveFrom(id, currentStatus, fields)`. For `published` it runs the same write inside `announceInTransaction`, which adds an `example.published` outbox event carrying `exampleId`, `userId` and `title`. After that, it emits analytics.
+- `analysePublished` (private): emits the `EXAMPLE_PUBLISHED` analytics event with `example_id`.
+- `notAllowed` / `REFUSALS`: build the 409 response. Each event has its own error code and i18n message key (`EXAMPLE_NOT_PUBLISHABLE`, `EXAMPLE_NOT_ARCHIVABLE`, `EXAMPLE_NOT_UNARCHIVABLE`). The status is passed in as the message parameter and as `details`.
+- `TransitionResult`: `ResponseSuccess<Example> | ResponseReject`.
 
 ## Relationships
-
-- **`src/modules/example/domain/index.ts`** — Imports `canApply`, `isPublished`, `shouldStampPublishedAt`, `statusAfter`, and the `ExampleEvent` type. The domain decides *whether* a move is legal; this file decides *how* to execute it.
-- **`src/modules/example/repository.ts`** — Calls `exampleRepository.findScoped` (read with access scope) and `exampleRepository.moveFrom` (conditional write).
-- **`src/kernel/outbox.ts`** — Calls `announceInTransaction` so the `EXAMPLE_PUBLISHED` outbox row and the status write commit atomically.
-- **`src/modules/example/events.ts`** — Imports `EXAMPLE_PUBLISHED` as the outbox event name.
-- **`src/modules/example/analytics.ts`** — Imports `exampleAnalyticsEvents` for the analytics event name.
-- **`src/modules/example/audit.ts`** — Imports `exampleAuditActions` for the audit action constant.
-- **`src/modules/example/model.ts`** — Imports `ExampleDocument` as the repository document type.
-- **`src/infrastructure/http/response.ts`** — Uses `generateSuccess` / `generateReject` for API response shaping.
-- **`src/infrastructure/i18n/index.ts`** — Uses `t()` for localized error messages.
-- **`src/infrastructure/observability/audit.ts`** — Calls `recordAudit` after every successful transition.
-- **`src/infrastructure/observability/analytics/index.ts`** — Calls `emitAnalyticsEvent` and `buildAnalyticsBase` on publish.
-- **`src/kernel/access/query.ts`** — Calls `accessibleFilterFor` to scope the read to what the caller may update (produces the 404-for-strangers behavior).
-- **`src/modules/example/services/index.ts`** — Re-exports or aggregates this module alongside sibling services (e.g. `owner.ts`, referenced via `presentForCaller`).
+- `src/modules/example/domain/index.ts` and `src/modules/example/domain/lifecycle.ts`: supply `canApply`, `statusAfter`, `isPublished`, `shouldStampPublishedAt` and the `ExampleEvent` type. These decide what is allowed.
+- `src/modules/example/repository.ts`: `findScoped` for the scoped read and `moveFrom` for the conditional write. `moveFrom` accepts an optional session.
+- `src/kernel/access/query.ts`: `accessibleFilterFor` gives the visibility scope.
+- `src/kernel/outbox.ts`: `announceInTransaction` ties the outbox row to the publish write.
+- `src/modules/example/events.ts`: `EXAMPLE_PUBLISHED` event name.
+- `src/modules/example/audit.ts` and `src/infrastructure/observability/audit.ts`: the example audit actions (the status-changed action) and `recordAudit`.
+- `src/modules/example/analytics.ts` and `src/infrastructure/observability/analytics/index.ts`: `exampleAnalyticsEvents`, `emitAnalyticsEvent`, `buildAnalyticsBase`.
+- `src/infrastructure/http/response.ts`: `generateSuccess` and `generateReject`.
+- `src/infrastructure/i18n/index.ts`: `t` for messages.
+- `src/modules/example/model.ts`: `ExampleDocument` type.
+- `./owner`: `presentForCaller` shapes the response.
+- `src/modules/example/services/index.ts` and `src/infrastructure/i18n/context.ts` are in the graph, but this file shows no direct interaction with them.
 
 ## Notes
-
-- **No `If-Match` / ETag.** Concurrency safety comes from the conditional write (`moveFrom` keyed on the *read* status), not an optimistic token. Two racers both pass `canApply`, but only one's `moveFrom` matches; the other gets `null` → 409.
-- **Visibility before legality.** The access-scoped read (`accessibleFilterFor`) runs *before* the domain check. A caller without `update` gets a 404, never a 409, so existence is not leaked.
-- **`publishedAt` is stamped exactly once.** `shouldStampPublishedAt` guards against overwriting the original timestamp on re-publish (e.g. archive → unarchive → publish).
-- **Analytics are fire-and-forget side effects**, *not* part of the outbox transaction. They run after the write succeeds but are not rolled back if a later step fails (there is no later step, but the distinction matters for reasoning about consistency).
-- **Delete criterion (from module doc):** if a module's lifecycle is only create/edit/delete, this file should not exist. See `orders/services/override.ts` for a step-up-gated variant.
+- Visibility is checked before legality. A caller who cannot edit the example gets a 404, so they learn nothing about it.
+- There is no `If-Match`. The write is conditional on the status that was read, so a racing loser gets the same 409 as an illegal move.
+- Audit and analytics run only after a successful write. The audit entry records `{event, from, to}`.
+- The module doc says to delete this file if the module has no lifecycle beyond create, edit and delete. It points to `orders` (`src/modules/orders/services/override.ts`) for a step-up-gated door.

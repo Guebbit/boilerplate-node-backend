@@ -1,36 +1,33 @@
 ---
 source: src/modules/payments/authorization.yaml
-sha256: f0b08fec7abc3f37d042240a02a0f60115629aef8263b8bf21939ab9d23f1a75
-generated_at: 2026-11-08T07:16:26.033182+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f0b08fec7abc3f37d042240a02a0f60115629aef8263b8bf21939ab9d23f1a75
+context_sha256: beadf67f4bb5903f903abfa83e28fdea425d0aa1c7c6a6f80ff9df332901d1f4
+generated_at: 2026-11-22T06:40:32.248325+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/authorization.yaml
 
 ## Purpose
-
-Declares the fine-grained authorization rules and named rule-sets for the payments module. Each rule binds an action (`read`, `display`, `create`) to a subject (`Payment`, `Refund`) at tenant scope, and the `sets` block groups individual rules into reusable permissions that an identity or role can be granted.
+Declares the authorization rules and permission sets for the `payments` module. Rules define which actions are allowed on which subjects; sets bundle those rules into named, human-meaningful permissions that can be granted to roles.
 
 ## Key elements
-
-- **`rules`** — Four permission entries:
-  - `read:Payment` — caller may read only their own payments; enforced by the `conditions: { userId: $caller.id }` filter and `credential: false`.
-  - `display:Payment` — broader read across all payments in the tenant (support-desk / shop-manager use case).
-  - `create:Payment` — record an out-of-band payment (cash, wire, manual). Marked `stepUp: critical` because the admin's assertion is the sole proof of receipt.
-  - `create:Refund` — issue a full or partial refund. Marked `stepUp: critical` because it is the one action whose effect is irreversible.
-- **`sets`** — Four named groupings, each wrapping exactly one rule:
+- **Rules** (all `module: payments`, `scope: tenant`):
+  - `read:Payment` — read the caller's own payments. Has `credential: false` and condition `userId: $caller.id`.
+  - `display:Payment` — read every payment in the shop (support desk, shop manager).
+  - `create:Payment` — record a payment received outside the provider (cash, transfer, by hand). `stepUp: critical`.
+  - `create:Refund` — return money to the payer, whole or partial. `stepUp: critical`.
+- **Sets** (each wraps exactly one rule):
   - `PaymentOwn` → `read:Payment`
   - `PaymentDisplay` → `display:Payment`
   - `PaymentRecording` → `create:Payment`
   - `PaymentRefunding` → `create:Refund`
 
 ## Relationships
-
-- **`src/modules/payments/module.yaml`** — Parent module manifest. Every rule here carries `module: payments`, tying these permissions into the module's registration; the module file is expected to reference or aggregate this authorization definition.
-- **`src/modules/payments/openapi.yaml`** — The OpenAPI spec for the payments endpoints. The rules in this file gate access to those operations (e.g., a `POST /payments` handler checks `create:Payment`; a `GET /payments` handler checks `read:Payment` or `display:Payment`).
+- `src/modules/returns/authorization.yaml` has the same file name and the same rules/sets structure, and is a sibling authorization declaration for another module. The file itself doesn't reference it.
+- `openapi.yaml` and `asyncapi.webhooks.yaml` are in the same module. This file contains no explicit references to either.
 
 ## Notes
-
-- `read:Payment` is the only rule with an explicit `conditions` block (row-level filter on `userId`) and the only one with `credential: false`; all others operate on the full tenant dataset.
-- The two `critical` step-up rules (`create:Payment`, `create:Refund`) share the same escalation tier even though one is an inbound and one an outbound money movement — the codebase treats both as admin-asserted, non-provider-verified transactions.
-- Sets are 1-to-1 with rules here; there is no set that bundles multiple rules. If a role needs both `PaymentRecording` and `PaymentRefunding`, it must be granted both sets individually.
+- `stepUp: critical` marks the two money-affecting actions (recording a payment, refunding). The comments explain the reasoning: the admin's word is the only proof, and a stolen access token says nothing about how recently its holder entered their password. Refunds are described as irreversible by any later request.
+- "Own" access is a condition-based rule (`userId: $caller.id`), whereas `display` is unconditioned shop-wide read access.
+- Rule references in sets use the `action:Subject` form.

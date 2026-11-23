@@ -1,31 +1,30 @@
 ---
 source: src/modules/tasks/authorization.yaml
-sha256: 18d9c3a5a6896cb14a256965f6694a5bf7a30e491c23662c674bf8fec2fee0e2
-generated_at: 2026-11-08T08:31:11.147861+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 18d9c3a5a6896cb14a256965f6694a5bf7a30e491c23662c674bf8fec2fee0e2
+context_sha256: 5722d624fa12066f6138181336b0ffaf357b3da08d6f4f3e6c32a8cca63b3d4c
+generated_at: 2026-11-22T07:57:05.069722+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/tasks/authorization.yaml
 
 ## Purpose
-
-Declares the authorization rules and composable permission sets that govern who can read, update, or delete `Task` resources within the `tasks` module, scoped at the tenant level.
+Declares the authorization rules and permission sets for the `tasks` module. It defines which actions can be performed on the `Task` subject, and bundles those actions into named sets that can be granted to callers.
 
 ## Key elements
-
-- **`rules`** — Three action rules on the `Task` subject (module: `tasks`, scope: `tenant`):
-  - `read` — View tasks (contact messages and system tasks tied to a permission set the caller holds).
-  - `update` — Work a task (resolve, mark spam, reopen, assign, add note). System tasks additionally require the task's own permission set.
-  - `delete` — Remove a task. System tasks additionally require the task's own permission set.
-- **`sets`** — Two named permission sets:
-  - `TaskDisplay` — Bundles `read:Task`.
-  - `TaskManagement` — Bundles `update:Task` and `delete:Task`.
+- **`rules`**: three tenant-scoped rules on subject `Task` (module `tasks`):
+  - `read`: read tasks, namely contact messages and the system tasks of a permission set the caller holds.
+  - `update`: work a task (resolve, mark as spam, reopen, assign, add a note). A system task also needs the task's own permission set.
+  - `delete`: remove a task. A system task also needs the task's own permission set.
+- **`sets`**: two named permission sets (module `tasks`):
+  - `TaskDisplay`: contains `read:Task`.
+  - `TaskManagement`: contains `update:Task` and `delete:Task`.
 
 ## Relationships
-
-- **`src/modules/tasks/openapi.yaml`** — The OpenAPI specification for the tasks module. The permission sets defined here (`TaskDisplay`, `TaskManagement`) are the authorization gates applied to the endpoints declared in that spec; a caller must hold the corresponding set to invoke the matching operations.
+- Sits beside `src/modules/tasks/openapi.yaml`, the tasks module's API spec. Nothing in this file references it directly, so any link between the two is by convention, not by an explicit reference.
 
 ## Notes
-
-- "System tasks" carry an extra authorization dimension: beyond the caller's own permission set, the task itself defines a required permission set that must also be held. This is an additional check on top of the standard `read`/`update`/`delete` rules.
-- `TaskDisplay` is a strict subset of `TaskManagement`; granting `TaskManagement` implicitly covers the read capability only if the application resolves both sets (the YAML itself does not express inheritance).
+- Rule identifiers in sets use the `action:Subject` format (e.g. `read:Task`).
+- `TaskManagement` does not include `read`. Per the descriptions, holders would also need `TaskDisplay` to read tasks.
+- For system tasks, `update` and `delete` require the task's own permission set in addition to the rule itself. `read` is likewise limited to system tasks of a permission set the caller holds.
+- All rules use `scope: tenant`.

@@ -1,36 +1,40 @@
 ---
 source: src/modules/locales/controllers/update-entity-translations.ts
-sha256: faa0f79a097a3dd51c282ea7b081fc0c194f5ebd86ff848a3c9d0d62d9becfcd
-generated_at: 2026-11-14T20:18:45.147423+00:00
-model: ollama:qwen3.8:27b
+source_sha256: faa0f79a097a3dd51c282ea7b081fc0c194f5ebd86ff848a3c9d0d62d9becfcd
+context_sha256: a0db2e1f6566e038e9315bc75a94db6e6106a6772fd4ec9cf886a348af553f99
+generated_at: 2026-11-22T05:44:01.077401+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/controllers/update-entity-translations.ts
 
 ## Purpose
-
-Thin HTTP adapters for `PUT` and `PATCH /locales/translations/:entityType/:id`. Both handlers delegate to `localeService` but differ in semantics: PUT replaces the full translation set (unlisted locales are deleted), PATCH merges per RFC 7396 (absent keys are left alone). The two handlers share a single factory so request parsing, ETag/If-Match handling, and error mapping are written once.
+Thin Express HTTP adapters for `PUT` and `PATCH /locales/translations/:entityType/:id` (both admin). They validate the request, apply an `If-Match` precondition, call the locale service, and return the entity's updated translations. PUT replaces the whole set (a stored locale the body doesn't name is deleted, and fields a sent locale omits are cleared). PATCH merges per RFC 7396 (an object merges field by field, `null` deletes, an absent key is left alone). It mirrors the replace/merge split used by `update-locale-entries.ts`.
 
 ## Key elements
-
-- **`writeEntityTranslations`** (module-private factory) — Builds an Express handler from a Zod schema, a service-write callback, and an operation name. Handles param extraction (`entityType`, `id`), body validation, `requireId` lookup, `withIfMatch` precondition, ETag setting, and `catchAs` error mapping in one flow.
-- **`replaceEntityTranslations`** (export) — The PUT handler. Schema: `ReplaceEntityTranslationsBody`; service call: `localeService.replaceEntityTranslations`; logged as `'replaceEntityTranslations'`.
-- **`updateEntityTranslations`** (export) — The PATCH handler. Schema: `UpdateEntityTranslationsBody`; service call: `localeService.updateEntityTranslations`; logged as `'updateEntityTranslations'`.
+- `writeEntityTranslations(schema, write, operation)` — private handler factory shared by both routes. The handler:
+  1. Reads `entityType` and `id` from the path params.
+  2. Runs `requireId`, using `entityNotFoundError(entityType, entityId)` as the not-found response.
+  3. Runs `parseBody(schema, request.body, response)`.
+  4. Calls `write(...)` inside `withIfMatch`, passing `callerContextOf(request)`.
+  5. Returns early if `refused(response, result)`. Otherwise it calls `setEtag(response, result.data)` and `successResponse(response, result.data)`.
+  6. Failures go through `catchAs(response, operation)`.
+- `replaceEntityTranslations` — the PUT handler. It uses the `ReplaceEntityTranslationsBody` schema and `localeService.replaceEntityTranslations`.
+- `updateEntityTranslations` — the PATCH handler. It uses the `UpdateEntityTranslationsBody` schema and `localeService.updateEntityTranslations`.
 
 ## Relationships
-
-- **`../services` (`localeService`)** — Both handlers pass the validated body straight to the corresponding service method; this file contains no business logic.
-- **`../services/translations`** — Imports `entityNotFoundError` (used in the `requireId` not-found branch) and the `EntityTranslationsResult` type (returned by the service, forwarded to the client).
-- **`@infrastructure/http/controller`** — `catchAs`, `parseBody`, `refused` provide the uniform error/validation/409 plumbing.
-- **`@infrastructure/http/preconditions`** — `withIfMatch` enforces optimistic concurrency; `setEtag` writes the new revision tag so the caller's next save doesn't require a re-read.
-- **`@infrastructure/http/ids`** — `requireId` resolves the `:id` param against the DB and short-circuits with a 404 if absent.
-- **`@infrastructure/http/request`** — `callerContextOf` extracts the authenticated `CallerContext` passed to the service call.
-- **`@infrastructure/http/response`** — `successResponse` and the `ResponseSuccess`/`ResponseReject` union types shape the final reply.
-- **`@types`** — `CallerContext`, `ReplaceEntityTranslationsRequest`, `UpdateEntityTranslationsRequest` are the typed request envelopes used in the Express `Request` generic.
-- **`src/modules/locales/routes.ts`** — Wires these two exports onto the `PUT`/`PATCH` routes under `/locales/translations/:entityType/:id`.
+- `src/infrastructure/http/controller.ts` supplies `parseBody`, `refused` and `catchAs`.
+- `src/infrastructure/http/ids.ts` supplies `requireId`.
+- `src/infrastructure/http/preconditions.ts` supplies `withIfMatch` and `setEtag`. The new ETag is returned so the caller's next save needs no re-read.
+- `src/infrastructure/http/request.ts` supplies `callerContextOf`.
+- `src/infrastructure/http/response.ts` supplies `successResponse` and the `ResponseSuccess` and `ResponseReject` types.
+- `src/modules/locales/services/index.ts` supplies `localeService`.
+- `src/modules/locales/services/translations.ts` supplies `entityNotFoundError` and the `EntityTranslationsResult` type.
+- `src/types/index.ts` supplies `CallerContext` and the request body types. `src/types/auth-context.ts` is a related neighbor in the same type layer.
+- `src/modules/locales/routes.ts` is the neighbor that wires these two handlers to their routes.
 
 ## Notes
-
-- PUT vs. PATCH is purely a body-schema + service-method swap; the HTTP-layer code (validation, ETag, error mapping) is identical. If a third "merge with delete" mode is ever needed, extend the factory rather than adding another handler.
-- The response body is **not** re-serialized through a `<EntityTranslations>` OpenAPI component — the service already returns wire-shaped rows. See `get-entity-translations.ts` docblock for the rationale.
-- `requireId` runs before body parsing; a missing entity yields a 404 without ever touching the request body.
+- `successResponse` is deliberately called without an `<EntityTranslations>` type argument. The rows are already in wire shape at this point (see `get-entity-translations.ts`).
+- The handler returns without a value after `requireId` or `parseBody` fails. Those helpers are expected to have already written the error response.
+- The body schemas are imported from the generated `@api/schemas.zod`.
+- The full PUT and PATCH behavior tables are in `openapi.yaml`.

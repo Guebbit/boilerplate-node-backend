@@ -1,34 +1,43 @@
 ---
 source: src/modules/invoicing/controllers/get-order-credit-note.ts
-sha256: 51e74d8a9990475090d25ae831d37a40376c9143ab644e44ae318e0c7eeb3147
-generated_at: 2026-11-14T20:11:20.383758+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 51e74d8a9990475090d25ae831d37a40376c9143ab644e44ae318e0c7eeb3147
+context_sha256: 32eca068c8fc63a082607a1146f6edc25a8431416666a1cd8ce2047d961edd6e
+generated_at: 2026-11-22T05:29:40.089798+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/controllers/get-order-credit-note.ts
 
 ## Purpose
-
-HTTP controller that serves the PDF credit note for a given order. It is the credit-note counterpart to `get-order-invoice`: it returns `200` with the rendered PDF when the caller is authorised, `404` when the order or credit note does not exist (or belongs to another order), and `500` on render failure.
+Express controller that serves the PDF of a credit note for an order (`GET /orders/:id/credit-notes/:creditNoteId`). It is the credit-note twin of `getOrderInvoice`. It returns `200` with the PDF when the order has that credit note, `404` when the credit note was never issued, belongs to another order, or the order doesn't exist, and `500` on a render failure.
 
 ## Key elements
-
-- **`getOrderCreditNote`** (exported) – Express handler for `GET /orders/:id/credit-notes/:creditNoteId`. Validates the order id, resolves the credit note via the invoicing service, records a staff-read audit event, renders the PDF, and streams it to the response.
+- `getOrderCreditNote(request, response)` is the only export, and it is the request handler.
+  - It validates the `:id` param with `requireId`, using the `orders.not-found` error key. If validation fails it returns early.
+  - It calls `invoicingService.creditNoteForCaller(id, creditNoteId, request.authContext, callerContextOf(request))`. Per its doc comment, non-admin callers see only their own order's credit note, and staff need the payments staff read.
+  - If `refused(response, result)` is true, it stops. The refusal response is sent by that helper.
+  - On success it destructures `{ document: creditNote, order }` from `result.data`.
+  - It records a staff read via `recordStaffRead` with these fields:
+    - key `display:Order`
+    - action `invoicingAuditActions.ADMIN_CREDIT_NOTE_VIEWED`
+    - target type `credit_note`
+    - target id `String(creditNote._id)`
+    - subject id `buyerIdOf(order)`
+  - It renders the PDF with `invoicingService.renderCreditNotePdf(creditNote)`, then sends it with `sendPdf(response, \`credit-note-${creditNote.number}.pdf\`, pdf)`.
+  - Any rejection goes to `catchAs(response, 'Credit note generation failed')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/ids.ts`** – `requireId` validates the `:id` path parameter and short-circuits with a 404 when absent.
-- **`src/infrastructure/http/controller.ts`** – `refused` converts an access-denial result into an HTTP error response; `catchAs` maps thrown/rejected errors to a 500.
-- **`src/infrastructure/http/request.ts`** – `callerContextOf` extracts the caller's context from the request for the service call.
-- **`src/modules/invoicing/services/index.ts`** – provides the `invoicingService` instance used to fetch/authorise the credit note and to render it as a PDF buffer.
-- **`src/kernel/staff-read.ts`** – `recordStaffRead` logs the staff-viewing audit event.
-- **`src/modules/invoicing/audit.ts`** – supplies the audit action constants used in the staff-read record.
-- **`src/modules/invoicing/controllers/send-pdf.ts`** – `sendPdf` sets response headers and writes the PDF bytes.
-- **`src/modules/invoicing/routes.ts`** – registers this handler on the Express route table.
-- **`src/modules/orders/index.ts`** – `buyerIdOf` resolves the buyer identifier from the order for the audit subject.
+- `src/infrastructure/http/ids.ts` supplies `requireId`, which validates the order id.
+- `src/infrastructure/http/controller.ts` supplies `refused`, which turns a refused service result into a response, and `catchAs`, which is the error handler.
+- `src/infrastructure/http/request.ts` supplies `callerContextOf`, which builds the caller context passed to the service.
+- `src/modules/invoicing/services/index.ts` supplies `invoicingService`, which does the authorization-aware lookup (`creditNoteForCaller`) and the PDF rendering (`renderCreditNotePdf`).
+- `src/modules/orders/index.ts` supplies `buyerIdOf`, used to set the audit `subjectId`.
+- `src/kernel/staff-read.ts` supplies `recordStaffRead`, which writes the staff-read audit entry.
+- `src/modules/invoicing/audit.ts` supplies the `invoicingAuditActions` constant used for the audit action (`ADMIN_CREDIT_NOTE_VIEWED`).
+- `src/modules/invoicing/controllers/send-pdf.ts` supplies `sendPdf`, which writes the PDF to the response under the given filename.
+- `src/modules/invoicing/routes.ts` is a graph neighbor and is presumably where this handler is mounted.
 
 ## Notes
-
-- The audit `targetId` is deliberately the credit note's **`_id`** (row identifier), not its `number`, because the number repeats across the invoice series and would be ambiguous for audit lookups.
-- Access is two-tiered: non-admin callers only see credit notes on their own orders; staff additionally require the "payments staff read" permission (enforced inside the service).
-- The module doc comment positions this file as the structural twin of `get-order-invoice.ts`; the two controllers share the same shape and helper set, differing only in the service methods and output file name.
+- The audit `targetId` is the credit note's row `_id`, not its number, because the number repeats across the invoice series.
+- The audit entry is recorded before rendering, so a render failure still leaves a staff-read record while the client gets a `500`.
+- The handler returns the promise chain, but no code outside the chain (such as the early `requireId` return) awaits it.

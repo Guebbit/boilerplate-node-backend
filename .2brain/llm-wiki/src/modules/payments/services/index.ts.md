@@ -1,36 +1,39 @@
 ---
 source: src/modules/payments/services/index.ts
-sha256: ef74c073b6195ef9620a9537f250a9c192e523d673a9bdd16f805c59cb16ddf1
-generated_at: 2026-11-14T21:06:37.945945+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ebedceb8711dd4ded7982cbea3851d0488c46c912972b495a39b362a7920a18c
+context_sha256: 74ab844cb9a943a5a8e96174c5e6ca78e1e418cd5e1acb234f4871a83d014784
+generated_at: 2026-11-22T06:50:43.957296+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/index.ts
 
 ## Purpose
-
-Barrel/facade for the payments domain service. It re-exports the public surface of every sub-module (intent, settlement, refunds, effects, offline, transfer, notify, scope, view, retention, list, stats, deadline) under a single `paymentService` object, so callers never import from the individual files. The module-level doc comment encodes the domain invariants: the order's `paid` transition is the gate (not the charge), refunds are at-most-once via conditional write on `amountRefunded`, and the provider webhook is the authority for settlement.
+Barrel and public entry point for the payments module's services. It collects the per-flow service files (intent, settlement, refunds, etc.) into a single `paymentService` object and re-exports a few errors, types and a config value. The module doc describes the design: one file per flow, an order's move to `paid` as the gate, at-most-once refunds, and the provider's webhook as the authority.
 
 ## Key elements
-
-- **`paymentService`** — the single public handle. A flat object exposing ~35 functions and helpers across all sub-modules. Named for the record it serves (analogous to `paymentRepository`).
-- **Re-exported errors** — `RefundLeftOpenError`, `WebhookProviderUnknownError` from `./errors`.
-- **Re-exported types** — `OfflinePaymentInput`, `OpenedReturnRefund`, `MixRow`, `PaymentMethodInfo`.
-- **`paymentAttentionMinutes`** — re-exported from `../config` at the module level (not inside `paymentService`).
-- **Deliberately *not* exported** — `settlePayment`, `applyWebhookDelivery`, `performRefund`, `refundForOrder`, `cancelOpenIntentForOrder`. These are internal choreography steps that carry scope/guard logic; exposing them would let callers skip the guards.
+- **`paymentService`**: the module's one service handle. It bundles these groups:
+  - Starting and settling payments: `createIntent`, `confirmPayment`, `syncPayment`, `receiveWebhook`, `applyWebhookSettlement`.
+  - Reads and views: `getById`, `orderIdOf`, `getForOrder`, `listForOrder`, `getRefund`, `refundOf`, `withActions`, `presentWithActions`, `listPayments`, `listRefunds`, `listAttention`, `methodMix`.
+  - Refunds: `refundPayment`, `openReturnRefund`, `returnRefundState`, `sendOpenedRefund`, `settleRefundByHand`, `cancelRefund`, `syncRefunds`, `settledRefundPayloads`, `refundLegalDue`.
+  - Disputes: `disputeStanding`, `keptInOtherCurrencyOn`.
+  - Background jobs: `retryOpenRefunds`, `reconcileStalePayments`.
+  - Offline and transfer payments: `recordOfflinePayment`, `openTransferPayment`.
+  - Retention and privacy: `detachUserId`, `findOwnPayments`, `findOwnPaymentsForExport`, `reapAbandonedPayments`.
+  - Notifications: `mailPaymentReceived`, `mailRefundIssued`, `mailRefundUndeliverable`.
+  - Access scoping: `callerScope`, `payerScope`, `buyerOrderScope`, `readsAllPayments`.
+  - Config: `listPaymentMethods`.
+- **Re-exports**: `RefundLeftOpenError`, `WebhookProviderUnknownError`, the types `OfflinePaymentInput`, `OpenedReturnRefund`, `MixRow` and `PaymentMethodInfo`, and `paymentAttentionMinutes` from `../config`.
 
 ## Relationships
-
-- **`src/modules/payments/config.ts`** — provides `listPaymentMethods` and `paymentAttentionMinutes`, both surfaced here directly.
-- **`src/modules/cart/services/checkout.ts`** — downstream consumer that imports from this module's `paymentService` handle for the checkout payment flow.
-- **`src/modules/invoicing/services/issue-credit-note.ts`** — downstream consumer that imports from this module's `paymentService` handle for credit-note refund operations.
-- **`src/modules/payments/controllers/get-*.ts`** (get-order-payments, get-payment, get-payments, get-refund, get-refunds, get-payment-attention) — controllers that read through the `paymentService` view/scope functions (`getById`, `getForOrder`, `listForOrder`, `getRefund`, `listRefunds`, `listAttention`) and scope helpers (`callerScope`, `payerScope`, `buyerOrderScope`).
-- **`scenarios/support/doubles/payments/levers.ts`** — test-double factory that wraps or replaces parts of `paymentService` for isolated scenario tests.
-- **Test files** (`shop.contract.test.ts`, `checkout-interleavings.test.ts`, `product-removal-protects-orders.test.ts`, `credit-note-catch-up.test.ts`, `issue-credit-note.test.ts`) — exercise the service handle or its sub-module functions through the public surface defined here.
+- Imports from the sibling files `./intent`, `./settlement`, `./refunds`, `./return-refunds`, `./external-refunds`, `./effects`, `./offline`, `./transfer`, `./notify`, `./scope`, `./view`, `./retention`, `./list`, `./stats`, `./deadline`, `./disputes` and `./errors`. It contains no logic of its own.
+- `../config` (`src/modules/payments/config.ts`) supplies `listPaymentMethods`, `PaymentMethodInfo` and `paymentAttentionMinutes`.
+- The listed payments controllers (`get-payment`, `get-payments`, `get-order-payments`, `get-refund`, `get-refunds`, `get-payment-attention`) sit next to this barrel in the graph. They are plausibly consumers of `paymentService`, but the file itself doesn't show this.
+- Other modules and tests in the neighbor list (cart `checkout.ts`, invoicing `issue-credit-note.ts`, and the cart, invoicing and account tests) are related through the graph. The file doesn't say which members of `paymentService` they use.
 
 ## Notes
-
-- The object is intentionally **flat** (no sub-namespace like `paymentService.refunds.*`). Search for a function name directly; there is no prefix to disambiguate.
-- Guarded-vs-unguarded split is the key convention: "doors" (e.g. `confirmPayment`, `refundPayment`) include scope checks and order-state gates; the choreography functions beneath them do not. Always call the door.
-- `refundLegalDue` is the only time/deadline concern exposed here (from `./deadline`); it is a pure calculation, not a side-effecting service call.
-- `listPaymentMethods` and `paymentAttentionMinutes` come from `../config`, not from a sibling service file—don't look for them under `./`-prefixed imports.
+- Some functions are deliberately **not** published: `settlePayment`, `applyWebhookDelivery` and `performRefund`. They are the choreography beneath the guarded entry points, and a caller using them directly would skip the scope, own-money and order-gate guards.
+- `refundForOrder` and `cancelOpenIntentForOrder` are also kept off the object, because only the `order.canceled` listener uses them.
+- The module doc says the `order.canceled` listener, `refundPayment` and `openReturnRefund` are each made at-most-once by `addRefund`'s conditional write on `amountRefunded`.
+- The module doc says money moves only if the order is `paid`. A slipped-away order is refunded immediately.
+- The service object is named `paymentService` after the record it serves, like `paymentRepository`.

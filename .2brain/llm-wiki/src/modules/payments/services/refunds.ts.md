@@ -1,51 +1,52 @@
 ---
 source: src/modules/payments/services/refunds.ts
-sha256: a967ac0b8db398d4b1ffa93f9b5d7a00cb704dc9000efb9a6310657df50fc4dd
-generated_at: 2026-11-14T21:08:55.453107+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3131337a3d1c03d69d556d495e8b2879c48671c5fc9ddb6c591442abd73a3c0e
+context_sha256: 50b9d4ec0251013ff7c3a6f98cd7d9ac7fe677e7ede8861a727013b847288ad6
+generated_at: 2026-11-22T06:52:47.106771+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/refunds.ts
 
 ## Purpose
-
-Single choke-point for moving money out of a payment in the module: the operator-triggered `refundPayment` and the `order.canceled` listener's compensation (`refundForOrder`) both funnel through `performRefund`. It opens a conditional refund record (reserving `amountRefunded`) before asking the provider, so concurrent refunds can never overdraw the original amount.
+The single place in the payments module that moves money back to customers. It serves the operator action (`refundPayment`) and the `order.canceled` listener's compensation (`refundForOrder`), both through `performRefund`. A refund is recorded as a row on the payment before the provider is asked, and settles only once the provider confirms.
 
 ## Key elements
+- `RefundRequest`: input shape. Fields: optional `amount` (absent means everything still refundable), `reason`, `returnId`, `lines`, `shipping`, `capAtRemaining`, `due`, `cancelEventId` and `paidOutside`.
+- `CANCELLATION_REQUEST`: frozen request with reason `cancellation`, used by automatic callers.
+- `LATE_PAYMENT_REQUEST`: frozen request with reason `late_payment`, for money that arrives after the order can no longer be paid.
+- `OpenedRefund`: a newly opened refund record together with the payment as it stood right after.
+- `RefundOutcome`: result of a refund call, with `payment`, `leftOpen` and `refundId`. `leftOpen` means money is waiting on a provider answer or an operator.
+- `recordOwedByHand(payment, refund, context?)`: writes an audit row (`PAYMENT_REFUND_OWED_BY_HAND`, target type `order`) so a person sees that cash or a transfer is owed outside the app. It falls back to `systemCallerContext('Payment')` when no caller is given.
+- `leaveForOperator` (internal): opens a refund on a hand-paid payment and leaves it `pending`. It logs a warning, audits the request and records the owed-by-hand row, then returns `leftOpen: true`. It returns `null` if nothing was left to open.
+- `announceOwedByHand` (internal): enqueues a `PAYMENT_REFUND_OWED_BY_HAND` outbox event inside the opening transaction, only for hand-recorded payments.
+- `failureReasonOf` (internal): maps a provider error to a closed `RefundFailureReason`. A `PaymentProviderError` supplies its own code and anything else becomes `unknown`. It logs the provider's wording, truncated to 500 characters (`MAX_ERROR_LENGTH`), and does not store it.
+- `CANCEL_EVENT_WRITE_RETRIES` (5): how many times a stamped refund write may miss and be retried before the call throws.
 
-- **`RefundRequest`** (interface) — shape of one refund ask: optional `amount`, required `reason`, optional `returnId`, `lines`, `shipping`, `capAtRemaining`, `due`, and `cancelEventId`.
-- **`CANCELLATION_REQUEST` / `LATE_PAYMENT_REQUEST`** — frozen `RefundRequest` constants for the two automatic (non-operator) paths.
-- **`OpenedRefund`** — `{ payment, refund }` snapshot returned after the opening write.
-- **`RefundOutcome`** — `{ payment, leftOpen, refundId }` describing the end state of an attempt.
-- **`failureReasonOf`** (private) — maps a thrown error to a `RefundFailureReason` and emits a bounded (500-char) warn log; distinguishes "no answer" from "refused."
-- **`recordOwedByHand`** (exported) — writes an audit row flagging that cash/transfer must be handed back outside the app; called once per record, idempotent by construction.
-- **`leaveForOperator`** (private) — opens a refund on a hand-recorded payment and leaves it `pending`; no provider call, no auto-settle.
-- **`announceOwedByHand`** (private) — enqueues a `PAYMENT_REFUND_OWED_BY_HAND` outbox event inside the opening transaction (hand payments only).
-- **`CANCEL_EVENT_WRITE_RETRIES`** (exported, = 5) — max retries for the conditional write that stamps `handledCancelEvents` on the payment.
-- **`handledCancelEvent`** (private) — guard that tells the retry loop the event was already processed, preventing an infinite re-read loop.
-- **`openRefund`** (private, truncated) — the conditional write that appends the refund row and increments `amountRefunded` atomically; re-reads on a miss and re-checks.
+The prompt ends partway through the file, so `performRefund`, `refundPayment`, `refundForOrder`, `refundOutside` and the other helpers named in the header are not detailed here.
 
 ## Relationships
-
-- **`@domain-primitives/money`** — all arithmetic (`addMoney`, `subtractMoney`, `minMoney`), unit conversion (`toMinorUnits`, `padDecimal`), and currency validation (`fitsCurrency`) go through this module; no raw number math in the service.
-- **`@domain-primitives/time`** — `MINUTE_MS` is used for retry/sweep timing constants.
-- **`@infrastructure/runtime/database`** — `withTransaction` wraps the open-then-settle sequence so the refund row, `amountRefunded` bump, and outbox enqueue commit atomically.
-- **`@kernel/outbox`** — `enqueueOutboxEvent` / `nudgeOutbox` / `announceInTransaction` publish `PAYMENT_REFUND_CANCELED` and `PAYMENT_REFUND_OWED_BY_HAND` events downstream.
-- **`@kernel/permissions`** — `systemCallerContext` supplies the actor when no human caller is present (event-driven refunds).
-- **`@kernel/ability`** — `holds` is used for permission checks before a refund is opened.
-- **`@infrastructure/observability/audit`** — `recordAudit` writes the durable audit trail for every refund action.
-- **`@infrastructure/observability/forbidden`** — `auditForbidden` records denied refund attempts.
-- **`@modules/access`** — `ownOrderFlag` (from the access module's protection domain) gates whether the caller can refund an order they do not own.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` / `fieldError` shape the HTTP payloads returned to the API layer.
-- **`@infrastructure/i18n`** — `t` localises user-facing error/reject messages.
-- **`@infrastructure/adapters/logger`** — structured warn/error logs for provider failures and hand-refund alerts.
+- **`../repository`, `../model`, `../domain`**: persistence and domain rules, including `exceedsRemaining`, `isHandRecorded`, `isOpenRefund` and `mayBeCanceled`.
+- **`./refund-settlement`**: helpers for settling and announcing refunds (`settleRefund`, `recordRefundFailure`, `announceRefund`, `remainingOf`, `isFullyRefunded`, `stampOrder`).
+- **`./refund-sync`**: provides `rereadRefund`.
+- **`../providers` and `../providers/registry`**: provider dispatch and the `PaymentProviderError` type.
+- **`@kernel/outbox`**: `enqueueOutboxEvent`, `announceInTransaction` and `nudgeOutbox` publish events (such as `PAYMENT_REFUND_OWED_BY_HAND`) from within transactions.
+- **`@kernel/events`**: the `DomainEventMap` type.
+- **`@kernel/permissions`**: `systemCallerContext` supplies the actor when no caller exists.
+- **`@infrastructure/runtime/database`**: `withTransaction`.
+- **`@infrastructure/observability/audit`**: `recordAudit` writes audit rows, using action names from `../audit`.
+- **`@infrastructure/adapters/logger`**: used for warnings.
+- **`@infrastructure/http/response`**: `generateSuccess`, `generateReject` and `fieldError`.
+- **`@infrastructure/i18n`**: `t`.
+- **`@domain-primitives/money` and `@domain-primitives/time`**: money arithmetic and formatting, plus `MINUTE_MS`.
+- **`@modules/access`**: `ownOrderFlag`.
+- **`@modules/orders` and `@modules/shop`**: `orderService`, `withdrawalRefundDueBy` and `shopTimezone`.
 
 ## Notes
-
-- **Concurrency model:** the refund row is opened *before* the provider call. The opening write is one conditional `update` that both appends the row and increments `amountRefunded`; a miss means a racing refund won, so the payment is re-read and the whole guard re-evaluated. A failed provider call leaves the record `failed` (still open), retried by a sweep with the same idempotency key.
-- **Provider dispatch:** always uses `payment.provider`, never the deployment-level default. A payment taken by Stripe stays refundable through Stripe even if the shop has since switched to a different PSP.
-- **Hand-recorded payments** have no provider. Their refunds stay `pending` until an operator explicitly calls `settleRefundByHand`; no privileged caller can auto-settle them.
-- **`capAtRemaining: true`** switches a would-be rejection (amount no longer fits) into a clamp-and-retry, important when a racing refund outdates the caller's read.
-- **`cancelEventId`** is stamped into `payment.handledCancelEvents` in the same write that opens the record, making `order.canceled` redelivery a no-op after the first successful write.
-- **Error text handling:** provider error strings are truncated to 500 chars before logging and are *never* persisted on the refund record.
-- The module header explicitly forbids any other file in the payments module from moving money out; this service is the sole exit.
+- **Record before provider:** opening a refund is one conditional write that also raises `amountRefunded`, so racing refunds cannot return more than was paid.
+- **Failed refunds:** a refusal leaves the record `failed`. It stays open and the sweep retries it with the same idempotency key.
+- **Full refunds:** a fully refunded payment stays `succeeded`. `displayStatus` reads `refunded` once the records add up to `amount`, and `addRefund`'s condition on `amountRefunded` prevents a double refund.
+- **Provider dispatch:** it uses the payment's own `provider`, not the deployment's configured one. A `manual` payment has no provider to ask, and a real refund must go to the provider that took the money.
+- **Hand-paid payments:** refunds stay `pending` for an operator (`settleRefundByHand`). Only `paidOutside` (via `refundOutside`) settles one on the spot, with no owed-by-hand announcement.
+- **Idempotency:** a redelivered cancel event does not open a second record, because `cancelEventId` is stamped on the payment in the same write.
+- **`capAtRemaining`:** takes at most what is left instead of refusing, so a return's amount clamped on a stale read does not fail after a racing refund.

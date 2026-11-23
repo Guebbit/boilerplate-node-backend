@@ -1,30 +1,27 @@
 ---
 source: src/modules/account/probes.ts
-sha256: 4c317f553de2041706a282439708a440bbd6d395dcba59809f67039fa3ccd267
-generated_at: 2026-11-14T18:39:27.494910+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4c317f553de2041706a282439708a440bbd6d395dcba59809f67039fa3ccd267
+context_sha256: 8b0a7a8581c986895cedf448ba8edb4127475ba5e584106f59f144636aba3335
+generated_at: 2026-11-22T03:33:47.928884+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/probes.ts
 
 ## Purpose
-
-Declares four API requests that the OpenAPI contract for the account module cannot express on its own (error-triggering states, cross-identity logins, rate-limit exhaustion). The array is consumed by the client-collections bundling pipeline to emit runnable Postman/Insomnia-style probe steps alongside the contract-generated collection.
+Declares the account module's "probes": requests the OpenAPI contract cannot itself express (error states, alternate identities, rate limiting). The file's header says `scripts/contracts/client-collections-bundle.ts` owns the rest: what a probe is for, where these are emitted, and which `{{seedToken}}` values a probe may use.
 
 ## Key elements
-
-- **`probes: Probe[]`** (exported const) — the sole export. Four `Probe` objects (type imported from `@guebbit/openapi-runnable-collections`), each with `name`, `why`, `method`, `path`, and either `body` or `headers`:
-  - *Non-admin login* — `POST /account/login` with `{{seedUserEmail}}` / `{{seedUserPassword}}` to surface 403s the admin token would never see.
-  - *401 with bogus token* — `GET /account` with a hardcoded invalid Bearer token to exercise the 401 error envelope.
-  - *409 duplicate signup* — `POST /account/signup` re-using `{{seedAdminEmail}}` to trigger the "already exists" conflict.
-  - *Rate-limit probe* — `POST /account/login` with a wrong password; must be sent ≥ `NODE_AUTH_RATE_LIMIT_MAX` (default 10) times to elicit a 429.
+- `probes: Probe[]` — the only export. It holds four entries, and the `Probe` type comes from `@guebbit/openapi-runnable-collections`. Each entry has a `name`, a `why` explanation, `method`, `path`, and optionally `body` or `headers`.
+  - **Log in as the non-admin**: `POST /account/login` with `{{seedUserEmail}}` / `{{seedUserPassword}}`. Generated logins are all the admin's, so this is the way to see the 403s and check role scoping.
+  - **401 with a bogus token**: `GET /account` with `Authorization: Bearer not.a.real.token`. This shows the real 401 error envelope and checks that the API answers 401, not 500.
+  - **409 on a signup that already exists**: `POST /account/signup` re-registering the seeded admin's email (username `root`, `{{seedAdminEmail}}`, `{{seedAdminPassword}}`, `termsAccepted: true`).
+  - **Rate limit (send repeatedly)**: `POST /account/login` with the admin email and the password `wrong-on-purpose`.
 
 ## Relationships
-
-- **`src/modules/account/tests/integration/probes.test.ts`** — integration test that asserts each probe's expected status code and response shape against a running server.
+- `src/modules/account/tests/integration/probes.test.ts` is the integration test for this file. Its contents are not shown here.
 
 ## Notes
-
-- Template variables (`{{seedUserEmail}}`, `{{seedAdminEmail}}`, etc.) are **not** resolved in this file; the bundle script (`scripts/contracts/client-collections-bundle.ts`, referenced in the module doc-block) substitutes them at generation time. Do not treat them as live credentials.
-- The rate-limit probe is intentionally idempotent-unsafe: a single execution only yields 401. The test file (or the running collection) is responsible for the repeat loop.
-- The file is a `@module`—it has no named-function exports; `probes` is the only thing other code imports.
+- The rate-limit probe only produces a 429 when sent repeatedly. A single send returns 401. The `why` text says the budget is `NODE_AUTH_RATE_LIMIT_MAX` (10 by default) and counts failed attempts, so send it 10 or more times.
+- Credentials and emails come from `{{seed*}}` placeholders (`seedUserEmail`, `seedUserPassword`, `seedAdminEmail`, `seedAdminPassword`). They are not literals. The header refers to the bundle script for which tokens are allowed.
+- The `why` field is human-readable documentation attached to each probe.

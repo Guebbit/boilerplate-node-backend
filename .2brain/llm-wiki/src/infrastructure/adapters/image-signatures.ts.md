@@ -1,42 +1,32 @@
 ---
 source: src/infrastructure/adapters/image-signatures.ts
-sha256: e3a3080b7403c43f25a4760f9454d8e68aa2f25a20e9a3e2447678378301f657
-generated_at: 2026-11-08T03:19:20.402096+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8878133f6c4589de4f759630949a1b0861826522bef0686c77e804ce0a881663
+context_sha256: 7133d5b3cfc36f9684000e2dc82371812108b3fab9a717a4615290fac9695853
+generated_at: 2026-11-22T02:36:47.936076+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/image-signatures.ts
 
 ## Purpose
-
-Identifies an uploaded file's real image format by matching its leading bytes against a small, hand-maintained signature table, rather than trusting the client-supplied `Content-Type`. Exists because a static file server that labels by extension, or a decoder fed attacker-controlled input, makes a spoofable header a real security risk. Deliberately avoids a dependency like `file-type`: three signatures are easier to audit than a library.
+Content-based image identification for uploads. A client's `Content-Type` is spoofable, so the real type is decided from the file's leading bytes (magic numbers). This guards against stored XSS, SVG-with-script uploads, and attacker-controlled input reaching decoders. It deliberately avoids a dependency like `file-type`, keeping the signature table small enough to audit.
 
 ## Key elements
-
-- **`ImageFormat`** (interface) — Describes one format: MIME type, optional aliases, signature `offset`/`bytes`, optional `alsoRequires` extra markers (e.g. WebP needs both `RIFF` and `WEBP`), and the storage `extension`.
-- **`SUPPORTED_IMAGE_FORMATS`** — The actual signature table, sourced from the generated `imageRuleData.formats` (upstream: `shared/rules/images.yaml`). Raster formats only; SVG is excluded.
-- **`SIGNATURES_COVER_CONTRACT`** (exported const, type-level) — Compile-time proof via `SameMembers<AcceptedUploadType, SignedType>` that the signature table and the API contract list exactly the same MIME types. Fails `tsc` on drift in either direction.
-- **`ACCEPTED_UPLOAD_MIMETYPES`** (exported `ReadonlySet<string>`) — Union of contract types and alias spellings; the set of declared `Content-Type` values the system will recognise.
-- **`identifyImage(header: Buffer)`** (exported) — Returns the MIME type whose signature matches the buffer's leading bytes, or `undefined`.
-- **`identifyImageFile(filePath: string)`** (exported, async) — Opens the file, reads only `HEADER_LENGTH` bytes, delegates to `identifyImage`. Catches all read errors and returns `undefined`. Always closes the handle in `finally`.
-- **`extensionForImage(mime)`** (exported) — Maps a canonical MIME type back to its storage extension. Never derived from a client filename.
-- **`normaliseDeclaredImageMime(declared)`** (exported) — Folds a non-IANA alias (e.g. `image/jpg`) into its canonical MIME so declared and sniffed types compare equal.
-- **`hasMarker`** (private) — Checks whether a buffer contains a marker's bytes at the given offset.
-- **`HEADER_LENGTH`** (private) — Computed as the max `offset + bytes.length` across all formats and their `alsoRequires` entries.
+- `SUPPORTED_IMAGE_FORMATS` (private): the signature table, taken from `imageRuleData.formats` in `./images.generated`. The source data is `shared/rules/images.yaml`. Raster formats only, with no SVG.
+- `ImageFormat` (private interface): `mime`, optional `aliases`, `offset`, `bytes`, `extension`, and optional `alsoRequires` markers (e.g. WebP needs `RIFF` at 0 and `WEBP` at 8).
+- `SIGNATURES_COVER_CONTRACT`: a compile-time check, using `SameMembers`, that `AcceptedUploadType` from `@api/upload-types` and the table's MIME types are the same set. Drift in either direction fails `tsc`.
+- `ACCEPTED_UPLOAD_MIMETYPES`: a `ReadonlySet` of the contract's `ACCEPTED_UPLOAD_TYPES` plus the table's aliases, such as `image/jpg`.
+- `identifyImage(header)`: returns the MIME type whose marker (and any `alsoRequires` markers) matches the buffer, or `undefined`. A short buffer matches nothing.
+- `identifyImageFile(filePath)`: opens the file and reads only the first `HEADER_LENGTH` bytes, then calls `identifyImage`. It returns `undefined` for an unreadable or unrecognised file and always closes the handle.
+- `extensionForImage(mime)`: the storage extension for an identified MIME type, or `undefined`.
+- `normaliseDeclaredImageMime(declared)`: maps a declared alias to its canonical MIME type, so declared and sniffed types can be compared. Unknown values pass through unchanged.
 
 ## Relationships
-
-- **`src/infrastructure/http/middlewares/upload.ts`** — Consumes the exported `ACCEPTED_UPLOAD_MIMETYPES`, `normaliseDeclaredImageMime`, `identifyImage`/`identifyImageFile`, and `extensionForImage` to validate declared type, sniff actual type, and decide the on-disk extension.
-- **`src/infrastructure/adapters/image.worker.ts`** — Runs image processing in a worker; relies on this module to confirm a file is a recognised raster before handing it to a decoder.
-- **`scripts/contracts/asyncapi-bundles.ts`** — Generates or maintains the `@api/upload-types` contract (`ACCEPTED_UPLOAD_TYPES`, `AcceptedUploadType`) that this file cross-checks at compile time via `SIGNATURES_COVER_CONTRACT`.
-- **`tests/unit/infrastructure/adapters/image-signatures.test.ts`** — Unit-tests the signature matching, alias normalisation, extension mapping, and the file-reading path.
-- **`tests/unit/infrastructure/adapters/image.worker.test.ts`** — Exercises the worker path, which depends on `identifyImageFile` for its pre-decode validation.
+- The neighbors `upload.ts` (HTTP upload middleware) and `image.worker.ts` are consumers in the dependency graph. The neighbor tests `image-signatures.test.ts` and `image.worker.test.ts` exercise this module. This file does not import any of them.
+- `scripts/contracts/asyncapi-bundles.ts` is related through the graph. The file itself shows no direct interaction with it.
 
 ## Notes
-
-- **No SVG.** The table is raster-only by design; accepting SVG would mean accepting script upload. No amount of byte-sniffing mitigates that.
-- **`alsoRequires`** exists solely for WebP, which needs two markers (`RIFF` at 0 *and* `WEBP` at 8). All other formats use only the primary `offset`/`bytes` pair.
-- **`identifyImageFile` swallows all read errors** (ENOENT, permissions, etc.) and returns `undefined`. The caller is expected to reject the upload either way; distinguishing "missing file" from "wrong format" adds no safety.
-- **`HEADER_LENGTH` is computed, not hardcoded.** Adding a longer signature to the YAML automatically extends the read window.
-- **Extension is derived from the sniffed type, never from `originalname`.** Storing valid PNG bytes as `.html` would yield stored XSS once the upload directory is served statically.
-- **The signature table is data, not code.** It lives in `images.generated.ts` (generated from `shared/rules/images.yaml`); the reasoning for each signature sits beside the data in that YAML.
+- The extension comes from the detected type, never the client's `originalname`. Otherwise valid PNG bytes saved as `.html` would be served as `text/html` once uploads are served statically.
+- `HEADER_LENGTH` is computed as the largest `offset + bytes.length` across all formats and their `alsoRequires` markers.
+- `identifyImageFile` swallows all errors, so "missing file" and "not an image" are indistinguishable by design. It carries an ESLint disable for `no-restricted-syntax` on its `try`.
+- `image/jpg` is tolerated as an alias but is not part of the API contract.

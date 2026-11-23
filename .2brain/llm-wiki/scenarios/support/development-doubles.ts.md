@@ -1,38 +1,38 @@
 ---
 source: scenarios/support/development-doubles.ts
-sha256: 94e60bc34760db52e6634266ffc3a937caa58be24925ad2c4f16387f6d69d3c3
-generated_at: 2026-11-08T02:33:16.925908+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 9168e7b9efedeafb1cf3c0b9cfd83102a060afe48b564c8e5388723d33d6abc5
+context_sha256: 9bbe191ba968d610d8e85ff006913a34eaa27f8161291b76c090217c4f1be2a2
+generated_at: 2026-11-22T01:47:02.698561+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/support/development-doubles.ts
 
 ## Purpose
-
-A Node preload script (loaded via `tsx --import`) that injects development-only doubles—fake payment provider, log-based mail transport, and a stand-in OAuth provider—into the application's registries. It exists so that local dev, e2e, demo, debug, and `scenario:apply` processes get working infrastructure without any of the fakes living in `src/` or the production Docker image.
+The single entry point that a development process loads before serving, to get the test doubles (fake payment provider, mail log, fake OAuth provider) that do not exist in production code or the production image. Importing it has side effects: it loads `.env`, fills in developer-machine defaults, and registers the doubles in the registries the application resolves from.
 
 ## Key elements
+- **Side-effect import of `@infrastructure/config/dotenv`**: placed first so `.env` is in `process.env` before anything else runs.
+- **`DEV_DEFAULTS`**: read-only map of defaults for three variables:
+  - `NODE_PAYMENT_PROVIDER` = `fake`
+  - `NODE_MAIL_TRANSPORT` = `log`
+  - `NODE_PSEUDONYM_KEY` = a fixed hex key, not a secret, so digests stay stable between runs.
+- **Defaulting loop**: sets each variable only if it is unset or blank (`!process.env[name]?.trim()`), after `.env` has been read.
+- **`refreshEnvironment()`**: makes the config store re-snapshot `process.env` so it sees the defaults.
+- **`registerDoubles()`**: registers the doubles (from `./doubles/register`).
+- **`registerOAuthProvider('fake', () => fakeOAuthProvider)`**: registers the fake OAuth provider through a factory.
 
-- **Module-level side effects** (no named exports): the file *is* the setup sequence.
-- **`DEV_DEFAULTS`** — a `Readonly<Record<string, string>>` mapping three env vars (`NODE_PAYMENT_PROVIDER`, `NODE_MAIL_TRANSPORT`, `NODE_PSEUDONYM_KEY`) to fallback values. Only applied when the variable is unset or blank in `process.env`.
-- **`refreshEnvironment()`** (from `@infrastructure/config/store`) — re-snapshots `process.env` into the config store *after* the defaults have been written, because the initial `dotenv` import already captured a snapshot without them.
-- **`registerDoubles()`** (from `./doubles/register`) — registers the fake payment and mail-log doubles in their respective registries.
-- **`registerOAuthProvider('fake', () => fakeOAuthProvider)`** — registers the OAuth stand-in. The second argument is a *factory* (thunk), not a bare value, because the OAuth registry re-evaluates "is it configured?" on every resolution.
+The file has no exports; everything happens at import time.
 
 ## Relationships
-
-- **`src/infrastructure/config/dotenv.ts`** — imported purely for its side effect of loading `.env` into `process.env` before anything else runs.
-- **`src/infrastructure/config/store.ts`** — `refreshEnvironment` re-reads `process.env` so the config store reflects the defaults set in this file.
-- **`scenarios/support/doubles/register.ts`** — provides `registerDoubles()`, which wires up the fake payment and mail-log providers.
-- **`scenarios/support/doubles/oauth-fake.ts`** — provides the `fakeOAuthProvider` object used in the OAuth registry entry.
-- **`src/modules/account/oauth/providers/index.ts`** — exposes `registerOAuthProvider`, the registration API this file calls.
-- **`scenarios/apply.ts`** — one of the entry-point scripts (`scenario:apply`) that loads this file via `--import`.
-- **`docker-compose.yml`** — the production image built here deliberately excludes the doubles; this file is the mechanism that *adds* them back in local/dev contexts.
+- `@infrastructure/config/dotenv` (`src/infrastructure/config/dotenv.ts`): imported for its `.env` loading side effect.
+- `@infrastructure/config/store` (`src/infrastructure/config/store.ts`): provides `refreshEnvironment`, called after the defaults are set.
+- `./doubles/register`: provides `registerDoubles`.
+- `./doubles/oauth-fake`: provides `fakeOAuthProvider`.
+- `@modules/account/oauth/providers` (`src/modules/account/oauth/providers/index.ts`): provides `registerOAuthProvider`, used to add the `'fake'` provider.
+- Loaders: `scenarios/apply.ts` (`scenario:apply`) and `scenarios/run-server.ts` are neighbors in the graph; per the header comment, `demo` and `scenario:apply` load this file through a static import.
 
 ## Notes
-
-- **No exports.** The module is purely imperative; it is consumed via `--import` side effects.
-- **`cluster.fork()` compatibility.** Because `execArgv` propagates to every worker, a clustered process preloads this file in each worker automatically.
-- **`NODE_PSEUDONYM_KEY` default is intentionally non-secret.** It is a fixed hex digest that must be stable across runs; the comment explicitly notes nothing here holds sensitive data.
-- **Ordering matters.** The `refreshEnvironment()` call must come *after* both the `dotenv` import and the `DEV_DEFAULTS` loop; otherwise the store snapshots env before defaults are applied.
-- **The OAuth entry is a factory, not a value.** Swapping `() => fakeOAuthProvider` for the object itself would break the registry's "is it configured?" check on subsequent calls.
+- Order matters: `.env` must be read first so "unset" means unset there too, and `refreshEnvironment()` must follow the defaulting because the config store snapshots `process.env` once.
+- The OAuth provider is registered as a factory because the registry re-checks whether a provider is configured on every call; this one always is.
+- Per the header comment, with `NODE_ENV=development` a separate boot-time module loads this file; the header is the only source for this.

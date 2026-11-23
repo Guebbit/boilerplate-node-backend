@@ -1,38 +1,55 @@
 ---
 source: src/infrastructure/adapters/managed-connection.ts
-sha256: 79f884caedd836ceb4a89ac794af1d9d0c0ed1f0ee0902e2d8bb0f65d9ba4495
-generated_at: 2026-11-08T03:21:59.008705+00:00
-model: ollama:qwen3.8:27b
+source_sha256: bb01dd9b3910866ee8e1cf54c9bc2a0d99cd7d43920ef6095f5ae4e3e36362b4
+context_sha256: 4c6b960dbc232bf5b24f65a1138cdd51bea51e9b2e36d53882f118796d8109b7
+generated_at: 2026-11-22T02:40:37.721825+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/managed-connection.ts
 
 ## Purpose
-
-Centralises the lifecycle of a single optional dependency connection (Redis for cache, Redis for rate-limiting) so that both adapters share identical fail-open rules: unconfigured is a supported deployment, unreachable is degraded but not an error. The module owns the memoised handle, shared in-flight connect, warn-once latch, fail-open/fail-closed getters, health-status reader, and shutdown logic; each adapter supplies only its own `connect`, `isReady`, `close`, and `isEnabled`.
+Defines the lifecycle for one optional Redis-style dependency, shared by the cache adapter and the rate-limit store. An unconfigured dependency is a supported deployment, and an unreachable one is a degraded deployment. Neither may turn a request into an error. The file centralises the memoised handle, the shared in-flight connect, a warn-once latch, a non-rejecting getter, a status reader and a close. Adapters supply only what is specific to them. It deliberately has no timer-based retry; recovery happens on demand, when the next `get()` is called.
 
 ## Key elements
-
-- **`unavailabilityLatch(log)`** — returns a `{ report, clear }` latch. `report` logs the first failure in a run of failures; `clear` resets and returns whether a warning was ever emitted (used to decide if recovery is worth announcing).
-- **`DependencyStatus`** — `'ready' | 'connecting' | 'unavailable' | 'disabled'`. The four states exposed by `GET /observability/health`. `disabled` is not a failure.
-- **`ManagedConnectionOptions<THandle>`** — the contract an adapter fulfils: `isEnabled`, `connect`, `isReady`, `close`, `unavailableMessage`, plus optional `unavailableLevel` and `onRecovered`.
-- **`ManagedConnection<THandle>`** — the lifecycle surface: `get` (fail-open), `getOrThrow` (fail-closed, for the rate limiter), `state`, `forget`, `reportUnavailable`, `stop`.
-- **`manageConnection<THandle>(options)`** — the factory. Closes over a single `handle`, a `connectPromise` (thunder-herd guard), and a latch instance. Returns the `ManagedConnection` object.
+- **`unavailabilityLatch(log)`**: builds a warn-once latch.
+  - `report(error)` logs the first failure and stays quiet until `clear()`.
+  - `clear()` resets the latch and returns whether it had been set, i.e. whether a warning was ever logged.
+- **`DependencyStatus`**: `'ready' | 'connecting' | 'unavailable' | 'disabled'`, the four values used by `GET /observability/health`. `disabled` is not a failure.
+- **`ManagedConnectionOptions<THandle>`**: what an adapter supplies.
+  - `unavailableMessage`
+  - `isEnabled`
+  - `connect` (resolving `undefined` means "cannot be built")
+  - `isReady`
+  - `close` (receives the handle or `undefined`)
+  - Optional `unavailableLevel` (`'warn'` by default, or `'error'`)
+  - Optional `onRecovered`
+- **`ManagedConnection<THandle>`**: the returned lifecycle.
+  - `get()`: resolves the live handle or `undefined`, and never rejects.
+  - `getOrThrow()`: rejects when the dependency is unreachable or disabled. It is for callers that must fail closed (the rate limiter).
+  - `state()`: reports the status with no I/O.
+  - `forget()`: drops the memoised handle without closing it.
+  - `reportUnavailable(error)`: reports through the shared latch.
+  - `stop()`: closes and resets state.
+- **`manageConnection(options)`**: the factory. It holds a private `handle` and `connectPromise` per call.
+  - `attempt()` deduplicates concurrent connects.
+  - On success it stores the handle, clears the latch and calls `onRecovered` if a warning had been logged.
+  - On failure it clears the handle and reports through the latch, except for the internal `NotConfigured` case.
+  - `connectPromise` is cleared in `finally`, so the next call can retry.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/logger.ts`** — imports `logger`; the latch's log callback calls `logger.warn` or `logger.error` depending on `unavailableLevel`.
-- **`src/infrastructure/adapters/cache.ts`** — primary consumer of `manageConnection`; uses the fail-open `get()` and `forget()` for its connection lifecycle.
-- **`src/infrastructure/adapters/limits-redis.ts`** — consumer of `manageConnection` via `getOrThrow()` (the one fail-closed caller).
-- **`src/infrastructure/adapters/queue.ts`** — does **not** use `manageConnection` (amqplib has its own reconnect); shares only `unavailabilityLatch` for warn-once logging of publish failures.
-- **`src/modules/observability/services/dependency-health.ts`** — reads `state()` / `DependencyStatus` to populate the health endpoint.
-- **`tests/unit/infrastructure/adapters/managed-connection.test.ts`** — unit tests for the module.
+- **`logger.ts`**: the only runtime import. The latch's log callback logs the unavailability message and error through the logger, at `warn` by default or `error` when `unavailableLevel` is `'error'`.
+- **`cache.ts` and `limits-redis.ts`**: the two adapters this module was written for. The cache is fail-open and uses `get`. The rate limiter is the fail-closed caller of `getOrThrow`.
+- **`queue.ts`**: does not use `manageConnection`, because amqplib's own `recovery` retries the connection and re-runs `setup`. It shares only `unavailabilityLatch`.
+- **`pubsub.ts`**: a neighbour in the graph. The visible content shows no direct interaction.
+- **`dependency-health.ts`**: consumes `DependencyStatus` and `state()` for `GET /observability/health`.
+- **`managed-connection.test.ts`**: the unit tests for this module.
 
 ## Notes
-
-- **No timer-based retry.** Recovery is purely demand-driven: the next `get()` or `getOrThrow()` call triggers a fresh `attempt()`. There is no background reconnect loop.
-- **`connect()` resolving `undefined` ≠ rejecting.** A resolved `undefined` means "cannot be built" (a configuration gap `isEnabled` couldn't rule out) and is treated as unavailable *without* a warning. A rejection is a runtime failure and does trigger the latch.
-- **`stop()` is the only path that must not raise.** It awaits an in-flight connect before calling `close`, then swallows any close rejection (the process is exiting; a dead socket rejecting its own close is the normal case).
-- **`forget()` does not close.** It merely drops the memoised handle. Used by adapters that detect their own death (e.g. a channel close event) and need the next `get()` to open a fresh connection.
-- **`state()` performs no I/O.** It reads in-memory state (`handle`, `connectPromise`, `isEnabled()`) only, so it is safe to call on every health-check tick.
-- Stryker mutation suppression wraps the `unavailableLevel` branch — the two log-level paths are intentionally not mutation-tested.
+- `get()` and `getOrThrow()` check `isEnabled()` first. A disabled dependency never opens a socket.
+- `connect()` resolving `undefined` is treated as unavailable without a warning, via the internal `NotConfigured` error.
+- `getOrThrow()` rejects with `NotConfigured` when the dependency is disabled.
+- `isReady` is checked before every reuse, so a dead handle is reconnected rather than returned. An adapter whose handle reports its own death can call `forget()` from its close listener.
+- `state()` reports `connecting` exactly while an attempt is in flight.
+- `stop()` waits for an in-flight connect before calling `close`, and swallows close errors because shutdown must not raise. It then clears the handle, the in-flight promise and the latch.
+- The warning-level branch is wrapped in `// Stryker disable all` / `// Stryker restore all` comments, which exclude it from mutation testing.

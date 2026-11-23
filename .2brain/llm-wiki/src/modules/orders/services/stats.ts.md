@@ -1,43 +1,40 @@
 ---
 source: src/modules/orders/services/stats.ts
-sha256: caf2f9326f3508344767493d0bb51b9a38f63c4fa5cd2f1e794714d048e05fce
-generated_at: 2026-11-14T20:46:41.443865+00:00
-model: ollama:qwen3.8:27b
+source_sha256: caf2f9326f3508344767493d0bb51b9a38f63c4fa5cd2f1e794714d048e05fce
+context_sha256: 1a73c5e8b1a75ec70fc71aa7ca9b140ad17d0a672e6342e6a550ef8dc9b98853
+generated_at: 2026-11-22T06:24:12.301405+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/stats.ts
 
 ## Purpose
-
-Read-only aggregate statistics for the orders module. Each exported function returns a small, pre-grouped result (a few hundred rows at most) that a dashboard or report composer can merge by key. All queries hit `orderRepository.aggregate` and filter out soft-deleted orders; monetary results are expressed net-of-VAT using each line's frozen tax rate.
+Holds the grouped MongoDB aggregation reads that the `stats` composer merges by key. Each read returns at most a few hundred already-grouped rows: orders and units per bucket, top products, categories, customers, the cancellation cohort, and the open pipeline. Orders the shop has deleted (`deletedAt` set) are excluded from every count here. Their money stays in the totals, since the invoice stays.
 
 ## Key elements
-
-- **`paidIn(window)`** – Internal `$match` helper: live orders whose `paidAt` falls in the half-open `[from, to)` window.
-- **`LINE_NET`** – Reusable Mongo aggregation expression computing a line's net-of-VAT amount: `quantity × price ÷ (1 + taxRate)`.
-- **`ORDER_TOTAL`** – Aggregation expression for a whole order's gross total (all lines' `quantity × price` plus `$shippingCost`, VAT included).
-- **`paidBuckets(window)`** → `PaidBucket[]` – Order count and unit count per currency and time bucket.
-- **`productTotals(window, limit)`** → `ProductTotal[]` – Top-N products by net sales, with units and net `Money`.
-- **`categoryTotals(window)`** → `CategoryTotal[]` – Net sales and units per product category.
-- **`productSeries(productId, window)`** → `ProductSeriesRead` – Per-bucket unit sales for a single product, plus the frozen title.
-- **`customerCounts(window)`** – Distinct paying accounts in the window and how many paid for the first time in it.
-- **`cancellationCohort(window)`** – Orders *placed* (`createdAt`) in the window and how many ended `canceled`.
-- **`pipeline()`** → `PipelineRead` – Snapshot of bank-transfer orders still `pending` (count, total amount, nearest `payBy`) and paid orders awaiting shipment.
-- **Interfaces** – `PaidBucket`, `ProductTotal`, `CategoryTotal`, `ProductSeriesRead`, `AwaitingTransfers`, `PipelineRead` define the return shapes.
+- `paidBuckets(window)`: orders and units per currency and time bucket, dated by `paidAt`. Returns `PaidBucket[]`.
+- `productTotals(window, limit)`: top products by net sales, from the frozen order lines, sorted by `netSales` with `productId` as tie-break. Returns `ProductTotal[]`.
+- `categoryTotals(window)`: net sales and units per category, from the categories each line froze. Returns `CategoryTotal[]`.
+- `productSeries(productId, window)`: units of one product per bucket, plus the title as the orders froze it. Returns `ProductSeriesRead`.
+- `customerCounts(window)`: distinct accounts that paid in the window, and how many of those paid for the first time in it.
+- `cancellationCohort(window)`: orders created in the window (by `createdAt`) and how many ended with status `canceled`.
+- `pipeline()`: a snapshot via `$facet`. It returns bank transfers still pending per currency (count, amount, nearest `payBy`) and the number of paid orders awaiting shipment (`PipelineRead`).
+- `paidIn(window)`: private `$match` stage for `paidAt` in `[from, to)` with `deletedAt: null`.
+- `LINE_NET`: private expression for a line's net-of-VAT amount, `quantity × price ÷ (1 + taxRate)`, using the line's frozen rate.
+- `ORDER_TOTAL`: private expression for an order's total, the sum of line quantity × price plus `$shippingCost` (VAT included).
 
 ## Relationships
-
-- **`@infrastructure/persistence/report`** – Supplies `ReportWindow` (the `{ from, to, bucketSize }` parameter) and `bucketOf`, which computes the bucket key used in every `$group`.
-- **`@domain-primitives/money`** – Provides `toMinorUnits` (converts the Mongo decimal result into the domain `Money` type) and the `Money` type itself.
-- **`@infrastructure/persistence/create-repository`** – Supplies `toObjectId` to cast string product IDs into Mongo ObjectIds for matching.
-- **`../domain/fulfillment`** – `fulfillmentStatusFilter('awaiting_shipment')` builds the status match used in the `pipeline` read.
-- **`../repository`** – This file imports `orderRepository` from that module and calls `.aggregate()` on it; every function in this file is a thin pipeline over that single data-access entry point.
-- **`../services/index`** – Re-exports this module so consumers import from the services barrel.
+- `src/modules/orders/repository.ts` (`orderRepository`): every function runs `.aggregate(...)` on it.
+- `src/infrastructure/persistence/report.ts`: supplies the `ReportWindow` type and `bucketOf`, which builds the bucket expression for `$paidAt`.
+- `src/infrastructure/persistence/create-repository.ts`: `toObjectId` converts `productId` for the `productSeries` match.
+- `src/domain-primitives/money.ts`: `toMinorUnits` converts decimal aggregation results into `Money`, per currency. `Money` types the net-sales and amount fields.
+- `src/modules/orders/domain/fulfillment.ts`: `fulfillmentStatusFilter('awaiting_shipment')` defines the "paid, not shipped" count in `pipeline`.
+- `src/modules/orders/services/index.ts`: the services barrel. The file does not import it. Its doc comment says the `stats` composer consumes these reads.
 
 ## Notes
-
-- **Category totals ≠ product totals.** A product tagged with multiple categories is counted once per category after `$unwind`, so the sum of category rows can exceed the grand total.
-- **Customer identity is `userId`, not email.** Erased accounts share a placeholder email; the aggregation groups by `userId` to keep them distinct.
-- **`customerCounts` scans full history.** It matches all orders up to `to` (not just the window) so it can find each account's *first* paid order, then filters to accounts whose *last* paid order falls in the window.
-- **Two different date fields.** Sale-based reads (`paidBuckets`, `productTotals`, etc.) filter on `paidAt`; the cancellation cohort filters on `createdAt` because there is no cancel timestamp to bucket by.
-- **Deleted orders are excluded from counts** but their monetary value persists (the invoice is kept); the `deletedAt: null` filter enforces this.
+- Windows are half-open (`from` inclusive, `to` exclusive).
+- `categoryTotals` counts a product in every category it has, so the rows do not sum to the total.
+- `customerCounts` keys on `userId` and skips orders with a null `userId`, never on email, because erased accounts share one placeholder address. It matches all paid orders up to `to` so each account's first paid order can be found.
+- `cancellationCohort` uses `createdAt`, not a cancel date, because there is no cancel date to bucket by.
+- Net-of-VAT amounts are computed with `$toDecimal`, since prices include VAT. Per the file's comment, this mirrors `src/modules/orders/domain/tax.ts`.
+- `productSeries` matches on the product twice, before and after `$unwind`. The first match narrows the orders. The second keeps only that product's lines.

@@ -1,34 +1,42 @@
 ---
 source: shared/scenarios/personas.yaml
-sha256: 941ab53235d8b670e1fb298a8cda795653e11c03fd2426c53112d779fc61205d
-generated_at: 2026-11-14T17:47:17.323173+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a759bf30bb55e5210798b877c6cc26ef9c4273329c3e72adc0d23886d95cc2cf
+context_sha256: 59f37f8a87126cb3770810221d63e765ddbff5afde332773d63d9ce2d7887274
+generated_at: 2026-11-22T02:28:44.755918+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/scenarios/personas.yaml
 
 ## Purpose
-
-Defines the 13 demo login accounts for the demo profile: who they are (email, username), what they may do (role memberships), and what state they start in (verification, 2FA, consent flags, etc.). It is a seed fixture consumed by the demo backend and its paired Cypress suite; it never feeds a production database.
+Declares the 13 demo login accounts: who each is, which roles it holds, and what state it starts in (verified, active, 2FA, etc.). Ids, images, address books and the 10 filler customers are deliberately not here; they stay in `scenarios/` code. Passwords are public on purpose, since the demo profile's database is only visible to developers or CI. The frontend's Cypress suite reads logins from the scenario description (`GET /__test/scenario`) instead of keeping its own copy.
 
 ## Key elements
-
-- **`staffTotpSecret`** — A single Base32 (160-bit) TOTP secret shared by every account that has `authenticator: true`. Deliberately one value for all accounts; a demo fixture gains no security benefit from per-account secrets.
-- **`accounts`** — A map of 13 named accounts (`admin`, `user`, `editor`, `moderator`, `unverified`, `twoFactor`, `pendingEmail`, `banned`, `secondShopper`, `manager`, `warehouse`, `support`, `operator`). Each entry contains:
-  - `email`, `username`, `defaultPassword` — identity and login credentials (passwords are intentionally public).
-  - `memberships` — zero or more `{ scope: tenant|platform, role: … }` grants. Customer-type accounts hold an empty list.
-  - `state` — Flags: `verified`, `active`, `twoFactor`, `authenticator`, `pendingEmail`, `analyticsConsent`.
+- `staffTotpSecret`: one Base32 (160-bit) secret shared by every authenticator-enabled account.
+- `accounts`: map keyed by persona name. Each entry has `email`, `username`, `defaultPassword`, `memberships`, and `state`.
+- `memberships`: list of `{ scope, role }` pairs. Scopes seen are `tenant` and `platform`. An empty list means a plain customer.
+- `state` flags:
+  - `verified`: the address is proven, so there is no verify-your-email nag.
+  - `active`: `false` means an admin switched the account off, and every login is refused.
+  - `twoFactor`: email 2FA is armed, with five known single-use backup codes.
+  - `authenticator`: an authenticator app is armed with `staffTotpSecret`.
+  - `pendingEmail`: an unconfirmed address change, or `null`.
+  - `analyticsConsent`: opted in to analytics.
+- Personas:
+  - `admin` (`root@root.it`): holds both `tenant/admin` and `platform/operator`.
+  - `operator`: `platform/operator` only.
+  - `editor`, `moderator`, `manager`, `warehouse`, `support`: one `tenant` role each, all with an authenticator.
+  - `user` (`customer@example.com`): plain customer, the only account with `analyticsConsent: true`. The cart analytics journey logs in as it.
+  - `unverified`: `verified: false`.
+  - `twoFactor`: `twoFactor: true`.
+  - `pendingEmail`: has a pending address change to `pending-new-address@example.com`.
+  - `banned`: `active: false`.
+  - `secondShopper`: a second plain customer.
 
 ## Relationships
-
-- **`src/modules/access/authorization.yaml`** — The role names referenced in each account's `memberships` are defined in this file. A customer account's effective permission is *not* a membership; it is derived at runtime from the `verified` state flag, as governed by the authorization module.
+- `shared/rules/authorization-roles.yaml`: every membership's `role` must name a role defined there. Customers have no membership, because that role is computed from `verified` rather than granted.
 
 ## Notes
-
-- **Password override:** Each account's password can be replaced per-environment via the `NODE_SEED_<NAME>_PASSWORD` env var (e.g. `NODE_SEED_ADMIN_PASSWORD`).
-- **Cypress coupling:** The paired frontend's Cypress suite retrieves each login from the scenario description (`GET /__test/scenario`) and stores no local copy of credentials.
-- **Shared TOTP secret:** All seven authenticator-armed accounts use the same `staffTotpSecret`. If you add a new authenticator account, it inherits that secret automatically.
-- **Customer vs. staff:** Customer accounts (`user`, `unverified`, `twoFactor`, `pendingEmail`, `banned`, `secondShopper`) have `memberships: []`. Their effective role is *computed* from `verified`, never explicitly granted.
-- **Dual-role admin:** The `admin` account holds two memberships (tenant `admin` + platform `operator`) because it is both shop owner and installation operator.
-- **Platform-only operator:** The `operator` account has only a platform-scope membership and no tenant membership, so it holds none of a shop's keys.
-- **Filler customers not here:** The 10 additional filler customer accounts and their address books live in `scenarios/` code, not in this file.
+- Passwords follow the pattern `Demo-<Name>1!`. `NODE_SEED_<NAME>_PASSWORD` overrides a password per account.
+- A staff role grants nothing without an armed authenticator, which is why every staff persona has `authenticator: true`.
+- Every authenticator shares the same secret, by design.

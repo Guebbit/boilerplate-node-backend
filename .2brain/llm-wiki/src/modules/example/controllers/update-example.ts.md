@@ -1,34 +1,35 @@
 ---
 source: src/modules/example/controllers/update-example.ts
-sha256: 5abdbe309be8f25af23d2e54be8ab98a72ee626fe2cc4d75f40959cd7b1dbcd9
-generated_at: 2026-11-14T19:58:15.363954+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 14fa4e70fd89466b9cd736dae491429601f50ba61029d7a5f1d2c33d13a539b5
+context_sha256: 652a02c3a8801b41dd40ab6558ad167c0a05700f655d7269a673df82cd84b0c2
+generated_at: 2026-11-22T05:08:14.691666+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/controllers/update-example.ts
 
 ## Purpose
-
-Defines the `PUT` (full replace) and `PATCH` (partial merge) handlers for `/examples/:id`. Both share a single pipeline built by the `createUpdateController` factory (which owns the id lookup, `If-Match` validation, and `ETag` response). This file supplies only what is module-specific: the two body schemas and the service call.
+Defines the HTTP controllers for `PUT /examples/:id` (replace) and `PATCH /examples/:id` (merge). Both are built by the shared update factory, which owns the id check, `If-Match` and the `ETag`. This file supplies only the per-module parts: the two body schemas and the service call.
 
 ## Key elements
-
-- **`replaceTrimmedBody`** – Zod schema for `PUT` bodies. Extends `ReplaceExampleByIdBody`, wrapping `title` and `body` with `trimmedInto` so whitespace-only values are rejected at the field level (422) rather than stored as blank columns.
-- **`updateTrimmedBody`** – Zod schema for `PATCH` bodies. Extends `UpdateExampleByIdBody`; `title` uses the custom `trimmedExampleTitle` rule, `body` uses `trimmedInto`. Both fields remain optional so an omitted field stays omitted.
-- **`replaceExample` / `updateExample`** (named exports) – The handler pair returned by `createUpdateController`. `replaceExample` handles `PUT`, `updateExample` handles `PATCH`. Both delegate to the example service's update method.
+- `replaceTrimmedBody`: the generated `ReplaceExampleByIdBody` schema with `title` and `body` wrapped in `trimmedInto`. A whitespace-only value such as `"   "` fails as a field-level 422 and is not stored as a blank column.
+- `updateTrimmedBody`: the generated `UpdateExampleByIdBody` schema with the same trimming, with `title` and `body` made optional. `title` uses `trimmedExampleTitle`, and `body` unwraps the generated optional schema, trims it and re-applies `.optional()`. An omitted field stays omitted.
+- `replaceExample` and `updateExample`: the exported handlers, destructured from `createUpdateController(...)` as `replace` and `update`. The factory is configured with:
+  - `versioned: true`
+  - `entity: 'example'`
+  - `notFoundKey: 'example.not-found'`
+  - `replaceSchema` and `patchSchema`, set to the two schemas above
+  - `update`: calls `exampleService.updateById(id, changes, callerContextOf(request))`
+  - `present`: the identity function, because the service already returns the contract's shape
 
 ## Relationships
-
-- **`create-update-controller.ts`** – Supplies the `createUpdateController` factory. This file passes `versioned`, `entity`, `notFoundKey`, both schemas, the `update` callback, and the `present` mapper.
-- **`request.ts`** – Imports `callerContextOf` to extract the authenticated caller's context for the service call.
-- **`schemas.ts`** – Imports `trimmedInto`, a helper that wraps an existing Zod schema string with trim-before-validation logic.
-- **`title-rule.ts`** – Imports `trimmedExampleTitle`, the module-specific title validation rule used in the `PATCH` schema.
-- **`src/modules/example/services/index.ts`** – Exports `exampleService`; the factory's `update` callback invokes a method on that service with the id, changes, and caller context.
-- **`routes.ts`** – Consumes the `replaceExample` and `updateExample` exports to register them on the router for `PUT` and `PATCH /examples/:id`.
+- `src/infrastructure/surfaces/create-update-controller.ts`: provides `createUpdateController`, which builds both handlers and runs the shared pipeline.
+- `src/infrastructure/http/schemas.ts`: provides `trimmedInto`, used to trim string fields.
+- `src/infrastructure/http/request.ts`: provides `callerContextOf`, which turns the request into the caller context passed to the service.
+- `src/modules/example/title-rule.ts`: provides `trimmedExampleTitle`, the title rule reused for `PATCH`.
+- `src/modules/example/services/index.ts`: provides `exampleService`, whose `updateById` does the actual update.
+- `src/modules/example/routes.ts`: this is the neighbor that wires the handlers to the routes.
 
 ## Notes
-
-- The `present` mapper is a pass-through (`example => example`) because the service already returns the contract's shape. No re-mapping is needed here.
-- `title` in the PATCH schema uses `trimmedExampleTitle` (from `title-rule.ts`) rather than the generic `trimmedInto`, indicating the title field has additional module-specific validation beyond trimming.
-- `notFoundKey` is set to `'example.not-found'`; the factory uses this to look up the i18n message for 404 responses.
-- The doc header references `docs/api/write-methods.md` for the broader PUT/PATCH contract.
+- The `PUT` title is trimmed with the generic `trimmedInto`, while the `PATCH` title uses `trimmedExampleTitle`. Check `title-rule.ts` if the two need to stay consistent.
+- The base `ReplaceExampleByIdBody` and `UpdateExampleByIdBody` schemas are imported from the generated `@api/schemas.zod` module.

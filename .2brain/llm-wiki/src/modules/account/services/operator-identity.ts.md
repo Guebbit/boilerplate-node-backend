@@ -1,35 +1,33 @@
 ---
 source: src/modules/account/services/operator-identity.ts
-sha256: cae6b9d7fee62e184cf3d6bd2d3e8e16af583fa65de88ef8a911b207a8463a4f
-generated_at: 2026-11-08T04:19:42.991561+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5655463a0879cbe80ca313124101f6f83bce980b5f13696fcebcb1ae4398f490
+context_sha256: 72660f9634b7a80979462752c840fde505afc5975de0a8efdab47d0d05626f50
+generated_at: 2026-11-22T03:38:52.128195+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/operator-identity.ts
 
 ## Purpose
-
-Resolves the operator identity (legal name, address, VAT, contact) that a site is legally required to publish under e-Commerce Directive Art. 5(1) and GDPR Art. 13(1)(a). It reads live values from `accountConfig` and returns a fully-populated `Operator` object, ensuring required legal fields are always present. Lives in the `account` module rather than `shop` because operator identity exists even on sites without a shop.
+Builds the site operator's legal identity (provider identification a visitor is entitled to under e-Commerce Directive Art. 5(1) and GDPR Art. 13(1)(a)) from the live `accountConfig` slice. It lives in `account`, not `shop`, because a site without the shop still has an operator. `GET /config` publishes the result, and `invoicing` and `orders` print it.
 
 ## Key elements
-
-- **`operatorIdentity()`** (exported) — Reads `accountConfig()`, validates required fields (`NODE_LEGAL_NAME`, `_STREET`, `_CITY`, `_ZIP`, `_COUNTRY`), includes optional fields (`_VAT_NUMBER`, `_TRADE_REGISTER`, `_REGISTRATION_NUMBER`, `_PHONE`) only when set, and returns an `Operator`. Email falls back to `supportEmail()` if `NODE_LEGAL_EMAIL` is unset.
-- **`requiredValue(name, value)`** (internal) — Returns the value or throws `ConfigError` if `undefined`. The guard is a safety net for `NODE_ENV=test`, where the normal boot-time check is skipped.
+- `operatorIdentity(): Operator` — the only export. Reads `accountConfig()` on each call and returns an `Operator` object:
+  - Required fields: `legalName`, `street`, `city`, `zip`, `country`, taken from `NODE_LEGAL_NAME`, `NODE_LEGAL_STREET`, `NODE_LEGAL_CITY`, `NODE_LEGAL_ZIP` and `NODE_LEGAL_COUNTRY`.
+  - Optional fields, included only when set: `vatNumber`, `tradeRegister`, `registrationNumber`, `phone`.
+  - `email` is `NODE_LEGAL_EMAIL`, falling back to `supportEmail()`.
+- `requiredValue(name, value)` — private helper. Throws `ConfigError("Invalid configuration (account): <name> is required")` when the value is `undefined`.
 
 ## Relationships
-
-- **`../config` (`src/modules/account/config.ts`)** — Provides `accountConfig()`, the sole data source for all identity fields.
-- **`@infrastructure/adapters/config`** — Supplies `supportEmail()`, the fallback when `NODE_LEGAL_EMAIL` is not configured.
-- **`@infrastructure/config/define`** — Supplies the `ConfigError` class thrown on missing required fields.
-- **`@types`** — Defines the `Operator` return type.
-- **`src/app/config-routes.ts`** — The `GET /config` endpoint that publishes the result to visitors.
-- **`src/modules/invoicing/services/issue-invoice.ts`** / **`src/modules/orders/emails.ts`** — Consumers that embed the operator identity in invoices and order emails.
-- **`src/modules/account/services/index.ts`** — Barrel re-export.
-- **`src/modules/account/tests/unit/operator-identity.test.ts`** — Unit tests covering field presence/absence and error paths.
+- **`src/modules/account/config.ts` (`accountConfig`)**: source of all `NODE_LEGAL_*` values.
+- **`src/infrastructure/adapters/config.ts` (`supportEmail`)**: fallback for `email`.
+- **`src/infrastructure/config/define.ts` (`ConfigError`)**: error type thrown for a missing required value.
+- **`src/types/index.ts` (`Operator`)**: return type.
+- **Consumers**: `GET /config` (via `src/app/config-routes.ts`), `src/modules/invoicing/services/issue-invoice.ts`, `src/modules/orders/emails.ts` and `src/modules/shop/service.ts`.
+- **`src/modules/account/services/index.ts`**: the services barrel for the account module.
+- **Tests**: `src/modules/account/tests/unit/operator-identity.test.ts` and `src/modules/shop/tests/unit/config.test.ts`.
 
 ## Notes
-
-- Required vs. optional is enforced here, not at config-parsing time. The distinction matters for legal compliance: name/street/city/zip/country must always appear on invoices and order emails.
-- The `ConfigError` path is reachable only under `NODE_ENV=test` (where the production boot check is bypassed). In production a missing variable would have already failed earlier.
-- Optional fields use spread-into-object (`...(x ? { key: x } : {})`) so the returned object omits them entirely rather than setting `undefined` values — important for serialization on `GET /config`.
-- The module docstring explicitly states this is **not** a shop concern; do not move it into `src/modules/shop/`.
+- Under `NODE_ENV=test` the boot-time config check is skipped, so a required variable may be unset. `requiredValue` then throws a `ConfigError` rather than leaving `undefined` in a legal notice. Outside tests the boot check is expected to catch this earlier.
+- Optional fields are checked for truthiness, so an empty string is omitted as well as `undefined`. Required fields are checked only for `undefined`, so an empty string passes.
+- Nothing is cached; the identity is recomputed on every call.

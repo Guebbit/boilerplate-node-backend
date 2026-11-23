@@ -1,32 +1,30 @@
 ---
 source: src/modules/addresses/controllers/get-addresses.ts
-sha256: e1f7104f73d67d25a2d6efa786400fd677bcc0a133d172aa597dd107f6ca078a
-generated_at: 2026-11-08T04:53:55.692704+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e1f7104f73d67d25a2d6efa786400fd677bcc0a133d172aa597dd107f6ca078a
+context_sha256: fc4d56a8d7e4827d36f198b591f5dde90d164b900be725fc887f89654154e29a
+generated_at: 2026-11-22T04:12:48.689933+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/controllers/get-addresses.ts
 
 ## Purpose
-
-Thin HTTP adapter that exposes `GET /account/addresses`, returning the authenticated caller's full address book in one service call. It exists to decouple Express plumbing from domain logic so the service layer stays transport-agnostic.
+Controller for `GET /account/addresses`. It is a thin HTTP adapter that returns the caller's whole address book by making a single call to `addressService.list`.
 
 ## Key elements
-
-- **`getAddresses(request, response)`** — The sole export. Reads the user ID from `request.authContext!`, calls `addressService.list(id)`, sends the result via `successResponse`, and routes any rejection through `catchAs(response, 'listAddresses')`.
-- **`successResponse<AddressesResponse>`** (imported) — Serialises the service view into a typed HTTP 200 body.
-- **`catchAs`** (imported) — Centralised error-to-response mapping; the `'listAddresses'` label identifies this call site in logs.
+- `getAddresses(request, response)`: the exported Express handler.
+  - Reads the user `id` from `request.authContext!`, which is non-null because the `isAuth` middleware guarantees it.
+  - Calls `addressService.list(id)`.
+  - On success, sends the resulting view with `successResponse<AddressesResponse>`.
+  - On failure, `.catch(catchAs(response, 'listAddresses'))` handles the error.
 
 ## Relationships
-
-- **`src/modules/addresses/routes.ts`** — Registers `getAddresses` as the handler for the `GET /account/addresses` route (behind `isAuth` middleware).
-- **`src/modules/addresses/service.ts`** — Supplies `addressService.list(id)`, the only domain call this controller makes.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` used to format the 200 reply.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs` for uniform error handling.
-- **`src/types/index.ts`** — Defines `AddressesResponse`, the shared response shape used here and by all sibling address controllers.
+- `src/modules/addresses/service.ts` (imported as `../service`): exports `addressService`, whose `list` method does the actual work.
+- `src/infrastructure/http/response.ts`: provides `successResponse`, which formats the success reply.
+- `src/infrastructure/http/controller.ts`: provides `catchAs`, the shared error handler, tagged with the label `'listAddresses'`.
+- `src/types/index.ts` (imported as `@types`): provides the `AddressesResponse` type used for the response payload.
+- `src/modules/addresses/routes.ts`: the routes module that wires this handler to the endpoint. The handler relies on `isAuth` having run before it.
 
 ## Notes
-
-- **Whole-book return pattern.** Every write endpoint (`post-address`, `update-address`, `delete-address`) also returns the full address list, so clients never need a follow-up GET after a mutation. Keep the response shape consistent across those siblings.
-- **Auth is middleware-guaranteed.** The `!` on `request.authContext` is safe only because `isAuth` runs before this handler; do not add a null-check here unless the middleware contract changes.
-- **No input validation.** This is a pure read keyed by the authenticated user; there are no body/query parameters to validate.
+- The returned view is the whole address book. According to the file's doc comment, the post, update and delete controllers (`./post-address.ts`, `./update-address.ts`, `./delete-address.ts`) answer with the same whole-book view. Clients therefore don't need to re-fetch after a change.
+- The handler returns the promise chain rather than being `async`.

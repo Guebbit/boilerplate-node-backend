@@ -1,27 +1,28 @@
 ---
 source: src/modules/addresses/tests/integration/fixtures.ts
-sha256: 98792d3a304d5beb524735bc2cdd2371b620f0ef4150adacfac08cdbfb286ada
-generated_at: 2026-11-08T04:57:45.091926+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8e0c0015bcd75eaedec2db25163a77def06ca0bd962ffbe31e7f1d761fb4aeea
+context_sha256: 8997af21376cb702981508c70b838c3753f54d34ca1ed75b7016881a3b3705ae
+generated_at: 2026-11-22T04:16:39.644023+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/tests/integration/fixtures.ts
 
 ## Purpose
-
-Shared test fixtures providing two fully-specified address objects used by the address-book and checkout integration suites. Exists so both test files reference identical data rather than duplicating inline literals.
+Shared test data for the address-book integration suites. It exports two constant address objects so tests use identical, predictable payloads instead of redefining them.
 
 ## Key elements
-
-- **`HOME`** — A home address (label `'home'`) for *Ada Lovelace*, 1 Via Roma, Modena 41121, IT.
-- **`OFFICE`** — A second address (label `'office'`) for the same person, 2 Via Milano, Modena 41122, IT.
+- `HOME`: address with label `home`, full name `Ada Lovelace`, street `Via Roma 1`, city `Modena`, zip `41121`, country `IT`.
+- `OFFICE`: address with label `office`, same full name, street `Via Milano 2`, city `Modena`, zip `41122`, country `IT`. It is documented as a second address in the same town.
 
 ## Relationships
+The neighbors in the dependency graph are the integration suites that use these fixtures:
+- `addresses.test.ts`
+- `checkout.test.ts`
+- `idempotent-create.test.ts`
 
-- Imported by `addresses.test.ts` — used as the canonical addresses the suite creates, reads, and asserts against.
-- Imported by `checkout.test.ts` — supplies the shipping/billing address payloads for checkout flow assertions.
+The file has no imports of its own, so it depends on nothing.
 
 ## Notes
-
-- Both fixtures share `fullName` and `city`; they differ only in `label`, `street`, and `zip`. Tests that distinguish the two rely on those three fields.
-- The `label` values (`'home'`, `'office'`) are the identifiers the address book uses to look up or update an entry; treat them as the logical key, not just display text.
+- The two addresses share the same `fullName`, `city` and `country`. They differ in `label`, `street` and `zip`.
+- The objects are plain, mutable literals with no `as const` or `Object.freeze`. A test that mutates one could affect other tests in the same module instance.

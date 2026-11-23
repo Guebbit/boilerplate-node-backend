@@ -1,35 +1,31 @@
 ---
 source: src/modules/locales/controllers/delete-locale-entry.ts
-sha256: cba31a55c6f9c95b4aa2fa7b1a9933406b3b929636899a656fc2bec1a8f3c0e9
-generated_at: 2026-11-08T06:20:30.002493+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cba31a55c6f9c95b4aa2fa7b1a9933406b3b929636899a656fc2bec1a8f3c0e9
+context_sha256: 784c2effa50d508e86a41987222ab438552a511abf1a751b3c7cbf1269713e2a
+generated_at: 2026-11-22T05:41:52.161555+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/controllers/delete-locale-entry.ts
 
 ## Purpose
-
-Thin HTTP adapter for `DELETE /locales/:locale/apps/:app/entries/:entryId`. It validates the `entryId` parameter, delegates the actual deletion to `localeService.removeEntry`, and returns a `204 No Content` (or a refusal/error status) — no response body.
+Express controller for `DELETE /locales/:locale/apps/:app/entries/:entryId` (admin). It is a thin HTTP adapter over `localeService.removeEntry`: it removes one key from one language only, leaving other languages' rows for that key intact. It responds with no body; the removed key is recorded in the audit trail instead.
 
 ## Key elements
-
-- **`deleteLocaleEntry(request, response)`** (exported) — The sole handler. Resolves `entryId` via `requireId`, calls `localeService.removeEntry(locale, app, entryId, callerContextOf(request))`, then either short-circuits on a refusal, sends a `204`, or routes the error through `catchAs`.
-- **`requireId`** (from `@infrastructure/http/ids`) — Validates/extracts the `entryId` param; sends a 404 with the i18n key `locales.error-entry-not-found` when missing or invalid, and the handler returns early.
-- **`callerContextOf`** (from `@infrastructure/http/request`) — Derives audit/context metadata from the request to pass into the service call.
-- **`noContentResponse`** (from `@infrastructure/http/response`) — Emits the `204` response on success.
-- **`catchAs` / `refused`** (from `@infrastructure/http/controller`) — Standard error/refusal plumbing shared across controllers.
+- `deleteLocaleEntry(request, response)` — the exported handler.
+  - Validates `entryId` with `requireId`, using the not-found message key `locales.error-entry-not-found` and param name `entryId`. If validation fails, it returns `Promise.resolve()` and stops.
+  - Calls `localeService.removeEntry(locale, app, entryId, callerContextOf(request))`.
+  - If `refused(response, result)` reports the service refused the request, it returns without further action. Otherwise it sends `noContentResponse(response)`.
+  - Any rejection is handled by `catchAs(response, 'deleteLocaleEntry')`.
 
 ## Relationships
-
-- **`src/modules/locales/services/index.ts`** — Calls `localeService.removeEntry`; the service performs the deletion and (per its own docs) refreshes the overlay on success.
-- **`src/modules/locales/routes.ts`** — Registers `deleteLocaleEntry` as the handler for the DELETE route.
-- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs` and `refused` for uniform error/refusal handling.
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf` for audit context extraction.
-- **`src/infrastructure/http/ids.ts`** — Supplies `requireId` for parameter validation.
-- **`src/infrastructure/http/response.ts`** — Supplies `noContentResponse` for the 204 reply.
+- `src/infrastructure/http/controller.ts` — supplies `refused` (checks the service result and writes a refusal response) and `catchAs` (error handler labelled with the controller name).
+- `src/infrastructure/http/ids.ts` — `requireId` parses and validates the `entryId` route param.
+- `src/infrastructure/http/request.ts` — `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts` — `noContentResponse` sends the success response.
+- `src/modules/locales/services/index.ts` — provides `localeService`, whose `removeEntry` does the actual removal. Per the source comment, the service itself refreshes the overlay on success.
+- `src/modules/locales/routes.ts` — mounts this handler on the DELETE route.
 
 ## Notes
-
-- The controller is intentionally stateless: the service layer owns the overlay refresh and audit-trail recording. Do not add side-effects here.
-- `requireId` returning a falsy value causes an early `Promise.resolve()` — the 404 is already sent at that point; no further processing occurs.
-- Only one language's row for the given key is removed; other locales' rows for the same key are unaffected (documented in the service, not re-checked in the controller).
+- The handler always returns a Promise (including on the early-exit path), so callers can treat it uniformly.
+- It has no business logic of its own; authorization, removal, audit logging and overlay refresh all happen elsewhere (the "(admin)" restriction is stated in the doc comment, not enforced in this file).

@@ -1,41 +1,50 @@
 ---
 source: scripts/scaffold/scenario-registry.ts
-sha256: f227d560719af723f6a5a604ba424f034638f46364c0331f2ea48b27e5c0fdde
-generated_at: 2026-11-14T17:42:20.308225+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:16:47.477152+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/scaffold/scenario-registry.ts
 
 ## Purpose
-
-Generates four registry files (`shop-modules.generated.ts`, `scenarios.generated.ts`, `modules.generated.ts`, `levers.generated.ts`) by scanning the `scenarios/` file tree for files that follow naming and export conventions. This eliminates hand-maintained lists: adding or deleting a module is just adding or deleting files, and the next regeneration reflects the change.
+Generates the four scenario registry files from the file tree instead of maintaining them by hand. It reads only file names and a single `export const <name>` line per file (never the body), so removing a module or the whole shop is just deleting files; the next generation drops what is gone.
 
 ## Key elements
+- `GeneratedFile` — `{ file, content }`: a repo-relative path and what it should hold.
+- `FIXTURE_REGISTRY`, `SCENARIO_REGISTRY`, `DOUBLES_REGISTRY`, `LEVERS_REGISTRY` — repo-relative paths of the generated outputs. They are written by this generator, so they may not exist until it has run:
+  - `scenarios/shop-modules.generated.ts`
+  - `scenarios/scenarios.generated.ts`
+  - `scenarios/support/doubles/modules.generated.ts`
+  - `scenarios/support/doubles/levers.generated.ts`
+- `renderScenarioRegistries(repoRoot, format)` — builds all four files and runs each through the injected formatter. Failures reject the promise rather than throwing synchronously.
+- `writeScenarioRegistries(repoRoot, format)` — writes only files whose content changed (creating directories as needed) and returns the changed repo-relative paths.
+- `staleScenarioRegistries(repoRoot, format)` — returns the paths that are stale or missing, for `--check`. The body is cut off in the source I was given, so this description comes from its docblock only.
+- Private helpers:
+  - `declares` — regex check for a top-level `export const <name>`.
+  - `foldersDeclaring` — doubles folders whose given file declares the given export, sorted.
+  - `namesIn` — sorted entry names in a folder matching a pattern.
+  - `identifier` — turns kebab-case into camelCase.
+  - `renderCollection` — emits the import lines and the collected object.
+  - `renderFixtureRegistry`, `renderScenarioRegistry`, `renderDoublesRegistry`, `renderLeversRegistry` — one renderer per registry.
 
-- **`FIXTURE_REGISTRY` / `SCENARIO_REGISTRY` / `DOUBLES_REGISTRY` / `LEVERS_REGISTRY`** — repo-relative paths of the four generated files.
-- **`declares(file, exportName)`** — regex check (not a full parse) that a file contains a top-level `export const <name>`.
-- **`foldersDeclaring(dir, fileName, exportName)`** — returns alphabetically-sorted doubles subfolder names whose inner file declares the expected export; tolerates a folder having only one of its two files.
-- **`identifier(name)`** — kebab-case → camelCase for use as an import alias.
-- **`namesIn(folder, pattern)`** — extracts captured names from matching file names in a directory.
-- **`renderCollection(entries, constName, description)`** — emits `import { x as y }` lines plus the `export const <name> = { … }` object.
-- **`renderFixtureRegistry` / `renderScenarioRegistry` / `renderDoublesRegistry` / `renderLeversRegistry`** — each produces the full file body (header + imports + declaration) for one registry.
-- **`renderScenarioRegistries(repoRoot, format)`** — renders all four, pipes each through the injected `FormatText` formatter, returns `Promise<GeneratedFile[]>`.
-- **`writeScenarioRegistries(repoRoot, format)`** — writes only files whose content changed; returns the changed paths.
-- **`staleScenarioRegistries(repoRoot, format)`** — compares rendered output to on-disk files; returns paths that are stale or missing (used by `--check`).
+## Conventions collected
+| file | export | collected as |
+| --- | --- | --- |
+| `scenarios/<module>.ts` | `shopModule` | `shopModuleFixtures` |
+| `scenarios/<name>.scenario.ts` | `scenario` | `scenarioFixtures` |
+| `scenarios/support/doubles/<module>/register.ts` | `registerDouble` | `registerModuleDoubles` |
+| `scenarios/support/doubles/<module>/levers.ts` | `installLever` | `installModuleLevers` |
 
 ## Relationships
-
-- **`scripts/scaffold/format-text.ts`** — exports the `FormatText` type injected into `renderScenarioRegistries`, `writeScenarioRegistries`, and `staleScenarioRegistries`. The formatter is passed in (rather than imported) so unit tests can avoid loading Prettier under Jest.
-- **`scripts/docs/generate-scenario-registries.ts`** — the CLI entry point that invokes `writeScenarioRegistries` (or `staleScenarioRegistries` for `--check`).
-- **`scripts/scaffold/demo-remove.ts`** — after deleting a module's files, the next registry regeneration drops the corresponding entry; this module provides the regeneration logic.
-- **`tests/unit/scripts/scaffold/scenario-registry.test.ts`** — unit tests for the render and write functions.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — exercises registry generation in a CI mutation-wave context.
+- `format-text.ts` — supplies the `FormatText` type. The formatter is passed in as an argument because importing the real one loads Prettier, which a Jest unit test cannot do.
+- `generate-scenario-registries.ts` (in `scripts/docs`) and `demo-remove.ts` — neighbors in the dependency graph. They presumably call the render, write and stale functions. Their code is not shown here, so the exact calls are unconfirmed.
+- `scenario-registry.test.ts` — the unit test for this file.
+- `waves.test.ts` and `shallow-candidates.ts` — also linked in the graph. The nature of the link is not visible from this file.
 
 ## Notes
-
-- Detection is purely convention-based: a file is picked up only if its name matches the expected pattern **and** it declares the expected `export const` via a simple regex. No module-system resolution or full AST parsing occurs.
-- `renderScenarioRegistry` **throws** if a `.scenario.ts` file is found by name but does not declare `export const scenario`; the fixture and doubles/levers renderers silently skip non-conforming entries instead.
-- All generated files open with a `@module` header stating they are generated and must not be edited.
-- `renderScenarioRegistries` wraps its body in `Promise.resolve().then(…)` so that a synchronous read failure rejects the promise rather than escaping as an uncaught throw.
-- The `format` parameter is always the Prettier-wrapped `formatWithRepoConfig` in production; tests substitute a no-op or simple formatter.
+- Generated files open with a `GENERATED by npm run regenerate — do not edit` header.
+- A `*.scenario.ts` file that exports no `scenario` throws `[scenarios] <name>.scenario.ts exports no \`scenario\`.`.
+- Module files that lack `shopModule` are silently skipped. Doubles folders with only one of `register.ts` or `levers.ts` are skipped for the other registry rather than failing.
+- Module files are matched by `^(?!.*\.scenario)([\w-]+)\.ts$`, so `*.scenario.ts` files and names with dots are excluded.
+- Entries are sorted alphabetically. Kebab-case names become camelCase identifiers, and the object key stays quoted as the original name when the two differ.
+- Detection is line-based (`^export const <name>\b`, multiline), not a parse, so the export must be a top-level `export const`.
