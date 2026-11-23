@@ -29,8 +29,10 @@ import {
     environmentKnob,
     filesPerShard,
     heapCapMb,
+    parseShardSelector,
     processBudgetMb,
     shardCount,
+    sliceShards,
     shardTargetMb,
     workerCount
 } from './machine-budget';
@@ -224,6 +226,12 @@ const inBand = suite.serialized || workers === 1;
 const shardsOverride = environmentKnob('JEST_SHARDS');
 
 /**
+ * `JEST_SHARD=<i>/<n>`, set by a CI matrix job: this process runs slice `i` of `n` and nothing else.
+ * It fixes the slice count, so it wins over {@link shardsOverride} and the memory-driven count.
+ */
+const selector = parseShardSelector(process.env.JEST_SHARD);
+
+/**
  * How many sequential jest processes this layer needs.
  *
  * Only an IN-BAND layer is sharded.
@@ -236,11 +244,22 @@ const shardsOverride = environmentKnob('JEST_SHARDS');
  * `JEST_SHARDS` still overrides this for a parallel layer, for whoever needs that knob anyway,
  * clamped to the layer's own file count: a shard beyond it runs empty and jest exits non-zero.
  */
-const shards = shardsOverride
+const memoryShards = shardsOverride
     ? clampShards(shardsOverride, fileCount)
     : inBand
       ? shardCount(fileCount, perShard)
       : 1;
+
+/**
+ * A matrix job's share of {@link memoryShards}: the total jest shard count and the ones this job runs.
+ * Without `JEST_SHARD` that is every shard, in order.
+ */
+const plan = selector
+    ? sliceShards(selector, memoryShards, fileCount)
+    : { total: memoryShards, mine: Array.from({ length: memoryShards }, (_, i) => i + 1) };
+
+/** The total jest shard count; `--shard=k/shards` is passed when it is above one. */
+const shards = plan.total;
 
 /**
  * `--workerIdleMemoryLimit` for a parallel layer's worker; meaningless (and unused) in band,
@@ -313,7 +332,7 @@ const main = async () => {
             `${availableMemoryMb()} MB available`
     );
 
-    for (let shard = 1; shard <= shards; shard += 1) {
+    for (const shard of plan.mine) {
         if (shards > 1) console.log(`\n[test] ${suiteName}: shard ${shard}/${shards}`);
 
         /**
@@ -330,7 +349,7 @@ const main = async () => {
         process.exit(code);
     }
 
-    console.log(`\n[test] ${suiteName}: all ${shards} shard(s) passed`);
+    console.log(`\n[test] ${suiteName}: ${plan.mine.length} of ${shards} shard(s) passed`);
 };
 
 // Entry point: a rejection prints the error and exits 1.

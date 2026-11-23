@@ -121,9 +121,11 @@ module.exports = {
      * Transform cache, on disk under node_modules: no RAM cost, survives reboots.
      * Lane slots share it through the node_modules symlink; entries are keyed by absolute file path,
      * so slots do not collide. `npx jest --clearCache` (or deleting node_modules) resets it.
+     * `JEST_CACHE_DIRECTORY` moves it: CI points it outside node_modules, which `npm ci` wipes on
+     * every run, so actions/cache can keep it between runs.
      * https://jestjs.io/docs/configuration#cachedirectory-string
      */
-    cacheDirectory: '<rootDir>/node_modules/.cache/jest',
+    cacheDirectory: process.env.JEST_CACHE_DIRECTORY || '<rootDir>/node_modules/.cache/jest',
     clearMocks: true,
     /**
      * `node`, plus clearing every timer a file leaves running — without it each file's whole module

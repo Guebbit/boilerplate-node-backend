@@ -23,6 +23,13 @@ inputs:
         required: false
         default: 'false'
 
+    jest-cache:
+        description: >-
+            Restore ts-jest's transform cache, saved by the job's own step, under this name (one per matrix slice, so
+            slices do not overwrite each other). Empty means no cache.
+        required: false
+        default: ''
+
 runs:
     using: composite
     steps:
@@ -64,3 +71,23 @@ runs:
               sudo apt-get update
               sudo apt-get install -y "mongodb-org-server=${version}"
               echo "MONGOMS_SYSTEM_BINARY=$(command -v mongod)" >> "$GITHUB_ENV"
+
+        # ts-jest type-checks every file it compiles, 8-18 s each on a runner, so a cold cache is
+        # most of a test job's time. jest's default cache lives in node_modules, which `npm ci`
+        # wipes; JEST_CACHE_DIRECTORY (read by jest.config.js) moves it somewhere that survives.
+        - name: Point jest's cache outside node_modules
+          if: ${{ inputs.jest-cache != '' }}
+          shell: bash
+          run: echo "JEST_CACHE_DIRECTORY=${RUNNER_TEMP}/jest-cache" >> "$GITHUB_ENV"
+
+        # Restore only: the saving step belongs to the job, after its tests, and runs on main alone
+        # (a branch restores main's cache). Saving here, with a run-unique key, wrote several
+        # multi-GB entries per run and evicted the npm cache from the 10 GB limit.
+        # Key: lockfile + tsconfigs decide whether a cached transform is still valid.
+        # https://github.com/actions/cache/tree/main/restore
+        - name: Restore jest's transform cache
+          if: ${{ inputs.jest-cache != '' }}
+          uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+          with:
+              path: ${{ runner.temp }}/jest-cache
+              key: jest-${{ runner.os }}-${{ inputs.jest-cache }}-${{ hashFiles('package-lock.json', 'tsconfig*.json') }}
