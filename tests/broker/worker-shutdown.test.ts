@@ -51,6 +51,9 @@ const SHUTDOWN_DELAY_MS = 500;
 /** The management API refreshes its counters on this interval (RabbitMQ's default is 5 s). */
 const MANAGEMENT_STATS_INTERVAL_MS = 5000;
 
+/** How long to poll the counters for: a quorum queue's stats lag about two intervals, plus slack. */
+const MANAGEMENT_STATS_SETTLE_MS = MANAGEMENT_STATS_INTERVAL_MS * 4;
+
 /** The mail queue the email consumer reads (`EMAIL_QUEUE` in `queue.ts`). */
 const MAIL_QUEUE = 'worker.email.send';
 
@@ -285,20 +288,35 @@ describe('a worker that gets SIGTERM while it runs a job', () => {
         );
         expect(smtp.accepted()).toBe(1);
 
-        // The management counters lag by their stats interval: read once they are surely fresh.
-        await new Promise((resolve) => setTimeout(resolve, MANAGEMENT_STATS_INTERVAL_MS + 1000));
-        const [work, retry, dead] = await Promise.all([
-            broker.management.queue(MAIL_QUEUE),
-            broker.management.queue(`${MAIL_QUEUE}.retry`),
-            broker.management.queue(`${MAIL_QUEUE}.dead`)
-        ]);
-        expect(work.messages_ready).toBe(0);
-        expect(work.messages_unacknowledged).toBe(0);
-        // A handler that threw during shutdown is acked and republished here, so an empty work queue alone proves nothing.
-        expect(retry.messages_ready).toBe(0);
-        expect(retry.messages_unacknowledged).toBe(0);
-        expect(dead.messages_ready).toBe(0);
-        expect(dead.messages_unacknowledged).toBe(0);
+        /**
+         * The management counters lag by their stats interval, and a quorum queue's lag more than
+         * once over, so one read after a fixed sleep can still show the job. Poll until all six
+         * counters settle at zero; the last read is the failure message. The first wait outlasts
+         * the lag, so an all-zero read that is merely stale cannot pass a message still unacked.
+         */
+        await new Promise((resolve) =>
+            setTimeout(resolve, MANAGEMENT_STATS_INTERVAL_MS * 2 + 1000)
+        );
+        await retryUntil(
+            () =>
+                Promise.all([
+                    broker.management.queue(MAIL_QUEUE),
+                    broker.management.queue(`${MAIL_QUEUE}.retry`),
+                    broker.management.queue(`${MAIL_QUEUE}.dead`)
+                ]).then(([work, retry, dead]) => {
+                    // A handler that threw during shutdown is acked and republished to retry/dead, so an empty work queue alone proves nothing.
+                    expect([
+                        work.messages_ready,
+                        work.messages_unacknowledged,
+                        retry.messages_ready,
+                        retry.messages_unacknowledged,
+                        dead.messages_ready,
+                        dead.messages_unacknowledged
+                    ]).toEqual([0, 0, 0, 0, 0, 0]);
+                }),
+            MANAGEMENT_STATS_SETTLE_MS,
+            1000
+        );
         /**
          * A job finished inside the wait is not redelivered: the documented promise, not
          * exactly-once in general (a job that outlives the wait is redelivered by design). A

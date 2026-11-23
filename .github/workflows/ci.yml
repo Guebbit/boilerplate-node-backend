@@ -491,7 +491,8 @@ jobs:
         # against in-memory Mongo. One parallel jest pass gives the verdict and the JSON report.
         # Coverage is not measured anywhere: the mutation score is the test-quality number.
         runs-on: ubuntu-latest
-        timeout-minutes: 30
+        # the suites take longer than 30 minutes on a 4-vCPU runner
+        timeout-minutes: 60
         permissions:
             contents: read
         env:
