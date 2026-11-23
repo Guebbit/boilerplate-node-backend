@@ -1,32 +1,28 @@
 ---
 source: src/infrastructure/adapters/ssrf-exemptions.ts
-sha256: 0c2bbf4d1092937ace1403a1209c46f9ca094b5f814ccc0159f384682c24cffe
-generated_at: 2026-11-08T03:24:00.706829+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 22f91212435c35a5eb7d9aad8e19e51fc40d0365df0dab274e61b3147d1e87ec
+context_sha256: b8c074296da558b51e3d5b93529f86e2d22f48dcf474db3acf3621109d3679cc
+generated_at: 2026-11-22T02:42:41.871284+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/ssrf-exemptions.ts
 
 ## Purpose
-
-Holds a process-wide set of origins exempt from the SSRF guard's private-address check. Exists as a standalone module with **zero imports** so that dev preloads and Jest setup can register an exemption without pulling in `ssrf-guard.ts` (and its DNS dependencies) before a test's own DNS mock is in place. In production the set is always empty.
+Holds the registry of origins that the SSRF guard (`./ssrf-guard`) allows to resolve to a private address. The registry is empty in production, because nothing in `src/` registers an origin. A development or demo process registers its own sink before the application loads. The file has no imports, so development doubles and the jest setup can register an origin without loading the guard and its DNS imports before a test's own DNS mock is in place.
 
 ## Key elements
-
-- **`exemptOrigins`** (module-private `Set<string>`) — the registry of exempt origins. Never exported directly.
-- **`registerSsrfExemptOrigin(origin: string): void`** — adds one origin (full `https://host:port` string, as `URL.origin` writes it) to the set.
-- **`clearSsrfExemptOrigins(): void`** — empties the set. Intended as a test teardown seam.
-- **`isSsrfExemptOrigin(origin: string): boolean`** — membership check the guard calls before rejecting a resolved private address.
+- `exemptOrigins` (module-private): a `Set<string>` of origins in the form `https://host:port`. An exemption covers one host and one port, so a sink on `:3070` does not open the other ports on that machine.
+- `registerSsrfExemptOrigin(origin)`: adds an origin, written as `URL.origin` writes it (e.g. `https://127.0.0.1:3070`). It relaxes only the address check. The `https:` rule, credential checks, parsing and DNS resolution still run in full.
+- `clearSsrfExemptOrigins()`: empties the set. It is a test seam: a suite that registers an origin should reset it afterwards.
+- `isSsrfExemptOrigin(origin)`: returns whether an origin was registered.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/ssrf-guard.ts`** — the consumer. Queries `isSsrfExemptOrigin` during its address-resolution step to decide whether to skip the private-IP rejection. The exemption relaxes *only* the address check; the `https:` scheme rule, credential stripping, URL parsing, and DNS resolution all still run.
-- **`scenarios/support/doubles/webhook-sink.ts`** — the one caller of `registerSsrfExemptOrigin` in non-test code. It registers its own sink origin before the application module graph loads.
-- **Test files** (`tests/unit/infrastructure/adapters/ssrf-guard.test.ts`, `tests/fuzz/ssrf-guard.fuzz.test.ts`, `tests/cross-cutting/ssrf-conformance.test.ts`, `src/modules/webhooks/tests/fuzz/webhook-ssrf.fuzz.test.ts`, `tests/integration/scenarios/webhooks-seed.test.ts`, `tests/support/webhook-receiver.ts`, `src/modules/webhooks/tests/contract/webhooks.contract.test.ts`, `tests/unit/scenarios/webhook-sink.test.ts`) — each registers an exemption in setup and calls `clearSsrfExemptOrigins` in teardown.
+- `ssrf-guard.ts` is the consumer. It checks `isSsrfExemptOrigin` to decide whether to skip the private-address check.
+- `scenarios/support/doubles/webhook-sink.ts` is the documented registrant in development and demo setups.
+- Tests and support code that reference this file or exercise the exemption behavior: `tests/unit/infrastructure/adapters/ssrf-guard.test.ts`, `tests/cross-cutting/ssrf-conformance.test.ts`, `tests/fuzz/ssrf-guard.fuzz.test.ts`, `src/modules/webhooks/tests/fuzz/webhook-ssrf.fuzz.test.ts`, `src/modules/webhooks/tests/contract/webhooks.contract.test.ts`, `tests/integration/scenarios/webhooks-seed.test.ts`, `tests/unit/scenarios/webhook-sink.test.ts` and `tests/support/webhook-receiver.ts`.
 
 ## Notes
-
-- **Origin, not host.** The exempt value is the full origin string including port. A sink registered on `:3070` does *not* open every port on that host.
-- **Single-check relaxation.** Registering an origin bypasses only the "resolves to a private address" gate. The guard's other invariants (scheme, credentials, parseability, DNS reachability) are untouched.
-- **No imports by design.** This file must stay import-free. Adding a dependency here would break the guarantee that it can be loaded before Jest installs its DNS mock, causing the guard's real DNS code to execute at module-evaluation time.
-- **Process-global, mutable.** There is no isolation between test files in the same worker; every suite that registers must clear. The `clearSsrfExemptOrigins` export is the only reset mechanism.
+- Origins must be passed in the exact `URL.origin` form, because matching is exact string membership in the set.
+- The state is process-global and mutable. Tests that register an origin should call `clearSsrfExemptOrigins()` afterwards to avoid leaking state between suites.
+- Keep this file free of imports, since that is what lets it be loaded ahead of the guard.

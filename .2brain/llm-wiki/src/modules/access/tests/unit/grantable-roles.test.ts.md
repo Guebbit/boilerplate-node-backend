@@ -1,36 +1,31 @@
 ---
 source: src/modules/access/tests/unit/grantable-roles.test.ts
-sha256: 73cf06a871ddcfa97c8321a0631d724b4665c0f28abba517a205c8d7cdc22d07
-generated_at: 2026-11-14T18:29:04.975178+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5ac8963054590569fdced284cd82e070f4cb0e04f8e469b86e161739e1a04d04
+context_sha256: e8f27f85b1751606b0b719293e7cba27fbb295136c4517b80f489468d525df1c
+generated_at: 2026-11-22T03:18:47.334486+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/access/tests/unit/grantable-roles.test.ts
 
 ## Purpose
-
-Unit tests for `grantableRoles` and `assertCanGrant` in isolation, verifying which tenant-scoped roles a preset caller is permitted to assign to other members. The test table is the executable model of the grant rule defined in `shared/rules/authorization-roles.yaml`: adding a role or changing its `assignable` flag should surface here as a new or updated row.
+Unit tests for `grantableRoles` in isolation: which tenant roles each preset caller may hand out. The expectations follow the same rule `validateGrant` applies on the write path. The file's header says the table is the model: a role added to `shared/rules/authorization-roles.yaml` that changes who may grant what shows up here as a row to review.
 
 ## Key elements
-
-- **`everyTenantRole`** — all `PRESET_ROLES` with `scope === 'tenant'`, in declaration order.
-- **`assignableTenantRoles`** — the subset of the above where `assignable !== false` (i.e. excludes `system`).
-- **`refuses(call)`** — helper that runs a synchronous function and returns `true` if it throws; lets a single `expect` assert both grant and deny outcomes for a table row.
-- **`describe('grantableRoles')`** suite containing:
-  - Parameterised check that `admin` gets all assignable tenant roles, while `moderator` and `support` get none.
-  - Empty-permissions caller returns `[]`.
-  - `system` role is never grantable, even by `admin` (both `grantableRoles` exclusion and `assertCanGrant` rejection with a "never assigned" message).
-  - Platform-scoped roles (e.g. `operator`) never appear in tenant-scope results.
-  - Cross-check table (`admin`/`moderator` × every tenant role) confirming `grantableRoles` offers a role **if and only if** `assertCanGrant` does not throw — i.e. the read path and the write path agree.
+- `everyTenantRole`: names of all `PRESET_ROLES` with `scope === 'tenant'`, in declaration order.
+- `assignableTenantRoles`: the tenant roles whose `assignable` is not `false`, which excludes `system`.
+- `refuses(call)`: runs a synchronous call and returns `true` if it throws. This lets one `expect` cover both outcomes of a table row.
+- Table test: `admin` gets all `assignableTenantRoles`. `moderator` and `support` get `[]`. The comment says the rule is "hold `assign:Role`", so only a role manager can grant.
+- A caller holding no permission keys gets `[]`.
+- `system` is never offered, even to `admin`, and `assertCanGrant('tenant', 'system', …)` throws `/never assigned/`.
+- The `operator` platform role is not offered in tenant scope.
+- Parity test: for `admin` and `moderator` against every tenant role, `refuses(assertCanGrant(...))` must equal `!grantableRoles(...).includes(role)`. This ties the list to the write-path check.
 
 ## Relationships
-
-- **`src/kernel/permissions.ts`** — source of `PRESET_ROLES` (the role catalog) and `permissionsOfRole` (maps a role name to its permission-key array). The tests derive their expected tables directly from these constants.
-- **`src/modules/access/services/grants.ts`** — defines `grantableRoles` and `assertCanGrant`, the two functions under test.
-- **`src/modules/access/services/index.ts`** — barrel re-export; the test imports `grantableRoles` and `assertCanGrant` through this path (`../../services`) rather than reaching into `grants.ts` directly.
+- `src/kernel/permissions.ts`: provides `PRESET_ROLES` (used to derive the role lists) and `permissionsOfRole` (used to build each caller's permission set).
+- `src/modules/access/services/index.ts`: the test imports `grantableRoles` and `assertCanGrant` from here. The implementation presumably lives in `src/modules/access/services/grants.ts`, which the index appears to re-export; the test does not import that file directly.
+- `../../repository`: mocked with empty `membershipRepository` and `tenantRepository` objects, so no data layer is needed.
 
 ## Notes
-
-- The tests mock `../../repository` (empty stubs) so no database calls leak in; the functions under test are pure given their permission-key arguments.
-- The consistency table (`agrees with the write path`) is the critical guard: if someone edits the grant rule in YAML or the service logic without updating the other side, this cross-check catches the drift immediately.
-- `customer` and `unverified` are intentionally absent from the grant tables — they are audience labels, not grantable roles.
+- The `jest.mock` of the repository is needed only so that importing the services doesn't load the real repositories. The tests call only pure permission logic.
+- The parity test covers only `admin` and `moderator`, not `support` or other callers.

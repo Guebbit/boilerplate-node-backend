@@ -1,37 +1,51 @@
 ---
 source: src/modules/account/tests/unit/session-listing.test.ts
-sha256: 3043f40a8fa02da0b76264ed6d70a311cb6a0fafff02ca884ce0fa8ece91f737
-generated_at: 2026-11-14T19:16:58.493471+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3043f40a8fa02da0b76264ed6d70a311cb6a0fafff02ca884ce0fa8ece91f737
+context_sha256: 3ccf95da11e5f4b2f8dcc35e422be8249b592c0adb34fc4cf8c556d72c321901
+generated_at: 2026-11-22T04:08:53.217198+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/session-listing.test.ts
 
 ## Purpose
-
-Unit tests for the two exports of `@modules/account/session/listing` (`newestPerFamily` and `listSessions`). They verify the public shape of the session list: one entry per family regardless of rotation-race duplicates, correct `current` marking, absence (not invention) of optional fields, account-epoch (ban) filtering, and the staff idle-timeout rule. The store is fully replaced; what `listLive` returns is controlled per-case.
+Unit tests for the session list published by `listSessions` and the helper `newestPerFamily` in `src/modules/account/session/listing.ts`. They check that there is one entry per sign-in (even when a rotation race left several rows), that the caller's own session is marked, and that optional fields are omitted rather than invented. The store is fully replaced with a mock. Which rows `listLive` selects is covered by the integration suite, not here.
 
 ## Key elements
+- **Module mocks** (`jest.mock`): each spreads the real module and swaps one member.
+  - `sessionRepository.listLive` becomes a `jest.fn()`.
+  - `accountUserService.findAuthenticatableById` becomes a `jest.fn()`.
+  - `accessService.rolesOf` becomes a `jest.fn()` that resolves `{ tenant: null, platform: null }`.
+- `USER_ID`: the fixed account id used in every case.
+- `row(familyId, overrides)`: builds a stub `SessionRow` with a fresh `_id`, `mode: 'jwt'`, a random `tokenHash` made with `hashToken`, and fixed `startedAt` and `expiresAt` dates. `_id` decides which of a family's rows is newer.
+- `listLive` and `findAuthenticatableById`: typed handles to the mocks, obtained with `asStub`.
+- `beforeEach`: calls `jest.resetAllMocks()`, then restores the default of no roles and an authenticatable user `{ id: USER_ID }`.
 
-- **`row(familyId, overrides?)`** – local factory that builds a `SessionRow` fixture with a fresh `Types.ObjectId` for `_id` (so the last-created object is always "newer"), a fixed `USER_ID`, and a `hashToken`-generated `tokenHash`.
-- **`describe('newestPerFamily')`** – asserts that the function keeps exactly one row per `familyId` (the later-written one, regardless of input order) and preserves the caller's family ordering.
-- **`describe('listSessions')`** – asserts the mapped output (`id`, `createdAt`, `expiration`, `current`), that `lastUsedAt`/`device` are absent when the row lacks them, and that `current` is `false` when no credential is supplied.
-- **`describe('listSessions and the account epoch')`** – asserts rows whose `authTime` (Unix seconds) predates the account's `tokensValidAfter` are dropped, while rows with no stored `authTime` are kept.
-- **`describe('listSessions and the staff idle timeout')`** – asserts that a session whose `lastUsedAt` exceeds the idle window is hidden when the caller holds a staff role (`tenant: 'editor'`) but visible for a non-staff caller.
+**Test groups**
+- `newestPerFamily`:
+  - keeps the later-written row per family, whatever its position in the input;
+  - keeps every family, in the order given.
+- `listSessions`:
+  - publishes `id` (the family id), `createdAt`, `expiration` and `current`;
+  - marks the caller's own session current, including when the caller holds the family's older row (the grace window);
+  - marks nothing current when there is no credential;
+  - includes `lastUsedAt` and `device` only when the row has them.
+- Account epoch:
+  - drops rows whose `authTime` predates the user's `tokensValidAfter`;
+  - keeps rows with no `authTime`.
+- Staff idle timeout:
+  - hides a session with a 24h-old `lastUsedAt` when `rolesOf` returns a tenant role (`editor`);
+  - keeps the same session for a user with no roles.
 
 ## Relationships
-
-- **`src/modules/account/session/listing.ts`** – the module under test; provides `listSessions` and `newestPerFamily`.
-- **`src/modules/account/repository.ts`** – the session store whose `listLive` method is mocked to return controlled `SessionRow` arrays.
-- **`src/modules/users/friends/account.ts`** – the account-read service whose `findAuthenticatableById` is mocked to supply the account record (id, `tokensValidAfter`).
-- **`src/modules/access/index.ts`** – the access service whose `rolesOf` is mocked to drive staff-vs-shopper role logic.
-- **`src/infrastructure/security/hash-token.ts`** – `hashToken` is called in fixtures to produce realistic `tokenHash` values.
-- **`tests/support/stub.ts`** – `asStub` is used to type-assert the jest mocks back into their real shapes.
+- Tests `listSessions` and `newestPerFamily` from `@modules/account/session/listing`.
+- Mocks `sessionRepository` from `@modules/account/repository`, and imports the `SessionRow` type from there.
+- Mocks `accountUserService` from `@modules/users/friends/account`.
+- Mocks `accessService` from `@modules/access`.
+- Uses `hashToken` from `@infrastructure/security/hash-token` to build row hashes. The test for the current session relies on the code under test hashing the raw token the same way.
+- Uses `asStub` from `@tests/stub` for casts to the mock types.
 
 ## Notes
-
-- Mocks use the `jest.mock` + `requireActual` spread pattern so only the specific method is replaced while the rest of each module's exports remain intact.
-- "Newer" in `newestPerFamily` is determined by `Types.ObjectId` natural ordering (timestamp-embedded), not by an explicit `startedAt` comparison; the `row()` helper relies on creation order.
-- The staff idle-timeout test uses `Date.now() - 24 h`, making it wall-clock relative rather than fixed-time.
-- The `current`-marking test for the rotation race passes the *old* token (`'rotated-away'`) as the caller credential, verifying that family-level (not row-level) matching marks the entry.
-- `hashToken` is imported only for fixture realism; the `listSessions` signature takes the raw token string (e.g. `'mine'`), not a hash.
+- The mocks spread the real module (`requireActual`), so only the named members are replaced.
+- `jest.resetAllMocks()` clears the `rolesOf` default set in the mock factory, so `beforeEach` sets it again.
+- The staff idle-limit test uses `Date.now()` for the stale timestamp. It does not use fake timers.

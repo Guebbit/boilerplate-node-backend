@@ -1,42 +1,42 @@
 ---
 source: src/modules/observability/controllers/get-observability-metrics-overview.ts
-sha256: 621450721e41903dbd183cfb02a6bf4c1a951e655b5f0361ba7efd4372903736
-generated_at: 2026-11-14T20:28:50.192907+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a55bc02910eefbc72fba4f5bb74263df332fec862f930bbcd82fb7da7c6fd824
+context_sha256: 3588e6cfa4171426c6fa5722882fc841d8aa5aedd23009b7259435a7c6f30fcd
+generated_at: 2026-11-22T06:01:07.249927+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/controllers/get-observability-metrics-overview.ts
 
 ## Purpose
-
-Controller handler for `GET /observability/metrics/overview`. It aggregates HTTP, auth, business, database, and process metrics into a single JSON summary. Domain counters are resolved **by metric name** off the shared prom-client registry rather than by importing the counter objects, so this module stays decoupled from the domain modules it reports on.
+Express controller for `GET /observability/metrics/overview`. It assembles a single `ObservabilityMetricsSummary` (HTTP, auth, optional business, database and process sections) from the shared prom-client registry. Domain counters are looked up by metric name rather than imported, so the observability module does not depend on the domains it reports on.
 
 ## Key elements
+- `getObservabilityMetricsOverview(_request, response)`: the exported handler. It reads all metrics in parallel with `Promise.all`, builds the summary, sends it with `successResponse`, and routes errors through `catchAs(response, 'getObservabilityMetricsOverview')`.
+- `readCounter(name)`: looks up a metric with `metricsRegistry.getSingleMetric(name)` and returns its `values`. A missing metric returns `[]`, so its row reads as zero.
+- `SHOP_METRIC_NAMES` / `hasShopMetrics()`: the four shop metrics (`cart_checkout_total`, `order_created_total`, `products_low_stock_total`, `inventory_reserved_units_total`). The `business` block is included only if at least one of them is registered.
+- `histogramCounts(values)`: keeps only the `_count` samples of a histogram. Bucket, `_sum` and `+Inf` rows would inflate totals.
+- `sumByLabels(values, filter)`: sums sample values whose labels all match `filter`.
+- `MetricSample`: local interface for a prom-client sample (`value`, `labels`).
 
-- **`MetricSample`** – local interface for one prom-client counter/gauge sample (`value`, `labels`).
-- **`readCounter(name)`** – looks up a metric by name in `metricsRegistry`, calls `.get()`, and returns its `values` array. Returns `[]` when the metric is not registered (module not in this build).
-- **`SHOP_METRIC_NAMES`** – readonly tuple of the four shop-domain metric names that back the `business` block.
-- **`hasShopMetrics()`** – returns a boolean: whether at least one of `SHOP_METRIC_NAMES` is registered; gates the optional `business` block in the response.
-- **`histogramCounts(values)`** – filters a histogram's samples to only the `_count` series (one per label combo), excluding bucket / `_sum` / `+Inf` rows.
-- **`sumByLabels(values, filter)`** – sums `value` across samples whose `labels` match every key/value in `filter`.
-- **`getObservabilityMetricsOverview`** *(exported)* – the Express handler. `Promise.all`s all metric reads, assembles an `ObservabilityMetricsSummary`, and sends it via `successResponse`. Errors are routed to `catchAs`.
+Summary sections and their sources:
+- `http`: `totalRequests` and `totalErrors` from `getHttpRequestCounters()`, `errorRate` (0 when there are no requests), `inFlight` from `httpInflightRequests`, and `latencyMs` p50/p95 from `getLatencyPercentiles()`.
+- `auth`: `loginSuccess` and `loginFailure` from `auth_login_total` by `status`, and `signupSuccess` from `auth_signup_total`.
+- `business` (optional): `checkoutSuccess`, `ordersCreated`, `lowStockProducts` and `reservedUnits`.
+- `database`: `queriesTotal` and `errorsTotal` from the `_count` rows of `db_client_operation_duration_seconds`. Errors are rows with `outcome === 'error'`.
+- `process`: `uptimeSeconds` and `memory`, taken from a snapshot obtained from the observability service.
+- `timestamp`: ISO time of the response.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** – imports `catchAs` for the error-catch branch.
-- **`src/infrastructure/http/response.ts`** – imports `successResponse` to send the JSON payload.
-- **`src/infrastructure/observability/metrics-registry.ts`** – imports the shared `metricsRegistry` (prom-client `Registry` instance) used by `readCounter` and `hasShopMetrics`.
-- **`src/infrastructure/observability/metrics-http.ts`** – imports the `httpInflightRequests` gauge (read inline, not via `readCounter`).
-- **`src/modules/observability/http-readback.ts`** – imports `getHttpRequestCounters`, `getLatencyPercentiles`, and `sumMetricValues` helpers.
-- **`src/modules/observability/services/index.ts`** – imports `observabilityService` to pull the process snapshot (uptime, memory).
-- **`src/types/index.ts`** – imports the `ObservabilityMetricsSummary` type that shapes the response.
-- **`src/modules/observability/routes.ts`** – upstream consumer that mounts `getObservabilityMetricsOverview` on the `/observability/metrics/overview` route.
-- **`src/modules/observability/tests/unit/metrics-overview.support.ts`** – unit-test support that exercises this controller in isolation.
+- `src/infrastructure/http/response.ts` (`successResponse`) and `src/infrastructure/http/controller.ts` (`catchAs`) handle the response and error wrapping.
+- `src/infrastructure/observability/metrics-registry.ts` (`metricsRegistry`) is the registry queried by name.
+- `src/infrastructure/observability/metrics-http.ts` supplies `httpInflightRequests`, which is imported directly.
+- `src/modules/observability/http-readback.ts` supplies `getHttpRequestCounters`, `getLatencyPercentiles` and `sumMetricValues`.
+- `src/modules/observability/services/index.ts` exports `observabilityService`, which provides the process snapshot (uptime and memory).
+- `src/types/index.ts` supplies the `ObservabilityMetricsSummary` type.
+- `src/modules/observability/routes.ts` and `src/modules/observability/tests/unit/metrics-overview.support.ts` are graph neighbors, but this file does not import them.
 
 ## Notes
-
-- **Name-based lookup is intentional.** The dependency-cruiser rule `module-coupling-observability` forbids this module from importing any domain beyond `audit-logs`. Reading by name keeps deleting a domain module from breaking this file.
-- **Absent metric ≠ error.** `readCounter` resolves `[]` for unregistered metrics; the response row simply shows zero.
-- **`business` block is conditional.** `openapi.yaml` marks it optional; it is omitted entirely (not zeroed) when no shop metric is registered.
-- **Histograms require `_count` filtering.** `histogramCounts` strips bucket/sum/+Inf rows so `sumMetricValues` does not double-count.
-- **Gauges are read the same way as counters.** prom-client's `.get()` triggers `collect()`, so gauge values are always current at read time.
+- A missing metric is normal and reports zero, since its owning module may not be in the build. The one exception is the `business` block, which is omitted entirely (the module's docs reference `openapi.yaml`, which makes it optional) when no shop metric exists.
+- `products_low_stock_total` and `inventory_reserved_units_total` are gauges but are read the same way as counters.
+- The HTTP counters, in-flight gauge and latency percentiles are the only metrics tied to infrastructure or module code. Everything else is resolved by name.

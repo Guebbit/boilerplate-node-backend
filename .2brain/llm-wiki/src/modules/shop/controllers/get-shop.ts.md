@@ -1,29 +1,27 @@
 ---
 source: src/modules/shop/controllers/get-shop.ts
-sha256: 36295664743ab226926740f0d84da9878a6a3d73072427d9b5206a2240a44ea3
-generated_at: 2026-11-08T08:20:16.277994+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 36295664743ab226926740f0d84da9878a6a3d73072427d9b5206a2240a44ea3
+context_sha256: 13ac38684a82748ce61dc42324d0858d1cc6910ffd247e59ffcf3d1bb3dfad0d
+generated_at: 2026-11-22T07:46:47.628788+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop/controllers/get-shop.ts
 
 ## Purpose
-
-Public controller for `GET /shop`. Returns the shop's own settings (identity, shipping origin, return address, traded goods, currency) so that a buyer can identify the seller and the checkout flow can resolve currency before any authenticated exchange.
+Express controller for the public `GET /shop` endpoint. It returns the shop's own settings: identity, shipping locations, return destinations and trading currency. It is public by design, because the seller must be identifiable before a sale and checkout needs the currency before the caller is known.
 
 ## Key elements
-
-- **`getShop(request, response)`** — The sole export. Reads shop settings via the service layer, wraps them in a `successResponse<Shop>` envelope, and delegates error formatting to `catchAs`. The request object is intentionally unused (prefixed `_`); the endpoint requires no parameters or authentication.
+- `getShop(_request, response)` — the only export. It calls the service's `getShop` (imported as `readShop`) and sends the result with `successResponse<Shop>`. Any error is passed to `catchAs(response, 'getShop')`.
 
 ## Relationships
-
-- **`src/modules/shop/service.ts`** — Imports `getShop` (aliased `readShop`) as the data source; this controller is a thin HTTP wrapper over that function.
-- **`src/modules/shop/routes.ts`** — Registers this handler at the `GET /shop` route.
-- **`src/infrastructure/http/response.ts`** — Uses `successResponse` to shape the JSON envelope.
-- **`src/infrastructure/http/controller.ts`** — Uses `catchAs` to convert thrown errors into a consistent HTTP error response.
-- **`src/types/index.ts`** — Imports the `Shop` interface, which parameterises the response type.
+- `../service` (`src/modules/shop/service.ts`) — supplies the data through `getShop()`, which is called synchronously.
+- `@infrastructure/http/response` (`src/infrastructure/http/response.ts`) — provides `successResponse`, which writes the success response.
+- `@infrastructure/http/controller` (`src/infrastructure/http/controller.ts`) — provides `catchAs`, the error handler attached to the promise chain and labelled `'getShop'`.
+- `@types` (`src/types/index.ts`) — provides the `Shop` type used to type the response payload.
+- `src/modules/shop/routes.ts` — the neighbor that wires this handler to the route. This file does not import it.
 
 ## Notes
-
-- The handler is fully synchronous in practice (`readShop()` is called inside `Promise.resolve().then(…)`), so the `.catch` branch only fires if `readShop` throws synchronously. There is no async I/O here.
-- The endpoint is intentionally public; no auth middleware is expected upstream. Do not add a guard here.
+- The request argument is unused (`_request`), so the endpoint takes no input.
+- The body is wrapped in `Promise.resolve().then(...)`, so a synchronous throw from `readShop()` is caught by `.catch` rather than escaping the handler.
+- No authentication is applied in this file.

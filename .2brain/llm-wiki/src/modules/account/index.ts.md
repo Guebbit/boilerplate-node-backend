@@ -1,32 +1,28 @@
 ---
 source: src/modules/account/index.ts
-sha256: 3955cee78f7e6206ee97c5149f2ff65785a873f689a7f67e844d31c915ec1342
-generated_at: 2026-11-08T04:10:03.659984+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:29:49.649773+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/index.ts
 
 ## Purpose
-
-Public barrel for the `account` module. Per the strategic DDD rule (see `docs/theory/strategic-ddd.md` §5), this file is the **only** entry point a sibling module is permitted to import from. It re-exports the module's public surface while deliberately withholding internal sub-surfaces.
+Public barrel for the `account` module. It is the only surface sibling modules may import from, and it re-exports the module's services, domain, emails, events and model types. Internal parts are deliberately left out.
 
 ## Key elements
-
-- `export * from './services'` — re-exports the public service layer (e.g. `accountService`, `twoFactorService`).
-- `export * from './domain'` — re-exports the domain layer (entities, value objects, domain services).
-- `export * from './emails'` — re-exports account-related email templates/composers.
-- `export * from './events'` — re-exports domain events emitted by account operations.
-- `export type * from './model'` — re-exports **types only** (interfaces, type aliases) from the model layer; no runtime values are published.
+- `export * from './services'` — public services (the header names `accountService` and `twoFactorService`).
+- `export * from './domain'` — domain exports.
+- `export * from './emails'` — account email exports.
+- `export * from './events'` — account event exports.
+- `export type * from './model'` — model types only, with no runtime values.
 
 ## Relationships
-
-- **Re-exports from** `./services`, `./domain`, `./emails`, `./events`, `./model` — these five files constitute the full public surface.
-- **Imported by** sibling modules (`api-keys`, `shop`, `tasks`, `invoicing`, `orders`) as their sole entry point into account functionality, per the strategic boundary. `config-routes.ts` also consumes it for route wiring.
-- **Not exported:** `session/` (token logic lives behind `kernel/authentication.ts`), `oauth/`, `two-factor/` (reached only via `accountService`/`twoFactorService`), and `services/export*.ts` (export build touches every sibling's data and must stay internal).
+- Re-exports from `src/modules/account/domain/index.ts`, `src/modules/account/emails.ts`, `src/modules/account/events.ts`, `src/modules/account/model.ts` and `src/modules/account/services/index.ts` in the same module.
+- Neighbors outside the module (`src/modules/api-keys`, `src/modules/invoicing`, `src/modules/orders`, `src/modules/shop`, `src/app/config-routes.ts`) appear in the dependency graph as related files. Consumers are expected to go through this barrel rather than reach into account internals.
 
 ## Notes
-
-- The model re-export is `export type *`, not `export *`. Consumers get compile-time shapes only; any runtime import from `./model` bypassing this barrel is a boundary violation.
-- Adding a new sub-directory under `src/modules/account/` does **not** automatically make it public — you must add an explicit re-export here to publish it.
-- The export-services directory (`services/export*.ts`) is intentionally excluded because it aggregates data across every sibling module; leaking it through the barrel would break the isolation contract.
+- Deliberately not published:
+  - `session/`'s token surface, because every request goes through `src/kernel/authentication.ts`.
+  - `oauth/` and `two-factor/`, which are reached only through `accountService`/`twoFactorService`.
+  - The export build (`services/export*.ts`), because it reaches every sibling's data.
+- Adding an export here widens the cross-module API. The file header links to two docs for the rules: `docs/understand/strategic-ddd.md#_5-published-language-—-the-barrel` and `docs/modules/account.md#its-neighbourhood`. Neither could be confirmed as a file in this repository.

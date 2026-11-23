@@ -1,45 +1,29 @@
 ---
 source: src/modules/payments/events.ts
-sha256: 26718f971f6c101131d8b2845910af076973ea228ee5d647b99018614d65f5e1
-generated_at: 2026-11-08T07:21:03.354860+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3874f1a9a6608c4c3117ebc88f5fd00db545ad232e471cb4c68f010694bf9285
+context_sha256: 58336b59c565e5579bdcb66339ed7578ae2a4c43ca44f8107339e6cf103a6440
+generated_at: 2026-11-22T06:45:08.152417+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/events.ts
 
 ## Purpose
-
-Declares the payments module's domain event payload types by augmenting the kernel's `DomainEventMap` (TypeScript module augmentation in `@kernel/events`), and exports a string constant for each event name. It is the single source of truth for what data each payment event carries, decoupled from where and how the events are emitted.
+Central registry of the domain event names the payments module emits. Each event is declared in `./asyncapi.domain-events.yaml`. This file exports them as string constants, type-checked against the kernel's `DomainEventName`, so emitters and tests can use the constants instead of raw strings.
 
 ## Key elements
-
-- **`DisputeEventPayload`** (interface) — shared shape for `payment.dispute_opened` and `payment.dispute_updated`; carries provider-identified dispute fields (`disputeId`, `kind`, `status`, `reason`, `amount`, `currency`, `fundsWithdrawn`, optional `evidenceDueBy`).
-- **`declare module '@kernel/events'`** — augments `DomainEventMap` with ten events:
-  - `payment.succeeded` / `payment.failed` — basic `{ paymentId, orderId }`; the latter can fire multiple times per order (one per declined attempt).
-  - `payment.refunded` — includes `refundId`, optional `returnId`, optional `goods` (line items + shipping) for per-rate credit notes, `amount`, `currency`, and `full` (whether it covers the whole payment).
-  - `payment.refund_canceled` — staff voided a refund; no money moved.
-  - `payment.refund_failed` — provider refusal; `final` distinguishes terminal from transient.
-  - `payment.refund_reversed` — bank clawed back a settled refund; record reopens.
-  - `payment.dispute_opened` / `payment.dispute_updated` — use `DisputeEventPayload`.
-  - `payment.refund_owed_by_hand` — hand-paid refund opened; **internal only** (no AsyncAPI channel).
-  - `payment.amount_mismatch` — provider success doesn't match the frozen payment; **internal only**.
-- **`PAYMENT_*` constants** (10 exports) — string values for each event name, for use in emit/subscribe calls without hard-coding.
+- `DisputeEventPayload`: type alias for `DomainEventMap['payment.dispute_opened']`. It is the payload shared by both dispute events. It carries the dispute as the provider last reported it, never its free text.
+- Payment lifecycle constants: `PAYMENT_SUCCEEDED`, `PAYMENT_FAILED`.
+- Refund constants: `PAYMENT_REFUNDED`, `PAYMENT_REFUND_CANCELED`, `PAYMENT_REFUND_FAILED`, `PAYMENT_REFUND_REVERSED`.
+- Dispute constants: `PAYMENT_DISPUTE_OPENED`, `PAYMENT_DISPUTE_UPDATED`.
+- Follow-up and anomaly constants: `PAYMENT_REFUND_OWED_AFTER_DISPUTE`, `PAYMENT_REFUND_OWED_BY_HAND`, `PAYMENT_AMOUNT_MISMATCH`, `PAYMENT_REFUND_UNRECORDED`, `PAYMENT_RETURN_REFUND_SHORT`.
 
 ## Relationships
-
-- **`services/settlement.ts`** — emits `payment.succeeded` and `payment.failed` as the sole reconciliation point.
-- **`services/refunds.ts`** — emits `payment.refunded`, `payment.refund_canceled`, `payment.refund_failed`, `payment.refund_reversed`, and `payment.refund_owed_by_hand`.
-- **`services/disputes.ts`** — emits `payment.dispute_opened` and `payment.dispute_updated`.
-- **`services/announce.ts`** — the transactional outbox through which every event above is delivered; no event is emitted inline.
-- **`services/external-refunds.ts` / `services/refund-settlement.ts`** — participate in the refund lifecycle that produces the events declared here.
-- **`index.ts` / `module.ts`** — module registration; the augmentation makes these payloads visible kernel-wide.
-- **Tests** (`announce.test.ts`, `canceled.test.ts`, `disputes.test.ts`, `external-refunds.test.ts`, `hand-refund.test.ts`, `refund-cancel.test.ts`, `refund-failed-event.test.ts`) — assert the event payloads and delivery semantics for each scenario.
+- `src/kernel/events.ts`: supplies the `DomainEventMap` and `DomainEventName` types. Each constant uses `satisfies DomainEventName`, so a name that isn't a declared event fails to compile.
+- `src/modules/payments/services/settlement.ts`: per the module doc comment, `settlePayment` here is the one place a payment is reconciled and the source of the succeeded and failed payment events.
+- `src/modules/payments/services/refunds.ts`: per the module doc comment, the source of the refunded payment event.
+- The other payments services (`announce`, `disputes`, `external-refunds`, `refund-settlement`, `return-refunds`), `index.ts`, `module.ts` and the integration tests are listed as graph neighbors. This file does not show which of them use which constants.
 
 ## Notes
-
-- **At-least-once delivery.** Every event goes through the outbox in `announce.ts`; listeners must deduplicate on `meta.eventId`.
-- **Internal-only events.** `payment.refund_owed_by_hand` and `payment.amount_mismatch` have no AsyncAPI channel and are not exposed externally; `tasks` consumes the former.
-- **Money is always a decimal string**, never a number, in every payload.
-- **`payment.failed` is not unique per order.** Each declined attempt is its own event, mirroring the audit log.
-- **Module augmentation, not a central registry.** The file follows the same pattern as `modules/orders/events.ts`; adding a new event means adding a key here, not editing a shared list.
-- **Closed enum types only.** `kind`, `status`, `reason`, and `failureReason` are imported from `@types` as fixed unions — provider free-text is never stored in the payload.
+- The file has no runtime logic. Each constant is a string literal, and `satisfies` keeps its literal type.
+- The YAML spec is the source of truth. The `DomainEventMap` payload types are generated from it, as the `DisputeEventPayload` doc comment says.

@@ -1,39 +1,36 @@
 ---
 source: scripts/scaffold/demo-remove.ts
-sha256: 01e584b061e680afc688a2674e4301ab651554ed2fe2f89adf16c502ae3fb832
-generated_at: 2026-11-08T02:59:21.797491+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ac5d6508f306db8d59614250ed3e9a62e2d6f974a5c9a7ce6a3d7b7ce1b2df64
+context_sha256: ee92646016dfbef52254ddc6260c3867b546c3badeb8439dbe3b2bbe06c5be7c
+generated_at: 2026-11-22T02:15:31.925560+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/scaffold/demo-remove.ts
 
 ## Purpose
-
-Entry-point script for `npm run demo:remove`. In a single run it deletes every module folder tagged `group: shop` or `group: example` (including their scheduled jobs and owned tests), removes seed images and shop-only scenario files, and regenerates the scenario registries so the repo still compiles. It operates directly on the current checkout.
+Entry script for `npm run demo:remove`, the one-command strip of the demo content from this checkout. It deletes every `group: shop` and `group: example` module folder, the seed images, and the demo catalogue's scenario data. It then edits `src/modules.ts` and regenerates the scenario registries so the repo still compiles. It runs against the current checkout, not a scratch copy.
 
 ## Key elements
-
-- **`report(notes)`** – Prints one `console.info` line per `RemovalNote` (file + detail).
-- **`demoModuleNames`** – Module list discovered at runtime via `readDemoModuleNames(REPO_ROOT)`; used to scope the removal.
-- **Step 1 – `removeModules`** – Deletes the module folders and edits central files (e.g. `src/modules.ts`) that reference them.
-- **Step 2 – `removeSeedImages` / `removeShopOnlyScenarioFiles`** – Deletes the demo catalogue's seed images and scenario data files. No central files are edited here.
-- **Step 3 – `writeScenarioRegistries`** – Regenerates the scenario registry files from what remains, formatted via `formatWithRepoConfig`. Runs asynchronously; on success prints next-step instructions, on failure delegates to `failScript`.
-- **Post-strip guidance** – Two manual follow-up commands printed to the console: `npm run regenerate` and `npm run ts-check`.
+- `report(notes)`: prints each `RemovalNote` as `  <file> — <detail>`.
+- `demoModuleNames`: result of `readDemoModuleNames(REPO_ROOT)`, the modules labelled shop or example.
+- Step one: `removeModules(REPO_ROOT, demoModuleNames)` deletes the module folders and edits the central files that name them.
+- Step two: `removeSeedImages` and `removeShopOnlyScenarioFiles` delete the demo catalogue's data. Neither edits any file.
+- Step three: `writeScenarioRegistries(REPO_ROOT, formatWithRepoConfig)` rebuilds the scenario registries from what is left. The script then prints the manual next steps: `npm run regenerate`, then `npm run ts-check`.
+- Failures in the async step go to `failScript`.
 
 ## Relationships
-
-- **`scripts/fail-script.ts`** → imported as `failScript`; the `.catch` handler for the async registry-write step.
-- **`scripts/modules-on-disk.ts`** → imported as `REPO_ROOT`; provides the filesystem root used by every other step.
-- **`scripts/scaffold/demo-remove-modules.ts`** → imported as `removeModules`; performs step 1 (folder deletion + central-file edits).
-- **`scripts/scaffold/demo-remove-registry.ts`** → imported as the `RemovalNote` type; shapes the report output.
-- **`scripts/scaffold/demo-remove-scenarios.ts`** → imported as `removeSeedImages` and `removeShopOnlyScenarioFiles`; performs step 2.
-- **`scripts/scaffold/format-text.ts`** → imported as `formatWithRepoConfig`; formatter passed into `writeScenarioRegistries`.
-- **`scripts/scaffold/scenario-registry.ts`** → imported as `writeScenarioRegistries`; performs step 3 (async).
-- **`scripts/testing/demo-module-names.ts`** → imported as `readDemoModuleNames`; discovers which module folders qualify for removal.
+- `scripts/testing/demo-module-names.ts`: `readDemoModuleNames` supplies the list of modules to strip.
+- `scripts/scaffold/demo-remove-modules.ts`: provides `removeModules`.
+- `scripts/scaffold/demo-remove-registry.ts`: provides the `RemovalNote` type that `report` consumes.
+- `scripts/scaffold/demo-remove-scenarios.ts`: provides `removeSeedImages` and `removeShopOnlyScenarioFiles`.
+- `scripts/scaffold/scenario-registry.ts`: provides `writeScenarioRegistries`.
+- `scripts/scaffold/format-text.ts`: provides `formatWithRepoConfig`, used to format the regenerated registries.
+- `scripts/modules-on-disk.ts`: provides `REPO_ROOT`.
+- `scripts/fail-script.ts`: provides `failScript`, the error handler.
 
 ## Notes
-
-- The script executes side-effects at import time (top-level `console.info` and function calls); it is not a library module.
-- It runs against the live checkout, not a scratch copy — there is no dry-run or backup step.
-- A test file that *imports* a removed module is deleted alongside it (handled inside `removeModules`), but tests in unrelated packages that still reference the module by name in a string or table will **not** be caught; the user must fix those after running `npm run ts-check`.
-- The async boundary is only at step 3; steps 1 and 2 are synchronous and run before any `await`.
+- The script is destructive and has no dry-run or confirmation. It announces what it will remove, then acts.
+- Steps one and two run synchronously at module top level. Only the registry regeneration is async.
+- Its header comment says tests are removed by `demo-remove-tests.ts`, which this file does not import directly. Presumably `removeModules` or the registry layer invokes it, but that isn't visible here.
+- Success is not verified here. Leftover references to removed modules in strings or tables (not imports) must be fixed by hand after `npm run ts-check`.

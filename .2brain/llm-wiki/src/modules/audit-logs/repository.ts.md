@@ -1,42 +1,37 @@
 ---
 source: src/modules/audit-logs/repository.ts
-sha256: a12b589cc19d62e533751105ec6c5896066ef57770630a376b2276106428d73c
-generated_at: 2026-11-14T19:25:07.567851+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a5646b99f43b4156915ab893581a1f591b33bc118a4f40676153658dfdea979a
+context_sha256: 48449f6d78ec9dec66d0aa41c2f48037639a51587f2f592e265af6c8feddc01f
+generated_at: 2026-11-22T04:27:43.518345+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/audit-logs/repository.ts
 
 ## Purpose
-
-Repository layer for the audit-log collection. It exposes an append-and-read-only surface (one `create`, filtered `search`, plus two purpose-built reads) and deliberately omits any update or delete path, since an editable trail is not an audit trail. Expiry is handled by a TTL index on the model, not by application code.
+Audit log repository. It deliberately exposes only two kinds of operation: append an entry and read entries. There is no update or delete, because an audit trail editable by the application isn't a trustworthy one. Expiry is left to Mongo's TTL index defined on the model.
 
 ## Key elements
-
-- **`AuditLogSearchFilters`** – interface describing the filterable fields accepted by `search`; mirrors the query params of the audit routes.
-- **`base`** (private) – instance of the shared `createRepository` factory bound to `auditLogModel`; provides `create`, `search`, and `normalize`. All searchable fields are declared `exact` (verbatim match, never regex).
-- **`AUDIT_SORT`** – `{ timestamp: -1, _id: -1 }`. Custom because the model sets `timestamps: false`; the `_id` tiebreaker prevents duplicates or gaps in paged reads where `timestamp` is not unique.
-- **`sinceScope`** – returns `{ timestamp: { $gt: date } }` or `{}`. Implemented as a scope fragment (merged after `buildWhere`) so the `Date` is not coerced through `Number()`.
-- **`ownOrderScope`** – maps `true` → `{ 'metadata.ownOrder': true }`, `false` → `{ $ne: true }`, `undefined` → `{}`.
-- **`OwnEntriesCursor`** / **`OwnEntriesPage`** – keyset-cursor types for the actor's own-entries export.
-- **`cursorAfter`** (private) – computes the next cursor from a page of rows, carrying over `seen` ids when the page edge didn't advance past the previous timestamp.
-- **`ownEntriesPage`** – one page of an actor's entries via keyset pagination on `{ actorUserId, timestamp }` index; no `countDocuments`, no `skip`, so each page costs O(page) rather than O(position).
-- **`ConsultationRow`** / **`consultationsOf`** – reads consultation entries for a `subjectId` with a projection that excludes `_id` and the actor, so the staff identity never reaches a data export.
-- **`auditLogRepository`** (default export) – the public object: `{ create, search, sinceScope, ownOrderScope, ownEntriesPage, consultationsOf }`.
+- **`AuditLogSearchFilters`**: the filter shape accepted by `search`. Fields are `actor`, `action`, `outcome` (`'success' | 'failure'`), `since` (exclusive lower bound), `target`, `subject`, `ownOrder`, `page` and `pageSize`. It mirrors the query parameters of `GET /observability/audit` and `GET /audit`.
+- **`base`** (internal): `createRepository(auditLogModel, …)` configured with `applyAuditLogTransform` and exact-match searchable fields. The mapping is `actor`→`actorUserId`, `action`→`action`, `outcome`→`outcome`, `target`→`targetId`, `subject`→`subjectId`. These are matched verbatim and never as a regex, so `'fail'` does not match `'failure'`.
+- **`AUDIT_SORT`**: `{ timestamp: -1, _id: -1 }`, newest first with `_id` as the tiebreaker. It is used instead of the shared `DEFAULT_SORT` because the model has `timestamps: false` and its own `timestamp` field.
+- **`sinceScope(since?)`**: returns `{ timestamp: { $gt: since } }`, or `{}` if there is no `since`. It is a scope fragment rather than a declared filter because the spec's `ranges` coerce bounds with `Number()`, which is wrong for dates.
+- **`ownOrderScope(ownOrder?)`**: `true` returns `{ 'metadata.ownOrder': true }`. `false` returns `{ $ne: true }`, which includes entries where the flag is absent. `undefined` returns `{}`.
+- **`OwnEntriesCursor`**: `{ timestamp, seen: ObjectId[] }`. `seen` holds the ids already returned at that timestamp.
+- **`ownEntriesPage(actor, after, limit)`**: keyset-paginated read of one actor's own entries, newest first, for the account data export. It does no count and no skip. It returns `{ items, next }`, and `next` is `undefined` when the page is shorter than `limit`.
+- **`cursorAfter`** (internal): builds the next cursor from the oldest timestamp reached. It carries over the previous `seen` ids when the page did not move past that timestamp.
+- **`ConsultationRow`** and **`consultationsOf(subject, actions, since)`**: rows naming `subject` whose action is in `actions`, with `timestamp >= since`, newest first. The projection is `timestamp`, `action`, `targetType` and `targetId`. The actor is never selected, so it cannot reach an export.
+- **`auditLogRepository`**: the export. It has only `create`, `search`, `sinceScope`, `ownOrderScope`, `ownEntriesPage` and `consultationsOf`. There is no `save` or `deleteOne`, so the type itself refuses edits.
 
 ## Relationships
-
-- **`src/infrastructure/persistence/create-repository.ts`** – provides the `createRepository` generic factory that builds `base` (create + search + normalize).
-- **`src/modules/audit-logs/model.ts`** – source of `auditLogModel`, `applyAuditLogTransform` (used as the `transform` option), and the `AuditLogDocument` type.
-- **`src/types/index.ts`** – source of the `AuditEntryItem` shape returned by `normalize`.
-- **`src/modules/audit-logs/service.ts`** – primary consumer; calls `auditLogRepository` to fulfil read and write operations.
-- **Tests** (`repository.test.ts`, `audit.contract.test.ts`, `incidents.test.ts`, `service.test.ts`, `staff-reads.test.ts`) – exercise the repository's filter, pagination, and projection behaviour at unit, integration, and contract levels.
+- **`src/infrastructure/persistence/create-repository.ts`**: supplies `createRepository`, which provides `create`, `search` and `normalize`.
+- **`src/modules/audit-logs/model.ts`**: supplies `auditLogModel`, `applyAuditLogTransform` and the `AuditLogDocument` type. It also owns the TTL index and the `{ actorUserId, timestamp }` and `{ subjectId, timestamp }` indexes that the reads rely on.
+- **`src/types/index.ts`**: supplies `AuditEntryItem`, the output item type.
+- **`src/modules/audit-logs/service.ts`** and the test files listed as neighbors are the consumers and verifiers of this repository. The file content does not show how they call it.
 
 ## Notes
-
-- **Append-only by type, not by review.** The exported object has no `save` or `deleteOne`; the type system is the guard, not a lint rule.
-- **`since` is a scope, not a declared filter.** Declared filters pass through `buildWhere`, which coerces range bounds with `Number()`—correct for prices, wrong for dates. The scope fragment bypasses that path.
-- **`ownOrder: false` means "anything other than `true`".** The flag is only ever written as `true`, so the negation is `{ $ne: true }` (includes documents where the field is absent).
-- **Keyset cursor for own-entries.** The shared `search` does `countDocuments` + `skip` on every page, which is quadratic over a long trail. `ownEntriesPage` walks the compound index instead.
-- **Cursor computed before `normalize`.** `normalize` mutates rows in place (stringifies `timestamp`, strips `_id`); `cursorAfter` needs the raw stored values, so it must run first.
-- **`consultationsOf` projection omits the actor.** The staff member's identity is never selected, preventing it from leaking into a subject's data export.
+- `ownEntriesPage` and `consultationsOf` query the model directly, bypassing the shared `search`. `ownEntriesPage` sorts on `timestamp` only. Its keyset cursor depends on the `$lte` timestamp plus `_id: { $nin: seen }` filter rather than on an `_id` tiebreak.
+- In `ownEntriesPage`, the cursor is computed before `base.normalize(rows)` because normalization rewrites rows in place. It turns `timestamp` into a string and removes `_id`, and the cursor needs both as stored.
+- `since` is an exclusive bound in `sinceScope` (`$gt`) but inclusive in `consultationsOf` (`$gte`).
+- `sinceScope` and `ownOrderScope` are merged as `scope` after `buildWhere`, so they bypass the declared filter handling. `sinceScope`'s `Date` therefore reaches Mongo as the `Date` the controller parsed.
+- The module docs referenced by the file header (`@see` the pipeline section of the audit-logs module documentation) hold further background; that document is not among the listed neighbors.

@@ -1,44 +1,36 @@
 ---
 source: scripts/docs/repo-references.ts
-sha256: 703faf56cc0fb935bc580c6afea703998324720825f7ac037c32b26e5d27175c
-generated_at: 2026-11-14T17:34:58.926998+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:05:12.151491+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/docs/repo-references.ts
 
 ## Purpose
-
-Shared path-resolution primitives that answer one question: *does a path cited in a doc page or source comment still exist in this repo?* Extracted so that `check-references.ts` (markdown docs) and `comment-links.ts` (TypeScript comments) agree on what counts as a real path, while each caller keeps its own policy for relative-URL and bare-token resolution.
+Shared machinery for deciding whether a path cited in a comment still exists in the repo. It backs both `check-references.ts` (every `docs/*.md` page) and the `.ts`/`.tsx` half of the `local/comment-links` lint rule, so the two checkers agree on what counts as a real path. Caller-specific policies (VitePress `./relative` routing, paired-repo `boilerplate-vue-frontend/...` tokens) stay with the callers.
 
 ## Key elements
-
-- **`ALLOWED`** — array of `{ prefix, reason }` entries for paths that are legitimately absent in a clean checkout (generated files, `node_modules`, build output, env files, etc.).
-- **`allowed(token)`** — returns true if the token is covered by `ALLOWED` or ends in a known generated suffix (`.generated.ts`, `asyncapi.public.yaml`).
-- **`NOT_A_PATH`** — regex of characters (whitespace, quotes, brackets, ellipsis, angle brackets, etc.) that mark a span as prose, glob, type, or command rather than a real path.
-- **`trackedTargets(root)`** — runs `git ls-files`, then builds two `Set<string>`s: `targets` (every path tail and every directory on the way) and `roots` (top-level entries). Excludes `.2brain/` mirrors.
-- **`resolves(targets, token)`** — checks whether the token (or the token + any of the `SPELLINGS` extensions/index suffixes) appears in the `targets` set.
-- **`claimsAPath(roots, token)`** — gates whether a token is even a repo-path claim: last segment must match `FILENAME` *or* first segment must be a known root entry. Prevents false positives on MIME types, container image names, lint rules, etc.
-- **`readAliases()`** — reads and parses `tsconfig.json` (strips JSONC comments first) and returns the `compilerOptions.paths` table as `{ prefix, target }` pairs.
-- **`throughAliases(aliases, token)`** — rewrites an `@alias/…` token to its concrete path; returns `undefined` for unclaimed `@scope/name` (i.e. npm packages). Distinguishes wildcard (`@modules/*`) from bare (`@types`) aliases.
-- **`FILENAME`**, **`SPELLINGS`**, **`GENERATED_SUFFIXES`** — module-private constants used by the functions above.
-- **Re-export: `gitEnvironment`** — re-exported from `../git-base` for callers that import it from here.
+- `ALLOWED` — prefix allowlist of paths legitimately absent from a clean checkout (`tmp/`, `node_modules/`, `dist/`, generated files, `.env`, VitePress build/cache dirs, etc.), each entry carrying a `reason`.
+- `allowed(token)` — true if the token ends in one of two generated-file suffixes or matches an `ALLOWED` entry. It matches the directory itself, anything under it, and any directory leading to it.
+- `NOT_A_PATH` — regex for characters that mark a span as prose, glob, type, command, placeholder (`<>`) or elided (`…`) rather than one real path.
+- `trackedTargets(root)` — runs `git ls-files` and returns `{ targets, roots }`. `targets` holds every tail of every tracked path and of every directory on the way to one. `roots` holds the real top-level entries. `.2brain/` is excluded.
+- `resolves(targets, token)` — true if the token, with any of a fixed list of extension or index spellings appended (the bare token, `.ts`, `.tsx`, `.js`, `.vue`, `.json`, `.yaml`, `.yml`, `.md`, plus `index.ts`/`index.js` under the token as a directory), is in `targets`.
+- `claimsAPath(roots, token)` — decides whether a token is claiming a path in this repo. It qualifies if the last segment is a real filename (known extension, non-empty non-dot-led stem) or the first segment is an actual root entry.
+- `readAliases()` — reads `compilerOptions.paths` from the root `tsconfig.json` (stripping `//` comment lines first) into `{ prefix, target }` pairs.
+- `throughAliases(aliases, token)` — rewrites an `@alias/...` token to its real path. Non-`@` tokens pass through unchanged, and an unclaimed `@scope/name` returns `undefined`.
+- `gitEnvironment` — re-exported from `../git-base`.
 
 ## Relationships
-
-- **`scripts/docs/check-references.ts`** — primary consumer; builds its markdown-page resolution policy (VitePress routing, paired-repo bare tokens) on top of `allowed`, `trackedTargets`, `resolves`, `claimsAPath`, `readAliases`, and `throughAliases`.
-- **`scripts/eslint/comment-links.ts`** — second consumer; applies the same primitives to `.ts`/`.tsx` source comments with its own token-extraction rules.
-- **`scripts/git-base.ts`** — provides `gitEnvironment()` (imported and re-exported here); the env map is passed to `git ls-files` inside `trackedTargets`.
-- **`scripts/modules-on-disk.ts`** — supplies the `REPO_ROOT` constant used by `readAliases` to locate the project's `tsconfig.json` at runtime.
-- **`tests/unit/scripts/docs/repo-references.test.ts`** — unit tests exercising `allowed`, `trackedTargets`, `resolves`, `claimsAPath`, `readAliases`, and `throughAliases`.
-- **`tests/unit/scripts/docs/code-citations.test.ts`** — integration-level tests for the citation pipeline that builds on this module.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — exercises mutation-CI wave logic that references paths validated through this module's allowlist.
+- `check-references.ts` and `scripts/eslint/comment-links.ts` are the two consumers. Each layers its own policy on top of these primitives.
+- `../git-base` supplies `gitEnvironment()`, which is passed as `env` to `git ls-files` and is also re-exported.
+- `../modules-on-disk` supplies `REPO_ROOT` (imported as `ROOT`), used to locate the root `tsconfig.json`.
+- `tests/unit/scripts/docs/repo-references.test.ts` is the unit test for this file. `code-citations.test.ts` and `waves.test.ts` are related tests in the graph.
 
 ## Notes
-
-- Each `ALLOWED` entry is "an argument, not a mute button": a path with no legitimate reason to be absent belongs in findings, not here.
-- `trackedTargets` is a precomputed `Set` (hash lookup) rather than per-token `endsWith` scans, because a full sweep asks thousands of questions against thousands of files × ~10 candidate spellings.
-- `readAliases` strips `//` comments via regex before `JSON.parse` because `tsconfig.json` is JSONC.
-- `throughAliases` keeps a trailing slash on wildcard prefixes (`@modules/`) so `@modules/foo` matches but `@modulesX` does not; bare aliases (`@types`) require an exact token match to avoid claiming `@typescript-eslint/parser`.
-- The `FILENAME` regex is applied to the **last** path segment only, so a suffix convention like `.visual.cy.ts` embedded in a longer token is not mistaken for a filename.
-- `.2brain/` mirror pages (each source file mirrored as `<path>.md`) are excluded from `trackedTargets` to prevent a stale mirror from vouching for a deleted source file.
+- `trackedTargets` precomputes tail sets so each lookup is a hash check instead of many `endsWith` comparisons. A sweep makes thousands of queries against thousands of files.
+- `roots` is built from the file list, not from `targets`. Targets hold tails, so a tracked file nested under a directory (such as `model.ts` inside an `orders` directory) would otherwise make that nested directory look top-level.
+- `.2brain/` is filtered out because its mirrored `<path>.md` pages would otherwise vouch for source files that no longer exist.
+- A bare slash does not make a path (`text/event-stream`, `try/catch`). The top-level-directory check reads the tree, so new top-level directories need no edit here.
+- The filename pattern rejects dot-led suffix conventions (such as a visual-test suffix like `.visual.cy.ts`-style tokens), since the last segment must have a non-empty, non-dot-led stem.
+- `throughAliases` requires a wildcard alias, which ends in `/`, to prefix-match, and a bare alias to match whole. This stops `@types` from claiming `@typescript-eslint/parser`.
+- `ALLOWED` entries are meant to be justified; a path with no reason to be absent belongs in the findings.

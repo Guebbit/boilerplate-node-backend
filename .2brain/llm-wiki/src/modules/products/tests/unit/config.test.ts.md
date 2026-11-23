@@ -1,33 +1,36 @@
 ---
 source: src/modules/products/tests/unit/config.test.ts
-sha256: 7e2504eab5f3b700db2f46678e826d8eb751ac748c0ef848417eefdb9ff748cb
-generated_at: 2026-11-08T07:53:51.751827+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8a90092d737482f6a417709c38ea5fe849b7ae8c11af8c6138b8dbb73d8f13da
+context_sha256: 99ca2b3a34cd31c423853df1ca9781e2607782ddc4d8451bd5765404705964c4
+generated_at: 2026-11-22T07:19:08.729973+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
-# src/modules/products/products/tests/unit/config.test.ts
+# src/modules/products/tests/unit/config.test.ts
 
 ## Purpose
-
-Unit tests for the products module's VAT rate boot gate. Verifies that `assertModuleConfig` rejects missing or malformed `NODE_VAT_RATE_DEFAULT` / `NODE_VAT_RATE_REDUCED` values, accepts valid ones, and that the accessor functions (`vatRateDefault`, `vatRateReduced`) read per-call and fall back to declared defaults.
+Unit tests for the products module's VAT-rate boot gate: the two rates (default and reduced) declared on the module manifest and range-checked by its slice check. It also covers how the rates are read at runtime.
 
 ## Key elements
-
-- **`TOUCHED`** — readonly tuple of every env var the gate reads; passed to `withoutEnvironmentInThisFile` to guarantee a clean slate per case and restore after the file.
-- **`configure()`** — helper that sets a fully valid deployment baseline (`NODE_ENV=development`, a URL, both VAT rates) so individual cases can break exactly one thing.
-- **`describe('the VAT rate boot gate')`** — four cases: neither rate set (error mentions both names), parametrized invalid rates (`'abc'`, `'1'`, `'1.5'`, `'-0.1'`, `'.5'`, `'1e-1'`, `' '`), rate of exactly `0` (valid), and a fully configured catalogue (valid).
-- **`describe('reading the rates')`** — two cases confirming `vatRateDefault()` / `vatRateReduced()` reflect the current env on each call and return the manifest defaults (0.22 / 0.1) when the gate is skipped.
+- `TOUCHED`: the env vars the suite controls (`NODE_ENV`, `NODE_URL`, `NODE_VAT_RATE_DEFAULT`, `NODE_VAT_RATE_REDUCED`). They are passed to `withoutEnvironmentInThisFile`, so they are cleared before each case and restored after the file.
+- `configure()`: sets a fully valid deployment (`NODE_ENV=development`, a URL, rates `0.22` and `0.1`). Each case then breaks one thing.
+- `describe('the VAT rate boot gate')`: calls `assertModuleConfig([productsModule], [])` and checks that:
+  - It throws naming both variables when neither rate is set.
+  - It throws naming `NODE_VAT_RATE_DEFAULT` for `abc`, `1`, `1.5`, `-0.1`, `.5`, `1e-1` and `' '`. These are checked with `it.each`.
+  - It accepts a rate of exactly `0`.
+  - It accepts a fully configured catalogue.
+- `describe('reading the rates')`:
+  - `vatRateDefault()` reads the environment on each call, so an override applies to the next read (`0.05`).
+  - With the rates unset, `vatRateDefault()` returns `0.22` and `vatRateReduced()` returns `0.1`.
 
 ## Relationships
-
-- **`@kernel/module-config`** — provides `assertModuleConfig`, the function under test. The test calls it with `[productsModule]` to exercise the manifest → slice-check wiring, not the validator in isolation.
-- **`../../config`** — exports `vatRateDefault` and `vatRateReduced`, the accessor functions whose read-per-call and fallback behaviour are asserted in the second `describe` block.
-- **`../../module`** — exports the default `productsModule` manifest that carries the VAT rate slice check; required so the boot gate actually runs.
-- **`@tests/environment`** — `withoutEnvironmentInThisFile` and `setEnvironment` manage env-var lifecycle for the whole file and individual cases.
+- `@kernel/module-config` (`src/kernel/module-config.ts`): provides `assertModuleConfig`, the entry point under test.
+- `src/modules/products/config.ts`: provides `vatRateDefault` and `vatRateReduced`, which are exercised directly in the "reading the rates" block.
+- `src/modules/products/module.ts`: the default-exported `productsModule` manifest passed to `assertModuleConfig`. Going through it also tests the manifest wiring.
+- `@tests/environment` (`tests/support/environment.ts`): provides `withoutEnvironmentInThisFile` and `setEnvironment` for isolating and setting env vars.
 
 ## Notes
-
-- **`NODE_ENV` must be non-`test` in every case.** The boot gate short-circuits under the test environment; `configure()` sets it to `'development'`, but any test that omits `configure()` would silently pass without asserting anything.
-- **Invalid-rate cases use a regex, not an exact string.** The "neither rate set" error can name the two variables in either order, so the assertion matches both permutations.
-- **`.5` and `1e-1` are deliberately included.** A naive `Number(raw)` would accept both as in-range; the gate's stricter decimal grammar must reject them to stay consistent with what `vatRateDefault` actually parses.
-- **The `configure` helper mutates real process env.** It is not sandboxed per-test beyond `withoutEnvironmentInThisFile`'s file-level guard; tests rely on calling `configure()` first rather than on Jest's automatic env isolation.
+- Every gate case sets `NODE_ENV` to `development`, because the gate short-circuits under `NODE_ENV=test`. Leaving it alone would make the assertions vacuous.
+- The gate is tested through `assertModuleConfig` rather than by calling `invalidVatRateConfig` directly. A test that skipped the manifest could still pass with the slice check unset.
+- `.5` and `1e-1` are rejected on purpose. A bare `Number(raw)` would accept them as 0.5 and 0.1, but `vatRateDefault` reads through the stricter `decimal` field grammar and would silently fall back to `0.22`. The gate therefore must not accept a value that would be charged at the wrong rate.
+- The fallback defaults (`0.22`, `0.1`) apply under the test environment and the demo profile, which skip the gate.

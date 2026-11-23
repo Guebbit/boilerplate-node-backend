@@ -1,35 +1,31 @@
 ---
 source: src/modules/invoicing/tests/unit/credit-breakdown.test.ts
-sha256: 83f92d8a4b506da38277247f733ad8a898124d7a216612f181d69304b2211d63
-generated_at: 2026-11-08T06:18:31.043553+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a84f06df8d5180ae61befb8691a04457cb5581821369f34d56a4215445071820
+context_sha256: db51d75cdf3500e4efa29f535fcdbe76b4d0ff2f1306c58453aed3c891d3ef70
+generated_at: 2026-11-22T05:39:43.930309+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/tests/unit/credit-breakdown.test.ts
 
 ## Purpose
-
-Unit tests for `creditBreakdownOf`, verifying that a partial credit note's per-rate rows (net, tax, gross) sum to exactly the refunded amount, that VAT is extracted once per rate, and that currency-specific rounding (decimal vs. zero-decimal) is handled correctly.
+Unit tests for `creditBreakdownOf` (from `services/credit-breakdown`) fed by `creditShares` (from the invoicing `domain`). They check that the figures of a partial credit note add up: VAT is extracted once per rate, and the gross reconciles to the refunded amount to the cent.
 
 ## Key elements
-
-- **`invoice`** — EUR fixture with two tax rates (10 %, 22 %) and empty `lines`/`shippingByRate`; used as the default source.
-- **`breakdownOf(source, amount)`** — local helper that calls `creditShares(source, amount, 'Refund')` then feeds the result into `creditBreakdownOf(…, source.currency)`.
-- **`describe('creditBreakdownOf')`** — five tests:
-  - *Reconciliation*: gross across summary rows equals the refunded amount to the cent.
-  - *No shipping*: `shippingNetAmount` is `'0.00'` and `shippingByRate` is empty; shipped share is folded into rate rows.
-  - *Mixed-rate exact values*: refunding 10.00 of 62.30 yields 2.92 @ 10 % and 7.08 @ 22 %, each taxed once; net/tax totals are `'8.45'` / `'1.55'`.
-  - *Zero-decimal currency (JPY)*: 105 yen at 8 % rounds VAT to a whole yen (8), net 97.
-  - *Line-item rate*: crediting a specific book at its own 10 % rate, ignoring the 22 % row present in the source invoice.
+- `invoice` — fixture `CreditableInvoice` in EUR with two tax-summary rows: 110.00 at 10% and 122.00 at 22% (232.00 gross), with no lines and no shipping.
+- `breakdownOf(source, amount)` — helper that runs `creditBreakdownOf(creditShares(source, amount, 'Refund'), source.currency)`.
+- Test cases in `describe('creditBreakdownOf')`:
+  - **Reconciliation:** refunding 50.00 gives summary-row gross values that sum to exactly 5000 cents, and `netTotal + taxTotal` is about 50.
+  - **Shipping:** `shippingNetAmount` is `'0.00'` and `shippingByRate` is `[]`, because the shipped share is folded into the rate rows.
+  - **Mixed rates:** refunding 10.00 of an invoice with 18.25 at 10% and 44.05 at 22% gives 2.92 gross at 10% and 7.08 at 22%. Each rate is taxed once, with totals net 8.45 and tax 1.55. The expected figures follow the rounding in the inline comments.
+  - **Zero-decimal currency:** JPY refunding 105 at 8% gives net `'97'`, tax `'8'` and gross `'105'`, with no decimals.
+  - **Returned book:** `creditShares` is called with an options object (`lines: [{ productId: 'book', quantity: 1 }]`, `shipping: '0.00'`). The credit is then only at the book's 10% rate: net 10.00, tax 1.00, gross 11.00.
 
 ## Relationships
-
-- **`src/modules/invoicing/domain/credit-shares.ts`** — provides the `creditShares` function and the `CreditableInvoice` type; the test calls `creditShares` to produce the per-rate share data that `creditBreakdownOf` then formats.
-- **`src/modules/invoicing/domain/index.ts`** — barrel re-export consumed by the `import { … } from '../../domain'` statement.
-- **`src/modules/invoicing/services/credit-breakdown.ts`** — exports `creditBreakdownOf`, the function under test; this file exercises its output shape and numeric correctness.
+- `src/modules/invoicing/domain/credit-shares.ts` — provides `creditShares` and the `CreditableInvoice` type (both imported from `../../domain`). `creditShares` turns an invoice and an amount into the shares that are tested.
+- `src/modules/invoicing/services/credit-breakdown.ts` — provides `creditBreakdownOf`, the unit under test. It takes the shares and a currency and returns `taxSummary`, `netTotal`, `taxTotal`, `shippingNetAmount` and `shippingByRate`.
 
 ## Notes
-
-- All monetary values are **string-encoded** (`'50.00'`, `'8'`); tests compare with `.toBe` on strings or use `Number(…)` / `toBeCloseTo` when summing.
-- The JPY test intentionally omits decimal places to confirm the service does not emit a decimal separator for zero-decimal currencies.
-- One test (the book test) bypasses the `breakdownOf` helper and calls `creditShares` directly with the `lines` option, isolating the line-item-rate path from the proportional-allocation path.
+- The tests use real domain and service code, with no mocks.
+- Amounts are decimal strings. Tests compare them as strings, or through `Number` and cent rounding where reconciliation is the point.
+- Rounding is per rate, on the gross share. The tax is `round(gross × rate/(1+rate))` and the net is gross minus tax. The comments in the mixed-rate and JPY tests show the arithmetic.

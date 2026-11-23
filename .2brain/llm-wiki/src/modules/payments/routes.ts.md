@@ -1,38 +1,53 @@
 ---
 source: src/modules/payments/routes.ts
-sha256: 8ef2d4796e080aa3ffc122c0974394c305c27737069f962b92f81e27cea0bc69
-generated_at: 2026-11-14T21:05:40.861381+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 90c61ceb63dac49e6fbdf362f86e46149daab04e79ec86a1704bdaf9d20dd50a
+context_sha256: c102983cf86be9784852e64fd5b71043730ca1aecc9143ffa0f52428c530c0fc
+generated_at: 2026-11-22T06:48:59.215899+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/routes.ts
 
 ## Purpose
-
-Express router defining the complete HTTP route table for payment operations. It layers authentication, authorization, rate-limiting, and idempotency guards per route so that the webhook (machine caller) and the public `/methods` lookup stay outside the auth wall, while every route that reads or moves money sits behind session auth plus route-specific permission and freshness checks.
+Defines the Express router for the payments module. It declares every payment route (intent, confirm, sync, refunds, staff listings, read-backs, webhook) and the order of guards on each. Two routes are public and sit above the auth wall: the provider webhook and `GET /methods`. Everything after that is authenticated.
 
 ## Key elements
-
-- **`router`** (exported `Router`) — the single artifact this file produces; consumed by the parent HTTP server.
-- **Pre-auth routes** — `POST /webhook/:provider` (provider callback, signature-authenticated, `webhookLimiter`) and `GET /methods` (public, mirrors `GET /delivery/methods`).
-- **Staff read routes** — `GET /`, `POST /search`, `GET /refunds`, `GET /attention`; guarded by `requirePermission('display','Payment')` + `privateNoCache`/`noStore`.
-- **Customer money routes** — `POST /` (create intent), `POST /:id/confirm` (validate card), `POST /:id/sync` (report provider outcome); each requires `checkout:Cart` + `requireFreshAuth('critical')` and a shared `paymentIntentLimiter` (confirm adds three velocity limiters + a challenge gate).
-- **Admin refund routes** — `POST /:id/refunds` (create), `…/settle`, `…/cancel`; guarded by `requirePermission('create','Refund')`. The create route **requires** an idempotency key; settle/cancel accept one optionally (409 is the real guard against re-execution).
-- **Scoped reads** — `GET /:id` and `GET /:id/refunds/:refundId`; no permission guard, scoping delegated to the service layer.
+- `router` — the exported Express `Router`.
+- **Above the auth wall**
+  - `POST /webhook/:provider` — provider callback. Uses `webhookLimiter` and has no session auth (the caller signs the raw body).
+  - `GET /methods` — `environmentCache` + `getPaymentMethods`. Public pre-purchase information.
+- **Auth wall:** `router.use(getAuth, isAuth)`.
+- **Staff reads** (`requirePermission('display', 'Payment')`, never shared-cached):
+  - `GET /` → `getPayments` (`privateNoCache`)
+  - `POST /search` → `getPayments` (`noStore`)
+  - `GET /refunds` → `getRefunds`
+  - `GET /attention` → `getPaymentAttention`
+- **Customer routes** (`checkout:Cart` + `requireFreshAuth('critical')`):
+  - `POST /` → `postPayment`, behind `paymentIntentLimiter`. No idempotency key.
+  - `POST /:id/confirm` → `postPaymentConfirm`. Chain: the three confirm velocity limiters (attempt, decline, decline-block), then `paymentDeclineChallengeGate`, then `idempotencyKey`.
+  - `POST /:id/sync` → `postPaymentSync`, behind `paymentIntentLimiter`. No idempotency key.
+- **Refund routes** (`create:Refund`):
+  - `POST /:id/refunds` → `postPaymentRefund`, with `requireIdempotencyKey({ operation: 'refund', subjectParam: 'id' })`.
+  - `POST /:id/refunds/sync` → `postPaymentRefundsSync`. No key.
+  - `POST /:id/refunds/:refundId/settle` → `postPaymentRefundSettle`, with optional `idempotencyKey`.
+  - `POST /:id/refunds/:refundId/cancel` → `postPaymentRefundCancel`, with optional `idempotencyKey`.
+- **Read-back routes:** `GET /:id` → `getPayment` and `GET /:id/refunds/:refundId` → `getRefund`. Neither has a permission guard.
 
 ## Relationships
-
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuth`, `requirePermission`, `requireFreshAuth`, which this file applies as per-route middleware (or as a router-level guard for all post-webhook routes).
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — provides `idempotencyKey` (optional replay guard on settle/cancel/confirm) and `requireIdempotencyKey` (mandatory, used only on refund creation).
-- **`src/infrastructure/http/middlewares/cache.ts`** — provides `noStore` and `privateNoCache` cache-control directives applied to the staff read routes.
-- **Controllers** (all under `src/modules/payments/controllers/`) — each route's terminal handler: `postPaymentWebhook`, `getPaymentMethods`, `getPayments`, `getRefunds`, `getPaymentAttention`, `postPaymentConfirm`, `postPaymentSync`, `getPayment`, `getRefund`, `postPaymentRefund`, `postPaymentRefundSettle`, `postPaymentRefundCancel`.
+- `src/kernel/middlewares/authorizations.ts` supplies `getAuth`, `isAuth`, `requirePermission` and `requireFreshAuth`.
+- `src/infrastructure/http/middlewares/idempotency.ts` supplies `idempotencyKey` (optional) and `requireIdempotencyKey` (mandatory, used for refund creation).
+- `src/infrastructure/http/middlewares/cache.ts` supplies `environmentCache`, `noStore` and `privateNoCache`.
+- Each route maps to a handler in `src/modules/payments/controllers/*`: `get-payments`, `get-payment`, `get-payment-methods`, `get-payment-attention`, `get-refunds`, `get-refund`, `post-payment-confirm`, `post-payment-sync`, `post-payment-refund`, `post-payment-refund-settle`, `post-payment-refund-cancel` and `post-payment-refunds-sync`. The `post-payment` and `post-payment-webhook` handlers and the `./rate-limits` limiters are also imported here.
 
 ## Notes
-
-- **Route order is load-bearing.** The literal GETs (`/refunds`, `/attention`) must appear before `GET /:id`, or Express will match `:id` first. The webhook and `/methods` must appear before the `getAuth`/`isAuth` guard is attached to the router.
-- **`POST /` omits `idempotencyKey` on purpose.** A replayed intent already refreshes the same record; storing the response in the idempotency ledger would persist the `clientSecret`.
-- **Refund create uses `requireIdempotencyKey` (mandatory), not the optional `idempotencyKey`.** A retried refund must not re-execute; a key with an unknown outcome returns "outcome unknown" rather than running the action again.
-- **`requireFreshAuth` is explicit on customer money routes but *absent* on refund routes.** The `create:Refund` permission key carries `stepUp: critical` in `shared/authorization-keys.generated.yaml`, so the framework enforces the freshness check and audits it without a duplicate middleware call here.
-- **`checkout:Cart` is mounted here but owned by the `cart` module**, following the same cross-module permission-mounting pattern as `products/routes.ts` mounting `locales`-owned keys.
-- **`paymentIntentLimiter` is shared by `POST /` and `POST /:id/sync`** because both end in a provider API call and should draw from the same per-account budget.
-- **`noStore`/`privateNoCache` on staff routes** follows the RFC 9111 §3.5 rule: the response body is shop-wide financial data, never eligible for shared caching.
+- **Order matters.**
+  - The webhook and `/methods` must stay above `router.use(getAuth, isAuth)`.
+  - `GET /:id` is declared after the literal GETs (`/refunds`, `/attention`) so it doesn't swallow them.
+  - `/:id/refunds/sync` is declared before the `/:id/refunds/:refundId/...` routes.
+- **Step-up on refunds.** Refund routes have no explicit `requireFreshAuth`. The `create:Refund` key carries `stepUp: critical` in `shared/authorization-keys.generated.yaml`, so the guard enforces it.
+- **Idempotency.** `POST /` and `/sync` skip the key because they are idempotent by construction. `POST /:id/refunds` requires it, because a retry would otherwise refund twice. Settle and cancel use the optional key and rely on the record returning 409 on a repeat.
+- **Fresh-auth order.** `requireFreshAuth` is asked after the permission key it sits beside, so a caller who can never pass is refused rather than challenged.
+- **Card-testing budgets** apply only to `POST /:id/confirm`, because that is where the card is validated.
+- **Cache headers.** Staff listings are never shared-cached. The `POST /search` route uses `noStore`, following the POST rule in RFC 9111 §3.5.
+- **Scoped reads.** `GET /:id` and `GET /:id/refunds/:refundId` are scoped in the service. A stranger's record returns the same 404 as a missing one.
+- The header comment mentions that the admin-only order payment record route lives in a separate `./order-routes.ts`; it is not mounted in this file.

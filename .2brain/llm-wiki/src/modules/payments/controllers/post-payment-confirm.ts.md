@@ -1,36 +1,44 @@
 ---
 source: src/modules/payments/controllers/post-payment-confirm.ts
-sha256: c007e5a509bb448beb402e1536bdc6ffa4873fcefbab220e631f341c4fcb9d63
-generated_at: 2026-11-08T07:18:04.971160+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 74797b4c9dadf6314ebf7d50051b97bb3c063c3dd1b6b68494b3a57e7fda5834
+context_sha256: a4b6c5485eb37ae2e189b49783e1f51ec183989c620c2d05b897056df36a195e
+generated_at: 2026-11-22T06:41:58.119584+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/controllers/post-payment-confirm.ts
 
 ## Purpose
-
-Handles `POST /payments/:id/confirm` — the step where the browser hands over the tokenised payment method and the service fires the actual charge events. It normalises three distinct outcomes (succeeded, declined, in-flight) into appropriate HTTP responses and records a Prometheus counter for each.
+Express controller for `POST /payments/:id/confirm`, the payment form's submit step where the browser-tokenised payment method is handed to the payment service. It maps the service result to an HTTP response, and records metrics and a decline flag for outcomes that matter operationally (declines are reported as 409 but still counted and audited; in-flight results return 200).
 
 ## Key elements
-
-- **`postPaymentConfirm`** (exported const) — The sole handler. Validates the `:id` param and the JSON body against `ConfirmPaymentBody`, delegates to `paymentService.confirmPayment`, then branches on the result to emit metrics, set a decline flag on the request, and either refuse (409) or resolve `presentWithActions` before returning 200.
-- **`request.paymentConfirmDeclined`** (side-effect on the Express request) — A boolean flag consumed downstream by the decline-budget limiter in `rate-limiters.ts` so it spends budget only on genuine card declines, not on other 409 responses from this route.
-- **Metric labels** — `paymentConfirmTotal` is incremented with one of three outcomes: `succeeded`, `in_flight` (covers `requires_action` / `processing`), or `declined`. Not-found and race rejections are intentionally *not* counted.
+- `postPaymentConfirm(request, response)`: the exported handler. Flow:
+  1. `requireId` extracts the payment id (not-found key `payments.not-found`).
+  2. `parseBody(ConfirmPaymentBody, ...)` validates the body.
+  3. Calls `paymentService.confirmPayment(paymentId, body.paymentMethodRef, request.authContext, callerContextOf(request))`.
+  4. Sets `request.paymentConfirmDeclined` and increments `paymentConfirmTotal`.
+  5. Calls `refused(response, result)` and stops if the result was refused.
+  6. Otherwise calls `paymentService.presentWithActions(...)` and responds with `successResponse<Payment>(response, payment, 200)`.
+  7. Any rejection goes to `catchAs(response, 'postPaymentConfirm')`.
+- Decline detection: a failed result whose `errors` include `ERROR_CODES.PAYMENT_DECLINED`.
+- Metric labels on `paymentConfirmTotal` (`outcome`):
+  - `succeeded`: result succeeded and `data.status === 'succeeded'`.
+  - `in_flight`: any other successful status, such as `requires_action` or `processing`.
+  - `declined`: a decline error.
+  - Other failures (not-found, race rejections) are not counted.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Supplies the shared helpers `requireId`, `parseBody`, `refused`, and `catchAs` that structure validation, error mapping, and catch-all handling.
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId` to extract and validate the `:id` param before any business logic runs.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, which derives the caller identity passed into `confirmPayment`.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, used to emit the final 200 with a `Payment` payload.
-- **`src/modules/payments/metrics.ts`** — Source of `paymentConfirmTotal` (a Counter) that this handler increments per outcome.
-- **`src/modules/payments/services/index.ts`** — Exposes `paymentService`, whose `confirmPayment` and `presentWithActions` methods contain the actual business logic.
-- **`src/modules/payments/routes.ts`** — Wires this handler to the `POST /payments/:id/confirm` route.
-- **`src/types/index.ts`** — Source of the `Payment` type used in the success-response generic.
+- `src/infrastructure/http/controller.ts`: provides `parseBody`, `refused` and `catchAs`.
+- `src/infrastructure/http/ids.ts`: provides `requireId`.
+- `src/infrastructure/http/request.ts`: provides `callerContextOf`.
+- `src/infrastructure/http/response.ts`: provides `successResponse`.
+- `src/modules/payments/metrics.ts`: provides the `paymentConfirmTotal` counter.
+- `src/modules/payments/services/index.ts`: provides `paymentService` (`confirmPayment`, `presentWithActions`).
+- `src/types/index.ts`: provides the `Payment` type.
+- `src/modules/payments/routes.ts`: the route that presumably mounts this handler. The file itself doesn't show the wiring.
 
 ## Notes
-
-- A **declined** payment is returned as a **409** with `PAYMENT_DECLINED`, not a 4xx "stop" signal to the browser. An **in-flight** answer (`requires_action`, `processing`) is a **200** — the browser still has a next step (e.g. redirect to provider). A 4xx would incorrectly tell it to halt.
-- The `actions` field on the response is loaded via a second call (`presentWithActions`) *after* the confirm result; omitting it would hide the follow-up step from the payment form.
-- The `request.paymentConfirmDeclined` flag is a deliberate cross-cutting convention: the rate-limiter in `rate-limiters.ts` reads it to distinguish a real decline from other 409s this route might produce.
-- The handler is a plain function (not a class method), consistent with the controller helpers in `@infrastructure/http/controller`.
+- `request.paymentConfirmDeclined` is set on every non-early-exit result, before the refusal check. Per the file's comments, a decline-budget limiter reads it so it spends its budget only on genuine declines, not on the route's other 409 responses.
+- The decline is counted before `refused` runs, so a declined payment is both counted and reported as a 409 `PAYMENT_DECLINED`.
+- Successful responses include the payment's `actions` via `presentWithActions`. The payment form replaces its stored payment with this answer, so omitting them would hide the next step (finish at provider).
+- The handler returns early without a response value after `requireId` or `parseBody` fails. Those helpers are expected to have already written the error response.

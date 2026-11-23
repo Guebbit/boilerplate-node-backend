@@ -1,49 +1,54 @@
 ---
 source: src/modules/payments/controllers/post-payment-webhook.ts
-sha256: 7fc445ba1ac973fb77c8ab6f3bec6ad71059f248ba8613eb61742fff07128d1c
-generated_at: 2026-11-14T20:59:27.087586+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T06:42:52.862812+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/controllers/post-payment-webhook.ts
 
 ## Purpose
-
-Single HTTP handler for `POST /payments/webhook/:provider`. Receives payment-event deliveries from external providers, validates the raw-body signature via the service layer, and applies the event idempotently. It is the only place in the codebase that turns a provider's signed HTTP POST into a state change.
+Express controller for `POST /payments/webhook/:provider`, the endpoint where a payment provider reports what actually happened to a payment. It is the authority for payment outcomes. It uses no session auth: the provider authenticates by signing the raw request body, and the signature is verified downstream. Rejections and errors are mapped to HTTP statuses so that provider retries behave correctly.
 
 ## Key elements
+- `postPaymentWebhook(request, response)` — the exported handler.
+  - Reads `rawBody` and `headers` from the request.
+  - Calls `paymentService.receiveWebhook(provider, rawBody, headers)`, where `provider` comes from `request.params.provider`.
+  - Responds 204 on success.
+- `sentNoBody(headers)` — private helper. It is true when there is no `Transfer-Encoding` and `Content-Length` is absent or `'0'`. It separates a caller sending an empty request from a parser-ordering bug.
 
-- **`postPaymentWebhook(request, response)`** (exported) — The sole handler. Reads `request.rawBody` (populated by an Express `verify` hook), delegates to the payment service's `receiveWebhook` method, and maps the result or thrown error to an HTTP status.
-- **`sentNoBody(headers)`** (internal) — Checks whether the request carried no body at all (no `Transfer-Encoding`, `Content-Length` absent or `0`). Used to distinguish a caller's empty request (plain 400, no alarm) from a body that *was* sent but failed to buffer (logged as an infrastructure error).
-- **Error dispatch (`.catch` block):**
-  - `WebhookProviderUnknownError` → **404** (`t('payments.webhook-not-configured')`).
-  - `WebhookRejected` → **400** (`t('payments.webhook-unverified')`). The error's `message` carries the specific reason; its `signatureFailure` flag additionally triggers a security-event record.
-  - Anything else → **500** via `catchAs`, so the provider retries.
+Response mapping:
+
+| Condition | Result |
+|---|---|
+| No `rawBody` | 400 with `payments.webhook-unverified`. If a body was announced, an error is also logged. |
+| `WebhookProviderUnknownError` | 404 with `payments.webhook-not-configured` |
+| `WebhookRejected` | 400 with `payments.webhook-unverified` (details below) |
+| Anything else | Delegated to `catchAs(response, 'postPaymentWebhook')`, which yields a 500 so the provider retries |
+
+For `WebhookRejected`:
+- `error.message` is logged as a warning.
+- If `error.signatureFailure` is true, a security event is recorded with the action `SECURITY_PAYMENT_WEBHOOK_INVALID_SIGNATURE` and the reason.
+- Otherwise `paymentWebhookDroppedTotal` is incremented with `reason: 'unreadable'`.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/payments/services/index.ts` | The payment service is called here (`receiveWebhook`); all signature verification, provider resolution, and idempotent application are delegated to that module. |
-| `src/modules/payments/services/errors.ts` | Defines `WebhookProviderUnknownError`, which this controller catches to return 404. |
-| `src/modules/payments/providers/index.ts` | Source of the `WebhookRejected` error class; this controller catches it, inspects its `signatureFailure` flag, and returns 400. |
-| `src/modules/payments/providers/webhook-signature.ts` | Signature verification logic lives in this module; this file never performs crypto directly. |
-| `src/modules/payments/routes.ts` | Registers this handler on the `POST /payments/webhook/:provider` route. |
-| `src/modules/payments/audit.ts` | Provides the audit-action constant used when recording a security event for an invalid signature. |
-| `src/infrastructure/observability/security-events.ts` | Provides `recordSecurityEvent`, called only when a `WebhookRejected` error carries the `signatureFailure` flag. |
-| `src/infrastructure/http/controller.ts` | Provides `catchAs` to format the 500 response. |
-| `src/infrastructure/http/request.ts` | Provides `callerContextOf` to extract caller metadata attached to a security event. |
-| `src/infrastructure/http/response.ts` | Provides `noContentResponse` (204) and `rejectResponse` (400 / 404). |
-| `src/infrastructure/i18n/index.ts` | Provides `t()` for the two localised error strings. |
-| `src/infrastructure/adapters/logger.ts` | Used to log the missing-raw-body infrastructure error and rejected-webhook warnings. |
-| `src/modules/payments/tests/integration/webhook-no-body.test.ts` | Integration test exercising the no-body / empty-body 400 path. |
-| `src/modules/payments/tests/integration/webhook-rate-limit.test.ts` | Integration test for rate-limiting behaviour on this endpoint. |
+- `src/modules/payments/services/index.ts` — supplies `paymentService` and `WebhookProviderUnknownError`. The service applies the event idempotently through conditional writes.
+- `src/modules/payments/providers/index.ts` — supplies `WebhookRejected`. Each adapter verifies its own signature.
+- `src/modules/payments/providers/webhook-signature.ts` — related to the signature verification that happens downstream of this controller.
+- `src/modules/payments/audit.ts` — supplies `paymentsAuditActions`, used for the security event action.
+- `src/modules/payments/metrics.ts` — supplies `paymentWebhookDroppedTotal`, which feeds the `PaymentWebhookUnreadable` alert.
+- `src/infrastructure/observability/security-events.ts` — `recordSecurityEvent`, called with `callerContextOf(request)` from `src/infrastructure/http/request.ts`.
+- `src/infrastructure/http/response.ts` — `noContentResponse` and `rejectResponse`.
+- `src/infrastructure/http/controller.ts` — `catchAs`, for unexpected errors.
+- `src/infrastructure/adapters/logger.ts` — error and warning logs.
+- `src/infrastructure/i18n/index.ts` — `t()` for the error messages.
+- `src/modules/payments/routes.ts` — mounts the handler.
+- `src/modules/payments/tests/integration/webhook-no-body.test.ts` — covers the empty-body case.
 
 ## Notes
-
-- **Raw body is load-bearing.** The Express `json` middleware's `verify` hook (configured in `app/security.ts`) stashes the raw buffer on `request.rawBody` for this route only. If that ordering is changed, every signature check silently fails — the controller logs an explicit error in that case, but the caller still receives a 400.
-- **204, not 200, for success.** Any authentic event — including ones this module deliberately ignores — gets `204 No Content`. A non-2xx tells the provider the delivery failed and triggers a retry.
-- **400 vs 500 is deliberate.** 400 means "your signature/body is wrong, stop retrying." 500 means "our transient fault, please retry." Mapping a genuine internal error to 400 would suppress a needed retry.
-- **Provider is taken from the URL path**, never from an environment variable. A de-provisioned provider can still deliver in-flight events; each adapter verifies its own signature scheme. An unrecognised name gets a clean 404.
-- **Security events ≠ all rejections.** The security-event record fires only when the `WebhookRejected` error has its `signatureFailure` flag set. A provider sending a malformed JSON body or a missing event-id is logged at warn level but is not treated as an attack.
-- **Idempotency is the service's job.** The controller applies no locking or deduplication itself; the payment service guarantees "applied once" via conditional writes.
+- The provider is chosen by the name in the URL path from the registry of installed adapters, never from `NODE_PAYMENT_PROVIDER`. A provider that is no longer the default can still deliver events for in-flight payments.
+- Authentic events get a 204, including events this module ignores, because a non-2xx makes the provider retry harder.
+- Only unverifiable or unreadable bodies get a 400. Genuine faults deliberately become 500s so that retries happen.
+- The signature must be checked against the raw bytes, never a re-serialised body.
+- The raw body buffer is kept for this route alone by the `verify` hook of `express.json`, set up in `app/security.ts`.
+- The `Stryker disable` comments exclude the log calls from mutation testing.
+- A signed but malformed event is counted as dropped, not recorded as a security event. No sweep re-reads dropped events, so the metric exists to alert staff.

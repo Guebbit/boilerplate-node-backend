@@ -1,40 +1,35 @@
 ---
 source: src/modules/orders/domain/rules.ts
-sha256: ab8af8bbcf1e688cb3b6127817f38ee01854bac30a9a2555546b09023b55a925
-generated_at: 2026-11-08T06:49:54.428857+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ff7a3b09331ebea23ec336d965fb09b2bbcdf8bb85cfb47dc067e83c5b28fa96
+context_sha256: 04ae24929e1d4c9fe42935303a99074e815237049d24e763b291f6bbaad03d91
+generated_at: 2026-11-22T06:12:46.632763+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/domain/rules.ts
 
 ## Purpose
-
-Pure validation and classification predicates for order data. Functions take structured input and return a simple verdict or boolean — no side effects, no status codes, no i18n. The calling layer (primarily `services/place`) is responsible for translating verdicts into HTTP responses or user-facing messages.
+Pure order rules: data in, verdict out. It has no status codes and no i18n. `../services/place` maps the verdicts to responses. The file covers order-line validation, buyer identification and ownership, and shipped vs. digital classification of lines.
 
 ## Key elements
-
-- **`OrderLineCandidate`** — input shape for `checkOrderLines`; a line with an optional `quantity` and optional `product` (absent `product` means the reference no longer resolves).
-- **`OrderLinesVerdict`** — discriminated union: `{ ok: true }` or `{ ok: false; reason: 'no-lines' | 'product-missing' }`.
-- **`checkOrderLines(lines)`** — validates a set of candidate lines. Returns `no-lines` if empty, `product-missing` if any line lacks a resolvable product, otherwise `ok`.
-- **`buyerIdOf(order)`** — normalises an order's `userId` (which may be an ObjectId or a plain string) into a `string | undefined`. The single canonical place where a buyer identity becomes a string.
-- **`isBuyer(order, caller)`** — true only when the order has a resolvable buyer *and* that buyer matches `caller.id`. Returns false for erased buyers or missing caller identity.
-- **`ShippableLineCandidate`** — minimal shape for `isShippedItem`; only reads `product.requiresShipping`.
-- **`isShippedItem(line)`** — a line is shipped unless `product.requiresShipping === false`. Absent/`undefined` counts as shipped (the product schema default).
-- **`isDigitalOnlyOrder(lines)`** — true when the order has at least one line *and* every line is non-shipped. An empty line set is never digital-only.
+- `OrderLineCandidate` – a line as the rules see it. A missing `product` means the reference no longer resolves.
+- `OrderLinesVerdict` – `{ ok: true }`, or `{ ok: false, reason: 'no-lines' | 'product-missing' }`.
+- `checkOrderLines(lines)` – refuses an empty set (`no-lines`) and any set where a line's `product` is `undefined` or `null` (`product-missing`). Otherwise it accepts.
+- `buyerIdOf(order)` – returns the order's `userId` as a string, or `undefined` if it has none (erased account, or a walk-in order). It is the one place an order's buyer becomes a string.
+- `isBuyer(order, caller)` – true only if the order has a buyer, the caller has an id, and the two match.
+- `ShippableLineCandidate` – the only field the shipping predicates read: `product.requiresShipping`.
+- `isShippedItem(line)` – true unless `product.requiresShipping === false`. A missing flag counts as shipped, matching the product schema default.
+- `isDigitalOnlyOrder(lines)` – true only when there is at least one line and no line is shipped.
 
 ## Relationships
+The graph lists many neighbors, but the file's own content shows only this link:
+- `src/modules/orders/services/place.ts` consumes the `checkOrderLines` verdicts and maps them to status codes and messages.
 
-- **`src/modules/orders/services/place.ts`** — the primary consumer of `checkOrderLines`; maps its verdict to HTTP status codes and i18n messages (per the module doc comment).
-- **`src/modules/orders/domain/index.ts`** — domain barrel that re-exports this module's public API for other domain files and services.
-- **`src/modules/orders/domain/tax.ts`**, **`src/modules/orders/domain/withdrawal.ts`** — sibling domain modules; may consume `buyerIdOf` / `isBuyer` for account-scoped logic.
-- **`src/modules/orders/controllers/get-order.ts`**, **`src/modules/orders/services/cancel.ts`**, **`src/modules/orders/services/override.ts`** — order-side consumers of `isBuyer` / `buyerIdOf` for authorisation checks.
-- **`src/modules/delivery/services/ensure.ts`**, **`src/modules/delivery/services/notice.ts`** — delivery-side consumers of `isShippedItem` / `isDigitalOnlyOrder` to decide whether a parcel is warranted.
-- **`src/modules/invoicing/controllers/get-order-invoice.ts`**, **`src/modules/invoicing/controllers/get-order-credit-note.ts`**, **`src/modules/invoicing/services/for-caller.ts`** — invoicing-side consumers of `isBuyer` / `buyerIdOf` for caller-scoped access.
-- **`src/modules/orders/emails.ts`**, **`src/modules/orders/services/notify.ts`**, **`src/modules/orders/services/actions.ts`** — notification/action consumers of `buyerIdOf` to address outgoing mail.
+The other neighbors (delivery, invoicing, `get-order`, `src/modules/orders/domain/index.ts`, `tax.ts`, `withdrawal.ts`, emails, and the cancel/notify/override/actions services) are related in the dependency graph. This file does not show how they use it.
 
 ## Notes
-
-- **Order of checks in `checkOrderLines` matters**: `no-lines` is evaluated before `product-missing` because the two reasons map to different status codes downstream.
-- **`isShippedItem` is the frozen twin of `cart/domain/rules.ts`'s `isShippedLine`**: same predicate (`requiresShipping !== false`) applied to an embedded product snapshot rather than a joined cart line. The two shapes diverge post-checkout, so they cannot share a single function.
-- **`HasBuyer` is intentionally non-exported** — it's a structural type accepted by `buyerIdOf` and `isBuyer`. Any object with a compatible `userId` field satisfies it; callers don't need to import the interface.
-- **`buyerIdOf` returns `undefined` (not `null`)** for erased buyers; downstream code should treat `undefined` as "no buyer" rather than an empty string.
+- The order of the checks in `checkOrderLines` matters, because the two reasons map to different status codes. `no-lines` is checked first.
+- `buyerIdOf` accepts `userId` as a string or an ObjectId-like value with `toString`. A falsy `userId` gives `undefined`.
+- `isBuyer` is false when the caller is `undefined`, which covers paths with no request behind them.
+- `isShippedItem` is the post-checkout counterpart of `isShippedLine` in the cart module's domain rules. It applies the same predicate to an order's embedded product snapshot.
+- For digital-only orders, `ship` and `deliver` have nothing to do, and `fulfill` is their route instead. An order with no lines is never digital-only.

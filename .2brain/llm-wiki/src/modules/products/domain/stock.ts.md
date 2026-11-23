@@ -1,35 +1,30 @@
 ---
 source: src/modules/products/domain/stock.ts
-sha256: d2813e889a307509d4d43a405e73e9574b35730718be89c6c65ab973134808af
-generated_at: 2026-11-08T07:44:04.054466+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1675fd5b7cdbf17e3e85a2142dfdb7d15d1390d9c9125395c74e9319d94d6796
+context_sha256: 76429bb93c025bb2b9107cae90df58b7269e7239b5c8a08ee76708503bc922de
+generated_at: 2026-11-22T07:09:30.200853+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/domain/stock.ts
 
 ## Purpose
-
-Pure calculation helpers that derive a customer-facing stock picture (available units, remaining preorder allowance, and display flags) from the raw `onHand` / `reserved` counters that the inventory module writes onto a product. It lives in the products domain rather than in `inventory` or `cart` because a product's catalogue availability is a product invariant, following the same layering rationale as `tax.ts`.
+Pure helpers that compute customer-facing quantities for a product: how many units can be bought now, and how many preorder units remain. It sits beside the product model because catalogue availability is this module's own invariant. It is not placed in `inventory` or `cart`, which hold no catalogue rules. The module doc says `tax.ts` follows the same reasoning for `resolveTaxRate`.
 
 ## Key elements
-
-- **`availableStock(onHand?, reserved?)`** — Returns units a customer may buy, clamped at zero. Both parameters are optional and read as `0` when absent.
-- **`UNLIMITED_ALLOWANCE_SHOWN`** (private constant, `999_999`) — Sentinel value returned in place of an actual count when a backorder allowance has no cap.
-- **`preorderAllowanceLeft(backorderLimit?, backordered?)`** — Returns remaining preorder units (clamped at zero), or `UNLIMITED_ALLOWANCE_SHOWN` when `backorderLimit` is `null`. A `undefined` `backorderLimit` means the allowance is closed (zero).
-- **`stockFlags(available, threshold)`** — Returns `{ inStock: boolean; lowStock: boolean }`. `lowStock` is only ever true while `inStock` is also true.
+- `availableStock(onHand?, reserved?)` returns `max(0, onHand - reserved)`. Absent arguments count as 0. The clamp ensures a negative count never reaches a screen, even though inventory transitions are meant to keep `reserved <= onHand`.
+- `preorderAllowanceLeft(backorderLimit?, backordered?)` returns the units still available to preorder:
+  - `backorderLimit === null` means no cap, and the function returns the `UNLIMITED_ALLOWANCE_SHOWN` constant (999,999).
+  - An absent limit counts as 0, which closes the preorder.
+  - Otherwise it returns `max(0, limit - backordered)`. The clamp is needed because the allowance can be lowered below the units already claimed.
+- `UNLIMITED_ALLOWANCE_SHOWN` (private, 999,999) is the integer shown for an uncapped allowance. The contract requires an integer, and buyers are never shown the real count.
 
 ## Relationships
-
-- **`domain/backorder.ts`** — Supplies the `backorderLimit` and `backordered` values consumed by `preorderAllowanceLeft`.
-- **`domain/buyable.ts`** — Likely composes `availableStock` / `stockFlags` to decide whether a product is purchasable.
-- **`domain/index.ts`** — Barrel re-export; makes the three public functions available to the rest of the product module.
-- **`presenter.ts`** — Consumes `stockFlags` (and possibly `availableStock`) to shape the two boolean flags and availability count in API responses.
-- **`tests/unit/stock.test.ts`** — Unit tests for all exported functions.
-- **`tests/factories.ts`** — Provides test fixtures that populate the `onHand` / `reserved` / `backorderLimit` fields these functions read.
+The listed neighbors are `src/modules/products/domain/availability.ts`, `src/modules/products/domain/index.ts`, `src/modules/products/tests/factories.ts` and `src/modules/products/tests/unit/stock.test.ts`. Only the following is visible from this file's own content:
+- The doc comment says the inputs are the two stock counters of `@modules/inventory`'s level. The file has no imports, so the data comes from callers.
+- Per the module doc, the result feeds `available`. The file does not show how `availability.ts` or `index.ts` use these helpers.
+- The test files are not referenced from this file.
 
 ## Notes
-
-- `backorderLimit` is **tri-state**: `undefined` → allowance closed (0), `null` → no cap (unlimited), a number → finite cap. Callers must not confuse `undefined` with `null`.
-- `UNLIMITED_ALLOWANCE_SHOWN` is a display sentinel (`999_999`), not `Infinity`; downstream code that compares it numerically should treat it as "effectively unlimited," not a real unit count.
-- `lowStock` and `inStock: false` are mutually exclusive by construction — an empty shelf is simply "out of stock," never "low stock."
-- The file's doc comment explicitly cites `docs/theory/layers.md` as the reason it is co-located with the product model rather than in the inventory module; moving it would violate the layering contract.
+- `null` and an absent value mean different things for `backorderLimit`. `null` is unlimited and an absent value is zero, which is closed.
+- The 999,999 value is a display sentinel, not a real quantity. Callers should not use it in arithmetic.

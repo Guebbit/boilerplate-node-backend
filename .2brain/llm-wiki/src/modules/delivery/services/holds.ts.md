@@ -1,44 +1,49 @@
 ---
 source: src/modules/delivery/services/holds.ts
-sha256: 23a8803a9f607172a32c7d1a60a3d7a19a167d77df160558489360364f430939
-generated_at: 2026-11-08T05:36:08.514457+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e3af14d86f3914802741557f59d93126e05cf8463316f7caa0c7d4602769687a
+context_sha256: e4d9af5c83ba899e7367b5179880cfd8a05ca82a72757e61f73f92d1c28e4aba
+generated_at: 2026-11-22T04:55:20.651619+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/holds.ts
 
 ## Purpose
-
-Implements the two staff-facing mutations for a fulfillment order's hold state: **hold** (stop shipping, record a reason) and **release** (clear the hold, resume shipping). Both run inside a Mongoose transaction, enforce preconditions, write through the repository, fire downstream notifications, and emit an audit entry before returning the updated order view.
+Implements holding a fulfillment order back from shipping and releasing it again. Staff may hold for `incorrect_address`, `high_risk` or `other`. The `awaiting_stock` reason is set and released only by stock allocation, so staff can neither set nor release it. This is a consistency guard against shipping goods the stock ledger never counted out, not an administrator policy.
 
 ## Key elements
-
-- **`HoldInput`** (exported) – Payload staff submit when holding: a `reason` (excludes `awaiting_stock`), an optional internal `note`, and an optional buyer-facing `message`.
-- **`holdFulfillmentOrder`** (exported) – Public entry point to place a hold. Delegates to `guarded` with `holdAct`.
-- **`releaseFulfillmentOrder`** (exported) – Public entry point to release a hold. Delegates to `guarded` with `releaseAct`.
-- **`holdAct`** (private) – Validates that the order is still in-progress and the fulfillment order is holdable, then calls `fulfillmentOrderRepository.claim` to set status/hold fields, reports progress, and announces the hold.
-- **`releaseAct`** (private) – Validates releasability, calls `claim` to unset all four hold fields and restore line-based status, reports progress, and announces the release.
-- **`guarded`** (private) – Shared wrapper that runs the act via `runAct`, records the audit log entry, fetches a fresh order, and shapes the success/reject HTTP response.
-- **`isWorked`** (private) – One-line guard: `isAwaitingGoods(order.status)`; rejects hold/release on delivered or canceled orders.
+- `HoldInput`: the hold request. It has `reason` (any `FulfillmentHoldReason` except `awaiting_stock`), an optional staff-facing `note`, and an optional buyer-facing `message` that is mailed with the hold.
+- `holdFulfillmentOrder(id, input, authContext, context)`: public entry point for placing a hold. It audits as `ADMIN_FULFILLMENT_ORDER_HELD`.
+- `releaseFulfillmentOrder(id, authContext, context)`: public entry point for releasing a hold. It audits as `ADMIN_FULFILLMENT_ORDER_RELEASED`.
+- `holdAct`: the in-transaction hold step.
+  - It reads the fulfillment order with its order, then checks `isWorked` and `isHoldable`.
+  - It claims the record at its current `revision`, setting `status` from `statusOfLines(lines, true)`, plus `holdReason`, `heldAt` and the optional `holdNote` and `holdMessage`.
+  - It then calls `reportProgress` and `announceHeld`.
+- `releaseAct`: the in-transaction release step.
+  - It checks `isWorked` and `isReleasable`.
+  - It claims the record with `status` from `statusOfLines(lines, false)` and unsets `holdReason`, `heldAt`, `holdNote` and `holdMessage`.
+  - It then calls `reportProgress` and `announceReleased`.
+- `guarded`: shared wrapper.
+  - It runs the act through `runAct`, returns the reject if the act was refused, and otherwise records a success audit.
+  - It re-fetches the order and returns `viewFulfillmentOrder(...)` wrapped in `generateSuccess`.
+- `isWorked`: true only while the order is awaiting goods (`isAwaitingGoods(order.status)`). A hold or release on a delivered or canceled order is refused.
 
 ## Relationships
-
-- **`services/act.ts`** – Provides `readWithOrder` (load FO + parent order in-session), `refuse` (structured 409), and `runAct` (transaction runner).
-- **`services/announce.ts`** – `announceHeld` / `announceReleased` send buyer notifications after the write commits.
-- **`services/progress.ts`** – `reportProgress` updates the parent order's delivery progress after either mutation.
-- **`services/actions.ts`** – `viewFulfillmentOrder` shapes the response payload (includes caller-specific action buttons).
-- **`domain/` (fulfillment.ts, index.ts)** – `isHoldable`, `isReleasable`, and `statusOfLines` encode the state-machine preconditions and the status derived from line items.
-- **`repository.ts`** – `fulfillmentOrderRepository.claim` performs the optimistic-concurrency write (revision check) inside the transaction.
-- **`model.ts`** – `FulfillmentOrderDocument` is the Mongoose document type used throughout.
-- **`delivery/audit.ts`** – `deliveryAuditActions` supplies the stable action identifiers (`ADMIN_FULFILLMENT_ORDER_HELD`, `…RELEASED`) for the audit log.
-- **`@infrastructure/observability/audit`** – `recordAudit` persists the structured audit entry (action, target, reason code).
-- **`@infrastructure/http/response`** – `generateSuccess` and the `ResponseReject`/`ResponseSuccess` union type shape the HTTP reply.
-- **`modules/orders`** – `isAwaitingGoods` (lifecycle guard) and `orderService.getById` (fetch fresh order for the response view).
-- **`services/index.ts`** – Barrel re-export so callers import `holdFulfillmentOrder` / `releaseFulfillmentOrder` from the module root.
+- `./act`: provides `readWithOrder`, `refuse` and `runAct`, which handle the transaction, the read and the 409 refusals.
+- `../repository`: the fulfillment order repository, used to perform the revision-checked update (`claim`) in both acts.
+- `../domain`: supplies `isHoldable`, `isReleasable` and `statusOfLines`.
+- `./progress`: `reportProgress` is called after each claim.
+- `./announce`: `announceHeld` and `announceReleased` notify after each claim.
+- `./actions`: `viewFulfillmentOrder` builds the response, including its `actions`.
+- `../audit`: `deliveryAuditActions` names the audit actions.
+- `@infrastructure/observability/audit`: `recordAudit` writes the audit entry.
+- `@infrastructure/http/response`: `generateSuccess` and the `ResponseSuccess` and `ResponseReject` types.
+- `@modules/orders`: `isAwaitingGoods` and `OrderDocument`; the module's order service is also used to re-fetch the order for the response.
+- `../model`: `FulfillmentOrderDocument`.
 
 ## Notes
-
-- **`awaiting_stock` is system-managed only.** `HoldInput.reason` is typed as `Exclude<FulfillmentHoldReason, 'awaiting_stock'>`, so staff cannot set or clear that reason here. A hand release would ship stock the allocation ledger never counted out.
-- **Audit metadata omits `holdNote`.** Only the `reason` code is recorded; free-text notes are deliberately excluded because the audit pipeline ships unhashed text to Loki.
-- **Reason is captured pre-write in `releaseAct`.** After `claim` unsets `holdReason`, the post-write document no longer carries it, so the code is read from the pre-write `fulfillmentOrder` and passed through `Changed.reason`.
-- **Optimistic concurrency.** Both acts pass `fulfillmentOrder.revision` to `claim`; a `null` return means a concurrent mutation won the race and the act refuses with 409.
+- Refusals are 409s: `DELIVERY_NOT_HOLDABLE` or `DELIVERY_NOT_RELEASABLE`. They are raised either when the state checks fail or when `claim` returns nothing (a concurrent change on `revision`).
+- The audit `metadata` holds only `fulfillmentOrderId` and the reason code, never `holdNote`. The note is free text, and it would reach Loki unhashed.
+- On release, the reason is read from the record before the write, because `released` no longer carries it.
+- The release comment says an `awaiting_stock` hold is refused. In this file the refusal comes only from `isReleasable`, whose logic lives in the domain module.
+- The final response prefers a freshly fetched order and falls back to the one read inside the transaction.

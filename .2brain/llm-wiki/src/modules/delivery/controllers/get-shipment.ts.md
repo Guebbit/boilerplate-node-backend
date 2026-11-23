@@ -1,31 +1,32 @@
 ---
 source: src/modules/delivery/controllers/get-shipment.ts
-sha256: 2b7b03553f16d0a769e725951ccfbd595643caa8fd2ccbfb25049ec6978b1ae8
-generated_at: 2026-11-08T05:26:49.458709+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2b7b03553f16d0a769e725951ccfbd595643caa8fd2ccbfb25049ec6978b1ae8
+context_sha256: e3b5aee4df95678a1b188e65cab5b1d03dc13ff142e9e0e884f263071f565bce
+generated_at: 2026-11-22T04:45:56.758035+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/controllers/get-shipment.ts
 
 ## Purpose
-
-HTTP controller for the `GET /delivery/shipments/:id` endpoint. It retrieves a single shipment by ID for staff viewing/correction and serializes the result into a standard success or refusal response.
+Express controller for `GET /delivery/shipments/:id`. It returns a single shipment for staff who may correct it, delegating the lookup and authorization to the delivery service and formatting the HTTP response.
 
 ## Key elements
-
-- **`getShipment(request, response)`** (exported) — Validates the `:id` path parameter, calls `deliveryService.getShipment`, then writes either a refusal or a `Shipment`-typed success response. Errors are funnelled through `catchAs(response, 'getShipment')`.
+- `getShipment(request, response)` — the only export. It does the following:
+  1. Validates the `:id` param with `requireId`, using the not-found key `delivery.shipment-not-found`. If the id is missing or invalid, it returns `Promise.resolve()` and stops. It relies on `requireId` having already written the response.
+  2. Calls `deliveryService.getShipment(id, request.authContext)`.
+  3. If `refused(response, result)` handles the result, it returns without further output.
+  4. Otherwise it sends `successResponse<Shipment>(response, result.data)`.
+  5. It attaches `.catch(catchAs(response, 'getShipment'))` to handle errors.
 
 ## Relationships
-
-- **`src/modules/delivery/routes.ts`** — Registers `getShipment` on the `GET /delivery/shipments/:id` route.
-- **`src/modules/delivery/services/index.ts`** — Provides the `deliveryService` instance whose `getShipment(id, authContext)` method performs the actual data lookup.
-- **`src/infrastructure/http/ids.ts`** — Supplies `requireId`, which extracts and validates the `:id` param (returns early with a 404 on failure).
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standard 200 JSON envelope.
-- **`src/infrastructure/http/controller.ts`** — Supplies `catchAs` (error → standard error response) and `refused` (service-level rejection → appropriate status).
-- **`src/types/index.ts`** — Exports the `Shipment` interface used as the response payload type.
+- `src/infrastructure/http/ids.ts` — supplies `requireId`, which parses and validates the route id.
+- `src/infrastructure/http/controller.ts` — supplies `refused` (handles refused service results) and `catchAs` (error handler labelled `'getShipment'`).
+- `src/infrastructure/http/response.ts` — supplies `successResponse` for the success payload.
+- `src/modules/delivery/services/index.ts` — supplies `deliveryService`, which does the business logic and access checks.
+- `src/types/index.ts` — supplies the `Shipment` type, imported through the `@types` alias.
+- `src/modules/delivery/routes.ts` — the route definitions that mount this handler.
 
 ## Notes
-
-- The early-return path (`if (!id) return Promise.resolve()`) avoids a microtask but keeps the function's return type consistent (`Promise<void>`).
-- The service call receives `request.authContext` — the controller itself does no authorization; that is delegated to the service layer.
-- `catchAs` is tagged with the string `'getShipment'`, which is used for logging/correlation on the server side.
+- The handler is not `async`. It returns a promise chain, and the early-exit path returns a resolved promise to keep the return type consistent.
+- Authorization is carried by `request.authContext` and passed to the service. The controller does not check permissions itself.

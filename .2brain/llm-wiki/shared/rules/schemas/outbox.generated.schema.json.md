@@ -1,33 +1,28 @@
 ---
 source: shared/rules/schemas/outbox.generated.schema.json
-sha256: b174b139ebe3897cccd8e1b10aef1a6572ded6522930453cbe97377655f87e11
-generated_at: 2026-11-08T03:11:15.257745+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b174b139ebe3897cccd8e1b10aef1a6572ded6522930453cbe97377655f87e11
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:28:07.303348+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/schemas/outbox.generated.schema.json
 
 ## Purpose
-
-JSON Schema (draft 2020-12) that validates an outbox configuration object. It defines the shape and constraints for the tunable parameters of the outbox subsystem—retention, retry attempts, lease timing, and exponential-backoff settings—so that consumers can reject malformed configs at validation time.
+A generated JSON Schema (draft 2020-12) that describes the shape of the outbox configuration. It validates an object with a single top-level `outbox` key holding five tuning parameters for an outbox-style retry/delivery mechanism. The `.generated` name suggests it is produced from another source (likely a TypeScript/Zod definition) and should not be edited by hand.
 
 ## Key elements
-
-- **Top-level object** — requires a single `outbox` key; no additional properties allowed.
-- **`outbox` object** — requires all five of the following properties; no additional properties allowed:
-  - `retentionDays` (integer, > 0) — how long outbox entries are retained.
-  - `maxAttempts` (integer, > 0) — upper bound on delivery attempts.
-  - `leaseSeconds` (integer, > 0) — duration of a processing lease.
-  - `backoffBaseMs` (integer, > 0) — base interval for exponential backoff.
-  - `backoffCapMs` (integer, > 0) — ceiling on backoff delay.
-- **Constraints** — every field uses `exclusiveMinimum: 0` (must be ≥ 1) and `maximum: 9007199254740991` (safe-integer upper bound).
+All properties below live under the required top-level `outbox` object. Each is an `integer` with `exclusiveMinimum: 0` (so at least 1) and `maximum: 9007199254740991` (2^53 − 1).
+- `retentionDays` — retention period, in days.
+- `maxAttempts` — maximum number of attempts.
+- `leaseSeconds` — lease duration, in seconds.
+- `backoffBaseMs` — base backoff delay, in milliseconds.
+- `backoffCapMs` — cap on the backoff delay, in milliseconds.
 
 ## Relationships
-
-No dependency-graph neighbors are recorded for this file.
+No graph neighbors are listed, so no dependencies or consumers are visible from this file.
 
 ## Notes
-
-- The `maximum` value (`9007199254740991` = 2⁵³ − 1) is the ECMAScript safe-integer limit; it effectively means "no practical upper bound" while keeping the value representable in JS `number` type without precision loss.
-- `additionalProperties: false` is enforced at **both** the top level and the `outbox` level, so any typo'd key name will fail validation.
-- Because every field is `required`, partial or empty outbox configs are always invalid—consumers must supply all five values.
+- All five fields are required, and `additionalProperties: false` is set on both the root and the `outbox` object. Unknown keys are rejected and there are no defaults.
+- The schema enforces only type and range. It does not enforce that `backoffCapMs >= backoffBaseMs`.
+- The `9007199254740991` maximum is characteristic of a generator mapping a safe-integer number type, such as Zod's `.int().positive()`. The generator is inferred, not stated in the file.

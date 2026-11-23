@@ -1,35 +1,31 @@
 ---
 source: src/modules/cart/tests/integration/checkout-terms-version.test.ts
-sha256: 7b09e93ed5393f1a914c82831c2f1dfcf244cd81c26da6826b500d4719a73486
-generated_at: 2026-11-14T19:33:37.627755+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7b09e93ed5393f1a914c82831c2f1dfcf244cd81c26da6826b500d4719a73486
+context_sha256: 4fc54ff9042eff38b254344b52c3d48993e4e524322036207025daf0a19cd628
+generated_at: 2026-11-22T04:38:57.751095+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/integration/checkout-terms-version.test.ts
 
 ## Purpose
-
-Integration test verifying that a checkout stamps the order with the Terms version in force at the moment of placement, and that bumping `NODE_TERMS_VERSION` between two checkouts leaves each order on its respective version — analogous to how currency is frozen at order time.
+Integration test verifying that an order placed through `POST /cart/checkout` freezes the Terms version in force at placement (like it freezes currency). A later bump of the Terms version must not change the version on an already-placed order.
 
 ## Key elements
-
-- **`fillCart(bearer, productId)`** — POSTs one unit of the given product to `/cart/items` and sets the shipping method to `pickup`, leaving the cart in a check-out-able state.
-- **`shopperReady()`** — Authenticates a fresh `user`, gives them an address, creates a product (price `10.00`, stock 10), and fills the cart. Returns `{ bearer, product }` for subsequent assertions.
-- **`setupTestDb()`** — Called at module top level; resets/seeds the database before the `describe` block runs.
-- **Test: "stamps the order with the version in force at placement"** — Wraps the checkout in `withEnvironmentOverrides({ NODE_TERMS_VERSION: '2026-11' })` and asserts the response body carries that exact version.
-- **Test: "gives two orders two versions when the Terms were bumped between them"** — Performs two checkouts under `NODE_TERMS_VERSION` of `'v1'` and `'v2'` respectively, re-filling the cart between them, and asserts each order carries its own version.
+- `fillCart(bearer, productId)`: adds one unit of the product via `POST /cart/items` and selects the `pickup` shipping method via `PUT /cart/shipping-method`, expecting 200 from both.
+- `shopperReady()`: authenticates as `'user'`, gives that user an address, creates a product (price `'10.00'`, `onHand: 10`), fills the cart, and returns `{ bearer, product }`.
+- Test "stamps the order with the version in force at placement": with `NODE_TERMS_VERSION` overridden to `'2026-11'`, checkout returns 201 and `body.termsVersion` is `'2026-11'`.
+- Test "gives two orders two versions...": checks out under `NODE_TERMS_VERSION='v1'`, refills the cart, checks out under `'v2'`, then expects the first order's `termsVersion` to be `'v1'` and the second's `'v2'`.
 
 ## Relationships
-
-- **`tests/support/http.ts`** — Provides `api()` (supertest-style HTTP client) and `authenticateAs()` used by `fillCart` and `shopperReady`.
-- **`tests/support/checkout-as.ts`** — Provides `checkoutAs(bearer)`, the single-call abstraction that triggers `POST /cart/checkout` and returns the full response.
-- **`tests/support/environment.ts`** — Provides `withEnvironmentOverrides()`, which temporarily mutates `NODE_TERMS_VERSION` for the duration of the wrapped call, allowing per-checkout version switching.
-- **`tests/support/setup-test-db.ts`** — Provides `setupTestDb()` to prepare a clean database fixture before tests run.
-- **`src/modules/addresses/tests/factories.ts`** — Provides `giveAddress(userId)` so the authenticated user has a shipping address on file.
-- **`src/modules/products/tests/factories.ts`** — Provides `createProduct({ price, onHand })` to mint a purchasable product per test.
+- `@tests/http` (`tests/support/http.ts`): provides `api()` (HTTP client for the cart endpoints) and `authenticateAs()`.
+- `@tests/checkout-as` (`tests/support/checkout-as.ts`): `checkoutAs(bearer)` performs the checkout request under test.
+- `@tests/setup-test-db` (`tests/support/setup-test-db.ts`): `setupTestDb()` is called at module level to prepare the test database.
+- `@tests/environment` (`tests/support/environment.ts`): `withEnvironmentOverrides` temporarily sets `NODE_TERMS_VERSION` around a callback.
+- `src/modules/addresses/tests/factories.ts`: `giveAddress` creates the address needed to check out.
+- `src/modules/products/tests/factories.ts`: `createProduct` creates the product to buy.
 
 ## Notes
-
-- `NODE_TERMS_VERSION` is read **at checkout time**, not at process start. The tests rely on `withEnvironmentOverrides` to prove this by changing the value between two calls in the same process.
-- The second test reuses the same product but calls `fillCart` a second time, implying the first checkout consumed (emptied) the cart.
-- `product._id` is coerced with `String(...)` before sending, consistent with a Mongoose ObjectId that must arrive as a string in JSON.
+- The Terms version is switched only around the `checkoutAs` call, so it is read at checkout time via the environment variable, not at setup.
+- The cart must be refilled between the two checkouts in the second test (`fillCart` is called again), since the first checkout consumes it.
+- `fillCart` and `shopperReady` are local helpers and aren't exported.

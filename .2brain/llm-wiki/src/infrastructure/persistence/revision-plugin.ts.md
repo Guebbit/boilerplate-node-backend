@@ -1,45 +1,35 @@
 ---
 source: src/infrastructure/persistence/revision-plugin.ts
-sha256: 9de53981a5fe3a1cd30281f53f0742a67d429ffd72bc98fe5ade155a5f2fdaff
-generated_at: 2026-11-14T18:14:51.032315+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 75d879984a2e4b455be3d8b8cb9862846abbf611db7001dc8182397851477518
+context_sha256: c9704b4e3177936a7ce9a38d939e0e25d89d83ea93c274c8f70722803670ac69
+generated_at: 2026-11-22T03:04:16.455561+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/revision-plugin.ts
 
 ## Purpose
-
-Mongoose plugin that stamps an `editRevision` integer counter on a versioned row every time an editor's edit writes to it. It replaces Mongoose's `__v` with a domain-named key, increments it via `$inc` on `save` and query updates, and deliberately skips bookkeeping writes (`timestamps: false`) so the counter serves as a strong ETag validator (RFC 9110 §8.8.1).
+Defines a Mongoose plugin that gives a schema an `editRevision` counter, an integer incremented atomically (`$inc`) on every real edit of a row. This counter is the row's version: the `ETag` is derived from it and `If-Match` is compared against it. A counter is used instead of `updatedAt` because a strong validator (RFC 9110 §8.8.1) must change on every change, and two edits in the same millisecond share a timestamp but never a counter.
 
 ## Key elements
-
-- **`EDIT_REVISION`** (const) — The schema path string `'editRevision'`. Named to avoid colliding with the `locales` module's own `revision` wire field.
-- **`revisionPlugin(schema)`** (exported fn) — Registers `versionKey` as `EDIT_REVISION`, then wires:
-  - a `pre('save')` hook that calls `flagIncrement` when the document is not new and `updatedAt` was just stamped by Mongoose's timestamps hook;
-  - `pre(['updateOne', 'updateMany', 'findOneAndUpdate'])` hooks that call `incrementOnUpdate`.
-- **`flagIncrement(document)`** (internal) — Sets Mongoose's private version bit-field to the `VERSION_INC` flag *only* (not the version-filter flag), so the next `save()` emits `$inc` without a version-filter that would turn last-writer-wins into an error. Throws if Mongoose's internals have moved.
-- **`incrementOnUpdate(query)`** (internal) — Reads the query's update; if it stamps `updatedAt` (i.e., it is an edit), appends `$inc: { editRevision: 1 }` (or a pipeline `$set` with `$add`/`$ifNull` for aggregation-pipeline updates).
-- **`stampsUpdatedAt(update)`** (internal) — Detects whether any `$set` in the update touches `updatedAt`, the signal that Mongoose's timestamps hook treated the write as an edit.
-- **`VERSION_INC`** (module-local const) — Read at runtime via `Reflect.get(Document, 'VERSION_INC')` to stay correct across Mongoose renumberings.
+- `EDIT_REVISION` (`'editRevision'`): the path holding the counter. It is not called `revision` because `locales` already has a wire field with that name and a different meaning.
+- `revisionPlugin(schema)`: the exported plugin. It does three things:
+  - Sets the schema's `versionKey` to `editRevision`, replacing `__v`.
+  - Adds a `pre('save')` hook that calls `flagIncrement` when the document is not new and `updatedAt` is modified.
+  - Adds a `pre` hook for `updateOne`, `updateMany` and `findOneAndUpdate` that runs `incrementOnUpdate`.
+- `flagIncrement(document)` (internal): ORs Mongoose's `VERSION_INC` flag into the document's private internal version bit field. Mongoose then sends `$inc` without a version filter. It throws if Mongoose no longer keeps the flag there.
+- `incrementOnUpdate` (internal): a query hook. It does nothing unless the update stamps `updatedAt`. For object updates it merges `editRevision: 1` into `$inc`. For pipeline updates it appends a `$set` stage that uses `$add` with `$ifNull(…, 0)`.
+- `stampsUpdatedAt` (internal): detects a `$set.updatedAt` in an update, whether the update is an object or a pipeline.
+- `VERSION_INC` (internal): read from `Document` via `Reflect.get` rather than hard-coded.
 
 ## Relationships
-
-- **src/infrastructure/persistence/versioning.ts** — Consumes the `editRevision` value to derive ETags and perform `If-Match` comparisons; this plugin is the writer side of that contract.
-- **src/infrastructure/persistence/serialize.ts** — Serialises persisted documents (including the `editRevision` field) for transport; the plugin guarantees the field exists and is a plain integer.
-- **src/infrastructure/persistence/translatable-columns.ts** — Provides column metadata for schemas that the plugin is applied to.
-- **src/modules/locales/model.ts** — The module whose existing `revision` wire field motivated the `editRevision` naming; also a consumer of the plugin.
-- **src/modules/locales/controllers/update-locale-entries.ts** / **src/modules/locales/services/entries.ts** — Exercise the query-update path (`updateOne`/`findOneAndUpdate`) that the plugin's pre-update hooks intercept.
-- **src/modules/orders/model.ts** — Schema that calls `revisionPlugin` to opt into the counter.
-- **src/modules/products/model.ts** — Schema that calls `revisionPlugin` to opt into the counter.
-- **src/modules/users/model.ts** — Schema that calls `revisionPlugin` to opt into the counter.
-- **src/modules/webhooks/model.ts** — Schema that calls `revisionPlugin` to opt into the counter.
-- **src/modules/example/model.ts** — Schema that calls `revisionPlugin` to opt into the counter.
-- **tests/integration/persistence/revision.test.ts** — Integration tests that assert increment-on-edit and no-increment-on-bookkeeping; they also guard the private Mongoose bit-field access against upgrades.
+- Model files (`src/modules/example/model.ts`, `src/modules/locales/model.ts`, `src/modules/orders/model.ts`, `src/modules/products/model.ts`, `src/modules/users/model.ts` and `src/modules/webhooks/model.ts`) are listed as neighbors. They are the schemas this plugin versions.
+- `tests/integration/persistence/revision.test.ts` is named in the source as the test that fails loudly if a Mongoose upgrade moves the private version flag.
+- The other neighbors (`src/infrastructure/persistence/serialize.ts`, `src/infrastructure/persistence/translatable-columns.ts`, `src/infrastructure/persistence/versioning.ts`, `src/modules/locales/controllers/update-locale-entries.ts`, `src/modules/locales/services/entries.ts`, `tests/unit/app/process-boot.test.ts`) are not referenced in this file's code.
 
 ## Notes
-
-- The plugin must be applied **after** the schema is constructed with `timestamps: true`; it relies on the timestamps hook having already registered so that `updatedAt` visibility signals "this is an edit."
-- Writes that pass `timestamps: false` (stock mirrors, digest refreshes, session-token rotations, password changes) are the **only** opt-out mechanism; the plugin does not inspect a caller-supplied options bag.
-- `flagIncrement` deliberately sets a bit in Mongoose's private per-document version field. A Mongoose major upgrade that relocates this will throw at runtime with an explicit message rather than silently mis-versioning.
-- Pipeline (aggregation) updates are handled by appending a `$set` stage using `$add`/`$ifNull` because pipeline syntax has no `$inc` operator.
-- The plugin does **not** hook `Document#updateOne` (instance method) — only the Model/Query forms (`Model.updateOne`, `Model.findOneAndUpdate`, etc.) are expected in this codebase.
+- The plugin must be applied after construction to a schema with `timestamps: true`. It identifies an edit by whether Mongoose's timestamps hook stamped `updatedAt`, and it does not read the query options.
+- Writes with `timestamps: false` (stock mirror, digest, session tokens, password change) do not stamp `updatedAt`, so they do not move the counter. An edit that changes nothing on the row stamps `updatedAt` by hand and does move it.
+- `Document#increment()` is deliberately avoided. It sets both the increment and the version-filter flags, so a save would fail when the row moved. That would turn "no `If-Match`, last writer wins" into an error.
+- Document-level `updateOne` and `deleteOne` are not hooked. Only the Model and Query forms are covered.
+- The private Mongoose internals used by `flagIncrement` could break on a Mongoose upgrade.

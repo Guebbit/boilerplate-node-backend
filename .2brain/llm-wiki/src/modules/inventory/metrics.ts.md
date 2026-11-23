@@ -1,32 +1,31 @@
 ---
 source: src/modules/inventory/metrics.ts
-sha256: 60c361347cf79b6cd03ac6c219cce44b51cdf4c6f473b239b857ca1945ab4db9
-generated_at: 2026-11-08T05:59:34.539373+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b214682f5502da1e2c35b61852902b7fcfd1b4602791f9fba8a21648d1e5df52
+context_sha256: 6fa9ee8b9279ebf2c9cce50b42c8386da570cb0a0c93614885a8ce2b738ca841
+generated_at: 2026-11-22T05:19:23.641334+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/metrics.ts
 
 ## Purpose
-
-Declares the Prometheus gauges owned by the inventory module. The gauges self-register into the shared registry at import time; nothing in the codebase imports the gauge handles themselves. Placing them here (in the module) rather than in `infrastructure` keeps ownership local — the same convention used by `modules/account/metrics.ts`.
+Declares the Prometheus gauges owned by the inventory module and registers them on the shared `metricsRegistry`. The gauges live in the module rather than in `infrastructure` (rationale is in `src/modules/account/metrics.ts`). All values are computed at scrape time through each gauge's `collect()` callback.
 
 ## Key elements
-
-- **`_productsLowStockTotal`** (`products_low_stock_total`) — Gauge whose `collect()` calls `inventoryService.lowStockCount()` at scrape time. Reports the count of products whose *available* units are at or under the low-stock threshold (availability, not raw `onHand`), so a fully-reserved product correctly reads as out of stock.
-- **`_inventoryReservedUnitsTotal`** (`inventory_reserved_units_total`) — Gauge whose `collect()` calls `stockLevelRepository.sumReserved()`. Reports units currently held by open (unpaid) reservations across the catalogue. A climbing trend at flat sales rate signals abandoned checkouts or a stalled payment confirmation path.
-
-Both are bound to underscore-prefixed variables purely to suppress unused-variable warnings; the variables are never read.
+- `_productsLowStockTotal` (`products_low_stock_total`): number of products whose available units are at or under the low-stock threshold. It counts availability, not units on hand, so a product whose stock is fully reserved counts as low. Value comes from `inventoryService.lowStockCount()`.
+- `_inventoryReservedUnitsTotal` (`inventory_reserved_units_total`): total units held by open reservations, from `stockLevelRepository.sumReserved()`. A total that keeps climbing while sales stay flat points to unresolved holds, such as abandoned checkouts or payment confirmations that stopped arriving.
+- `_inventoryOverdueHolds` (`inventory_overdue_holds`): holds still open more than 10 minutes past their deadline, meaning the reservation sweep could not expire them. Value comes from `reservationRepository.countHeldPastDeadline(cutoff)`, where cutoff is `Date.now() - OVERDUE_HOLD_GRACE_MS`.
+- `OVERDUE_HOLD_GRACE_MS` (not exported): 10 minutes, twice the 5-minute sweep interval in `docker/crontab`. A single late or still-draining sweep tick doesn't trip the gauge.
 
 ## Relationships
-
-- **`src/infrastructure/observability/metrics-registry.ts`** — Provides the `metricsRegistry` instance passed in each gauge's `registers` array. This is what makes the gauges visible to the process-wide scrape endpoint without any consumer importing this file.
-- **`src/modules/inventory/repository.ts`** — Exports `stockLevelRepository`; the reserved-units gauge calls its `sumReserved()` during collection.
-- **`src/modules/inventory/services/index.ts`** — Exports `inventoryService`; the low-stock gauge calls its `lowStockCount()` during collection.
-- **`src/modules/inventory/module.ts`** — The module's overview endpoint surfaces these gauges; it reads them from the shared registry rather than importing this file directly.
+- `src/infrastructure/observability/metrics-registry.ts`: provides `metricsRegistry`, which every gauge registers on. Its two process gauges use the same underscore-variable pattern.
+- `src/modules/inventory/repository.ts`: provides `stockLevelRepository` (`sumReserved`) and `reservationRepository` (`countHeldPastDeadline`).
+- `src/modules/inventory/services/index.ts`: provides `inventoryService`, which this file uses for the low-stock gauge's value. Per the docblock, it combines this module's counters with the `products` module's visibility rule.
+- `src/modules/inventory/module.ts` and `src/modules/inventory/tests/integration/service.test.ts`: no interaction is visible in this file.
 
 ## Notes
-
-- The gauges are *pull*-style (`collect` is async and runs at scrape time), not push-style. Do not set values imperatively elsewhere.
-- `products_low_stock_total` reflects *availability* (on-hand minus reserved), not raw stock. A product with 40 units all reserved reports as out of stock here.
-- The underscore prefix on both variables is intentional — it signals "registration side-effect only, handle unused." Follow the same pattern when adding gauges.
+- Each gauge is bound to an unused `_`-prefixed variable. Constructing the `Gauge` registers it, and nothing reads the handle.
+- The file exports nothing. It only takes effect if something imports it for its side effects.
+- `inventory_overdue_holds` is read from Mongo at scrape time. The sweep runs as a one-shot job in the `cron` container, which Prometheus doesn't scrape, so a counter incremented there would never be seen.
+- A hold the sweep can't expire keeps its units reserved. It shows up in `inventory_overdue_holds` on every scrape until someone fixes it.
+- The file's docblocks point to further documentation on the pipeline and on holds that keep failing to expire.

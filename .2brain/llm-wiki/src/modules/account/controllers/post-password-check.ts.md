@@ -1,31 +1,30 @@
 ---
 source: src/modules/account/controllers/post-password-check.ts
-sha256: 36e28a3e612a6872df31c843885228138ffc99f7b64b35d595bd239794adb0b9
-generated_at: 2026-11-08T04:06:41.371754+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 36e28a3e612a6872df31c843885228138ffc99f7b64b35d595bd239794adb0b9
+context_sha256: 23efa7adf4421c8f74f980d9c38cb51e110484d75e6240291dabe884a31b5518
+generated_at: 2026-11-22T03:26:26.271436+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-password-check.ts
 
 ## Purpose
-
-Handles the unauthenticated `POST /account/password/check` endpoint, which reports whether a candidate password appears in a known-breach database. It exists to give clients (e.g., a signup form) an advisory signal before an account is created. It is intentionally non-blocking: the four password-SET endpoints remain the authoritative server-side gate.
+Express controller for `POST /account/password/check`. It reports whether a candidate password appears in known breaches. The endpoint is advisory only and unauthenticated, because signup needs it before an account exists. It never blocks anything. The four password-SET paths remain the real gate and re-check server-side regardless of this endpoint's answer.
 
 ## Key elements
-
-- **`postPasswordCheck`** (exported function) — Express handler that validates the request body against the `CheckPasswordBreachedBody` Zod schema, calls `checkPasswordBreach(password)`, and returns a `PasswordCheck` payload via `successResponse`. Errors are funneled through `catchAs`.
-- **`CheckPasswordBreachedBody`** (imported Zod schema) — shapes the expected body; `parseBody` rejects the request early if validation fails.
+- `postPasswordCheck(request, response)`: the exported handler.
+  - Validates the body against `CheckPasswordBreachedBody` (from `@api/schemas.zod`) using `parseBody`. If validation fails it returns early, since `parseBody` handles the response.
+  - Calls `checkPasswordBreach(parsed.password)`.
+  - Sends the result with `successResponse<PasswordCheck>`.
+  - Routes any rejection through `catchAs(response, 'postPasswordCheck')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — supplies `parseBody` (Zod validation + early 400) and `catchAs` (structured error handler).
-- **`src/infrastructure/http/response.ts`** — supplies `successResponse` for uniform JSON success envelopes.
-- **`src/infrastructure/security/breached-passwords/index.ts`** — supplies `checkPasswordBreach`, the async service that queries the breach data source.
-- **`src/modules/account/routes.ts`** — registers `postPasswordCheck` as the handler for the `POST /account/password/check` route.
-- **`src/types/index.ts`** — provides the `PasswordCheck` return type.
+- `src/infrastructure/http/controller.ts`: provides `parseBody` (body validation) and `catchAs` (error handling, tagged with the handler name).
+- `src/infrastructure/http/response.ts`: provides `successResponse`, which formats the success reply.
+- `src/infrastructure/security/breached-passwords/index.ts`: provides `checkPasswordBreach`, which does the actual breach lookup.
+- `src/types/index.ts`: provides the `PasswordCheck` type, used as the response payload type.
+- `src/modules/account/routes.ts`: wires this handler to the `POST /account/password/check` route.
 
 ## Notes
-
-- The endpoint is **advisory only**. A 200 with a "breached" flag does not prevent a subsequent password-SET request from succeeding or failing; those endpoints re-validate independently.
-- No authentication middleware is applied here by design (the caller may not yet have an account).
-- The handler is a thin orchestration layer: all logic (breach lookup, response shape) lives in the imported modules, so changes to breach-checking behavior won't require touching this file.
+- The result of `checkPasswordBreach` is passed straight to the response with no transformation in this file.
+- The handler returns a promise on the success path and `undefined` on a validation failure.

@@ -1,32 +1,34 @@
 ---
 source: scenarios/addresses.ts
-sha256: bdc69a566d41df605f2f7fd512b137a48f86c335b8488d24db838d8643ef6105
-generated_at: 2026-11-08T02:27:18.456693+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7cc46db5eb727b086fb489be0d4935d042bd9da5b3dd7178afbf74b3c7959d14
+context_sha256: 5b5b3caba5cfdbd622019d5159b7d1998e1d5153358b3360ae9e290fa1b42561
+generated_at: 2026-11-22T01:41:31.595827+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/addresses.ts
 
 ## Purpose
-
-Seeds the address-book collection for the demo dataset. It defines three fixture books (admin with two entries, ordinary customer with one, second shopper with one) so that order-snapshot behaviour, "exactly one default" logic, and two-shopper journeys are all observable against live data. Exposed as a `shopModule` entry that `seedShop` calls.
+Defines the address-book slice of the demo dataset and registers it as a seedable module. It gives the admin two entries (so "exactly one default" is observable), the ordinary customer one, and the second-shopper persona one. The ordinary customer's entry is the one that orders placed by the flow runner snapshot as `shippingAddress` and `billingAddress`, so "an order remembers where it was sent" can be checked against a book that may still change.
 
 ## Key elements
-
-- **`addressBookFixtures`** (const array) — Three `makeAddressBook` results keyed to `SEED_ADMIN_ID`, `SEED_USER_ID`, and `SEED_SECOND_SHOPPER_ID`. Admin has a default "home" + non-default "office" pair; the other two each have a single default entry. The customer's entry intentionally omits `phone` to exercise the optional field.
-- **`seedAddressBooksCollection`** (function) — Maps every fixture through `insertIfAbsentForOwner(addressBookRepository, book)` in parallel; returns `Promise<SeedOutcome[]>`.
-- **`shopModule`** (exported const) — `{ seed: seedAddressBooksCollection }`; the shape consumed by the generated `shop-modules` table.
+- `addressBookFixtures` (module-private): three address books built with `makeAddressBook`.
+  - Admin (`SEED_ADMIN_ID`): "home" (Modena, default) and "office" (Bologna, non-default, the target for a "set as default" demo).
+  - Ordinary customer (`SEED_USER_ID`): one "casa" entry (Napoli, default), with `phone` deliberately omitted to show an absent optional field.
+  - Second shopper (`SEED_SECOND_SHOPPER_ID`): one "home" entry (Parma, default).
+- `seedAddressBooksCollection()` (module-private): runs `insertIfAbsentForOwner(addressBookRepository, book)` for every fixture via `Promise.all`, returning `Promise<SeedOutcome[]>`.
+- `shopModule` (exported): `{ seed: seedAddressBooksCollection }`, this module's entry in the `shop` fixture table.
 
 ## Relationships
-
-- **scenarios/accounts.ts** — Supplies the three `SEED_*_ID` constants used as `userId` in every fixture.
-- **scenarios/seed.ts** — Provides the `SeedOutcome` type and the `insertIfAbsentForOwner` helper that gives per-owner idempotency.
-- **src/modules/addresses/factories.ts** — `makeAddressBook` builds each fixture object from the item arrays.
-- **src/modules/addresses/repository.ts** — `addressBookRepository` is the persistence target passed to `insertIfAbsentForOwner`.
+- `scenarios/accounts.ts`: supplies the owner ids `SEED_ADMIN_ID`, `SEED_USER_ID` and `SEED_SECOND_SHOPPER_ID`.
+- `scenarios/seed.ts`: supplies `insertIfAbsentForOwner` and the `SeedOutcome` type.
+- `src/modules/addresses/factories.ts`: supplies `makeAddressBook`, which builds each fixture.
+- `src/modules/addresses/repository.ts`: supplies `addressBookRepository`, the persistence target for seeding.
+- `./shop-modules` and `seedShop` (per the comments, not among the listed neighbors): `shopModule` is collected into `shopModules` and run by `seedShop`.
 
 ## Notes
-
-- Idempotency is keyed on `userId`, **not** on the book's `_id`. The book-level `_id` is generated but never looked up; each entry's `_id` is likewise minted fresh (`new Types.ObjectId()`) purely to satisfy the contract.
-- The admin's second entry ("office") exists so a "set as default" demo has a target to move the flag onto.
-- An order's `shippingAddress`/`billingAddress` is a *snapshot copy* of an entry, not a reference — sharing the literal would prevent the book from diverging, which is exactly the scenario this fixture set is meant to demonstrate.
-- `shopModule` is consumed by `scenarios/shop-modules.generated.ts` (regenerated via `npm run regenerate`); deleting this file removes its entry from that table automatically.
+- The books have no pinned `_id`. `insertIfAbsentForOwner` keys on `userId`, so an id would add no idempotency.
+- Each entry's `id` is minted fresh with `new Types.ObjectId().toHexString()`, because the contract requires one but nothing looks entries up by value. These ids therefore change on each module load.
+- Orders restate a copy of an address rather than referencing the book's entry. The snapshot must be able to differ from the live book.
+- Staff and admin personas do not shop, so only the ordinary customer and the second shopper have a checkout address. The second shopper exists for two-shopper journeys.
+- Registration is generated. `npm run regenerate` regenerates the entry collected into `shopModules` (`./shop-modules`), so deleting this file removes its entry.

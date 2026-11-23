@@ -1,31 +1,27 @@
 ---
 source: src/modules/invoicing/index.ts
-sha256: 8e45d327f6c3b7a8a8aae4515db291ba30fd7d41737e5f332bbf170bab79278b
-generated_at: 2026-11-08T06:11:14.673061+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c58814bea2ac48dcadeae36f7b30a8bc9f15202015577e9a743507a6eaf72e14
+context_sha256: 4e27c9364e12de28731f7e1178874092f8c2d5ceeb7ce83e7798960bcb7996f5
+generated_at: 2026-11-22T05:31:35.585682+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/index.ts
 
 ## Purpose
-
-Public barrel for the invoicing module. It is the **only** import surface available to sibling modules (per `docs/theory/strategic-ddd.md` §5), re-exporting the module's services, domain, emails, and model types while keeping all runtime write-path (repository, model instantiation) internal.
+Public barrel for the invoicing module. It is the only surface sibling modules may import. It re-exports the module's services, domain, emails and model types, and deliberately keeps the repository and the models' runtime code private. As a result, nothing outside the module can write an invoice or a credit note.
 
 ## Key elements
-
-- `export * from './services'` — re-exports the services barrel (`src/modules/invoicing/services/index.ts`).
-- `export * from './domain'` — re-exports the domain barrel (`src/modules/invoicing/domain/index.ts`).
-- `export * from './emails'` — re-exports email template/utility exports (`src/modules/invoicing/emails.ts`).
-- `export type * from './model'` — **type-only** re-export of model definitions (`src/modules/invoicing/model.ts`); no runtime values leak out.
+- `export * from './services'`: the module's service layer.
+- `export * from './domain'`: the domain exports.
+- `export * from './emails'`: the email-related exports.
+- `export type * from './model'`: type-only re-export. The models' runtime stays internal.
 
 ## Relationships
-
-- **Re-exports (direct children):** `services/index.ts`, `domain/index.ts`, `emails.ts`, `model.ts` (types only).
-- **Consumers (graph neighbors that import through this barrel):**
-  - `src/modules/stats/services/breakdowns.ts`, `src/modules/stats/services/sales.ts` — read invoicing types/services for aggregation.
-  - Test suites across other modules (`shop.contract.test.ts`, `settlement-mismatch.test.ts`, `receive.test.ts`, `withdrawal-before-dispatch.test.ts`, `stats.test.ts`, `bought-returned-refunded.test.ts`) — exercise the public API exported here.
+- Re-exports `src/modules/invoicing/services/index.ts`, `src/modules/invoicing/domain/index.ts`, `src/modules/invoicing/emails.ts` and `src/modules/invoicing/model.ts`.
+- Consumers elsewhere in the codebase import through this barrel. These are the stats services (`src/modules/stats/services/breakdowns.ts`, `src/modules/stats/services/sales.ts`) and several tests: the account shop contract test, the payments settlement-mismatch test, the returns integration tests, the stats integration test and the bought-returned-refunded journey test.
 
 ## Notes
-
-- The `export type *` syntax on `model` is deliberate: external code can reference invoice/credit-note shapes but **cannot** instantiate or mutate them. All writes stay inside the module's own event listeners.
-- If a sibling module needs a new invoicing export, it must be added through one of the four re-export lines here; there is no second entry point.
+- `invoicingRepository` is intentionally not exported. Per the file's header comment, invoices and credit notes are frozen only from this module's own event listeners.
+- Model exports are type-only (`export type *`), so sibling modules cannot import the model classes or schemas at runtime.
+- The header comment references external docs on the barrel and published-language rule.

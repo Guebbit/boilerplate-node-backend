@@ -1,29 +1,29 @@
 ---
 source: src/modules/sitemap/controllers/send-xml.ts
-sha256: b39b0d769a8c77624159f806f88bda4d604d78bb671c806514f2222ca1b391c5
-generated_at: 2026-11-08T08:22:18.617136+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b39b0d769a8c77624159f806f88bda4d604d78bb671c806514f2222ca1b391c5
+context_sha256: caf09b4a1f2247091236bf55ed3a23dc3c4ac3124296fbb19e233114afe22924
+generated_at: 2026-11-22T07:48:39.528712+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/sitemap/controllers/send-xml.ts
 
 ## Purpose
-
-Single egress point for all sitemap files. Converts a collection of entries into a streamed XML response on Express, applying the correct content type and a shared cache policy, so that individual sitemap controllers (index, pages, products) don't each re-implement response plumbing.
+Shared helper that every sitemap controller uses to send its XML output. It streams a list of entries through an XML writer into the Express response and sets one-hour public caching.
 
 ## Key elements
-
-- **`sendXml(response, entries, writer)`** — The sole export. Sets `200`, `application/xml`, and `Cache-Control: public, max-age=3600`, then pipes `entries` (via `Readable.from`) through the provided `sitemap`-package XML stream (`SitemapStream` or `SitemapIndexStream`) into the Express `response` using Node's `pipeline`.
-- **`CACHE_CONTROL`** — Module-level constant (`'public, max-age=3600'`) encoding the one-hour public-cache contract for all sitemap outputs.
-- **Error callback** — Because headers are already sent when a mid-stream error occurs, the only recovery is a `logger.warn` with the error object; no status override is possible.
+- `sendXml(response, entries, writer): void` is the only export.
+  - It sets the status to 200, the content type to `application/xml`, and `Cache-Control` to `public, max-age=3600`.
+  - It then runs Node's `pipeline(Readable.from(entries), writer, response, cb)`.
+  - `entries` is a `readonly (object | string)[]`.
+  - `writer` is a `SitemapStream` or a `SitemapIndexStream` from the `sitemap` package, depending on the kind of file.
+- `CACHE_CONTROL` is a private constant holding the caching header value. The comment says sitemaps change with the catalogue, not per request.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/logger.ts`** — Imports `logger`; the only runtime dependency outside `node:stream` and the `sitemap` types. Used exclusively in the pipeline error callback.
-- **`get-sitemap-index.ts` / `get-sitemap-pages.ts` / `get-sitemap-products.ts`** — Callers. Each builds its own `SitemapIndexStream` or `SitemapStream`, assembles the entry list, then delegates the actual write to `sendXml`. This file is the shared "last mile" they all converge on.
+- `@infrastructure/adapters/logger` provides `logger`. It is used in the pipeline callback to `warn` with the message `sitemap stream aborted` and the error.
+- The sitemap controllers `get-sitemap-index.ts`, `get-sitemap-pages.ts` and `get-sitemap-products.ts` are neighbors in the dependency graph. They are the intended callers, since the module doc calls this the one way every sitemap file leaves. The file itself does not show how they call it.
 
 ## Notes
-
-- `entries` is typed `readonly (object | string)[]`, intentionally loose so it works with both index entries (URLs) and full page/product objects without a shared interface.
-- The function returns `void` and does **not** return a Promise or call `response.end` itself; `pipeline` handles stream finalisation. Callers should not double-close the response.
-- The hour-long cache is a deliberate choice (sitemap content changes with catalogue sync, not per-request) — do not shorten it without understanding the sync cadence.
+- `pipeline` handles backpressure. It also destroys all streams if one fails or the client disconnects.
+- Headers are sent before streaming starts, so a mid-stream failure cannot change the response status. The error callback only logs it.
+- The function returns `void` and does not wait for the stream to finish. Errors are never thrown to the caller.

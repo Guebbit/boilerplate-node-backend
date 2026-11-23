@@ -1,32 +1,29 @@
 ---
 source: src/modules/account/tests/unit/key-ring.test.ts
-sha256: e9be536006d1955c829bec7f492d19c5410ae736c24ba8ddcbdf5faa8d68b9ed
-generated_at: 2026-11-08T04:47:38.716884+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 36c216ecd5a359ef4d572df0675fcfcd1e3f1c929218c8f079b8a63c2abb0025
+context_sha256: 4a7620757e4565e4a52978857edc57dddad04b3b9062157d38af9998c39b2cbd
+generated_at: 2026-11-22T04:06:18.952796+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/key-ring.test.ts
 
 ## Purpose
-
-Unit tests for the pure key-ID functions in `key-ring.ts`. They pin down the invariants that JWT verification depends on: key IDs are deterministic, collision-free, and independent of ring position. This file deliberately tests only the ID math—signing is covered separately in `session-jwt.test.ts`.
+Unit tests for the pure `kid` (key ID) math in `src/modules/account/session/key-ring.ts`. The tests cover only key-ID derivation and lookup. No signing happens here.
 
 ## Key elements
-
-- **`describe('keyId')`** — three cases:
-  - *Stable*: same secret always yields the same ID.
-  - *Distinct*: different secrets yield different IDs (no cross-key collision).
-  - *Position-independent*: the ID is derived from the secret itself, not its index in the ring, so rotating out the oldest entry does not repoint an existing token's `kid`.
-- **`describe('keyForId')`** — three cases using a two-element `ring`:
-  - Resolves a `kid` to the matching ring member.
-  - Returns `undefined` when the `kid` names a retired (absent) secret.
-  - Returns `undefined` when passed `undefined` (a token with no `kid`), rather than defaulting to `ring[0]`.
+- **`describe('keyId')`**
+  - Same secret gives the same ID (stable).
+  - Distinct secrets give distinct IDs, so two ring members can't collide and a token signed with one can't verify against the other.
+  - The ID is derived from the secret, not from its position. Dropping the oldest ring entry must not repoint an existing token's `kid` at a different key.
+- **`describe('keyForId')`**, using the ring `['newest-secret', 'oldest-secret']`:
+  - Returns the ring member that a `kid` names. The test looks up `oldest-secret`.
+  - Returns `undefined` for a `kid` that names no current member, such as a retired key. The caller is expected to turn this into a rejection, not a crash.
+  - Returns `undefined` for an absent (`undefined`) `kid`. It must not default to `ring[0]`, because that would let an unkeyed forgery pass as signed by the newest secret.
 
 ## Relationships
-
-- **`src/modules/account/session/key-ring.ts`** — the sole import source. The test file exercises its two exported functions, `keyId` and `keyForId`, in isolation (no mocking, no network, no signing library).
+- Imports `keyId` and `keyForId` from `@modules/account/session/key-ring` (`src/modules/account/session/key-ring.ts`), the only module under test.
 
 ## Notes
-
-- The file's own module doc comment explicitly scopes out signing; do not add tests for signature verification here—that belongs in `session-jwt.test.ts`.
-- The "absent kid" test (`keyForId(ring, undefined)`) encodes a security requirement: an unkeyed token must be rejected, not silently attributed to the newest key. If `keyForId` gains a default-argument or fallback, this test is the guardrail.
+- The tests are pure and deterministic, with no mocks or I/O.
+- The comments record security-relevant invariants: no collisions, no positional IDs, and no fallback to the newest key.

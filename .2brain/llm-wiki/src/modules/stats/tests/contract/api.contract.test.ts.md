@@ -1,37 +1,34 @@
 ---
 source: src/modules/stats/tests/contract/api.contract.test.ts
-sha256: 8cea6a8d6080e05ab76602a7d07603483b083b4f47ff78c75c95e7b6414e68b8
-generated_at: 2026-11-08T08:26:22.541442+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8cea6a8d6080e05ab76602a7d07603483b083b4f47ff78c75c95e7b6414e68b8
+context_sha256: b7a6497612e34f9ba69f4cb4fbcddac5f8fe5b65527745b5a9723f5dfd5bdada
+generated_at: 2026-11-22T07:52:24.445243+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stats/tests/contract/api.contract.test.ts
 
 ## Purpose
-
-Contract test that pins down the behavioural contract of every `/stats/*` GET endpoint: each read must return 200 for authorised roles, reject unauthorised roles, return 404 for malformed IDs, never leak data into a shared cache, and answer 422 (with a rule-naming message) when the period or query violates the API's validation rules.
+Contract tests for the `/stats` HTTP endpoints. They check that every read endpoint answers successfully for an administrator, that a manager can read sales, that shared caches can't store sales figures, and that invalid periods or query fields are rejected with 422.
 
 ## Key elements
-
-- **`PERIOD`** – constant query-string (`from=2026-03-01&to=2026-03-31`) representing a valid period every read accepts.
-- **`READS`** – array of eight `/stats/*` endpoint paths (sales, products list, product by ID, categories, payments, operations, customers, pipeline) each pre-suffixed with the required query params.
-- **`it.each(READS)` (admin)** – asserts every endpoint returns 200 for an admin bearer.
-- **Manager read test** – asserts `/stats/sales` returns 200 for a `manager` role.
-- **404 test** – asserts `/stats/products/not-an-id` returns 404 (ID format validation).
-- **Cache-control test** – asserts the sales response header is `private` or `no-store` and does **not** contain `public` or `s-maxage`, preventing shared-cache leakage.
-- **`it.each` (422 matrix)** – four invalid-period scenarios (out-of-order, `Feb 30`, period > allowed span, `interval=day` over a long range) each expect 422.
-- **Missing / unknown-field test** – asserts 422 both when `from`/`to` are absent and when an unrecognised query key (`colour=blue`) is supplied.
+- `PERIOD` — a valid date range (`from=2026-03-01&to=2026-03-31`) that every read accepts.
+- `READS` — the list of read URLs with the query each needs: `/stats/sales` (with `interval=week`), `/stats/products` (with `limit=5`), `/stats/products/:id` (using `MISSING_ID`), `/stats/categories`, `/stats/payments`, `/stats/operations`, `/stats/customers` and `/stats/pipeline`.
+- `describe('GET /stats/*')` — contains these cases:
+  - Each URL in `READS` returns 200 for an `admin`, via `it.each`.
+  - A `manager` gets 200 on `/stats/sales`.
+  - `/stats/products/not-an-id` returns 404.
+  - The `/stats/sales` `cache-control` header must not match `public|s-maxage` and must match `private|no-store`.
+  - Four bad periods return 422: out-of-order, invalid day (`2026-02-30`), too long (from 2020), and too many buckets (`interval=day` over a year-plus range).
+  - A missing period, or an unknown query field (`colour=blue`), returns 422.
 
 ## Relationships
-
-- **`tests/support/contract.ts`** – imported as a side-effect (`import '@tests/contract'`); provides the shared contract-test infrastructure (likely global matchers or setup) that this file relies on before any assertion runs.
-- **`tests/support/http.ts`** – supplies `api()` (a pre-configured HTTP client), `authenticateAs`, and `authenticateAsRole` used to build every request in the file.
-- **`tests/support/ids.ts`** – supplies `MISSING_ID`, a syntactically valid but non-existent identifier used in the product-by-ID read.
-- **`tests/support/setup-test-db.ts`** – supplies `setupTestDb()`, called at module top-level to provision a clean database fixture before the suite executes.
+- `@tests/contract` — imported for its side effects only (`import '@tests/contract'`). Nothing from it is used by name in this file.
+- `@tests/setup-test-db` — `setupTestDb()` is called once at module level to prepare the test database.
+- `@tests/http` — provides `api()` (the request client), `authenticateAs('admin')` and `authenticateAsRole('manager')`. Each returns a `bearer` value, which the tests send in the `Authorization` header.
+- `@tests/ids` — provides `MISSING_ID`, used in the per-product stats URL.
 
 ## Notes
-
-- The `@tests/contract` import is intentionally bare (no named binding); it is a side-effect import that configures the test environment, so it must appear before any other test logic.
-- `PERIOD` and the 422-matrix strings are raw query strings, not parameter objects — keep them as single strings when adding new cases so the URL interpolation in the `it.each` body continues to work.
-- The cache-control assertion uses a negative regex (`not.toMatch(/public|s-maxage/)`) *and* a positive one (`toMatch(/private|no-store/)`); both must hold, so a response that simply omits the header will fail.
-- The file does **not** contain an explicit customer-role rejection test despite the header comment mentioning one; the absence (or a shared fixture in `contract.ts`) means the customer check lives elsewhere.
+- The header comment says a customer must not be able to read, but no test in this file exercises a customer. The comment also says each read "answers its schema", but the tests only assert status 200. Schema checking, if any, would have to come from the `@tests/contract` import, which this file doesn't show.
+- The `it.each` for 422 cases receives `[query, label]` rows, but the callback only takes `query`. The labels (`out-of-order`, etc.) are not used, and the `%s` in the test title formats the query string.
+- The `/stats/products/${MISSING_ID}` read is expected to return 200, while a malformed id returns 404.

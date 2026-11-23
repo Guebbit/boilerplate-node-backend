@@ -1,33 +1,36 @@
 ---
 source: src/modules/orders/tests/unit/status-traits.test.ts
-sha256: a1c043e9271d556d3c4786394d8a1dca24e5b0dd5c85877807881ef99d17638e
-generated_at: 2026-11-08T07:14:35.340691+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 70942ff6f8deb1eded5c34451579ce8d5b1fc08d093ffaf6ae7b81f7234d7880
+context_sha256: ce24f4eaa20142c178a0bb9ebb8a65c1889900e16dfaf09f05c4e54d635e1458
+generated_at: 2026-11-22T06:38:28.922119+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/status-traits.test.ts
 
 ## Purpose
-
-Unit tests that lock down the `ORDER_STATUS_TRAITS` record and the `statusesWhere` predicate helper from the orders domain. They guarantee the traits table is a complete, correct mapping of every `OrderStatus` value and that `statusesWhere` filters statuses by a trait predicate in the expected contract order.
+Unit tests for the order status-traits record (`ORDER_STATUS_TRAITS`) and the `statusesWhere` helper. They check that the record covers every `OrderStatus` and that each status carries the expected trait flags.
 
 ## Key elements
+- **`ORDER_STATUS_TRAITS` completeness test**: asserts the record's sorted keys equal the sorted values of the `OrderStatus` enum, so there is exactly one row per status.
+- **Per-status `it.each` table**: checks `stockCommitted`, `beforeDispatch` and `withdrawable` for each status using `toMatchObject`:
 
-- **`describe('ORDER_STATUS_TRAITS')`**
-  - *`has exactly one row per contract status`* — asserts the record's keys are the same set as `Object.values(OrderStatus)` (order-independent via `.toSorted()`).
-  - *`it.each` table* — verifies `stockCommitted`, `beforeDispatch`, and `withdrawable` for each of the six statuses (`pending`, `paid`, `processing`, `shipped`, `delivered`, `canceled`).
+  | Status | stockCommitted | beforeDispatch | withdrawable |
+  |---|---|---|---|
+  | `pending` | false | true | true |
+  | `paid` | true | true | true |
+  | `processing` | true | true | true |
+  | `shipped` | true | false | true |
+  | `delivered` | true | false | true |
+  | `canceled` | false | false | false |
 
-- **`describe('statusesWhere')`**
-  - *`lists matching statuses in contract order`* — calls `statusesWhere(t => t.fulfillment.followsSummary)` and expects `[paid, processing]`, confirming both filtering and enumeration order.
+- **`statusesWhere` test**: with the predicate `traits.fulfillment.followsSummary`, expects `[paid, processing]`, in contract order.
 
 ## Relationships
-
-- **`src/modules/orders/domain/status-traits.ts`** — source of truth for `ORDER_STATUS_TRAITS` and `statusesWhere`; this file asserts their observable behavior.
-- **`src/modules/orders/domain/index.ts`** — barrel re-export consumed by the import path `../../domain`; the test does not import the trait module directly.
-- **`src/types/index.ts`** — provides the `OrderStatus` enum used to enumerate expected keys and to type the `it.each` table.
+- Imports `ORDER_STATUS_TRAITS` and `statusesWhere` from `../../domain` (`src/modules/orders/domain/index.ts`). That file re-exports them from `status-traits.ts`, where they are defined.
+- Imports `OrderStatus` from `@types` (`src/types/index.ts`). The enum is the "contract" the record is compared against.
 
 ## Notes
-
-- The `statusesWhere` test references `traits.fulfillment.followsSummary`, a nested property not covered by the explicit `it.each` table. If that trait's shape changes, only this test will catch the mismatch.
-- Key-completeness uses `.toSorted()` on both sides, so the test is intentionally order-insensitive for the record keys but order-sensitive for `statusesWhere` output.
-- The file is marked `@module` in its JSDoc; it has no runtime exports of its own.
+- Tests use `toSorted()`, so they need a runtime that supports it (Node 20+).
+- `toMatchObject` means the table checks only three flags. Other trait fields, such as `fulfillment.followsSummary`, are exercised only by the `statusesWhere` test.
+- The expected `statusesWhere` order comes from the contract order of the statuses, not from alphabetical order.

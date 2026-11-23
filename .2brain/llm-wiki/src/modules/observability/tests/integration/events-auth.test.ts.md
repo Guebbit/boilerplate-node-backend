@@ -1,35 +1,38 @@
 ---
 source: src/modules/observability/tests/integration/events-auth.test.ts
-sha256: 652a890ca10174fe54d235efc1fefdcc0ffb5e10f391f60e8b2cfe0092bb49d5
-generated_at: 2026-11-08T06:42:12.391898+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fc9b74d8ac8c05bc09fed302c35389cf05025a6b5ee91cb2136358f60ec04612
+context_sha256: 2358ec0dd0739305a82005c409c4081508cd8069cebb28e84e00e227e667f773
+generated_at: 2026-11-22T06:04:24.332535+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/tests/integration/events-auth.test.ts
 
 ## Purpose
-
-Integration tests for the `GET /observability/events` SSE endpoint's cookie-based authentication path. Because `EventSource` cannot set custom request headers, the stream authenticates solely via the `__Host-session` cookie; these tests verify that forged tokens, revoked sessions, and token rotation are handled correctly for both the initial connection and the periodic recheck of an already-open stream.
+Integration tests for the session-cookie authentication of the `GET /observability/events` event stream (SSE). Because `EventSource` cannot set request headers, the stream authenticates via the `__Host-session` cookie. The file covers refusal of forged and revoked cookies, and verifies that an already-open stream keeps following its session family across a refresh rotation.
 
 ## Key elements
-
-- **`signIn(role)`** — logs in through the real login route, returns the created user and the extracted `__Host-session=…` cookie value.
-- **`describe('GET /observability/events')`** — two cases: a forged cookie yields 401; a validly-signed token whose session row has been deleted (via `dropAllSessions`) also yields 401.
-- **`describe('the recheck of an open stream')`** — uses a local Express app wired with `cookieParser` and `requirePermissionViaCookie` to simulate the guard, then calls `stillHoldsRuleViaCookie` on the captured request to assert the recheck outcome after a refresh rotation or a full session-family revocation.
-- **`connect(cookie)`** (inner helper) — builds a throwaway Express instance, runs the real authorization middleware against a single `/stream` route, and returns the admitted `express.Request` for later recheck.
+- `setupTestDb()` – sets up the test database for the suite.
+- `signIn(role)` – creates an admin or plain user, logs in through the real route via `loginCompleting`, and returns `{ user, cookie }`, where `cookie` is the `__Host-session=` entry from `Set-Cookie`.
+- `describe('GET /observability/events')`:
+  - A forged cookie yields 401.
+  - A validly signed but revoked token (sessions dropped via `dropAllSessions`) yields 401. This shows that signature alone is not enough: the token must still be a live session row.
+- `describe('the recheck of an open stream')`:
+  - Sets `NODE_CORS_ORIGIN` to `https://shop.example` before each test.
+  - `connect(cookie)` mounts a small express app with `cookieParser` and `requirePermissionViaCookie('read', 'ObservabilitySnapshot')`. It returns the admitted request so it can be reused for rechecks.
+  - "stays open across a refresh rotation": `POST /account/refresh` with the cookie, then `stillHoldsRuleViaCookie` on the original request resolves `true`.
+  - "closes once its session family is revoked": after `dropAllSessions`, `stillHoldsRuleViaCookie` resolves `false`.
 
 ## Relationships
-
-- **`src/kernel/middlewares/authorizations.ts`** — imports `requirePermissionViaCookie` (guards the simulated stream route) and `stillHoldsRuleViaCookie` (performs the 30-second recheck assertion).
-- **`src/modules/users/tests/factories.ts`** — imports `createUser`, `createAdminUser`, `PLAIN_PASSWORD` to provision test accounts.
-- **`src/modules/account/tests/factories.ts`** — imports `dropAllSessions` to revoke sessions directly in the DB (the HTTP revocation route requires a bearer token the test does not hold).
-- **`tests/support/http.ts`** — imports `api` (supertest wrapper for the main app) and `loginCompleting` (drives the real login flow to obtain the session cookie).
-- **`tests/support/setup-test-db.ts`** — calls `setupTestDb()` at module scope to seed a clean database before any test runs.
-- **`tests/support/environment.ts`** — calls `setEnvironment({ NODE_CORS_ORIGIN })` in `beforeEach` so the CORS guard accepts the `Origin` header sent with the refresh request.
+- `@kernel/middlewares/authorizations` – supplies `requirePermissionViaCookie` and `stillHoldsRuleViaCookie`, the guard and the periodic recheck under test.
+- `@modules/users/tests/factories` – `createUser`, `createAdminUser`, and `PLAIN_PASSWORD` for seeding and logging in.
+- `@modules/account/tests/factories` – `dropAllSessions` revokes sessions directly at the source.
+- `@tests/http` – `api()` (the app client) and `loginCompleting` (real login flow).
+- `@tests/environment` – `setEnvironment` sets the CORS origin.
+- `@tests/setup-test-db` – `setupTestDb` provides database lifecycle.
 
 ## Notes
-
-- The `__Host-session` cookie prefix implies `Secure` + `SameSite=Strict` in production; the test relies on the browser-level semantics being irrelevant to the server-side check.
-- Revocation is performed by deleting the session row directly (`dropAllSessions`) rather than via `DELETE /account/sessions`, because that endpoint expects a bearer token the test intentionally does not possess.
-- The recheck test asserts on **session-family** continuity, not on the specific token string: after a refresh the old cookie value is gone, yet `stillHoldsRuleViaCookie` must still resolve `true` because it tracks the family.
-- `setupTestDb()` is called at top level (not in `beforeEach`), so it runs once per test file load.
+- Revocation is done via `dropAllSessions` rather than `DELETE /account/sessions`, since that endpoint needs a bearer token these tests don't have.
+- The recheck is exercised by calling `stillHoldsRuleViaCookie` directly on the captured request, not by waiting for the 30-second timer. The comment states the recheck must follow the session's family, not the superseded cookie value.
+- The refresh call sets `Origin` to the configured CORS origin.
+- A leftover comment on `signIn` calls the cookie the `jwt` refresh cookie, but the code looks for `__Host-session=`.

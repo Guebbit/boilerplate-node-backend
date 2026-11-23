@@ -1,30 +1,29 @@
 ---
 source: src/modules/sitemap/module.ts
-sha256: dbca348178089281b17e2b1e83d6d896e960da246da87c5b6313ccc17e25bf28
-generated_at: 2026-11-08T08:22:32.170785+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fd879e559cce8513b1c1c8550537da02efc6d0694c2939ccee46699ad1ec1da7
+context_sha256: 80183db8619d44fdf6e88e3a331d6d12cfb415e5d8f364274bd05c6c965a7e1b
+generated_at: 2026-11-22T07:48:55.261453+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/sitemap/module.ts
 
 ## Purpose
-Module manifest for the **sitemap** feature. It declares the module's route mount point, configuration slice, and data-ownership policy so the kernel can register and serve `sitemap.xml` from the live product catalogue without the module owning any collection of its own.
+Declares the manifest entry for the `sitemap` module, which serves `sitemap.xml` for search engines. The sitemap is built on request from the live catalogue. The module owns no collection of its own and reads `products` and `locales` through their services.
 
 ## Key elements
-- **`export default { … } satisfies AppModule`** — The sole export. A typed manifest object with:
+- **default export** – an object that satisfies the `AppModule` type, with these fields:
   - `name: 'sitemap'`
-  - `mounts` — registers the router at `basePath: '/sitemap'`
-  - `config: [sitemapConfig.slice]` — exposes a config slice (not the full object) for the kernel to read
-  - `personalData: 'none'` — declares the module publishes only already-public addresses; no PII is handled
+  - `mounts`: a single mount at `basePath: '/sitemap'` that uses the `router` imported from `./routes`.
+  - `config`: `[sitemapConfig.slice]`, which registers the module's settings slice from `./config`.
+  - `personalData: 'none'`: the module owns no collection and publishes only addresses that are already public.
 
 ## Relationships
-- **`src/kernel/registry.ts`** — Provides the `AppModule` type that this manifest must satisfy.
-- **`src/modules/sitemap/config.ts`** — Supplies `sitemapConfig`, from which the manifest exposes only `.slice`.
-- **`src/modules/sitemap/routes.ts`** — Supplies the Hono (or similar) `router` that gets mounted at `/sitemap`.
-- **`src/modules.ts`** — Aggregates module manifests (including this one) so the kernel can discover and mount all modules.
-- **`src/modules/sitemap/openapi.yaml`** — OpenAPI spec for the sitemap endpoints defined in `routes.ts`; not imported here but part of the same feature.
+- `src/kernel/registry.ts`: supplies the `AppModule` type that this manifest must satisfy.
+- `src/modules/sitemap/routes.ts`: supplies the `router` that is mounted at `/sitemap`.
+- `src/modules/sitemap/config.ts`: supplies `sitemapConfig`. Its `slice` is the module's config contribution.
+- `src/modules.ts`: a graph neighbor of this file. The file's content does not show how the two interact.
+- `src/modules/products/module.ts`: the header comment says the sitemap reads `products` through its service. This file does not import it.
 
 ## Notes
-- `config` exposes **`sitemapConfig.slice`**, not `sitemapConfig` itself — the kernel only sees the declared slice; the full config object stays module-private.
-- The module deliberately declares `personalData: 'none'`; it reads `products` and `locales` through their respective services rather than owning collections.
-- The JSDoc links to `docs/modules/sitemap.md` for design rationale beyond what the manifest expresses.
+- The file contains only declarations. The sitemap-building logic is not in this file.

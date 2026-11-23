@@ -1,34 +1,32 @@
 ---
 source: shared/scenarios/schemas/personas.generated.schema.json
-sha256: 83d31c059ff7108eaafa7eb554f52f3bb61864252ab38bd9e395c545bd1429a2
-generated_at: 2026-11-08T03:11:59.805806+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 83d31c059ff7108eaafa7eb554f52f3bb61864252ab38bd9e395c545bd1429a2
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:28:50.586375+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/scenarios/schemas/personas.generated.schema.json
 
 ## Purpose
-
-JSON Schema (draft 2020-12) that validates the shape of persona/account seed data used in scenario provisioning. It enforces a strict, closed structure for a set of named test accounts (admin, user, editor, moderator, unverified) so that scenario fixtures fail fast if a required field is missing or an unexpected property is introduced.
+A generated JSON Schema (draft 2020-12) describing the shape of a "personas" scenario data object: a staff TOTP secret plus a set of named test accounts. It lets tooling validate persona/account fixtures used in scenarios. The `.generated` name suggests it is produced from another source (likely a typed schema) and should not be edited by hand.
 
 ## Key elements
-
-- **`staffTotpSecret`** – Optional top-level string (minLength 1) for a staff TOTP secret.
-- **`accounts`** – Object mapping fixed persona keys (`admin`, `user`, `editor`, `moderator`, `unverified`) to account definitions. Each key is optional at the top level, but if present must satisfy the full account shape.
-- **Account shape** (shared by every persona key) – All of the following are `required` and `additionalProperties: false`:
-  - `email` – String with `format: "email"` **and** a strict regex pattern.
-  - `username` – String, minLength 1.
-  - `defaultPassword` – String, minLength 1.
-  - `memberships` – Array of objects; each item requires `scope` (enum: `"tenant"` | `"platform"`) and `role` (string, minLength 1); `additionalProperties: false`.
-  - `state` – Object with six **required** boolean/string fields (`verified`, `active`, `twoFactor`, `authenticator`, `pendingEmail`, `analyticsConsent`); `additionalProperties: false`. `pendingEmail` is `anyOf` (email-string | null).
+- **`staffTotpSecret`**: non-empty string.
+- **`accounts`**: object keyed by persona name. Visible keys are `admin`, `user`, `editor`, `moderator`, and `unverified`; the file may define more beyond what is shown here.
+- **Per-account fields** (identical structure for every persona):
+  - `email`: string with `format: email` and a regex `pattern`.
+  - `username`: non-empty string.
+  - `defaultPassword`: non-empty string.
+  - `memberships`: array of `{ scope, role }`, where `scope` is `"tenant"` or `"platform"` and `role` is a non-empty string.
+  - `state`: object with booleans `verified`, `active`, `twoFactor`, `authenticator`, and `analyticsConsent`, plus `pendingEmail`, which is an email string or `null`.
+- All account objects, `memberships` items, and `state` objects set `additionalProperties: false`, and every listed field is required.
 
 ## Relationships
-
-No graph neighbors detected. This schema is consumed by whatever validation layer loads scenario fixtures; it does not import or export code itself.
+No graph neighbors are listed, so no dependencies or consumers are visible from this file.
 
 ## Notes
-
-- Every persona key (`admin`, `user`, etc.) duplicates the identical account shape rather than using `$ref` or `allOf`/`$defs`. If the shape changes, **all** copies must be updated in lockstep.
-- Email fields carry both `format: "email"` and an explicit `pattern`. Depending on the validator, `format` may be annotation-only; the `pattern` is the authoritative constraint.
-- `additionalProperties: false` is set at the account, membership-item, and state levels—any extra key (even seemingly harmless metadata) will cause validation to fail.
-- The file was truncated in the reviewed excerpt; additional persona keys beyond `unverified` may exist.
+- The account schema is inlined and repeated for each persona rather than shared through `$ref`/`$defs`. This is typical of generated output, so changes belong in the generator source, not here.
+- The email regex is applied alongside `format: email`, so validation does not depend on the validator's format handling.
+- `pendingEmail` is required but nullable (`anyOf` email or `null`).
+- `defaultPassword` and `staffTotpSecret` are stored as plain strings in the persona data, so this is test or scenario data and not real credentials.

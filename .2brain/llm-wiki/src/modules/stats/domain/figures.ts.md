@@ -1,34 +1,39 @@
 ---
 source: src/modules/stats/domain/figures.ts
-sha256: 24ada564c539d7022117b41cd64c3eb7d2fe2fb9f74976d9e90bd43d7907fae8
-generated_at: 2026-11-08T08:25:31.232507+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b6bec8c418f51fa63ada6b9b7ecbc25478dbbfd81fac5e75b44cd1c3c4063e13
+context_sha256: 3ec7270d246f7cdc24d089577c83dcf4bc593c4a8e3333c66e39161ab14342a7
+generated_at: 2026-11-22T07:50:47.965847+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stats/domain/figures.ts
 
 ## Purpose
-
-Pure derivation layer that turns raw per-bucket money counts (in minor units) into the decimal-string `Figures` contract published to consumers. It exists so that bucket-level sums always reconcile with the grand total: all arithmetic stays in integer minor units until the final string formatting step.
+Pure domain logic that turns summed money and counts (supplied by the owning modules) into the sales figures the stats contract publishes. Everything stays in minor units until the final step, so the sum of bucket figures equals the figure of the whole. Definitions follow Shopify's names, with the sale date and "paid orders only" taken from WooCommerce (see `src/modules/stats/module.ts`).
 
 ## Key elements
-
-- **`RawFigures`** (interface) — one bucket's totals in minor-unit `Money`: order/unit counts plus invoiced and credited goods/shipping/tax/gross.
-- **`Figures`** (interface) — the published contract; all monetary values are decimal strings.
-- **`emptyRawFigures()`** — identity element (all zeros / `NO_MONEY`) for use as an accumulator seed.
-- **`addRawFigures(a, b)`** — field-by-field addition of two `RawFigures`; uses `addMoney` for monetary fields.
-- **`figuresOf(raw, currency)`** — derives `Figures` from `RawFigures`; computes net sales, shipping, taxes, total sales, and average order value, then formats via `toDecimalString`.
-- **`rateOf(part, whole)`** — safe division returning `part / whole`, or `0` when `whole` is `≤ 0`.
+- `RawFigures` — per-bucket, per-currency sums: `orders`, `unitsOrdered`, `unitsReversed`, plus invoiced and credited `Money` for goods, shipping, tax and gross.
+- `Figures` — the published shape: counts (`orders`, `unitsOrdered`, `unitsReversed`, `netUnits`) and decimal strings (`grossSales`, `discounts`, `reversals`, `netSales`, `shipping`, `taxes`, `totalSales`, `refunds`, `averageOrderValue`).
+- `emptyRawFigures()` — zeroed `RawFigures` (money fields are `NO_MONEY`).
+- `addRawFigures(a, b)` — field-by-field sum of two `RawFigures`, used to combine buckets.
+- `figuresOf(raw, currency)` — derives `Figures`:
+  - `grossSales` = invoiced goods; `reversals` = credited goods
+  - `netSales` = invoiced goods − credited goods
+  - `shipping` and `taxes` = invoiced minus credited
+  - `totalSales` = net sales + shipping + taxes
+  - `refunds` = credited gross
+  - `netUnits` = units ordered − units reversed
+  - `averageOrderValue` = invoiced goods averaged over `orders`
+- `rateOf(part, whole)` — `part / whole`, or 0 when `whole` is not positive.
 
 ## Relationships
-
-- **`src/domain-primitives/money.ts`** — imports `Money`, `NO_MONEY`, `addMoney`, `subtractMoney`, `averageMoney`, and `toDecimalString`; all monetary math in this file delegates to those primitives.
-- **`src/modules/stats/services/sales.ts`** / **`src/modules/stats/services/breakdowns.ts`** — upstream consumers that accumulate `RawFigures` (via `emptyRawFigures` / `addRawFigures`) and then call `figuresOf` to produce the published figures.
-- **`src/modules/stats/tests/unit/figures.test.ts`** — unit tests covering the arithmetic and edge cases of the functions above.
+- `@domain-primitives/money` (`src/domain-primitives/money.ts`): supplies `Money`, `NO_MONEY`, `addMoney`, `subtractMoney`, `averageMoney` and `toDecimalString`. All arithmetic and decimal formatting is delegated to it.
+- `src/modules/stats/domain/index.ts`: the domain entry point for the stats module, listed as a neighbor of this file.
+- `src/modules/stats/services/sales.ts` and `breakdowns.ts`: service-layer neighbors that consume these figures.
+- `src/modules/stats/tests/unit/figures.test.ts`: the unit tests for this file.
 
 ## Notes
-
-- `discounts` is always `NO_MONEY`; the code comment explicitly states "no discount exists yet," so it is a placeholder, not a bug.
-- `averageOrderValue` is **gross** ÷ order count, not net ÷ orders.
-- The `currency` ISO-4217 code is the sole input that affects output formatting (decimal places); it is not used in any arithmetic.
-- The invariant "sum of buckets equals sum of the whole" depends on all accumulation happening in minor units before `toDecimalString` is ever called.
+- `discounts` is always `"0"`-valued (formatted `NO_MONEY`) because no discount exists yet; net sales is therefore gross minus reversals.
+- Only `figuresOf` converts to decimals, and the `currency` argument (ISO-4217) decides the decimal places. Add and aggregate `RawFigures` first, then call `figuresOf` once. Do not sum `Figures` values.
+- `averageOrderValue` uses invoiced goods (gross), not net, and is divided by the order count via `averageMoney`. Zero-order handling lives in `averageMoney`, not here.
+- `rateOf` is the only plain-number (non-money) helper and guards against an empty denominator.

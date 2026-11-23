@@ -1,40 +1,31 @@
 ---
 source: src/modules/inventory/events.ts
-sha256: 5413a0f6d72ea3d74c7698a9c8f4b3c4e51bab06caee752a8a49f26153d0ce16
-generated_at: 2026-11-08T05:59:05.887899+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ded0ccb3f8d6b38b3aa4f4c4fa40d8c70e214019d9e598eee93c59176a415fd1
+context_sha256: f633221098b63885f20135a633cbcc9610638add4b19e975c414c8e746ab087b
+generated_at: 2026-11-22T05:18:49.818893+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/events.ts
 
 ## Purpose
-
-Declares the inventory module's domain events by augmenting the kernel's `DomainEventMap` interface and exports one named constant per event. Its role is to let downstream modules (`orders`, `delivery`, `tasks`) react to inventory state changes without importing the inventory services back, thereby avoiding circular dependencies.
+Declares the domain event names the inventory module emits, as constants. Each is typed with `satisfies DomainEventName`, so emitters and listeners share one spelling instead of separate string literals. Payloads and listeners are described in `./asyncapi.domain-events.yaml`, not in this file.
 
 ## Key elements
-
-- **`declare module '@kernel/events'`** — Augments `DomainEventMap` with four payload shapes:
-  - `inventory.reservation_expired` `{ orderId }` — hold window closed before payment; units already released. Emitted *after* the release.
-  - `inventory.backorder_allocated` `{ orderId, productId, waiting }` — preorder units became set-aside stock. `waiting` is the *remaining* preorder claim (a state, not a delta), making redelivery idempotent.
-  - `inventory.stock_retaken` `{ orderId, productIds }` — payment landed on an already-released hold; counters re-taken. Listener refreshes the catalogue's stock copy.
-  - `inventory.hold_orphaned` `{ orderId }` — order paid but no hold existed or could be re-acquired. Internal only (no AsyncAPI channel).
-- **`RESERVATION_EXPIRED`** — constant for `'inventory.reservation_expired'`.
-- **`PREORDER_ALLOCATED`** — constant for `'inventory.backorder_allocated'`.
-- **`STOCK_RETAKEN`** — constant for `'inventory.stock_retaken'`.
-- **`HOLD_ORPHANED`** — constant for `'inventory.hold_orphaned'`.
+- `RESERVATION_EXPIRED` (`'inventory.reservation_expired'`): emitted when a hold times out. `orders` reacts by cancelling the order.
+- `PREORDER_ALLOCATED` (`'inventory.backorder_allocated'`): emitted when a backorder is allocated. `delivery` imports this module only for the event name.
+- `STOCK_RETAKEN` (`'inventory.stock_retaken'`): the module's own refresh event. It is announced by the payment's own transaction, and its listener lives in `module.ts`.
+- `HOLD_ORPHANED` (`'inventory.hold_orphaned'`): declared with a pointer to its channel in the AsyncAPI file.
 
 ## Relationships
-
-- **`src/modules/inventory/index.ts`** — barrel that re-exports the four constants so emitters and listeners share a single spelling.
-- **`src/modules/inventory/services/holds.ts`** — expected emitter of `RESERVATION_EXPIRED` and `STOCK_RETAKEN` (hold lifecycle and payment-time retake).
-- **`src/modules/inventory/services/allocate.ts`** — expected emitter of `PREORDER_ALLOCATED` and `HOLD_ORPHANED` (allocation and payment transactions).
-- **`src/modules/inventory/module.ts`** — module registration entry point that wires these events into the kernel's event bus.
-- **`src/modules/inventory/tests/integration/preorder.test.ts`**, **`preorder-cache.test.ts`**, **`service.test.ts`** — integration tests that exercise the emit-and-consume paths for these events.
+- `src/kernel/events.ts`: supplies the `DomainEventName` type that every constant must satisfy.
+- `src/modules/inventory/index.ts`: the barrel through which these constants are exported to other modules.
+- `src/modules/inventory/module.ts`: holds the listener for `STOCK_RETAKEN`.
+- `src/modules/inventory/services/allocate.ts`, `src/modules/inventory/services/holds.ts`, `src/modules/inventory/services/sweep.ts`, `src/modules/inventory/tests/integration/preorder.test.ts` and `src/modules/inventory/tests/integration/service.test.ts` are graph neighbors. The file itself doesn't say which constants they use, so check them directly.
 
 ## Notes
-
-- **Past-tense naming is intentional.** `reservation_expired` is emitted *after* the release, so the listener (`orders`) cancels rather than approves a plan against already-gone stock.
-- **`waiting` is a state, not a delta.** A redelivery of `backorder_allocated` is harmless: `delivery` releases only what exceeds `waiting`; the second time, nothing remains.
-- **`hold_orphaned` is internal-only.** No AsyncAPI channel carries it; `tasks` is the sole listener.
-- **Stock-counter changes are *not* events here.** They live in `products/events.ts` because the counter write and its explanatory row are a single atomic write.
-- **Design constraint:** the events exist specifically to break import cycles — `orders` already imports this module for hold operations, so the event avoids importing `orders` back.
+- Stock changes are deliberately not events (see `src/modules/products/events.ts`). The counter and the row explaining it are written together in one write.
+- Of the four events, only `stock_retaken` stays inside the module. The other three reach other modules.
+- `RESERVATION_EXPIRED` and `PREORDER_ALLOCATED` are events rather than direct calls to avoid circular imports. `orders` and `delivery` already import inventory, so inventory must not import them back.
+- The constant `PREORDER_ALLOCATED` maps to the event name `backorder_allocated`, so the two terms differ.
+- The file's header comment points to a "the pipeline" section of the inventory module documentation for further background.

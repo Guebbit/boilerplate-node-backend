@@ -1,32 +1,28 @@
 ---
 source: src/modules/account/rules.yaml
-sha256: 2af5feb3ee7a583642b823812d0d74f7ef5f300946f13baf6e2c9998366a5ae3
-generated_at: 2026-11-08T04:15:48.851069+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2af5feb3ee7a583642b823812d0d74f7ef5f300946f13baf6e2c9998366a5ae3
+context_sha256: 270fa87b0a20afb4e1689824dc3a36082794db543f1c91cc06d3bb43497e0566
+generated_at: 2026-11-22T03:35:18.694021+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/rules.yaml
 
 ## Purpose
-
-Single source of truth for the numeric policy constants that govern two-factor authentication (lockout thresholds, delivered-code parameters). It exists so that the TypeScript runtime (via a generated file) and the PHP twin both copy the same plain-data values, keeping the security policy consistent across languages without hand-maintaining duplicated numbers.
+Plain-data source of truth for Account's two-factor numbers (lockout policy and delivered-code parameters). It is written as data so a PHP counterpart can copy the same values. It is not read at boot: `npm run regenerate` generates a TypeScript file from it.
 
 ## Key elements
-
-- **`twoFactor.lockout.maxFailures`** (10) — maximum wrong codes an account may reserve against its armed 2FA before locking.
-- **`twoFactor.lockout.lockMs`** (900000) — lockout duration in milliseconds (15 min).
-- **`twoFactor.deliveredCodes.digits`** (6) — length of numeric codes sent via email/SMS.
-- **`twoFactor.deliveredCodes.ttlMs`** (600000) — validity window for a delivered code (10 min).
-- **`twoFactor.deliveredCodes.resendSeconds`** (30) — minimum cooldown between two deliveries of the same method.
-- **`twoFactor.deliveredCodes.maxAttempts`** (5) — wrong guesses a single code tolerates before it is burned.
+- `twoFactor.lockout.maxFailures` (`10`): wrong codes an account may accumulate against its armed 2FA before locking. The comment notes NIST SP 800-63B allows at most 100.
+- `twoFactor.lockout.lockMs` (`900000`): lock duration once `maxFailures` is reached (15 minutes).
+- `twoFactor.deliveredCodes.digits` (`6`): length of codes sent via delivered methods (email, SMS).
+- `twoFactor.deliveredCodes.ttlMs` (`600000`): how long a delivered code is accepted (10 minutes).
+- `twoFactor.deliveredCodes.resendSeconds` (`30`): minimum seconds between two deliveries of the same method; the client counts this down.
+- `twoFactor.deliveredCodes.maxAttempts` (`5`): wrong guesses a single code tolerates before it is burned. Per the comment, this is what protects six-digit codes, not the hash.
 
 ## Relationships
-
-- **`src/modules/account/openapi.yaml`** — co-defines the 2FA contract within the account module. This file supplies the numeric limits (lockout duration, code TTL, attempt caps) that the API surface documented in the OpenAPI spec enforces (e.g., lockout error responses, code-expiry semantics).
+- `src/modules/account/module.ts` is the neighboring module file. Per the file header, this YAML is not read at boot. The content shown does not say how `module.ts` uses these values.
 
 ## Notes
-
-- **Not read at boot.** The runtime consumes `rules.generated.ts`, which is produced by `npm run regenerate` from this YAML. Editing this file without running the regenerate step has no effect on runtime behavior.
-- **No expressions.** Durations must be written out as literal numbers with the unit encoded in the key name (`…Ms`, `…Seconds`). There is no arithmetic or variable reference.
-- **PHP twin.** A parallel PHP implementation copies these same values; both must stay in sync, making this YAML the authoritative reference.
-- **Security rationale lives in the comments** (NIST SP 800-63B citation for the 100-miss ceiling; the "five tries out of a million" framing for `maxAttempts`). The comments are the design record, not just decoration.
+- Units are in key names (`Ms`, `Seconds`). Rules files contain no expressions, so durations are written out in full (e.g. `900000`, not `15 * 60 * 1000`).
+- Edit this file, then run `npm run regenerate` so the generated output stays in sync; do not hand-edit the generated output.
+- The PHP twin copies these numbers, so changes here need to be mirrored there to stay consistent.

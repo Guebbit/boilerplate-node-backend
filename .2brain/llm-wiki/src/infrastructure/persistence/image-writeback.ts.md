@@ -1,31 +1,30 @@
 ---
 source: src/infrastructure/persistence/image-writeback.ts
-sha256: a99296bd1880c028930ba6d2ea53dde35313a68f890c85f43b50e942e5bffdbd
-generated_at: 2026-11-14T18:13:38.862059+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7baefd96b3c0a9e123dd1786591da0b723de74172a13bbc987aad07346aec4ff
+context_sha256: e173e1c0d8b873ca627245dac91b2586d516488ca60508c863037be6ff158ef7
+generated_at: 2026-11-22T03:02:34.804485+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/image-writeback.ts
 
 ## Purpose
-
-Provides a single, reusable writeback function that the image-digest pipeline calls to persist final `imageUrl` / `thumbnailUrl` back into a Mongoose document. It exists because the pipeline (`image.worker.ts`) lives below the domain layer and cannot import a model; each module hands the pipeline a writeback instance built over its own collection via this factory.
+Provides the shared writeback step of the image digest pipeline for every collection that stores a picture. The pipeline (`image.worker.ts`) sits below the modules and cannot import a model, so each module passes it a writeback function built over its own model, e.g. `writebackImage: imageWritebackFor(userModel)`.
 
 ## Key elements
-
-- **`imageWritebackFor<TDocument>(model)`** — Curried factory. Accepts a Mongoose `Model` and returns an `ImageWriteback` function `(documentId, key, urls) => Promise<boolean>`.
-  - **Primary path:** `updateOne` matching `{ _id, pendingImageKey: key }`; `$set` the two URL fields, `$unset` `pendingImageKey`; `timestamps: false`.
-  - **Fallback path:** If `matchedCount === 0`, runs `model.exists({ _id, imageUrl })` to detect whether a duplicate job delivery already wrote the same URLs (returns `true`) versus a genuine miss (returns `false`, signalling the caller should delete orphaned files).
+- `imageWritebackFor(model)`: takes a Mongoose `Model<TDocument>` and returns an `ImageWriteback` function `(documentId, key, urls) => Promise<boolean>`.
+  - It runs an `updateOne` filtered on `_id` and `pendingImageKey: key`.
+  - On a match it `$set`s `imageUrl` and `thumbnailUrl` from `urls` and `$unset`s `pendingImageKey`.
+  - It passes `timestamps: false`, so Mongoose's automatic timestamp update is skipped (the digest finishing is not an edit anybody made).
+  - It resolves `true` if the update matched a document.
+  - If nothing matched, it checks whether a document with that `_id` already has `imageUrl` equal to `urls.imageUrl`. It resolves `true` if so and `false` otherwise.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/image.worker.ts`** — Supplies the `ImageWriteback` type that this file implements; the pipeline invokes the returned function to complete a digest job.
-- **`src/infrastructure/persistence/create-repository.ts`** — Source of the `toObjectId` helper used to coerce the raw string `documentId` before the Mongoose query.
-- **`src/modules/users/repository.ts`**, **`src/modules/products/repository.ts`**, **`src/modules/example/repository.ts`** — Each module's repository calls `imageWritebackFor(itsModel)` and passes the result to the image pipeline, binding the generic writeback to that module's specific collection.
+- `image.worker.ts`: defines the `ImageWriteback` type that this file returns. The worker calls the resulting function once the digest has produced URLs.
+- `create-repository.ts`: provides `toObjectId`, which converts the string `documentId` to an ObjectId for both queries.
+- `example`, `products` and `users` `repository.ts`: each builds a writeback from its own model with `imageWritebackFor` and hands it to the pipeline.
 
 ## Notes
-
-- The `pendingImageKey` equality guard makes the write idempotent and race-safe: a stale or duplicate job delivery silently no-ops rather than overwriting a newer upload.
-- `timestamps: false` is deliberate — completing a digest is not a user edit and must not bump `updatedAt`.
-- A `false` return means the document either doesn't exist or holds a *different* `imageUrl`; the caller is expected to clean up the now-orphaned image files.
-- The module doc-block references `docs/tools/image-processing.md` for the broader pipeline design.
+- The `pendingImageKey` condition means a stale or duplicate job delivery cannot overwrite a later upload. It also means a hard-deleted document shows up as a detectable miss (`false`) rather than a write to nothing.
+- A miss does not always mean failure. A duplicate run of the same job may already have written these exact URLs, which the fallback `exists` check on `imageUrl` counts as held (`true`). Without that, the caller would delete the live files.
+- The target model's documents must carry `pendingImageKey`, `imageUrl` and `thumbnailUrl`. Nothing in the types enforces this.

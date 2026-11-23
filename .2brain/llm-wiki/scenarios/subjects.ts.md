@@ -1,33 +1,28 @@
 ---
 source: scenarios/subjects.ts
-sha256: 6f51dbd2ef90a7347217376fbcc6d3b9e72f57bd792aefedc188f7f8d494a042
-generated_at: 2026-11-08T02:32:22.277093+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cceac07262c2b33fd6a8b5b41ed8bbbee1915e5d0244a52138676939b05c8266
+context_sha256: b0a876088f75cb18ef7d5662c1ae728afe0daa88065be5f1e0ad094d278ec3bd
+generated_at: 2026-11-22T01:46:09.606457+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/subjects.ts
 
 ## Purpose
-
-Provides a single, fixed `SUBJECTS` constant (admin + user id, email, password) for consumers that cannot import application module code — specifically, generated API client collections loaded on demand. It exists so those consumers have a stable, literal credential pair without pulling in generated artifacts, while keeping the credential source-of-truth in one place.
+Exposes the ids and login credentials of the two foundation seed accounts (admin and ordinary user) as a single constant. It exists for consumers that can't import module code but still need to point at a specific seeded row, namely generated API client collections whose examples need a *working* request.
 
 ## Key elements
-
-- **`SUBJECTS`** (const, `as const`) — The only export. Two entries:
-  - `admin`: `{ id: SEED_ADMIN_ID, email, password }`
-  - `user`: `{ id: SEED_USER_ID, email, password }`
-
-  All fields are re-exported from `@scenarios/accounts`; nothing is defined locally.
-
-- **Imports** — `SEED_ADMIN_ID`, `SEED_USER_ID`, `seedCredentials` from `@scenarios/accounts`. No other dependencies.
+- `SUBJECTS` (const export, `as const`): an object with two entries, `admin` and `user`. Each has `id`, `email` and `password`.
+  - `id` comes from `SEED_ADMIN_ID` / `SEED_USER_ID`.
+  - `email` and `password` come from `seedCredentials.admin` / `seedCredentials.user`.
 
 ## Relationships
-
-- **`scenarios/accounts.ts`** — Sole upstream. Supplies the seed IDs and credentials that `SUBJECTS` re-exports. `accounts.ts` is described in the source as the single place credentials must stay fixed against the paired frontend's `.env`.
-- **`scripts/contracts/client-collections-bundle.ts`** — Downstream consumer mechanism. The bundle loads the generated client collections (which read `SUBJECTS`) on demand. The bundler itself is guarded by `.dependency-cruiser.bootstrap.cjs` so it never reaches `api/`; it only ships this file to the collection targets.
+- **`scenarios/accounts.ts`**: the only import (`@scenarios/accounts`). `SUBJECTS` re-exports its ids and credentials rather than duplicating them. The seed passwords come from app config there.
+- **`scripts/contracts/client-collections-bundle.ts`**: a graph neighbor. The header says the collections that read this file are loaded on demand, and that the bundler must never import anything generated. The file does not import the bundle script itself.
 
 ## Notes
-
-- This file intentionally holds **only** the two foundation accounts. Module-specific pinned row IDs belong in `scenarios/product-ids.ts`; rows produced at runtime are minted at boot and recorded via `GET /__test/scenario`, so they can never be literals here.
-- Credentials are re-exported rather than duplicated to guarantee a single source of truth aligned with the frontend `.env`.
-- The file must remain importable without pulling in generated code — that constraint is enforced by the dependency-cruiser guard on the bundler.
+- It deliberately imports nothing generated. `.dependency-cruiser.bootstrap.cjs` guards the bundler against reaching `api.generated/`.
+- It covers the foundation's two accounts only:
+  - A module's own pinned rows live beside its fixtures (e.g. `scenarios/product-ids.ts`).
+  - Values the flows produce are minted at boot and recorded by the runner (`GET /__test/scenario`), so they can't be literals here.
+- `scenarios/accounts.ts` is the single place credentials must stay fixed against the paired frontend's own `.env` copy. Change them there, not here.

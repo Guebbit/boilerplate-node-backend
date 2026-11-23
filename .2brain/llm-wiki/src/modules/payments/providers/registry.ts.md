@@ -1,29 +1,27 @@
 ---
 source: src/modules/payments/providers/registry.ts
-sha256: e009528dc26fe4a149d45956a2344539ce78c86ceef6edd147b8ab87b9f781bb
-generated_at: 2026-11-14T21:03:21.998609+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 368abe3939aa369e7517aedea21ae37c085198a60af9a4e1b0641174b5eff879
+context_sha256: abf44dca542981b278460c6647e34d07a9745553601ff1e1196d285635aa9574
+generated_at: 2026-11-22T06:47:39.987709+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/providers/registry.ts
 
 ## Purpose
-
-A standalone payment-provider registry that can be imported in isolation without pulling in the full `./index` module (which loads the payments config chain: config store, `ibantools`). It exists so test doubles can register themselves at preload time without triggering that dependency tree, and so production PSPs can self-register with a single call in their own file.
+Holds the payment provider registry in its own file so a test double can register itself without loading the payments module. At runtime this file imports only the registry helper. `./index` would pull in the payments config chain (the config store, `ibantools`). Production registers nothing here: a real PSP adds its own file and one `registerPaymentProvider` call. The `fake` provider is a test double and lives in `scenarios/support/doubles/`.
 
 ## Key elements
-
-- **`paymentProviderRegistry`** — A shared registry instance (`createSharedProviderRegistry<PaymentProvider>('payments')`) keyed to the `'payments'` namespace. Shared across module instances so a double registered before a module reset is still visible after it.
-- **`registerPaymentProvider(provider: PaymentProvider): void`** — Registers (or, in tests, overrides) a provider under its own `provider.name`. That name is the value `NODE_PAYMENT_PROVIDER` selects and the value persisted on each payment, keeping the two in lockstep.
+- `paymentProviderRegistry`: a registry of `PaymentProvider` implementations, created with `createSharedProviderRegistry<PaymentProvider>('payments')`. It is shared across module instances, so a double registered at boot survives a module reset.
+- `registerPaymentProvider(provider)`: registers or overrides (in a test) an implementation under `provider.name`, without editing any module file.
 
 ## Relationships
-
-- **`src/infrastructure/runtime/provider-registry.ts`** — Runtime dependency: provides `createSharedProviderRegistry`, the only runtime import in this file.
-- **`src/modules/payments/providers/index.ts`** — Type-only dependency: supplies the `PaymentProvider` interface. Deliberately kept separate from the runtime path so importing this file never loads the config chain that `index` pulls in.
-- **`scenarios/support/doubles/payments/register.ts`** — The test-double registration entry point that calls `registerPaymentProvider` to install the `fake` provider without touching production module state.
+- `src/infrastructure/runtime/provider-registry.ts`: supplies `createSharedProviderRegistry`, the only runtime import.
+- `src/modules/payments/providers/index.ts`: the source of the `PaymentProvider` type (type-only import, so there is no runtime load). The file is split out to avoid the runtime dependency on `./index`.
+- `scenarios/support/doubles/payments/register.ts`: the test-double side. By the file's own description, doubles such as `fake` register through this registry.
+- The other neighbors (`repository.ts`, the `services/` refund and settlement files, and the contract, integration and rate-limit tests) are related through the dependency graph. The file's content does not show how they interact with the registry.
 
 ## Notes
-
-- **No runtime imports beyond the registry helper.** This is intentional; the file's only runtime dependency is `createSharedProviderRegistry`. The `PaymentProvider` import is type-only.
-- **Production registers nothing here.** A real PSP adds its own file containing a single `registerPaymentProvider` call. This file never contains a concrete implementation.
-- **Idempotent / overridable.** Calling `registerPaymentProvider` twice with the same `name` replaces the prior entry, which is the mechanism tests use to swap the fake in and out.
+- The registration key is `provider.name`. That is the value `NODE_PAYMENT_PROVIDER` selects by and the value persisted on each payment, so the two cannot disagree.
+- Registering under an existing name overrides it. The docs describe this as intended for tests.
+- Keep this file free of runtime imports from `./index`. It is split out so doubles can register without the config chain.

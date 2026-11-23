@@ -1,41 +1,30 @@
 ---
 source: src/infrastructure/security/password-hash.ts
-sha256: 6398373bdd98cf827ee9c88382e3445c84660aa7946db003df39db4f304432d9
-generated_at: 2026-11-08T03:49:07.548057+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:08:52.845213+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/security/password-hash.ts
 
 ## Purpose
-
-Wraps Node's built-in `argon2id` (Node 24.7+, `node:crypto`) with project-specific salt generation, PHC-string encoding/decoding, and constant-time comparison. It is the only application-owned layer between the crypto primitive and the rest of the codebase: the cost parameters are externalised to shared YAML so a PHP twin can read the same values.
+Password hashing for the app using argon2id from `node:crypto` (Node 24.7+), with no third-party dependency and no 72-byte input limit. Node provides only the primitive. This file adds the salt, the PHC-string storage format, and a constant-time comparison.
 
 ## Key elements
-
-- **`hashPassword(password)`** — async; derives an argon2id tag with a fresh 16-byte salt and the configured cost, returns a PHC string (`$argon2id$v=19$m=…,t=…,p=…$salt$hash`).
-- **`hashPasswordSync(password)`** — same logic via `argon2Sync`; exists solely for the one-at-import-time unknown-email decoy where a Promise adds no value.
-- **`verifyPassword(password, stored)`** — parses the PHC string with a strict regex, re-derives with the stored parameters/salt, compares via `timingSafeEqual`; returns `false` (never throws) if the stored value doesn't match the PHC shape.
-- **`PHC_PATTERN`** — anchored regex that pins `v=19`, captures `m`, `t`, `p`, salt, and hash (base64, no padding).
-- **`MEMORY_KIB` / `PASSES` / `PARALLELISM`** — loaded at module scope from `shared/rules/password-hash.yaml` via `loadSharedRules`; currently 19 MiB / 2 / 1 (OWASP's "≈ 50 ms" profile).
-- **`SALT_BYTES = 16`**, **`TAG_BYTES = 32`** — fixed at 128-bit salt (RFC 9106 §3.1) and 256-bit output.
-- **`derive`** — `promisify(argon2)`; runs on the threadpool, off the event loop.
-- **`parametersFor` / `encode`** — small helpers that build the `node:crypto` options object and serialise the PHC string respectively.
+- `hashPassword(password)`: async. It generates a 16-byte random salt and derives a 32-byte tag with the non-blocking `argon2` (threadpool, off the event loop). It returns a PHC string `$argon2id$v=19$m=…,t=…,p=…$<salt>$<hash>` (base64, no padding).
+- `hashPasswordSync(password)`: the same output via `argon2Sync`. It is intended only for the value computed at import time (the unknown-email decoy).
+- `verifyPassword(password, stored)`: parses `stored` with `PHC_PATTERN`, re-derives using the parameters embedded in the hash, and compares with `timingSafeEqual` (after checking lengths). It resolves `false` if `stored` is not an argon2id v=19 PHC string.
+- Module-level constants: `MEMORY_KIB`, `PASSES` and `PARALLELISM` are loaded at import via `loadSharedRules('password-hash', passwordHashSchema)`. `SALT_BYTES` is 16 and `TAG_BYTES` is 32.
+- Internal helpers: `parametersFor` builds Node's argon2 parameter object, `encode` serialises a PHC string, and `derive` is the promisified `argon2`.
 
 ## Relationships
-
-- **`config/shared-rules/load.ts`** — calls `loadSharedRules('password-hash', …)` at import time to resolve the cost triple.
-- **`config/shared-rules/password-hash.ts`** — supplies the Zod schema (`passwordHashSchema`) that validates the YAML value before it is destructured.
-- **`modules/account/services/login.ts`** / **`modules/account/services/reauth.ts`** — consume `verifyPassword` (and, for the unknown-email path, `hashPasswordSync`) to authenticate credentials.
-- **`modules/users/model.ts`** — defines the persisted field that stores the PHC string produced by `hashPassword`.
-- **`tests/unit/infrastructure/security/password-hash.test.ts`** — unit tests for hashing, verification, PHC parsing, and constant-time behaviour.
-- **`tests/cross-cutting/crypto-conformance.test.ts`** — cross-cutting checks that the output conforms to the PHC spec and that parameter round-tripping is stable.
-- **`modules/account/tests/integration/password-hashing.test.ts`** — integration coverage exercising the full login/reauth → verify path.
-- **`modules/users/tests/unit/schema-contract.test.ts`** — asserts the stored-hash column shape matches the PHC pattern this module emits.
+- `src/infrastructure/config/shared-rules/load.ts` and `src/infrastructure/config/shared-rules/password-hash.ts`: they supply the argon2id cost (`loadSharedRules` plus `passwordHashSchema`). The cost comes from `shared/rules/password-hash.yaml`, which a PHP twin implementation also reads.
+- `src/modules/account/services/login.ts` and `src/modules/account/services/reauth.ts`: consumers of the hashing and verification functions.
+- `src/modules/users/model.ts`: a neighbor in the dependency graph. The file shows no direct interaction.
+- Tests: `tests/unit/infrastructure/security/password-hash.test.ts`, `src/modules/account/tests/integration/password-hashing.test.ts`, `tests/cross-cutting/crypto-conformance.test.ts` and `src/modules/users/tests/unit/schema-contract.test.ts` cover this file or its contract.
 
 ## Notes
-
-- The stored PHC string is self-describing: `verifyPassword` reads `m`/`t`/`p` from the string itself, so rotating the YAML cost only affects *new* hashes, not verification of existing ones.
-- `hashPasswordSync` blocks the event loop for the duration of a derivation (~50 ms at current cost). It is intentionally limited to the single import-time decoy; do not call it in request paths.
-- The PHC regex is strict about `v=19` and rejects padding (`=`) in base64 segments; a hash encoded by an older/other implementation will simply fail to match and `verifyPassword` returns `false` without throwing.
-- `parallelism` is hard-locked to 1 in the YAML; the code passes it through but the comment notes it buys a defender nothing on a busy server.
+- Stored hashes carry their own m/t/p and salt, so changing the YAML cost affects only new hashes. Existing hashes still verify with their original parameters.
+- Parallelism is one lane by design, per the in-file comment.
+- Only `v=19` argon2id strings match. Anything else makes `verifyPassword` return `false`, not throw.
+- `verifyPassword` does not bound the embedded `m`/`t`/`p` values. It trusts whatever the stored string declares.
+- The PHC pattern's base64 character class is `[\w+/]`, so URL-safe base64 (`-`) is not accepted.

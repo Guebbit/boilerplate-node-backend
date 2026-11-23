@@ -1,34 +1,48 @@
 ---
 source: scripts/contracts/permission-vocabulary-render.ts
-sha256: a58337b8f779b7fed54c76279564ac7a4b778d151901b8ddfec78b1e02d45fa9
-generated_at: 2026-11-14T17:28:17.963083+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6518aab3b9b1510d918f34cee730ee2feeee477570d786956e3f6c458c1daea9
+context_sha256: a57900c645aa7f2e41f9764a7243a30db5a98677f1d39b79df98e69f2f3a25ed
+generated_at: 2026-11-22T01:59:10.059391+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/permission-vocabulary-render.ts
 
 ## Purpose
-
-The pure (I/O-free) half of the permission-vocabulary generator. It reads the closed authorization lists from a shared YAML document (`authorization-keys.generated.yaml`), validates them, and renders the TypeScript module that re-exports those lists as `as const` arrays plus derived union types. Keeping it free of filesystem calls lets unit tests exercise the full parse → validate → render pipeline in isolation.
+This is the pure half of the permission-vocabulary generator. It reads the closed lists (actions, subjects, rules, sets, scopes, step-up tiers) out of the shared authorization YAML document, and renders the TypeScript module that carries them. It does no filesystem access, so a test can exercise it directly. It is a shared script that is kept identical by hand in both repos of the pair, and it is deliberately not listed in `SHARED_FILES`.
 
 ## Key elements
-
-- **`PermissionVocabulary`** (interface) — the shape of every closed list: `actions`, `subjects`, `ruleIds`, `setNames`, `scopes`, `stepUpTiers`, and `pairs` (subject → actions map).
-- **`readPermissionVocabulary(yamlText: string): PermissionVocabulary`** — parses the YAML, extracts each list, enforces non-emptiness, uniqueness, and cross-references (every rule's action/scope/stepUp must appear in its declared list). Throws descriptive `Error`s on any violation.
-- **`renderPermissionVocabulary(vocabulary: PermissionVocabulary): string`** — emits the full text of the generated TypeScript file (six `as const` arrays + their union types + `PERMISSION_PAIRS` + `ActionOn<S>`).
-- **`stringList`, `mappingKeys`, `fieldOfEach`, `assertUnique`** (private helpers) — targeted extractors that throw early with a message naming the offending key and the source file.
-- **`renderList`** (private helper) — renders one `as const` array + its `(typeof …)[number]` union, given a name, type name, description, and items.
+- `PermissionVocabulary` (interface): the parsed result, with these fields:
+  - `actions`
+  - `subjects`: distinct rule subjects, in first-seen order.
+  - `ruleIds`: `<action>:<subject>` for each rule.
+  - `setNames`
+  - `scopes`: keys of `scopes:`.
+  - `stepUpTiers`: keys of `stepUp:`.
+  - `pairs`: a map from subject to the actions of the rules on it.
+- `readPermissionVocabulary(yamlText)`: parses the YAML and validates it, returning a `PermissionVocabulary`. It throws an `Error` when:
+  - a list is missing or empty;
+  - `actions:`, `sets:` or `rules:` repeats an entry;
+  - a rule uses an undeclared action, scope or `stepUp` tier. `stepUp` is optional on a rule, but `scope` is required.
+- `renderPermissionVocabulary(vocabulary)`: returns the full text of the generated module. It contains:
+  - a "Code generated … DO NOT EDIT" header;
+  - six `as const` arrays with their derived union types: `PERMISSION_ACTIONS`, `PERMISSION_SUBJECTS`, `PERMISSION_RULE_IDS`, `PERMISSION_SET_NAMES`, `AUTHORIZATION_SCOPES`, `STEP_UP_TIERS`;
+  - the `PERMISSION_PAIRS` map;
+  - the `ActionOn<S>` type.
+- Internal helpers (not exported):
+  - `stringList`: reads a non-empty list of strings.
+  - `mappingKeys`: reads the keys of a non-empty mapping.
+  - `fieldOfEach`: reads one non-empty string field from every entry of a list.
+  - `assertUnique`: throws on the first repeated entry.
+  - `renderList`: emits one array plus its union type.
 
 ## Relationships
-
-- **`scripts/contracts/generate-permission-vocabulary.ts`** — the file-system half; it reads the YAML from disk and hands the text to `readPermissionVocabulary`, then writes the result of `renderPermissionVocabulary` to the output file. This module is its "pure" counterpart (no `fs` import).
-- **`src/infrastructure/object-guards.ts`** — supplies `isPlainObject`, used inside `mappingKeys` to safely treat a parsed YAML value as a record.
-- **`tests/unit/scripts/contracts/permission-vocabulary-render.test.ts`** — unit tests that drive `readPermissionVocabulary` and `renderPermissionVocabulary` directly with in-memory strings, covering valid documents, missing lists, duplicates, and undeclared cross-references.
+- `scripts/contracts/generate-permission-vocabulary.ts` is the counterpart that does the I/O, as implied by the "pure half" description. The generated header names `npm run gen:api` as the regenerate command.
+- `src/infrastructure/object-guards.ts` supplies `isPlainObject`, which `mappingKeys` uses to check that `scopes:` and `stepUp:` are mappings.
+- `tests/unit/scripts/contracts/permission-vocabulary-render.test.ts` is the unit test for this file. The file's "no filesystem" design exists so it can be tested this way.
 
 ## Notes
-
-- **Shared script, not in `SHARED_FILES`.** The header comment and `docs/tools/pairing-and-ports.md` ("Convenience is not necessity") state it is kept identical across the two paired repos *by hand*, deliberately excluded from the automated sync list.
-- **No filesystem access.** The only I/O dependency is the `yaml` parse call; all functions accept and return strings/objects, so tests never touch disk.
-- **Error messages are stable and reference `authorization-keys.generated.yaml` by name**, even though this file never reads that path — the message is meant for the operator looking at the source document.
-- **`pairs` initialization** uses `[] as string[]` to sidestep TypeScript inferring `never[]` from an empty array literal (see inline comment).
-- **Generated output is marked `DO NOT EDIT`** and carries a regenerate hint (`npm run gen:api`); the file header of this module points to `docs/tools/permission-vocabulary.md` for the full contract.
+- Declared order is preserved everywhere. Subjects come out in first-seen order.
+- Error messages are all prefixed with `authorization-keys.generated.yaml`.
+- Because the file is hand-synced across two repos, a change here has to be mirrored in the other repo.
+- `readPermissionVocabulary` checks `rules:` shape only through `fieldOfEach`. The later `raw.rules as Raw[]` cast relies on that earlier validation.

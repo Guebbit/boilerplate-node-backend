@@ -1,30 +1,29 @@
 ---
 source: src/modules/account/session/device-label.ts
-sha256: 148ee2b9e57dfeba37bac75b646db9971649a0a56d60c4ee3bbcd219bb15a17f
-generated_at: 2026-11-14T18:56:50.033842+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 281b584107a67f338abd5a3a7ea5b9a4f86aef22ccc83a528eac9c3fd859ef97
+context_sha256: ec8211e1f4c115518246b3bb8b9f76c8e25fa7b62930d49381506e6bc24ec905
+generated_at: 2026-11-22T03:46:26.170006+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/session/device-label.ts
 
 ## Purpose
-
-Parses the `User-Agent` header at sign-in into a short, human-readable device label (e.g. `"Firefox on Linux"`) that is stored on the session so an account owner can distinguish their own devices in a sign-in list. Deliberately omits version numbers, model names, and IP addresses to avoid creating an identifier beyond what the owner already knows (see `docs/theory/data-protection.md`).
+Produces a coarse, human-readable label for where a sign-in came from (e.g. "Firefox on Linux"). It is parsed once at login from the User-Agent and stored on the session, so the account owner can tell their own devices apart in the session list. It deliberately names only browser and system, with no version, model, or IP.
 
 ## Key elements
-
-- **`describeDevice(userAgent?: string): string | undefined`** — The sole export. Trims and caps the input at 512 characters, runs it through **Bowser**, and returns `"<Browser> on <OS>"`, a single name when only one is recognisable, or `undefined` when neither is (e.g. `curl`, headless scripts).
-- **`MAX_USER_AGENT_LENGTH` (512)** — Internal constant; bounds the parser's work on an attacker-controlled header.
+- `describeDevice(userAgent: string | undefined): string | undefined`: the only export.
+  - Truncates the input to 512 characters (`MAX_USER_AGENT_LENGTH`) and trims it. Returns `undefined` if nothing is left.
+  - Parses with Bowser (`getBrowserName()`, `getOSName()`).
+  - Returns `"<browser> on <system>"` when both are known, whichever one is known when only one is, and `undefined` when neither is (scripts, `curl`, API testers).
+- `MAX_USER_AGENT_LENGTH` (private, 512): bounds parser work on an attacker-controlled header.
 
 ## Relationships
-
-- **`cookie-strategy.ts`** — Sibling module in the same `session/` directory. `describeDevice` produces the label that the cookie/session strategy stores alongside the session so it can be displayed back to the user.
-- **`device-label.test.ts`** — Unit-test file covering the parsing, the single-name fallback, the `undefined` path, and the length-cap behaviour.
-- **`package.json`** — Provides the `bowser` runtime dependency used by this file.
+- `package.json`: declares the `bowser` dependency that this file imports.
+- `src/modules/account/session/cookie-strategy.ts`: a sibling in the session module. The file itself shows no link to it, and the doc comment says only that the label is stored on the session at login.
+- `src/modules/account/tests/unit/device-label.test.ts`: the unit test for `describeDevice`.
 
 ## Notes
-
-- The function is intentionally **pure** (string in → string/undefined out) with no I/O, making it trivial to test and to call from any session-entry point.
-- `Bowser.getParser` throws on an empty string; the early `if (!text) return undefined` guard exists specifically to avoid that.
-- When both browser and OS are unknown Bowser returns `''` for each; the final `browser || system || undefined` chain relies on that falsy behaviour to fall through to `undefined` rather than producing an empty string.
-- The 512-char slice happens **before** `.trim()`, so a pathologically long whitespace-padded header is bounded first.
+- Returning `undefined` is intentional: "no label beats a wrong one".
+- The empty-string guard matters because Bowser's `getParser` throws on an empty string.
+- The audit log separately keeps the raw User-Agent for 180 days. This label is a shorter, friendlier copy shown back to the person it describes.

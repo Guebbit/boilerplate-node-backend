@@ -1,39 +1,37 @@
 ---
 source: docker/observability/prometheus.infra-rules.test.yaml
-sha256: 8608f3a6945034f523d13667365aa70d66b0833f56cabcd81d66c9e581e10bd7
-generated_at: 2026-11-08T02:23:16.493540+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1e9a0fc9f5f848d9a5327f9f435bb14c0d73b36034eae42d97f25dfab132cccf
+context_sha256: ecf30b7599c01dfbd821fd5e8605370c3efc84b7a1d13ba84062d212bff97ec6
+generated_at: 2026-11-22T01:33:32.658383+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/observability/prometheus.infra-rules.test.yaml
 
 ## Purpose
-
-Unit-test suite for the alerting rules in `prometheus.infra-rules.yaml`, executed by `promtool test rules`. It provides one firing scenario and (where applicable) one quiet scenario per alert to catch regressions in rule expressions, label/annotation propagation, and threshold logic. Invoked from the `alert-rules` job in `.github/workflows/ci.yml`.
+Unit tests for the alert rules in `prometheus.infra-rules.yaml`, executed with `promtool test rules`. It provides one firing case per alert, plus a quiet (no-alert) case for the alerts that read a counter or could misfire on special filesystems.
 
 ## Key elements
-
-- **`rule_files`** — points to `prometheus.infra-rules.yaml`; the file whose rules are being exercised.
-- **`evaluation_interval: 1m`** — global 1-minute step applied to every test block.
-- **Watchdog test** — asserts the always-firing heartbeat alert fires immediately with `severity: none`.
-- **AlertmanagerNotificationsFailing tests** — firing case: `alertmanager_notifications_failed_total` rises from 0 to 5; quiet case: all-zero values (`0x20`). Verifies the 15-minute counter threshold and the `integration` label.
-- **PrometheusRuleEvaluationFailures tests** — firing and quiet cases mirroring the pattern above, keyed on `prometheus_rule_evaluation_failures_total` for a specific `rule_group`.
-- **DiskAlmostFull tests** — four scenarios over a 2-hour window (120 samples):
-  - Low free space (5 % of 100 GB) → fires.
-  - Trending down (70 GB free, −100 MB/sample → projected full within 24 h) → fires.
-  - Steady 50 % free + a full `tmpfs` mount → stays quiet (tmpfs excluded by design).
-- **TlsCertExpiringSoon tests** — fires for a cert with 10 days remaining (`864000s`) while ignoring a 60-day cert and the Traefik default cert; quiet case with all certs > 14 days out.
+- **Config:** `rule_files` points at `prometheus.infra-rules.yaml`; `evaluation_interval: 1m`; every test case uses `interval: 1m`.
+- **Watchdog:** with no input series, at 1m it fires with `severity: none` and the "Alerting pipeline heartbeat" summary.
+- **AlertmanagerNotificationsFailing:**
+  - Fires at 6m with `severity: warning` and `integration: email` when `alertmanager_notifications_failed_total` rises (`0 0 0 1 2 3 4 5 5 5`).
+  - Quiet at 15m when the counter stays flat (`0x20`).
+- **PrometheusRuleEvaluationFailures:**
+  - Fires at 6m with `severity: warning` and a `rule_group` label when `prometheus_rule_evaluation_failures_total` rises.
+  - Quiet at 15m when the counter stays flat.
+  - The test uses an example rule group value (`<path>/alerts.yml;api.rules`), which is just test input.
+- **DiskAlmostFull** (evaluated at 2h, using `node_filesystem_avail_bytes` and `node_filesystem_size_bytes`):
+  - Fires for `/` at 5% free of a 100 GB disk.
+  - Fires for `/data` at 70% free but shrinking by 100 MB per minute, which covers the "full within 24 hours" trend condition.
+  - Quiet for `/` at 50% free and steady, and for a `/run` tmpfs that has 0 bytes available.
 
 ## Relationships
-
-- **`docker/observability_prometheus.infra-rules.test.yaml`** — graph-neighbor entry for this same test file (alternate path/alias); no separate code interaction.
-- **`prometheus.infra-rules.yaml`** (loaded via `rule_files`) — the rule definitions under test; labels, annotations, and thresholds asserted here must stay in sync with that file.
-- **`.github/workflows/ci.yml`** (`alert-rules` job) — CI entry point that shells out to `promtool test rules` against this file.
+- Loads and tests `prometheus.infra-rules.yaml`. The expected labels and annotations must match what that file defines.
+- Run in CI by the `alert-rules` job in `github/workflows/ci.yml`, per the header comment.
 
 ## Notes
-
-- Run manually with: `promtool test rules docker/observability/prometheus.infra-rules.test.yaml`.
-- Value shorthand `0x20` means "zero repeated 20 times"; `50000000000x120` means a constant 50 GB for 120 samples. The arithmetic form `70000000000-100000000x120` means "start at 70 GB, decrement by 100 MB each sample, 120 samples."
-- The `for` duration on `DiskAlmostFull` requires the series to be present for the entire window; stale gaps would suppress the alert. Tests therefore feed continuous data for 120 minutes.
-- The quiet disk case deliberately includes a `tmpfs` mount at 0 bytes free to lock in the rule's exclusion of tmpfs filesystems.
-- When adding a new alert to `prometheus.infra-rules.yaml`, a corresponding firing **and** quiet test case must be added here or CI will not catch expression changes.
+- Run locally with `promtool test rules docker/observability/prometheus.infra-rules.test.yaml`.
+- The disk tests supply samples every minute because a sample older than five minutes goes stale, and the rule's `for` clause needs the series present throughout.
+- The `/run` tmpfs case implies the rule excludes or ignores `tmpfs` filesystems. The exact filter is in the rules file.
+- The DiskAlmostFull description, "under 10 % free, or will be full within 24 hours at the rate of the last 6 hours", describes the two conditions the tests cover.

@@ -1,37 +1,40 @@
 ---
 source: src/modules/cart/tests/integration/checkout-version.test.ts
-sha256: 20ac3bd81cff665bd3e912df0f2e1269e524b663fa9033803ce6aefb6e400b12
-generated_at: 2026-11-08T05:20:37.300036+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f3c4bc8935b27c91f35daa6d2292fb07cf36812c95a630dc43ef6c47c28147aa
+context_sha256: 12b6f5903c82f4a4389a2c5017b62b7a4429eaa516c47eb6c811676b106c94f8
+generated_at: 2026-11-22T04:39:12.677836+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/integration/checkout-version.test.ts
 
 ## Purpose
-
-Integration tests that verify the `__v` (MongoDB version) counter on a cart document is bumped by every state-changing write, and that `cartRepository.clearLinesIfUnchanged` correctly acts as a compare-and-swap guard so a concurrent cart mutation invalidates an in-flight checkout rather than silently dropping the mutation. The tests run against a real MongoDB instance because the guarantee under test is the driver's `$inc` atomicity, which a mock cannot exercise.
+Integration tests, run against a real Mongo database, that pin down the cart's `__v` versioning contract. Every shopper write that changes a cart must bump `__v`, because checkout reads `__v` once and later empties the cart only if it is unchanged (`clearLinesIfUnchanged`). A write that skipped the bump would be invisible to that guard, and a line added or removed mid-checkout could be silently dropped. A mock can't show this, since the guarantee comes from the driver's own `$inc`.
 
 ## Key elements
-
-- **`versionOf(userId)`** – Helper that fetches a user's cart and returns its persisted `__v` (or `undefined` if the cart doesn't exist).
-- **`cartWithChoice()`** – Helper that creates a user, a product, adds a line, sets a shipping method, and returns the resulting cart version. Used by the `clearLinesIfUnchanged` suite.
-- **`describe('cart version increments on every write that changes it')`** – Asserts `__v` starts at 1, bumps on add / set-quantity / increment / remove / clear / product-pull-out, and does **not** bump on an idempotent same-quantity set.
-- **`describe('clearLinesIfUnchanged')`** – Asserts the conditional-clear guard: empties items *and* shipping method on a match; returns `null` and touches nothing on a version mismatch; is single-shot per version; rejects replay after empty-then-refill; and does **not** stamp `updatedAt`.
-- **`setupTestDb()`** – Called once at module scope to provision/tear down a dedicated test database.
+- `setupTestDb()`: called at module level to set up the test database.
+- `versionOf(userId)`: helper that returns the persisted `__v` of a user's cart, or `undefined` if no cart exists.
+- `describe('cart version increments on every write that changes it')`: covers each write path through `cartService`:
+  - The creating write already yields `__v === 1`, not 0, because the first write can itself race with checkout.
+  - Bumps on: pushing a new line, changing a line's quantity, `addItemById` on an existing line, `removeItemById`, `remove` (whole cart), and `productRemoveFromCartsById` (a deleted product pulled from carts).
+  - The one write that must not bump is `setItemById` with the quantity the line already holds. Otherwise a repeated PUT mid-checkout would fail with `CART_CHANGED` over nothing.
+- `cartWithChoice()`: helper that builds a user, a product, a cart with one line (qty 2), a `'pickup'` shipping method, and the current version.
+- `describe('clearLinesIfUnchanged')`: tests `cartRepository.clearLinesIfUnchanged(userId, version)`:
+  - With a matching version it empties the items and the shipping choice, and bumps `__v` by 1.
+  - It returns `null` and changes nothing when the cart moved since the read.
+  - A replay of the same version returns `null` (it matches at most once).
+  - A cart that was emptied and refilled does not match an older version.
+  - It does not touch `updatedAt`, so the cart doesn't read as recently edited by the checkout that emptied it.
+  - It returns `null` and creates no cart for a user with none.
 
 ## Relationships
-
-- **`src/modules/cart/repository.ts`** – Exercises `findByUserId`, `setShippingMethod`, `clearLines`, and `clearLinesIfUnchanged` directly against the real store.
-- **`src/modules/cart/services/index.ts`** – Drives every cart mutation through `cartService` (`setItemById`, `addItemById`, `removeItemById`, `remove`, `productRemoveFromCartsById`) to confirm the service layer triggers the version bump.
-- **`src/modules/users/tests/factories.ts`** – `createUser()` provides the actor for each test.
-- **`src/modules/products/tests/factories.ts`** – `createProduct()` provides the line-item target.
-- **`tests/support/callers.ts`** – `testCallerContext` supplies the caller identity required by `removeItemById` and `remove`.
-- **`tests/support/clock.ts`** – `freezeDate` / `advanceDate` isolate the `updatedAt`-unchanged assertion in the `clearLinesIfUnchanged` suite.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` wires up the real MongoDB instance for the whole file.
+- `@modules/cart/services` (`cartService`): the write paths under test (`setItemById`, `addItemById`, `removeItemById`, `remove`, `productRemoveFromCartsById`).
+- `@modules/cart/repository` (`cartRepository`): used for `findByUserId`, `setShippingMethod`, `clearLines` and the guarded `clearLinesIfUnchanged`.
+- `@modules/users/tests/factories` (`createUser`) and `@modules/products/tests/factories` (`createProduct`): create fixtures.
+- `@tests/setup-test-db`: provides the real Mongo lifecycle.
+- `@tests/callers` (`testCallerContext`): supplies the caller context for remove operations.
+- `@tests/clock` (`freezeDate`, `advanceDate`): control time in the `updatedAt` test.
 
 ## Notes
-
-- The suite uses a **real MongoDB** (no mocks/in-memory drivers). If the test environment lacks a running Mongo, every test fails at the `setupTestDb()` call.
-- The "does not bump" case (idempotent same-quantity set) is the critical negative: a regression here would cause spurious `CART_CHANGED` rejections on repeated PUTs during checkout.
-- In the `clearLinesIfUnchanged` block, `afterEach` calls `jest.useRealTimers()` to guarantee the frozen clock from the `updatedAt` test doesn't leak into subsequent tests.
-- `clearLinesIfUnchanged` is expected to return `null` (not throw) when the version doesn't match or the cart doesn't exist—callers must treat `null` as "someone else won the race."
+- The `clearLinesIfUnchanged` suite has an `afterEach` that calls `jest.useRealTimers()`, so a failed assertion doesn't leave `Date` frozen.
+- Several tests compute the expected version as `(before ?? 0) + 1`, so they assert a relative bump rather than an absolute value. Only the cart-creation test asserts an absolute `1`.

@@ -1,28 +1,24 @@
 ---
 source: src/modules/account/services/previous-email-cleanup.ts
-sha256: 9977a2bbd34690f761e2db20b8e65d436a43c2c321e6d44b8971832309fafa81
-generated_at: 2026-11-14T18:48:35.167253+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:39:57.340587+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/previous-email-cleanup.ts
 
 ## Purpose
-
-Implements the nightly `reap:previous-emails` sweep: for every account whose 7-day email-change undo link is no longer live (expired, spent, or revoked), it forgets the stored previous address. This is a data-minimisation step—an old address has no purpose once nothing can restore it.
+Implements the nightly `reap:previous-emails` sweep. When an account's email change has been made, the previous address is kept only so the user can undo the change via a 7-day undo link. Once that link has lapsed, this sweep forgets the old address (data minimisation). Expired sessions and one-time tokens are not handled here, since each row carries its own TTL date and the database deletes it.
 
 ## Key elements
-
-- **`reapLapsedPreviousEmails()`** (exported) — Returns `Promise<number>` (count of accounts cleared). Resolves the set of user IDs that still hold a live `EMAIL_CHANGE_UNDO_TOKEN_TYPE` token via the repository, then delegates to `accountUserService.clearLapsedPreviousEmail(keep)` to wipe the previous email for everyone *not* in that set.
+- `reapLapsedPreviousEmails(): Promise<number>`: the only export. It fetches the user IDs that still have a live undo token, then asks the account user service to clear the previous email for all other accounts. It resolves to the number of accounts cleared.
 
 ## Relationships
-
-- **`../repository`** — Imports `verificationTokenRepository`; calls `.userIdsWithLive(tokenType, now)` to determine which accounts must retain their previous email.
-- **`../token-types`** — Imports the `EMAIL_CHANGE_UNDO_TOKEN_TYPE` constant to scope the live-token query.
-- **`@modules/users/friends/account`** — Imports `accountUserService` and calls `.clearLapsedPreviousEmail(keep)` to perform the actual data clear.
+- `src/modules/account/repository.ts`: provides the verification token repository. This file calls its `userIdsWithLive(EMAIL_CHANGE_UNDO_TOKEN_TYPE, new Date())` to get the users whose undo link is still live (the "keep" set).
+- `src/modules/account/token-types.ts`: supplies `EMAIL_CHANGE_UNDO_TOKEN_TYPE`, which selects the undo-token type to look up.
+- `src/modules/users/friends/account.ts`: provides the account user service. This file calls its `clearLapsedPreviousEmail(keep)` to do the clearing, given the keep set.
+- `src/modules/account/jobs.ts` and `src/modules/account/services/index.ts`: graph neighbors. Their interaction is not visible in this file, but the `reap:previous-emails` name suggests the job is registered there.
 
 ## Notes
-
-- Logic is inverted: it computes the *keep* set (users with a live undo token) and clears the complement. If the token query returns an empty set, every account is cleared.
-- Only undo-token state matters here. Expired sessions and one-time tokens do **not** require a sweep—each row carries its own TTL date that the database enforces automatically, so they are out of scope for this file.
-- "Lapsed" is intentionally broad: expired, spent, and revoked tokens are indistinguishable for this purpose.
+- "Lapsed" means "no live undo token". An undo token that expired, was spent, or was revoked all count the same.
+- The function passes the set of users to keep rather than the set to clear. Accounts are cleared by exclusion from that set.
+- The doc comment refers to the `lapse` edge in `../domain/email-change.ts` as the state transition this sweep carries out; that file is referenced only in the comment, not imported.

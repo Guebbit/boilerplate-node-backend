@@ -1,44 +1,46 @@
 ---
 source: docker/observability/prometheus.alert-rules.yaml
-sha256: c36219ace5882c234f4a08438fead21efc0d4f01c7d07eaac532ed7ac0ed6d16
-generated_at: 2026-11-14T17:12:35.714330+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d022f418573e9c4535349acc47dedb9685c3d937be50aebb43639a63ecb7175e
+context_sha256: 9fceb2efd9c4db5d2460669d454416c3049ead4dcc152fa1893828f4114f131e
+generated_at: 2026-11-22T01:33:10.537847+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/observability/prometheus.alert-rules.yaml
 
 ## Purpose
-
-Defines the full set of Prometheus alert rules for the local API stack, covering the five SRE signals (availability, errors, latency, load, saturation) plus application-specific concerns: crash-loop detection, dependency health, heap pressure, dead-letter queues, outbox poison events, webhook delivery failures, and scheduled-job staleness.
+Defines the Prometheus alert rules for the local API stack. Dashboards are visual; these rules encode actionable SRE thresholds. They give starter coverage for availability, errors, latency, load, memory, queues, the outbox, webhooks and scheduled jobs. All rules live in a single group, `api.rules`.
 
 ## Key elements
-
-- **`api.rules` (group)** — single rule group containing all alerts; loaded by the Prometheus server.
-- **`ApiDown`** — fires when `up{job="api"} == 0` for 1 min (critical).
-- **`ApiRestarting`** — fires when `process_start_time_seconds` changes > 2 times in 15 min (critical). Known unreliable under `npm run start:cluster`; muted by `ApiDown`.
-- **`DependencyUnavailable`** (two rules, same name) — database: critical, 1 min; cache/queue: warning, 5 min. Uses the app-reported `dependency_up` gauge.
-- **`HighErrorRate`** — 5xx ratio > 5 % over 5 min (warning). Deliberately excludes 4xx.
-- **`HighP95Latency`** — `histogram_quantile(0.95, …)` > 2000 ms for 5 min (warning).
-- **`HighInFlightRequests`** — `http_requests_in_flight > 100` for 2 min (warning).
-- **`HighHeapUsage`** — `nodejs_heap_size_used_bytes / nodejs_heap_size_limit_bytes > 0.90` for 5 min (warning). Denominator is the V8 hard limit, not the committed heap.
-- **`QueueJobsParked`** — any increase in `queue_jobs_dead_lettered_total` in 15 min (warning).
-- **`OutboxEventsDead`** — any increase in `outbox_events_dead_total` in 15 min (warning).
-- **`WebhookDeliveriesFailingEverywhere`** — zero successes AND > 10 failures in 30 min (critical). Platform-side outage signal.
-- **`WebhookRetriesStalled`** — `webhook_deliveries_overdue > 0` sustained for 15 min (warning). Indicates the sweep cron is not running.
-- **`ScheduledJobStale`** — `job_last_success_timestamp_seconds` older than 48 h (warning). Excludes the four frequent sweep tasks.
-- **`ScheduledJobNeverSucceeded`** — `job_last_run_timestamp_seconds` exists but `job_last_success_timestamp_seconds` does not, for 1 h (warning). Catches jobs that ran but never succeeded.
+- **Availability**
+  - `ApiDown` and `WorkerDown` (critical): `up{job="api"}` or `up{job="worker"}` is 0 for 1m.
+  - `ApiRestarting` (critical): `changes(process_start_time_seconds{job="api"}[15m]) > 2`, which catches crash loops that `ApiDown`'s 1m wait would miss.
+  - `DependencyUnavailable`: one alert name with two rules that differ in severity. The database is critical after 1m. Cache and queue are warning after 5m. Both read `dependency_up`.
+- **Queue and outbox**
+  - `HeldJobsStuck` (critical): `max by (channel) (queue_held_jobs_oldest_age_seconds) > 900`. It fires when jobs held in the database fallback are not being drained.
+  - `QueueJobsParked` (warning): `increase(queue_jobs_dead_lettered_total[15m]) > 0`.
+  - `OutboxEventsDead` (warning): `increase(outbox_events_dead_total[15m]) > 0`.
+- **Golden signals**
+  - `HighErrorRate`: 5xx ratio above 5% for 5m.
+  - `HighP95Latency`: p95 of `http_request_duration_milliseconds_bucket` above 2000 ms for 5m.
+  - `HighInFlightRequests`: `http_requests_in_flight` above 100 for 2m.
+  - `HighHeapUsage`: `nodejs_heap_size_used_bytes / nodejs_heap_size_limit_bytes` above 0.90 for 5m.
+- **Webhooks**
+  - `WebhookDeliveriesFailingEverywhere` (critical): zero successes and more than 10 failures over 30m.
+  - `WebhookRetriesStalled` (warning): `webhook_deliveries_overdue > 0` for 15m, which suggests the retry sweep cron has stopped.
+- **Scheduled jobs**
+  - `ScheduledJobStale`: uses `job_last_success_timestamp_seconds` to flag nightly `docker/crontab` jobs. Its rule body is not visible here, and the file continues beyond this point.
 
 ## Relationships
-
-- **`docker/observability/prometheus.config.yaml`** — references this file as a rules source; the Prometheus server evaluates these rules on each scrape interval. The config also defines the scrape targets (`job="api"`) whose series these expressions query.
-- **`docker/observability/prometheus.alert-rules.test.yaml`** — a test/fixture variant of this file (or a subset) used to validate that rules parse and evaluate correctly without a live stack.
+- `alertmanager.config.template.yaml`: its `inhibit_rules` mute the alerts that follow from a firing database `DependencyUnavailable`. `ApiDown` also mutes `ApiRestarting`.
+- `prometheus.alert-rules.test.yaml`: the companion test file for these rules.
+- `prometheus.config.yaml`: the Prometheus config that supplies the `api` and `worker` scrape jobs these rules depend on.
 
 ## Notes
-
-- `ApiRestarting` is explicitly documented as unreliable in cluster mode (`npm run start:cluster`): each scrape may hit a different worker, causing `process_start_time_seconds` to jump. `ApiDown` is intended to mute it in that scenario.
-- `HighHeapUsage` uses `nodejs_heap_size_limit_bytes` (the `--max-old-space-size` ceiling), not `nodejs_heap_size_total_bytes` (committed heap). Against the latter the ratio sits ≈ 0.97 at idle and the alert would be a permanent false positive.
-- `WebhookDeliveriesFailingEverywhere` uses `or vector(0)` to handle the case where no success series has ever been recorded, and sums each side before the `and` because raw series carry different `outcome` labels.
-- `ScheduledJobStale` deliberately excludes the four frequent sweep tasks (`sweep:webhook-retries`, `sweep:outbox`, `sweep:payment-effects`, `sweep:reservations`); each has its own purpose-built alert.
-- `ScheduledJobNeverSucceeded` uses `unless on (task)` to select jobs that have a run timestamp but no success timestamp at all — a case invisible to the staleness rule.
-- While `DependencyUnavailable{database}` fires, Alertmanager is expected to mute downstream consequence alerts (referenced in comments as `alertmanager.config.template.yaml`, `inhibit_rules`); that file is not a graph neighbor here but is operationally coupled.
-- The file is heavily comment-annotated; comments explain *why* thresholds and expressions are shaped as they are, not just *what* they do. Preserve these when editing.
+- Comments in the rules say the metrics are registered by app code (`infrastructure/observability/metrics-registry`, `infrastructure/observability/metrics-queue`, and `metrics.ts`). These are not graph neighbors of this file.
+- `HighHeapUsage` divides by `nodejs_heap_size_limit_bytes`, not the total heap size. Against the total, the ratio sat around 0.97 on a healthy idle process, so the alert fired permanently.
+- `HighErrorRate` counts 5xx only. 4xx responses are excluded on purpose so one cause does not fire three alerts.
+- `WebhookDeliveriesFailingEverywhere` sums each `outcome` side down to a single value before combining them, because an `and` between the raw series never matched. It uses `or vector(0)` to cover a success series that does not exist.
+- `QueueJobsParked` never fires for webhook failures, because a failed delivery reschedules rather than parking. The webhook-specific alerts cover that case.
+- For `ApiRestarting`, scrape each API copy as its own target. Behind a balancer, `process_start_time_seconds` jumps between copies.
+- Many rules use `for: 0m` and alert on any increase above zero, because there is no meaningful threshold.

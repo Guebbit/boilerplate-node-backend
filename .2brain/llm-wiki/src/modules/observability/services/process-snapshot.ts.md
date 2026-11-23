@@ -1,30 +1,25 @@
 ---
 source: src/modules/observability/services/process-snapshot.ts
-sha256: b781e90e92dc97323e2597a49ef5d861258838b6cd3aee6767d014d31d5c4c14
-generated_at: 2026-11-08T06:41:31.631555+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 9fb08ffffd64ace47d9194472739d4bbe1434c31260b234a69e4ec433c87b84c
+context_sha256: 894dced743f6054627818dab3f16f67fa86c03662609e9de4db6bd1ed62dfb36
+generated_at: 2026-11-22T06:03:40.531417+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/services/process-snapshot.ts
 
 ## Purpose
-
-Provides a single atomic reading of process memory and uptime so that three separate consumers (the SSE stream and two REST endpoints) publish numbers from the same instant. Without this, each consumer calling `process.memoryUsage()` and `process.uptime()` independently could produce values that disagree purely due to timing drift.
+Provides a single function that reads process memory and uptime together, so the SSE stream and two REST endpoints publish consistent numbers instead of each calling `process.memoryUsage()`/`process.uptime()` separately. All units are bytes (memory) and whole seconds (uptime).
 
 ## Key elements
-
-- **`ProcessMemorySnapshot`** (interface) — the four memory fields published everywhere: `rss`, `heapUsed`, `heapTotal`, `external`. All in bytes. Deliberately no `arrayBuffers` or other Node-provided fields.
-- **`ProcessSnapshot`** (interface) — combines `uptimeSeconds` (integer, floored) with a `ProcessMemorySnapshot`.
-- **`processSnapshot()`** (exported function) — calls `process.memoryUsage()` and `process.uptime()` back-to-back and returns a `ProcessSnapshot`. Fields are copied individually (not spread) to prevent future Node additions from leaking into the public contract.
+- `ProcessMemorySnapshot` — interface with exactly four fields in bytes: `rss`, `heapUsed`, `heapTotal`, `external`.
+- `ProcessSnapshot` — interface with `uptimeSeconds` (integer, floored) and `memory` (`ProcessMemorySnapshot`).
+- `processSnapshot()` — calls `process.memoryUsage()` and `process.uptime()` back to back and returns a `ProcessSnapshot`. Memory fields are copied individually; uptime is passed through `Math.floor`.
 
 ## Relationships
-
-- **`stream.ts`** — the SSE stream reads its per-tick process data from `processSnapshot()` rather than calling the `process` APIs directly.
-- **`health.ts`** — one of the two REST endpoints that reads from `processSnapshot()` to report the same four memory fields and uptime.
-- **`index.ts`** — the services barrel re-exports this module's types and function so consumers can import from the package root.
+The listed neighbors are `health.ts`, `stream.ts` and `index.ts`. The module comment says the SSE stream and two REST endpoints read from this file, which fits `stream.ts` and `health.ts`. The file itself imports nothing and does not show which neighbor consumes it. `index.ts` is presumably the barrel for the services directory, but its contents aren't visible here.
 
 ## Notes
-
-- Uptime is always `Math.floor(process.uptime())` so every contract types it as `integer`; never use the raw float.
-- The field-by-field copy (vs. spread) is intentional: `process.memoryUsage()` also returns `arrayBuffers`, which appears in no consumer contract. A spread would publish it and any field Node adds later.
-- `metrics-registry.ts` is the one place that reads `process.uptime()` itself (required because its prom-client `Gauge` must answer at scrape time); it is **not** a consumer of this module.
+- Fields are picked explicitly rather than spread, so `arrayBuffers` (and any field Node adds later) is not published, because none of the three contracts include it.
+- Flooring uptime keeps it an `integer`, matching every contract and preventing two endpoints polled together from disagreeing.
+- `metrics-registry.ts` deliberately does not use this file. It reads `process.uptime()` itself because its prom-client `Gauge` must compute its value at scrape time.

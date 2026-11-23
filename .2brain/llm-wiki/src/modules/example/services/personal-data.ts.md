@@ -1,36 +1,32 @@
 ---
 source: src/modules/example/services/personal-data.ts
-sha256: 72d2212a73d0141edc1c4da1523d167c971ef5d6a03e4857a343ad66f8cb0781
-generated_at: 2026-11-08T05:54:10.369406+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 9061358c04ca54faf6cf801e4e171a588adfffcf2f8e61262b5dca9fc7f05ec4
+context_sha256: a9330589c5a09a86fe2af5d4f7497a916f45076d539e989707806bbc2064fcfc
+generated_at: 2026-11-22T05:12:57.019485+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/services/personal-data.ts
 
 ## Purpose
-
-Defines the two GDPR-style personal-data operations for the example module: **collect** (export all examples a person owns, shaped to the export contract) and **erase** (delete those examples and their cover images). Registered on the module manifest as `personalData`, so `account` and `users` invoke these functions without importing this file directly.
+Implements the example module's personal-data contract: what the module holds about one person, for an account export (`collect`) and an account erasure (`erase`). The module manifest declares these under `personalData`, so `account` and `users` can call them without importing this module. Here, the data is the examples an account owns and their cover images. Per the header, it should be deleted if a module holds nothing about a person.
 
 ## Key elements
-
-- **`collectPersonalData(subject: PersonalDataSubject)`** — Fetches every example owned by the subject (drafts and archived included) via paginated `readAll`, resolves the owner's display name, then maps each row through `presentExampleExport`. Returns `Promise<ExportExample[]>`.
-- **`eraseForUser(userId, session)`** — Deletes all of the user's examples inside the provided Mongoose transaction. Returns a post-commit callback (`AfterErase`) that removes cover image files from `imageStore`.
+- `collectPersonalData(subject)`: returns every example owned by the subject's user, including drafts and archived ones, as `ExportExample[]`. It reads all pages of `exampleRepository.findAll` through `readAll`, sorted by `createdAt` descending then `_id`. It fetches the owner name with `ownerNameOf`, normalizes the rows, and maps each through `presentExampleExport`.
+- `eraseForUser(userId, session)`: deletes everything the user owns through `exampleRepository.deleteAllOf(userId, session)`, inside the erasure's transaction (`ClientSession`). It returns an `AfterErase` step that removes each cover image from the image store.
 
 ## Relationships
-
-- **`@kernel/registry`** — Supplies the `PersonalDataSubject` and `AfterErase` contract types both functions implement.
-- **`../repository`** (`exampleRepository`) — Source of `findAll`, `normalize`, and `deleteAllOf`; the data-access layer this service delegates to.
-- **`../presenter`** — `presentExampleExport` shapes a normalized row into the `ExportExample` contract shape.
-- **`./owner`** — `ownerNameOf` resolves the display name embedded in each exported row.
-- **`@infrastructure/persistence/search`** — Provides `readAll` (pagination loop) and `MAX_CONFIGURED_PAGE_SIZE` used by `collectPersonalData`.
-- **`@infrastructure/persistence/create-repository`** — `toObjectId` converts the subject's string `userId` to a MongoDB ObjectId for querying.
-- **`@infrastructure/adapters/image-store`** — `imageStore.remove` deletes cover image files in the post-commit erasure step.
-- **`@types`** — `ExportExample` type defines the shape returned by `collectPersonalData`.
-- **`../module.ts`** — Declares this file as the `personalData` entry on the module manifest.
-- **`../tests/integration/capabilities.test.ts`** — Integration tests exercise both `collectPersonalData` and `eraseForUser`.
+- `src/modules/example/repository.ts`: provides `exampleRepository` (`findAll`, `normalize`, `deleteAllOf`).
+- `src/modules/example/presenter.ts`: `presentExampleExport` shapes each row into the export contract.
+- `src/modules/example/services/owner.ts`: `ownerNameOf` supplies the owner name for the export.
+- `src/infrastructure/persistence/search.ts`: `readAll` and `MAX_CONFIGURED_PAGE_SIZE` drive the pagination.
+- `src/infrastructure/persistence/create-repository.ts`: `toObjectId` converts the subject's user id into the query filter.
+- `src/infrastructure/adapters/image-store.ts`: provides `imageStore`, used to delete the image files.
+- `src/kernel/registry.ts`: supplies the `PersonalDataSubject` and `AfterErase` types.
+- `src/types/index.ts`: supplies the `ExportExample` type.
+- `src/modules/example/module.ts`: the manifest, which per the header declares these as `personalData`. The file itself does not import it.
+- `src/modules/example/tests/integration/capabilities.test.ts`: a related test file. Its contents were not provided.
 
 ## Notes
-
-- **Image deletion is post-commit by design.** Files on disk cannot participate in the Mongoose transaction, so `eraseForUser` returns a callback that `imageStore.remove` runs only after the DB commit succeeds. If the commit rolls back, images are untouched; if the post-commit step fails, a dangling file may remain.
-- **No direct imports from consumer modules.** Other modules (e.g. `account`, `users`) call these functions through the manifest/registry indirection, not by importing this file.
-- **`collectPersonalData` includes all states.** Drafts and archived examples are returned, not just published ones.
+- Cover images are files, not rows, so they cannot roll back with the transaction. They are deleted in the returned `AfterErase` step, which runs only after a commit.
+- The export pages with `skip` and `limit` at `MAX_CONFIGURED_PAGE_SIZE`. The sort includes `_id` as a tiebreaker, which keeps the page order stable.

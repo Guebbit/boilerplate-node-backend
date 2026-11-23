@@ -1,37 +1,34 @@
 ---
 source: src/modules/delivery/events.ts
-sha256: d50811f972e14d074d1fcbc3e013cce87186e5b8f676e53b67de329df0b916a3
-generated_at: 2026-11-14T19:40:45.198409+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 28b54961a50db5a140537ed4d0924f19ef4633357cc4e4f20d839e1e221c5ea1
+context_sha256: b57e6a0cc2335d8c63925abcbb24e09e40580ef32f9309b0a226ee9a599036e0
+generated_at: 2026-11-22T04:49:44.868122+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/events.ts
 
 ## Purpose
-
-Defines the domain-event payload types for the delivery module and registers them into the kernel's shared `DomainEventMap` via TypeScript module augmentation. Every payload here corresponds to an event that rides the transactional outbox, written in the same transaction as the act that caused it. `shipment.*` events are public (projected into the webhooks catalogue); `fulfillment_order.*` events are internal.
+Declares the domain events the delivery module emits: event-name constants and payload type aliases. The payload shapes are generated from `./asyncapi.domain-events.yaml` and surfaced here under the names the module's callers already use. Every event goes through the transactional outbox, written in the same transaction as the act that caused it. `shipment.*` events are projected into the `webhooks` public catalogue via `module.ts`'s `publicEvents`; `fulfillment_order.*` events are internal.
 
 ## Key elements
-
-- **`ShipmentEventLine` / `ShipmentEventPayload`** — Shared line-item shape and base payload (`orderId`, `shipmentId`, `fulfillmentOrderId`, `lines`) for both shipped and delivered events.
-- **`ShipmentLostOwedLine` / `ShipmentLostPayload`** — Payload for the lost event; extends the base with `orderNumber`, `reason` (`ShipmentLostReason`), optional `userId`/`message`, `owed` lines the shelf could not cover, and `expectedAt`.
-- **`ShipmentShippedPayload`** — Payload for the shipped event; adds optional `remainingUnits` (internal; the webhook omits it).
-- **`FulfillmentOrderDelayed`** — Payload for the delayed event; carries `agreedAt`, `promisedAt?`, `shipCountry?`, `expectedAt?`, and `reason` (`'moved' | 'due'`).
-- **`FulfillmentOrderHoldNoticed`** — Payload for the hold-noticed event; buyer-safe by construction, carrying a `notice` discriminator (`check_address` | `delayed`) and optional `message`.
-- **`declare module '@kernel/events'`** — Augments `DomainEventMap` with eight event keys: `shipment.shipped`, `shipment.delivered`, `shipment.lost`, `fulfillment_order.held`, `fulfillment_order.hold_noticed`, `fulfillment_order.released`, `fulfillment_order.canceled`, `fulfillment_order.delayed`.
-- **String constants** (`SHIPMENT_SHIPPED`, `SHIPMENT_DELIVERED`, `SHIPMENT_LOST`, `FULFILLMENT_ORDER_HELD`, `FULFILLMENT_ORDER_HOLD_NOTICED`, `FULFILLMENT_ORDER_RELEASED`, `FULFILLMENT_ORDER_CANCELED`, `FULFILLMENT_ORDER_DELAYED`) — Named exports matching the `DomainEventMap` keys, for use at emit/consume sites.
+- **Event name constants** (each `satisfies DomainEventName`, so a name missing from the kernel registry fails type-checking):
+  - `SHIPMENT_SHIPPED`, `SHIPMENT_DELIVERED`, `SHIPMENT_LOST`
+  - `FULFILLMENT_ORDER_HELD`, `FULFILLMENT_ORDER_HOLD_NOTICED`, `FULFILLMENT_ORDER_RELEASED`, `FULFILLMENT_ORDER_CANCELED`, `FULFILLMENT_ORDER_DELAYED`
+- **Payload types**, all indexed from `DomainEventMap`:
+  - `ShipmentEventPayload`: shared payload of both `shipment.*` events (indexed from `shipment.delivered`).
+  - `ShipmentEventLine`: one per-product line of that payload.
+  - `ShipmentLostPayload`: `shipment.lost` payload, which adds the reason and what the buyer is told.
+  - `ShipmentLostOwedLine`: an entry of `owed`, a product the shelf could not cover.
+  - `ShipmentShippedPayload`: `shipment.shipped` payload, which adds what the buyer's mail says.
+  - `FulfillmentOrderDelayed`: dates only, nothing the buyer must answer.
+  - `FulfillmentOrderHoldNoticed`: a hold the buyer can act on or should read about.
 
 ## Relationships
-
-- **`src/types/index.ts`** — Imports `FulfillmentHeldParamsNotice` and `ShipmentLostReason` from `@types` for use in payload definitions.
-- **`src/modules/delivery/module.ts`** — Its `publicEvents` list projects the `shipment.*` events into the `webhooks` module's public catalogue.
-- **`src/modules/delivery/services/notify.ts`** — Consumes the public `shipment.*` events to mail the buyer.
-- **`src/modules/delivery/index.ts`** — Barrel file; re-exports from this module for consumers outside the delivery directory.
+- Imports the `DomainEventMap` and `DomainEventName` types from `src/kernel/events.ts`, which is the source of the generated payload types and the valid event names.
+- `src/modules/delivery/module.ts` uses the `shipment.*` events for `publicEvents`, as noted in the file header.
+- The remaining neighbors (`src/modules/delivery/index.ts`, `src/modules/delivery/services/announce.ts`, `src/modules/delivery/services/notice.ts`, `src/modules/delivery/services/notify.ts`, and `src/modules/delivery/tests/integration/override-sync.test.ts`) are in the module's dependency graph around this file. This file doesn't show how they use it.
 
 ## Notes
-
-- `userId` is optional on several payloads because the buyer's account may have been erased; downstream consumers must handle its absence (no inbox to write to).
-- `message` on `ShipmentLostPayload` and `FulfillmentOrderHoldNoticed` is free-text written by staff; the webhook projection explicitly excludes it.
-- `shipment.shipped` fires once per shipment, so a split shipment produces multiple events. It is *not* fired for forced shipments brought in by an admin status override.
-- `fulfillment_order.delayed` is fire-and-forget: the shop tells the buyer the date moved or will be missed but never asks for consent or cancels on its own.
-- `promisedAt` on `FulfillmentOrderDelayed` is absent once an earlier notice informed the buyer there was no date; `tasks` uses it together with `shipCountry` to decide on consent reminders.
+- This file holds no runtime logic, only string constants and types. Change payload shapes in the AsyncAPI YAML, not here.
+- `ShipmentEventPayload` is derived from `shipment.delivered`, but its doc comment says it is shared by both `shipment.*` events.

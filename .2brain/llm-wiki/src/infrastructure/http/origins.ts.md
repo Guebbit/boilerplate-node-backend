@@ -1,27 +1,24 @@
 ---
 source: src/infrastructure/http/origins.ts
-sha256: 6aba29466ad8b6a6ce6d26d58376184859bf0e3870d1db2ea38096ebcd865f80
-generated_at: 2026-11-08T03:33:30.805609+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6aba29466ad8b6a6ce6d26d58376184859bf0e3870d1db2ea38096ebcd865f80
+context_sha256: 5fe8eb018793b2d6fcad2aecf60383609f790913d48f6d9c74aae4f4a598c1d0
+generated_at: 2026-11-22T02:52:54.358074+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/http/origins.ts
 
 ## Purpose
-
-Single source of truth for "which browser origins are allowed to call this API with credentials." It exists so the CORS middleware and the origin guard cannot drift apart—mismatched allow-lists would let a request the browser blocks via CORS still execute server-side.
+Single source of truth for which browser origins may call this API with credentials. The CORS middleware and the origin guard both use it, so a request that CORS would refuse in the browser can't still act on the server.
 
 ## Key elements
-
-- **`isAllowedOrigin(origin: string): boolean`** — The only export. Checks whether `origin` appears in the `NODE_CORS_ORIGIN` list (blank entries dropped, unset falls back to a developer default, both handled by the config field). Called at invocation time, not import time, so mutating the environment variable in a test is reflected immediately.
+- `isAllowedOrigin(origin: string): boolean` returns whether `origin` (an `Origin` header value) is in `siteConfig().NODE_CORS_ORIGIN`. The check is an array `includes`, so it is an exact string match.
 
 ## Relationships
-
-- **`src/infrastructure/http/config.ts`** — Imports `siteConfig`, which supplies the `NODE_CORS_ORIGIN` array that `isAllowedOrigin` searches.
-- **`src/app/security.ts`** — The CORS middleware that calls `isAllowedOrigin` to decide which `Access-Control-Allow-Origin` header to set.
-- **`src/infrastructure/http/middlewares/origin.ts`** — The origin guard middleware that also calls `isAllowedOrigin` to reject requests from disallowed origins before routing.
+- `./config`: imports `siteConfig`. The allowed-origin list comes from its `NODE_CORS_ORIGIN` field.
+- `src/app/security.ts`: the CORS middleware, which the module doc names as one of the two consumers that must agree on the allowed list.
+- `src/infrastructure/http/middlewares/origin.ts`: the origin guard, the other consumer named in the module doc.
 
 ## Notes
-
-- The check is a simple `Array.includes`; the order and normalization of entries is delegated entirely to `siteConfig`'s `NODE_CORS_ORIGIN` getter (blank-stripping, default fallback, etc.).
-- Because the lookup happens at call time, `NODE_CORS_ORIGIN` can be changed between requests (useful in tests) without a process restart.
+- `siteConfig()` is called on every invocation, not cached. A test that sets `NODE_CORS_ORIGIN` after import is therefore honoured.
+- Blank-entry filtering and the developer default for an unset variable are handled by the config field, not in this file.

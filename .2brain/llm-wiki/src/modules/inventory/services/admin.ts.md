@@ -1,46 +1,44 @@
 ---
 source: src/modules/inventory/services/admin.ts
-sha256: 9ea735bb2a62d579ecff431b1d1853b5d803798f0100627eb1ee23a27a379d9c
-generated_at: 2026-11-08T06:01:40.596307+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:21:18.304572+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/services/admin.ts
 
 ## Purpose
-
-Operator-facing stock write operations for the inventory domain: recording incoming deliveries (`receive`), applying signed stocktake corrections (`adjust`), and managing the backorder allowance (`setBackorderLimit`). Each write is audited, atomically applied, and returns the product's counters so the caller can render the post-write state.
+The operator's own stock writes: receiving a delivery, adjusting after a stocktake, and setting a product's backorder limit. Each write checks the product exists, changes stock, records an audit entry, and returns the fresh inventory level (or a rejected response).
 
 ## Key elements
-
-- **`receive`** (exported) — Records a positive quantity arriving from a supplier. Atomically applies the transition *and* allocates the units to the oldest paid preorders in one transaction. Fails with 404 if the product does not exist.
-- **`adjust`** (exported) — Applies a signed stocktake delta. Allocates only when the delta is positive (newly found units go to waiting buyers). On failure, re-reads the product to distinguish 404 (product missing) from 409 (would drop below reserved).
-- **`setBackorderLimit`** (exported) — Sets or clears the per-product backorder cap. Not a stock movement (no ledger row); audits the field diff via `auditChanges`. Lowering below outstanding orders is permitted.
-- **`applyAdminStockTransition`** (internal) — Shared body for `receive` and `adjust`: product-existence check → apply (with optional allocation) → read-back → audit → response. Parameterized by the `AdminStockTransition` interface.
-- **`receiveAndAllocate`** (internal) — Wraps `applyTransition` + `allocateWithin` in a single `withTransaction`, then nudges the outbox and refreshes the stock cache *after* commit.
-- **`levelFor`** (internal) — Reads a product's `InventoryLevel` from the repository and runs it through `presentInventoryLevel`.
-- **`AdminStockTransition`** (interface) — Describes what each caller supplies to the shared body: reason, signed/unsigned amount, failure handler, allocation flag, audit action, and metadata builder.
+- `receive(productId, quantity, note, context)`: units arrive from a supplier. It always allocates the new units to waiting paid preorders. Returns 404 if the product is unknown. Audited as `ADMIN_STOCK_RECEIVED`.
+- `adjust(productId, delta, note, context)`: a signed stocktake correction. It allocates only when `delta > 0`. Returns 404 if the product is unknown, or 409 (`ERROR_CODES.INVENTORY_BELOW_RESERVED`) if the result would fall below the reserved units. Audited as `ADMIN_STOCK_ADJUSTED`.
+- `setBackorderLimit(productId, backorderLimit, context?)`: sets the backorder allowance (`0` closes it, `null` removes the cap). It writes no ledger row. It diffs the old and new value with `auditChanges`, invalidates cached availability, and is audited as `ADMIN_BACKORDER_LIMIT_SET`.
+- `applyAdminStockTransition` (internal): the shared body of `receive` and `adjust`. Flow:
+  1. Check the product exists via `productService.findByIdRaw`.
+  2. Apply the transition.
+  3. On refusal, call the optional `onFailure` or default to 404.
+  4. Re-read the level.
+  5. `recordAudit`.
+  6. Return 200.
+- `receiveAndAllocate` (internal): runs `applyTransition` and `allocateWithin` in one `withTransaction`. After commit it calls `nudgeOutbox()` and `forgetAvailability`.
+- `levelFor` (internal): reads the level via `stockLevelRepository.findByProductId` and presents it with `presentInventoryLevel`. Returns `null` if there is no level row.
 
 ## Relationships
-
-- **`src/modules/inventory/services/transition.ts`** — Calls `applyTransition` (the state-machine guard + ledger write) and `refreshStockCache` (catalogue sync).
-- **`src/modules/inventory/services/allocate.ts`** — Calls `allocateWithin` to distribute newly available units to paid preorders within the same transaction.
-- **`src/modules/inventory/repository.ts`** — Reads/writes `stockLevelRepository` for level lookups and `setBackorderLimit`.
-- **`src/modules/inventory/presenter.ts`** — Transforms a raw `InventoryLevel` row into the API shape via `presentInventoryLevel`.
-- **`src/modules/inventory/audit.ts`** — Supplies `inventoryAuditActions` enum values used in `recordAudit` calls.
-- **`src/modules/products/index.ts`** — Uses `productService.findByIdRaw` for the pre-write existence check and, in `adjust`'s failure path, the 404-vs-409 disambiguation read.
-- **`src/kernel/outbox.ts`** — Calls `nudgeOutbox` after a successful receive/allocate commit so the relay wakes for downstream side-effects.
-- **`src/infrastructure/runtime/database.ts`** — Uses `withTransaction` to scope the transition + allocation into one atomic unit.
-- **`src/infrastructure/http/response.ts`** — Builds `ResponseSuccess` / `ResponseReject` payloads.
-- **`src/infrastructure/i18n/index.ts`** — Calls `t()` for user-facing error messages.
-- **`src/infrastructure/observability/audit.ts`** — Calls `recordAudit` to log each successful write.
-- **`src/infrastructure/observability/audit-changes.ts`** — Calls `auditChanges` to compute the backorder-limit diff metadata.
-- **`src/modules/inventory/services/index.ts`** — Barrel file that re-exports this module's public API.
+- `../repository`: `stockLevelRepository` for reading levels and setting the backorder limit.
+- `./transition`: `applyTransition` applies the signed stock movement.
+- `./allocate`: `allocateWithin` allocates new units to waiting paid preorders inside the same transaction.
+- `./availability`: `forgetAvailability` invalidates the cached availability after a write.
+- `../presenter`: `presentInventoryLevel` shapes the returned level.
+- `../audit`: `inventoryAuditActions` supplies the audit action names.
+- `@infrastructure/observability/audit` and `audit-changes`: `recordAudit` emits audit events; `auditChanges` builds the before/after metadata for the backorder limit.
+- `@infrastructure/runtime/database`: `withTransaction`.
+- `@kernel/outbox`: `nudgeOutbox` wakes the outbox relay after commit.
+- `src/modules/products/index.ts`: `productService.findByIdRaw` is the existence check, and supplies the title for presenting the level.
+- `@infrastructure/http/response` and `@infrastructure/i18n`: `generateSuccess` / `generateReject` build responses, and `t` supplies the localized messages.
 
 ## Notes
-
-- **Outbox & cache refresh are post-commit.** `nudgeOutbox` and `refreshStockCache` run in the `.then` chain after `withTransaction` resolves, so they cannot roll back with the write.
-- **Product existence is checked before the write.** Because `applyTransition`'s `receive` guard would create a level row even for a missing product, the explicit `productService.findByIdRaw` call prevents orphan rows and ledger entries.
-- **`adjust`'s 409 path re-reads the product.** The transition guard rejects both "product missing" and "below reserved" with a single `false`; the `onFailure` callback issues a second read to map the outcome to the correct status code.
-- **`setBackorderLimit` is audited but not a ledger write.** It changes a policy field on the level row, not `onHand`/`reserved`; hence `auditChanges` (field diff) instead of the transition-based `recordAudit`.
-- **`context` is required for `receive`/`adjust`** (a stock write with no accountable caller is untraceable) but **optional for `setBackorderLimit`** (tests omit it to skip the audit emit).
+- The product existence check runs before the write. For `receive`, the transition's condition matches any row or creates one, so an unknown product would otherwise get a level row and a ledger entry.
+- `adjust`'s `onFailure` re-reads the product to tell a deletion (404) apart from a below-reserved refusal (409).
+- Side effects that can't roll back (outbox nudge, availability invalidation) happen only after the transaction commits.
+- `context` is required for `receive` and `adjust` but optional for `setBackorderLimit`. The doc comment says tests omit it to skip the audit emit.
+- Lowering the backorder limit below the outstanding amount is allowed: existing orders stand and only new ones are refused.

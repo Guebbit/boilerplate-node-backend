@@ -1,34 +1,29 @@
 ---
 source: src/modules/api-keys/emails.ts
-sha256: fe33995eb13f968ab0a5e05a8f713dfc9767df94f585cc73980780562e0bc97d
-generated_at: 2026-11-08T05:02:24.937567+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fe33995eb13f968ab0a5e05a8f713dfc9767df94f585cc73980780562e0bc97d
+context_sha256: 0fa59fa9480c8b517205239c7bc4e0ed8f5d57ebf8a3ea2491e019ecb6d97098
+generated_at: 2026-11-22T04:21:21.207265+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/api-keys/emails.ts
 
 ## Purpose
-
-Resolves the finished, localized text for the two emails the API-keys module sends: one when a credential is minted (to alert the owner of a potentially stolen session) and one when credentials are revoked wholesale (to tell the owner what stopped working). Functions return fully interpolated strings; they never render HTML themselves.
+Builds the content of the two emails the api-keys module sends, as finished strings. Following the same rule as `@modules/account/emails`, the locale is passed in as an argument, the output is final text, and the mail template only interpolates it. The two mails are a notice to whoever just minted a credential, and a notice that their credentials were revoked because the account may be compromised.
 
 ## Key elements
-
-- **`KeysRevokedReason`** (type) — Union of `SessionsRevokedReason` and the literal `'authenticator-removed'`; determines which i18n body copy the revocation email uses.
-- **`apiKeyMintedEmail(locale, keyName, credential, expires)`** — Returns an `EmailContent` object (template `api-keys.minted`) carrying subject, greeting, body, advice, and footer, all translated via the provided locale.
-- **`apiKeysRevokedEmail(locale, reason, credentials)`** — Returns an `EmailContent` object (template `api-keys.revoked`) whose body is selected per-reason (`api-keys.email-revoked.body-${reason}`) and includes a comma-joined list of revoked credential labels.
+- `KeysRevokedReason`: type, `SessionsRevokedReason | 'authenticator-removed'`. It says why a person's keys were revoked wholesale: their sessions were ended, or their staff authenticator app was removed.
+- `apiKeyMintedEmail(locale, keyName, credential, expires)`: returns an `EmailContent` using the `api-keys.minted` template. It is sent as soon as a credential is created, so a stolen session that mints a key is not silent. The body interpolates the key name, the credential's public display id and the pre-formatted expiry. It carries no secret and no acting link.
+- `apiKeysRevokedEmail(locale, reason, credentials)`: returns an `EmailContent` using the `api-keys.revoked` template. The body text is chosen by the translation key `api-keys.email-revoked.body-${reason}`. `credentials` (one "label and display id" line each) is joined with `", "` into `list`.
 
 ## Relationships
-
-- **`src/infrastructure/i18n/index.ts`** — Imports `translator` to produce a locale-bound `t` function for every string in the email.
-- **`src/infrastructure/adapters/mailer.ts`** — Imports the `EmailContent` type that both exported functions return; the `template` field references a handlebars template owned by that adapter.
-- **`src/modules/account/index.ts`** — Source of the `SessionsRevokedReason` type (itself defined in `domain/revocation.ts`) used to form `KeysRevokedReason`.
-- **`src/modules/api-keys/services/api-keys.ts`** — The service layer that calls `apiKeyMintedEmail` / `apiKeysRevokedEmail` when the corresponding domain events occur.
-- **`src/modules/api-keys/tests/unit/emails.test.ts`** — Unit tests exercising both functions' output shape and i18n interpolation.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — Validates the handlebars templates (`api-keys.minted`, `api-keys.revoked`) that consume the `data` fields produced here.
+- `src/infrastructure/adapters/mailer.ts`: supplies the `EmailContent` type that both functions return. The `template` names and `data` fields in the returned objects feed the mailer's templates, which `tests/unit/infrastructure/adapters/mailer-templates.test.ts` covers.
+- `src/infrastructure/i18n/index.ts`: supplies `translator(locale)`, used to resolve every subject and body string.
+- `src/modules/account/index.ts`: supplies the `SessionsRevokedReason` type, which `KeysRevokedReason` extends. The `revocation.ts` neighbor is in the same account domain.
+- `src/modules/api-keys/services/api-keys.ts`: the service layer that sends these mails (inferred from the graph, not visible in this file).
+- `src/modules/api-keys/tests/unit/emails.test.ts`: unit tests for these builders.
 
 ## Notes
-
-- The module follows the same convention as `@modules/account/emails`: language is a parameter, output is finished text; templates only interpolate the provided values.
-- `apiKeyMintedEmail` deliberately carries **no secret and no actionable link** — only the caller-chosen label and a public display id.
-- The revocation email's body key is dynamic (`body-${reason}`); adding a new `KeysRevokedReason` member requires a matching i18n key or the call will fail at runtime.
-- `credentials` in the revocation email is pre-joined to a comma-separated string by the caller; the function does not iterate or format them.
+- The functions only build content and send nothing. Callers pass `expires` already formatted and `locale` as the recipient's own locale.
+- The `body-${reason}` key is built dynamically, so each `KeysRevokedReason` value needs a matching translation entry.
+- `credential` is the public display id only, never the secret.

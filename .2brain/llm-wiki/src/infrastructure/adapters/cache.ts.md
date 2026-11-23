@@ -1,47 +1,44 @@
 ---
 source: src/infrastructure/adapters/cache.ts
-sha256: 787aefbae3ba0f7b900f354e82234fcb7a3ffa94d3f69bd2c9f89e24734ffa6e
-generated_at: 2026-11-14T17:52:27.949782+00:00
-model: ollama:qwen3.8:27b
+source_sha256: be2abb89cb5bc499c73f1609ff99cbad0e87400dda623b1c6d4d26378d54e5b4
+context_sha256: f3b5f9844b191977b82e7e43f053e7de621464990a8be28a6f97a3a754f83f04
+generated_at: 2026-11-22T02:35:17.445007+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/cache.ts
 
 ## Purpose
-
-Redis cache adapter that exposes a minimal, opaque byte store with tag-based group invalidation. It owns the single Redis connection for the process and guarantees fail-open semantics: every public function resolves (with `undefined`/`false`/`{deleted:0, reachable:false}`) rather than rejecting when Redis is missing or the cache is disabled. Callers (notably the HTTP cache middleware) decide what to cache and how to frame values; this module only stores, retrieves, and deletes bytes.
+Redis cache adapter that acts as an opaque byte store with tag-based invalidation. Every function fails open: if Redis is unreachable or caching is disabled, the app keeps serving without a cache instead of erroring. What is cached (currently HTTP responses) and how it is serialized is left to callers.
 
 ## Key elements
-
-- **`cacheState()`** — Returns a `DependencyStatus` (memoised, no I/O) for the `/observability/health` endpoint.
-- **`startCache()`** — Warm-up connect at boot; non-blocking by design so a missing Redis never prevents the server from listening.
-- **`stopCache()`** — Graceful close + forget the client for a clean restart.
-- **`getCacheValue(key)`** — Reads one namespaced string key; resolves `undefined` on miss, failure, or disabled cache.
-- **`setCacheValue(key, value, ttlSeconds, tags?)`** — Writes a value with TTL and indexes it under each tag's sorted set. No-ops when `ttlSeconds <= 0`.
-- **`claimCacheRefresh(key, seconds)`** — Atomic "one writer" lock via `SET NX EX` under a `refresh:` namespace; returns `true` only to the winner, `false` on any failure.
-- **`invalidateCacheTags(tags)`** — Deletes all entries linked to the given tags across all replicas (shared Redis, no broadcast needed). Resolves `{ deleted, reachable }`; never rejects.
-- **`indexUnderTag`** *(internal)* — Maintains each tag's sorted set: prunes expired members via `zRemRangeByScore`, adds the new key scored by its own expiry via `zAdd`, and extends the set's TTL with `expire NX` + `expire GT`.
-- **`isCacheEnabled`** *(internal)* — Two independent gates: a Redis URL is configured **and** `NODE_REDIS_CACHE_ENABLED` is truthy.
-- **`cacheConnection`** *(internal)* — The `manageConnection<RedisClient>` instance; single shared connection per process.
+- `cacheState()` returns the connection's `DependencyStatus` for `GET /observability/health`. It reads memoised state and does no I/O.
+- `startCache()` warms up the Redis connection at boot so the first request doesn't pay the connect cost. A missing Redis must not block the server from listening.
+- `stopCache()` closes Redis gracefully and forgets the client so a later restart starts clean.
+- `getCacheValue(key)` reads one value. It resolves `undefined` on a miss, a failure, or when caching is disabled.
+- `getCacheValues(keys)` reads many values via `MGET` in one round trip. It returns one slot per key, in order, and an empty input returns `[]`.
+- `deleteCacheValues(keys)` deletes by key with a variadic `DEL`. It never rejects, and an empty input is a no-op.
+- `setCacheValue(key, value, ttlSeconds, tags = [])` stores a value with `EX` TTL and indexes it under its tags. It never rejects. A TTL `<= 0` means "don't cache". Tags are de-duplicated and empty strings are dropped.
+- `indexUnderTag(...)` (internal) adds a key to a tag's sorted-set index. It first prunes expired members with `zRemRangeByScore`, then calls `zAdd` scored by the entry's expiry in epoch ms, then `expire(..., 'NX')`. The rest of the function is cut off in the provided content.
+- Internal helpers:
+  - `isCacheEnabled()` is true only when a Redis URL is configured and `NODE_REDIS_CACHE_ENABLED` is truthy.
+  - `prefix()` namespaces keys with `NODE_REDIS_CACHE_PREFIX`.
+  - `cacheConnection` is the single shared client, built with `manageConnection`.
 
 ## Relationships
+- `src/infrastructure/adapters/managed-connection.ts`: supplies `manageConnection` and the `DependencyStatus` type. It handles memoising, sharing the in-flight connect, and warning once. This file only supplies the Redis-specific `isEnabled`, `isReady`, `connect` and `close` callbacks.
+- `src/infrastructure/adapters/redis.ts`: supplies `createRedisClient`, `closeRedisClient`, `configuredRedisUrl` and the `RedisClient` type.
+- `src/infrastructure/adapters/config.ts`: `redisConfig()` provides `NODE_REDIS_CACHE_ENABLED` and `NODE_REDIS_CACHE_PREFIX`.
+- `src/infrastructure/adapters/logger.ts`: used to log warnings when reads, writes and deletes fail.
+- `src/infrastructure/observability/metrics-cache.ts`: `cacheInvalidationFailuresTotal` is imported here. Its usage is not visible in the provided portion.
 
-- **`src/infrastructure/adapters/config.ts`** — Provides `redisConfig()` (prefix, enabled flag) consumed by `isCacheEnabled` and `prefix()`.
-- **`src/infrastructure/adapters/redis.ts`** — Supplies `createRedisClient`, `closeRedisClient`, `configuredRedisUrl`, and the `RedisClient` type.
-- **`src/infrastructure/adapters/managed-connection.ts`** — Provides `manageConnection` and `DependencyStatus`; this file delegates all memoise/share/warn-once lifecycle logic to it.
-- **`src/infrastructure/observability/metrics-cache.ts`** — Imports `cacheInvalidationFailuresTotal` (incremented on invalidation failure; visible in the truncated `invalidateCacheTags` body).
-- **`src/infrastructure/http/middlewares/cache.ts`** — Primary consumer of `getCacheValue` / `setCacheValue` / `claimCacheRefresh` for HTTP response caching.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** — Calls `startCache` / `stopCache` during boot and shutdown.
-- **`src/app.ts`** — Top-level composition root; wires the cache adapter into the app graph.
-- **`scenarios/apply.ts`** — Invokes `invalidateCacheTags` after a successful write to remove stale entries.
-- **`scripts/db/cache-clear.ts`** — Operational script that clears cache entries (likely via `invalidateCacheTags` or direct Redis commands).
-- **`src/infrastructure/adapters/image.worker.ts`** — Worker that may read/write cached image bytes through this adapter.
+Other listed neighbors (such as `src/infrastructure/http/middlewares/cache.ts`, `src/app/process-boot.ts`, `src/infrastructure/runtime/server-lifecycle.ts` and the scripts) are not shown interacting with this file in the visible content.
 
 ## Notes
-
-- **Two independent enable switches.** `configuredRedisUrl()` being truthy and `NODE_REDIS_CACHE_ENABLED` being truthy are checked separately. Setting `NODE_REDIS_CACHE_ENABLED=0` is a debug kill-switch that leaves Redis running.
-- **Namespace prefix is mandatory.** `NODE_REDIS_CACHE_PREFIX` prevents staging and production from reading each other's entries (Redis has no sub-namespaces beyond numbered DBs). All keys are `<prefix>:key:<hash>`, `<prefix>:tag:<name>`, or `<prefix>:refresh:<key>`.
-- **Tag indexes are sorted sets, not plain sets.** Members are scored by their own expiry (epoch ms) and pruned on every write, so a tag's index shrinks as entries expire. A plain set would accumulate ghost members indefinitely.
-- **`claimCacheRefresh` is a fire-and-forget lock.** There is no explicit release; the claim self-expires via `EX`. A Redis failure returns `false` (same as "lost the race"), so a flaky claim can never be mistaken for "a rebuild is in flight."
-- **`client.on('error', …)` is mandatory, not cosmetic.** node-redis is an EventEmitter; an unhandled `'error'` event crashes the process.
-- **Stryker mutation-testing guards** (`Stryker disable/restore all`) wrap every `logger.warn` in a catch block to keep mutation coverage honest without suppressing the log.
+- Keys are stored as `<prefix>:key:<key>` (string). Tag indexes are stored as `<prefix>:tag:<name>` (sorted set scored by expiry).
+- Use different `NODE_REDIS_CACHE_PREFIX` values for staging and production, since Redis has no namespaces beyond numbered databases and they would otherwise read each other's responses.
+- A failed delete or write only logs a warning. A stale entry is bounded by its own TTL.
+- The `client.on('error', ...)` listener is mandatory, because an unhandled node-redis `'error'` event would crash the process.
+- A new client is built on each connect attempt. A dropped client (`isReady` false) is replaced rather than reused.
+- Tag index TTL uses `EXPIRE ... NX`. The comments say a second `GT` call extends shorter TTLs (Redis 7+), but that part is not visible here.
+- Setting `NODE_REDIS_CACHE_ENABLED=0` disables caching without tearing down Redis.

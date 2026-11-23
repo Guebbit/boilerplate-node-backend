@@ -1,40 +1,44 @@
 ---
 source: src/modules/delivery/tests/integration/preorder.test.ts
-sha256: 6bd126c81cd8358525e0bdde618449cafdafa0a45013412f4ab49566d878434f
-generated_at: 2026-11-08T05:43:51.528772+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:02:30.470681+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/integration/preorder.test.ts
 
 ## Purpose
-
-Integration test that exercises the full paid-preorder delivery lifecycle against a real database and real outbox. It verifies the seam between the inventory and delivery modules: that fulfillment orders start `on_hold` for stock, that a stock receipt allocates units (releasing whole or splitting short), and that the grouping rule reads the order's frozen release date rather than the live catalogue.
+Integration test for the delivery module's handling of a paid preorder. It checks that fulfillment orders are grouped from what the order froze, not from the catalogue. It also checks that they wait `on_hold` for stock, and that a receipt allocating stock releases them through the outbox. Real inventory and a real outbox are used, because the test targets the seam between the two modules.
 
 ## Key elements
-
-- **`inDays(days)`** — returns a `Date` offset from now by the given number of days; used to build future release dates.
-- **`receiveAndSettle(productId, quantity)`** — helper that calls `inventoryService.receive` then `settleOutboxNudges`, simulating a physical delivery arriving and its outbox announcement being processed.
-- **`describe('grouping a paid preorder')`** — asserts the initial `on_hold` / `awaiting_stock` state and that the order's frozen date is used even if the catalogue date has since changed.
-- **`describe('stock arriving for a paid preorder')`** — covers whole-release (full quantity arrives → single `open` order), split-release (partial arrival → one `open` + one `on_hold` order inheriting the promise date), lazy creation when the paid-event listener never fired, idempotency of a duplicate `releaseAllocated` call, and earliest-promise-first ordering when one product is held for two dates.
+- **Setup**: `setupTestDb()` runs once. A `beforeEach` resets domain events, calls `deliveryModule.subscribe()` and then `markDomainEventsWired()`. An `afterEach` resets domain events again.
+- **Helpers**:
+  - `DAY` is one day in milliseconds.
+  - `inDays(days)` returns a release date `days` away.
+  - `receiveAndSettle(productId, quantity)` calls `inventoryService.receive` and then `settleOutboxNudges()`.
+- **`grouping a paid preorder`**:
+  - A preorder line becomes one `on_hold` fulfillment order with hold reason `awaiting_stock`. Its `agreedAt` and `expectedAt` equal the release date the buyer saw. The stored order's fulfillment shows `onHold` and `awaitingStock` counts.
+  - A later change to the product's catalogue `releaseDate` (via `productService.updateById`) does not affect the grouping.
+- **`stock arriving for a paid preorder`**:
+  - A delivery that covers the order releases the whole fulfillment order to `open` and clears `holdReason`.
+  - A short delivery splits the order. The held part (qty 1) stays `on_hold` as number 1, and the arrived part (qty 2) becomes `open` as number 2. The new order inherits `agreedAt`.
+  - If the paid listener never ran, receiving stock creates the fulfillment orders first and opens them.
+  - Calling `deliveryService.releaseAllocated` twice with the same allocation is harmless.
+  - A split that loses its race to claim the held fulfillment order throws `DELIVERY_NOT_RELEASABLE`. A retry then releases 2 of the 3 units, and the test asserts the quantities are `[1, 2]`.
+  - When one order holds the same product for two release dates, receiving 1 unit opens the earlier-dated fulfillment order and leaves the later one `on_hold`.
 
 ## Relationships
-
-- **`src/kernel/events.ts`** — `resetDomainEvents()` and `markDomainEventsWired()` are called in `beforeEach`/`afterEach` to isolate the event bus between tests.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges()` is invoked after each `inventoryService.receive` to drain the outbox and trigger delivery-side side effects.
-- **`src/modules/delivery/module.ts`** — `deliveryModule.subscribe()` registers the module's event listeners so that order-paid and inventory events reach the delivery service.
-- **`src/modules/delivery/services/index.ts`** — `deliveryService.releaseAllocated` is called directly in the idempotency test to simulate a duplicate outbox nudge.
-- **`src/modules/delivery/tests/factories.ts`** — provides `paidPreorderOrder` (creates a paid order + backorder) and `fulfillmentOrdersOf` (reads the fulfillment orders for an order).
-- **`src/modules/inventory/index.ts` / `services/index.ts`** — `inventoryService.receive`, `setBackorderLimit`, `reserveForOrder`, `commitForOrder` are the real inventory operations under test.
-- **`src/modules/orders/index.ts` / `services/index.ts`** — `orderService.getById` is used to assert the `fulfillment` projection stored on the order document.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder` and `toOrderItem` build multi-line orders with per-line preorder dates.
-- **`src/modules/products/index.ts` / `services/index.ts`** — `productService.updateById` mutates the catalogue release date to prove the grouping rule ignores it.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` creates the product fixture.
-- **`src/modules/shop/index.ts`** — `shopDayOf` formats a timestamp into the shop's day format for the catalogue-update assertion.
+- **Delivery**: `delivery/module.ts` supplies the module whose listeners the setup wires up. `delivery/services/index.ts` supplies the service the tests call to release allocated stock. `delivery/repository.ts` supplies the repository whose internal `claim` is spied on to simulate a lost race. `delivery/tests/factories.ts` supplies `fulfillmentOrdersOf` and `paidPreorderOrder`.
+- **Inventory**: `inventory/index.ts` supplies the inventory service used for real in the tests (receiving stock, setting the backorder limit, reserving and committing for an order).
+- **Kernel**: `kernel/outbox.ts` provides `settleOutboxNudges`. `kernel/events.ts` provides `resetDomainEvents` and `markDomainEventsWired` for per-test event isolation.
+- **Orders, products and shop**:
+  - `orders/index.ts` supplies the order service, read to check the stored order's `fulfillment` summary.
+  - `orders/tests/factories.ts` supplies `createOrder` and `toOrderItem`, which build the frozen order in the two-dates test.
+  - `products/tests/factories.ts` supplies `createProduct`.
+  - `products/index.ts` supplies the product service, used to change the catalogue release date.
+  - `shop/index.ts` supplies `shopDayOf`, which formats the new release date.
 
 ## Notes
-
-- The test file's doc comment states its intent explicitly: it tests the **seam** between inventory and delivery, not either module in isolation.
-- Split deliveries produce a **new** fulfillment order (not a mutation of the existing one); the new order inherits `agreedAt` so downstream "Late view" and notice logic still see the promise.
-- The "listener never ran" test confirms that `fulfillmentOrdersOf` (or the settlement path) can lazily materialize the fulfillment order if the paid-event handler was skipped — a resilience check, not a happy path.
-- `shopDayOf` is used solely to produce a valid shop-day value when overwriting the catalogue date; it does not participate in delivery logic.
+- The `claim` spy is deliberate. The test file notes that a write winning the race cannot be staged through a public door inside the one transaction, so it mocks an internal of the repository. It uses `mockRestore` in a `finally` block.
+- In the race test, `releaseAllocated` is called by hand instead of through a real receipt. A real receipt would announce the event and the listener would race.
+- The "paid listener never ran" case calls `paidPreorderOrder` and then does not call `fulfillmentOrdersOf` before receiving stock. The other tests call `fulfillmentOrdersOf` first.
+- The two-dates test freezes the same product twice with different `releaseDate` values. It uses a backorder limit of 3, a reservation of kind `backorder`, and `commitForOrder`.

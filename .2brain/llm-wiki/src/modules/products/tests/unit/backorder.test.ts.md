@@ -1,29 +1,32 @@
 ---
 source: src/modules/products/tests/unit/backorder.test.ts
-sha256: 6784e7db2360e1a79fac9607d998bc746244f2752e814085763e2ba729c4cdb8
-generated_at: 2026-11-08T07:53:31.913591+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1735ca49d5ec09fe4b12088b2aa3651b02f9a60a0f63bd006c19046ed6d1ebb9
+context_sha256: 25ebc2014d67351531b95d0ea4bdc1cfa2a96ef8e73473e713cbc9d5220f13a4
+generated_at: 2026-11-22T07:19:01.299786+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/unit/backorder.test.ts
 
 ## Purpose
-
-Unit tests for the `isBackorder` domain function. Because the function is pure (it receives the current time as a parameter rather than calling `Date.now()`), every test case runs against a fixed clock, making assertions deterministic without mocking.
+Unit tests for `isBackorder` from the products domain. The function is pure, so the tests pin the clock to a fixed instant (`NOW`, 2026-10-12T10:00:00Z) and exercise each edge of the backorder rule.
 
 ## Key elements
-
-- **`NOW`, `LATER`, `EARLIER`** — Fixed `Date` constants used as the "current time" and as restock/release date fixtures.
-- **`ON`** — Baseline product fact object representing the "backorder switch is on, within cap" state.
-- **`describe('isBackorder')` / `it.each(...)`** — A single table-driven test block that exercises 14 scenarios: switch on/off/unset, cap present/null/zero/full, restock date ahead/passed/exact-now, hidden/off-sale products, and preorder-vs-backorder distinction. Each row supplies a partial fact object and the expected boolean result.
+- `NOW`, `LATER`, `EARLIER`: fixed dates. `NOW` is the judgement instant; `LATER` is after it and `EARLIER` is before it.
+- `ON`: base facts, `{ allowBackorder: true }`.
+- `describe('isBackorder')` with an `it.each` table that calls `isBackorder(facts, NOW)` and checks the boolean result:
+  - **True:** switch on; `restockDate` in the future; `releaseDate` in the past.
+  - **False:**
+    - `restockDate` in the past, or exactly `NOW` (so the restock boundary is exclusive).
+    - `allowBackorder` false, or never set.
+    - `active: false` (hidden product).
+    - `purchasable: false` (off-sale product).
+    - `releaseDate` in the future, which counts as a preorder, not a backorder.
+- A standalone test: a full allowance (`backorderLimit: 5`, `backordered: 5`) still returns `true`.
 
 ## Relationships
-
-- **`src/modules/products/domain/backorder.ts`** — The sole import. This file calls `isBackorder(facts, NOW)` and asserts on the returned boolean. No other modules are touched.
+- Imports and tests `isBackorder` from `src/modules/products/domain/backorder.ts`. It is the only dependency, and nothing is mocked.
 
 ## Notes
-
-- The function signature is `isBackorder(facts, now: Date)` — callers must pass the clock explicitly; there is no hidden `Date.now()` call inside the domain function.
-- "Absent reads closed" convention: a missing `allowBackorder` field or a missing `backorderLimit` field both cause the function to return `false`, as asserted by the "switch never set" and "cap never opened" cases.
-- A `restockDate` exactly equal to `NOW` is treated as *passed* (sold out → `false`), not as still available.
-- A `releaseDate` in the future disqualifies a product from backorder (it is a preorder instead), even if every other backorder condition is met.
+- `isBackorder` judges only the product's terms, not inventory. The test comments say the allowance is enforced elsewhere: `availableFor` enforces it, and `availabilityOf` adds it to its own answer. The cart uses `isBackorder` to decide whether a line may go past the shelf.
+- `it.each` rows are `[name, facts, expected]`. The facts are partial objects.

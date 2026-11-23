@@ -1,34 +1,38 @@
 ---
 source: src/modules/account/controllers/post-reauth.ts
-sha256: 34d8b62f21931310f4575230a2d0728662477a24c8354c6ec3742a6b78abc891
-generated_at: 2026-11-08T04:07:01.704911+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 81e0cf913889ae537f44471b2183bfeda3d59ed72f06b5f326477b20cf0ed520
+context_sha256: 354591935e079a8a8feaf05d118b8c683e9fe418c9f600dedeaf018ab9594f63
+generated_at: 2026-11-22T03:26:45.601432+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-reauth.ts
 
 ## Purpose
-
-Thin HTTP adapter for `POST /account/reauth`. It answers a `401 REAUTH_REQUIRED` step-up challenge by re-proving the caller (password or emailed code), then re-mints the existing session with a fresh `auth_time` without destroying it. The `amr` claim on the new session reflects only what this specific call proved.
+Express controller for `POST /account/reauth`, a thin HTTP adapter over `accountService.reauth`. It answers a `401 REAUTH_REQUIRED` challenge from `requireFreshAuth`: the caller re-proves their identity (password, or a mailed code for accounts without a password), and their session is re-minted with a fresh `auth_time` without ending it.
 
 ## Key elements
-
-- **`postReauth(request, response)`** — the sole export. Validates the body against `ReauthBody`, delegates credential verification to `accountService.reauth`, then calls `reissueSession` to mint a new token pair. Returns 200 with `AuthTokens` on success; any failure (parse, service refusal, or re-mint error) yields a non-2xx and increments the `failure` metric.
+- `postReauth(request, response)` — the only export. Flow:
+  1. Reads `id` from `request.authContext!` (guaranteed by the `isAuth` middleware).
+  2. Validates the body with `parseBody(ReauthBody, ...)`. On failure it increments `authReauthTotal{status:'failure'}` and returns.
+  3. Calls `accountService.reauth(id, parsed, callerContextOf(request))`.
+  4. If `refused(response, result)` is true, it increments the failure metric and returns.
+  5. Otherwise calls `reissueSession(request, response, id, { amr: result.data.amr })`, increments the success metric, and sends `successResponse<AuthTokens>(response, issued, 200)`.
+  6. A trailing `.catch` increments the failure metric and calls `rejectDatabaseError(response, 'postReauth', error)`.
 
 ## Relationships
-
-- **`src/modules/account/routes.ts`** — registers `POST /account/reauth` → `postReauth` (typically behind `isAuth` middleware, which populates `request.authContext`).
-- **`src/modules/account/services/index.ts`** — calls `accountService.reauth(id, parsed, callerContext)`; this service performs the credential comparison but writes nothing and revokes nothing.
-- **`src/modules/account/session/session.ts`** — calls `reissueSession(request, response, id, { amr })` to produce the fresh token pair; same code path `postLogin` and `postPasswordChange` use at their tail.
-- **`src/infrastructure/http/controller.ts`** — provides `parseBody` (zod validation short-circuit) and `refused` (uniform rejection check on service results).
-- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseError(response, 'postReauth', error)` formats the 500 in the `.catch` branch.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf(request)` extracts the IP/UA context passed to the service.
-- **`src/infrastructure/http/response.ts`** — `successResponse` writes the 200 JSON body.
-- **`src/modules/account/metrics.ts`** — `authReauthTotal` counter incremented with `status: 'success' | 'failure'` on every terminal path.
-- **`src/types/index.ts`** — `ReauthRequest` (typed `request.body`) and `AuthTokens` (response payload).
+- `src/modules/account/services/index.ts` — exports `accountService`, whose `reauth` method performs the credential check and returns the `amr` that was proven.
+- `src/modules/account/session/session.ts` — `reissueSession` mints the new session and tokens. The doc comment says it is the same tail `postLogin` and `postPasswordChange` end with.
+- `src/modules/account/metrics.ts` — `authReauthTotal` counter, labelled by `status`.
+- `src/infrastructure/http/controller.ts` — `parseBody` (body validation) and `refused` (checks the service result and writes the refusal response).
+- `src/infrastructure/http/request.ts` — `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts` — `successResponse` writes the 200 response.
+- `src/infrastructure/http/errors.ts` — `rejectDatabaseError` handles thrown errors.
+- `src/types/index.ts` — `ReauthRequest` and `AuthTokens` types.
+- `src/modules/account/routes.ts` — presumably mounts this handler. Mounting is not visible in this file.
 
 ## Notes
-
-- A **failed re-mint is fatal to the 200 path**. The comment in the code explains why: `accountService.reauth` only *compares* the credential—it does not write or revoke. If `reissueSession` then throws, the whole endpoint's purpose (clearing the step-up challenge) has not been achieved, so the error must fall through to `.catch` → 500. A 200 with no token would falsely signal that the challenge was cleared.
-- The `amr` array on the reissued session is **not cumulative**. Only the proof supplied in this call is recorded (e.g. `["otp"]` if a code was used); nothing is carried over from the original login.
-- `request.authContext` is asserted non-null (`!`) on the assumption that the `isAuth` middleware runs first; there is no defensive guard in this controller.
+- The new session's `amr` contains only what this call proved. A code in the body earns `otp`, and nothing is carried over from the login.
+- A failed re-mint must propagate to the outer `.catch` and return 500. `accountService.reauth` only compares credentials and writes or revokes nothing, so a 200 without a token would wrongly claim the step-up challenge was cleared. This differs from `postPasswordChange`'s re-mint step, where durable changes have already happened.
+- The failure metric is incremented at each exit path (validation, refusal, thrown error). Success is counted only after the re-mint succeeds.
+- `Request<unknown, unknown, ReauthRequest>` types the body, but the body is still validated at runtime with `ReauthBody` (imported from `@api/schemas.zod`).

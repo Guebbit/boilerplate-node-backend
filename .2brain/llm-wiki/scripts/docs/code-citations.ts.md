@@ -1,33 +1,31 @@
 ---
 source: scripts/docs/code-citations.ts
-sha256: 577b909d6ab03a29f1eb4176a8d0a25469000a6391090941b614281bc1540586
-generated_at: 2026-11-14T17:30:56.772363+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6364311059f187a5f6fc4582cb9e71da131fce0dc4c308d54d964ca4a49d6601
+context_sha256: 8534e305c2a0dc6fc924b299d20d6e8929459690d6406d1adb2d93ee27263804
+generated_at: 2026-11-22T02:01:53.224908+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/docs/code-citations.ts
 
 ## Purpose
-
-Detects dead `docs/….md` references that appear **outside** the `docs/` directory (in `src/`, `scripts/`, YAML contracts, and `.env-example`). For each citation it verifies the page is git-tracked and, if a `#anchor` is given, that the anchor corresponds to a real heading slug. It mirrors the resolution logic in `check-references.ts` but targets citations embedded in non-docs files.
+Finds dead `docs/…` links cited *outside* `docs/` (source, tests, scripts, configs, root docs, YAML, `.env-example`). It resolves citations the way `check-references.ts` resolves a page's own citations. It checks that the cited page is tracked and that any `#anchor` is a real heading of that page. It does not judge wording, coverage, or the number of citations.
 
 ## Key elements
-
-- **`headingSlugs(markdown: string): Set<string>`** (exported) — Parses raw Markdown and returns every valid anchor slug for the page. Handles explicit `{#custom-id}` suffixes, strips inline links/code/emphasis before slugifying with VitePress's `slugify`, deduplicates repeated headings (`-1`, `-2`), and skips `#` lines inside fenced code blocks.
-- **`CITATION`** (module-private regex) — Matches `docs/<path>.md` with an optional `#anchor`. A lookbehind `(?<![\w/.:-])` prevents matching paths that are part of a URL, a `../`-relative path, or a peer repo's `<dir>/docs/…`.
-- **`isCitingFile(file: string): boolean`** (module-private) — Gate predicate: the file must live under `src/` or `scripts/`, be a `.yml`/`.yaml` file, or be exactly `.env-example`; it must **not** be under `docs/` or `.2brain/`.
-- **`deadCodeCitations(root: string, files: string[]): string[]`** (exported) — Walks the tracked file list, reads each citing file, extracts every citation, and returns one `file: docs/…` (or `file: docs/…#anchor`) line per unresolved reference. Caches per-page slug computation so a page cited by many files is parsed only once.
+- `headingSlugs(markdown)` — returns the set of anchors a page supports. It uses VitePress's `slugify` from `@mdit-vue/shared` on the heading's plain text (link targets, backticks and `*` stripped). Repeated headings get `-1`/`-2` suffixes, explicit `{#custom-id}` anchors are honored, and `#` lines inside ``` or ~~~ fences are ignored.
+- `deadCodeCitations(root, files)` — scans every tracked citing file for `docs/….md[#anchor]` citations. It returns one `file: citation` line per dead link, in file order. A citation is dead if the page is not a tracked `docs/*.md` file or the anchor is not among the page's slugs. Slugs are parsed once per page and cached.
+- `anchorlessSeeTags(root, files)` — returns `file:line: page` entries for docblock `@see docs/<page>.md` tags that have no `#anchor`. It covers JS/TS files only.
+- `CITATION` (internal) — the regex that matches a citation. Its lookbehind rejects paths glued to a longer path or URL.
+- `ANCHORLESS_SEE` (internal) — matches a `@see` on a ` * ` line or in a one-line `/** … */`.
+- `isCitingFile` / `citingText` (internal) — decide which files are scanned and read their text.
 
 ## Relationships
-
-- **`scripts/docs/check-references.ts`** — Sibling module that resolves citations *within* a doc page. This file reuses the same slug-resolution strategy (VitePress `slugify` + markdown-it-anchor dedup) but applies it to citations found in non-docs files.
-- **`tests/unit/scripts/docs/code-citations.test.ts`** — Unit tests exercising `headingSlugs` and `deadCodeCitations` directly.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — CI mutation-testing suite that includes this module in its wave; the tests confirm the file participates in the pipeline's mutation coverage.
+- `check-references.ts` is the checker whose resolution rules this file mirrors for citations outside `docs/`.
+- `tests/unit/scripts/docs/code-citations.test.ts` is the unit test for these exports.
+- `tests/unit/scripts/docs/document-facts.test.ts` and `tests/unit/scripts/mutation/ci/waves.test.ts` are listed as graph neighbors. Their interaction with this file is not visible here, though the fixture marker exists for test files whose `docs/…` strings are checker inputs.
 
 ## Notes
-
-- Slug computation deliberately uses `@mdit-vue/shared`'s `slugify` rather than a generic library, so anchors match exactly what VitePress generates at build time.
-- The `CITATION` regex lookbehind is the mechanism that keeps peer-repo paths like `other-project/docs/….md` from being flagged; the pattern does **not** simply match any `docs/` substring.
-- `decodeURIComponent` is applied to anchors before lookup, so percent-encoded slugs in citations resolve correctly.
-- Trailing sentence punctuation (`.:!?`) is stripped from captured anchors, since prose like `see `docs/x.md#intro`.` would otherwise include the period.
-- The module is intentionally narrow: it does not validate wording, coverage, or citation counts—only whether the target exists.
+- **Scanned files:** files under `src/`, `scripts/`, `scenarios/`, `tests/`, `docker/` and `.claude/`. Also top-level `*.md` and `*.js/ts/cjs/mjs/cts/mts` files, any `.yml`/`.yaml`, and `.env-example`, `.gitignore` and `.gitattributes`. `docs/` and `.2brain/` are excluded.
+- **Skipped citations:** URLs, `../`-relative paths and a peer repo's `<dir>/docs/…` are not matched. A leading `./` is allowed.
+- **Fixture opt-out:** a test file under `tests/` whose text starts with `// citation-fixture:` is skipped entirely. The marker has no effect in other directories, so a `src/` file that carries it is still scanned.
+- **Trailing punctuation:** `.:!?` after an anchor is stripped before lookup, and the anchor is passed through `decodeURIComponent`. An anchor with malformed percent-encoding would make `decodeURIComponent` throw. The code has no guard for this.

@@ -1,33 +1,34 @@
 ---
 source: src/modules/delivery/tests/unit/rates.property.test.ts
-sha256: f8af0b12f16913065b31a50416a77c08dd8ee6c177c789c591eaa4413878a0b2
-generated_at: 2026-11-08T05:46:43.237109+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f8af0b12f16913065b31a50416a77c08dd8ee6c177c789c591eaa4413878a0b2
+context_sha256: 1e8aab05453b4fe3f4d771b7939cf3142c44e7c89fa28ce70de39d11db3890db
+generated_at: 2026-11-22T05:05:16.363712+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/unit/rates.property.test.ts
 
 ## Purpose
-
-Property-based tests for the shipping-rate domain (`rates.ts`). Where the companion `rates.test.ts` checks three hand-picked points around the free-shipping threshold, this file asserts the invariants hold for *every* basket value: no NaN/negative output, no charge above the flat rate, correct free/flat behavior at the threshold, and exact weight-range boundaries.
+Property-based tests (fast-check) for the shipping-rate logic in `src/modules/delivery/domain/rates.ts`. The companion `rates.test.ts` checks `priceShipping` at three fixed points; this file checks the free-shipping threshold boundary and related invariants across generated inputs. Runs are seeded so counterexamples reproduce, and any counterexample found is meant to be added back as an example in `rates.test.ts`.
 
 ## Key elements
-
-- **`RUN`** — frozen config object: fixed seed (`20_260_902`), run count pulled from `PROPERTY_RUNS`, and `endOnFailure: true` (stop at first counterexample).
-- **`itemsTotal()`** — `fast-check` arbitrary producing any non-negative EUR decimal string (0 cents to 1 × 10⁸ cents) via `toDecimalString`.
-- **`describe('priceShipping — totality')`** — two properties: (1) result is never NaN and never negative; (2) result ≤ the method's flat rate for all methods × totals.
-- **`describe('priceShipping — the free-shipping threshold')`** — three properties: (1) "standard" method returns `"0.00"` at/above its `freeAbove` threshold; (2) returns the flat rate strictly below it; (3) "express" (no threshold) always returns its flat rate.
-- **`describe('methodFitsWeight — the declared range holds both ways')`** — property asserting `methodFitsWeight` is true exactly when weight is within `[minWeight, maxWeight]` (treating `undefined` bounds as open), for every method and every weight.
+- `RUN`: shared fast-check options with a fixed seed (`20_260_902`), `numRuns` from `PROPERTY_RUNS`, and `endOnFailure: true`. Passed to every `fc.assert` except... all of them in the `priceShipping` suites; the `methodFitsWeight` test also uses it.
+- `itemsTotal()`: arbitrary generating integer cents from 0 to 1e8, converted to a EUR decimal string via `toDecimalString`.
+- `priceShipping — totality`:
+  - For every method in `SHIPPING_METHODS` and any total, the price is never NaN and never negative.
+  - The price is never above the method's own flat rate (`method.price`).
+- `priceShipping — the free-shipping threshold`, using the `standard` method (via `findShippingMethod`) and its `freeAbove`:
+  - At or above the threshold (up to 1e6 cents above) the price is `'0.00'`.
+  - Strictly below the threshold (1 to 1e4 cents below) the price equals `standard.price`.
+  - The `express` method, which has no threshold, is always charged `express.price` at any total.
+- `methodFitsWeight — the declared range holds both ways`: for any method and integer weight 0 to 1e6, `methodFitsWeight` returns true exactly when the weight is not below `minWeight` and not above `maxWeight`. An undefined bound is treated as unbounded.
 
 ## Relationships
-
-- **`src/modules/delivery/domain/rates.ts`** — the system under test. Imports `findShippingMethod`, `priceShipping`, `methodFitsWeight`, and the `SHIPPING_METHODS` array.
-- **`src/domain-primitives/money.ts`** — imports `toDecimalString`, `toMinorUnits`, and the `Money` type to convert between cents and decimal strings in EUR.
-- **`tests/support/knobs.ts`** — imports `PROPERTY_RUNS` so the number of property iterations is adjustable project-wide (e.g. bumped for CI, reduced locally).
+- `src/modules/delivery/domain/rates.ts`: the code under test (`findShippingMethod`, `priceShipping`, `methodFitsWeight`, `SHIPPING_METHODS`).
+- `src/domain-primitives/money.ts`: provides `toDecimalString`, `toMinorUnits` and the `Money` type. They convert between cents and decimal strings and compute the threshold in minor units.
+- `tests/support/knobs.ts` (imported as `@tests/knobs`): supplies `PROPERTY_RUNS`, the run count that `RUN` uses (the comment ties it to `TEST_PROPERTY_RUNS`).
 
 ## Notes
-
-- Seeded (`seed: 20_260_902`); if a counterexample is found, it is deterministic and intended to be transcribed into a fixed-point case in `rates.test.ts` (stated in the file's doc comment).
-- `endOnFailure: true` means execution halts on the first failing example rather than collecting multiple — keep the seed stable so the failing input is reproducible.
-- The `itemsTotal()` generator caps at 10⁸ cents (≈ €1 000 000) to keep arithmetic sane while still covering "any realistic basket."
-- The threshold tests reference the `"standard"` and `"express"` methods by name via `findShippingMethod` with a non-null assertion (`!`); if those identifiers are renamed in the domain, this file breaks at the call site rather than in the domain.
+- The tests use non-null assertions (`findShippingMethod('standard')!`, `standard.freeAbove!`). They assume the `standard` method exists and has a `freeAbove` threshold, and that `express` exists and has none.
+- All prices are in `'EUR'`.
+- To change the seed, edit `RUN`. To change the run count, use the `TEST_PROPERTY_RUNS` setting rather than editing this file.

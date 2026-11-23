@@ -1,31 +1,26 @@
 ---
 source: src/modules/account/session/session-id.ts
-sha256: 23bf0900c548d61c605ee90fae88b7703673f0fe282bcb1be81a1a43ed5a946d
-generated_at: 2026-11-08T04:30:03.699604+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 23bf0900c548d61c605ee90fae88b7703673f0fe282bcb1be81a1a43ed5a946d
+context_sha256: d741ca2d42c3f345e9c8d1f62c69d666e189ab839be33d4d3283534d30a4b66f
+generated_at: 2026-11-22T03:48:44.710632+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/session/session-id.ts
 
 ## Purpose
-
-Generates and shape-checks opaque session IDs used in `cookie` authentication mode. A session ID is a 256-bit random token (`ses_` + base64url of 32 random bytes) whose **sha256 hash** (via `@infrastructure/security/hash-token`) is what gets persisted, so no plaintext ever leaves the one call-site that creates it. Because the entropy is sufficient, no HMAC or signing secret is required.
+Generates and recognizes the opaque session id used by `cookie` authentication mode. An id is 32 random bytes, base64url-encoded, behind the kernel's `ses_` prefix (same shape as an `sk_…` key). Only its sha256 is meant to be stored (via `@infrastructure/security/hash-token`), so a database read yields nothing a request could present. With 256 bits of entropy, a fast hash suffices and no signing secret is needed.
 
 ## Key elements
-
-- **`newSessionId(): string`** — The single point where a session ID's plaintext exists on the server. Returns `ses_` + 32 random bytes in base64url.
-- **`looksLikeSessionId(token: string): boolean`** — Cheap prefix check (`ses_`). Used to short-circuit authentication dispatch before any DB lookup.
-- **`looksLikeJwt(token: string): boolean`** — Shape-only regex test for a three-segment base64url token whose header decodes to a JSON object (`eyJ…`). Does **not** verify or decode the payload; that is `jwt` mode's responsibility.
+- `newSessionId()` — returns `SESSION_TOKEN_PREFIX` + 32 `randomBytes` as base64url. This is the only moment the plaintext exists on the server.
+- `looksLikeSessionId(token)` — true if the token starts with `SESSION_TOKEN_PREFIX`. A cheap pre-lookup refusal, so a JWT, an `sk_…` key or noise never costs a query.
+- `looksLikeJwt(token)` — true if the token matches `/^eyJ[\w-]*\.[\w-]+\.[\w-]*$/`: three base64url segments, the first starting with `eyJ` (an encoded `{"`). Checks shape only, not validity.
 
 ## Relationships
-
-- **`src/kernel/authentication.ts`** — Provides the `SESSION_TOKEN_PREFIX` constant (`ses_`) that this module imports and all three exports depend on for their prefix/regex logic.
-- **`src/modules/account/session/cookie-strategy.ts`** — Consumes `newSessionId` to mint a new session and `looksLikeSessionId` to decide whether an incoming credential should be treated as a cookie-mode token.
-- **`src/modules/account/session/jwt-strategy.ts`** — Uses `looksLikeJwt` as the first dispatch gate before attempting full JWT verification.
-- **`src/modules/account/tests/unit/session-id.test.ts`** — Unit tests covering format, entropy, and the two shape-check predicates.
+- `src/kernel/authentication.ts` — supplies `SESSION_TOKEN_PREFIX`, the prefix the kernel dispatches on.
+- `src/modules/account/session/cookie-strategy.ts` and `jwt-strategy.ts` — the cookie and `jwt` mode strategies, the natural consumers of these helpers. The shape checks distinguish session ids from JWTs; this file itself does not import them.
+- `src/modules/account/tests/unit/session-id.test.ts` — unit tests for this file.
 
 ## Notes
-
-- `looksLikeJwt` is intentionally a *shape* check, not a signature verification. A forged token that matches the regex will still be rejected later by `jwt-strategy`; the regex exists only to route the credential to the right strategy.
-- The prefix `ses_` and the `sk_…` API-key prefix are deliberately the same *shape* (prefix + opaque payload) so the kernel can dispatch on structure, but they are semantically different credentials.
-- Because only the sha256 hash is stored, a database leak does not expose a usable session token — the attacker would need to brute-force 256 bits.
+- Shape checks do no verification: `looksLikeJwt` does not say whether a JWT verifies (that is `jwt` mode's concern), and `looksLikeSessionId` does not say whether the session exists.
+- Hashing for storage is not done here; the file only produces the plaintext id.

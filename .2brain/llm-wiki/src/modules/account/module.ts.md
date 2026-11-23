@@ -1,56 +1,49 @@
 ---
 source: src/modules/account/module.ts
-sha256: 6080cf37eff9a6b50765d290c78a1f60d7e695132694e471731d72bd972964d4
-generated_at: 2026-11-14T18:37:41.323360+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0a8952faa835ba2773123a77f6462635987f2ff3cba6cdd8061cd088bb86a682
+context_sha256: c7e48844f314aed94681942f242275f6c2d814057bb64e65e36e0f2bef929937
+generated_at: 2026-11-22T03:31:12.178846+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/module.ts
 
 ## Purpose
-
-Module manifest for the **account** module. It installs the application-wide auth resolver, declares the module's routes, jobs, rate-limit budgets, queue consumers, event subscriptions, and GDPR export/erasure contracts. It exists so the kernel's `registerModules` pass can wire the account lifecycle (signup, login, refresh, password reset, two-step deletion) into the app in a single declarative object.
+Manifest entry for the `account` module: authentication and the account lifecycle (signup, login, refresh, password reset, logout everywhere, two-step deletion). It wires the module's routes, jobs, rate limits, personal-data hooks, queue consumer, config slices and domain-event subscriptions into the app's `AppModule` shape. It is a separate service over the same User record that `users` owns, mounted at `/account` (versus `/users`).
 
 ## Key elements
-
-- **`onRegistered(modules)`** — Called once after every enabled module is known. Registers `accountAuthResolver` via `@kernel/authentication` and resolves all modules' `personalData` sections into the export registry.
-- **`default export` (the `AppModule` object)** — The manifest consumed by the module loader:
-  - `mounts` — mounts `router` (from `./routes.ts`) at `/account`.
-  - `jobs` — scheduled/background jobs from `./jobs.ts`.
-  - `rateLimits` — credential, signup, reset, and MFA budgets from `./rate-limits.ts`.
-  - `personalData` — three sections (`accountExports`, `sessions`, `erasureLedger`) each declaring `collect` (what appears in a GDPR export) and `erase` (how the data is destroyed with the account).
-  - `consumers` — the `worker.account.export` queue handler (`runExportJob`) with `prefetch: 1`.
-  - `config` — merged config slices from `accountConfig`, `sessionConfig`, and `oauthConfig`.
-  - `reencrypt` — re-encrypts TOTP secrets (stored on the `users` document) under this module's key.
-  - `subscribe` — domain-event handlers (see below).
-  - `locales` / `templates` — file paths for i18n and mail templates.
-- **Event subscriptions** (inside `subscribe`):
-  - `USER_SETUP_REQUESTED` → sends setup email/token.
-  - `USER_DEACTIVATED` → revokes all one-time tokens and links.
-  - `USER_DELETION_CANCELED` → notifies the owner that a scheduled deletion was reverted by staff.
-  - `ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN` → calls the analytics provider's `forget(userId)`.
+- **Default export (`satisfies AppModule`)**: the manifest.
+  - `name: 'account'`, mounted at `/account` with `router` from `./routes`.
+  - `jobs: accountJobs`, `rateLimits: accountRateLimits`.
+  - `config`: `accountConfig.slice`, `sessionConfig.slice`, `oauthConfig.slice`.
+  - `reencrypt: reencryptTotpSecrets`: TOTP secrets live on the `users` document but are encrypted under this module's key.
+  - `locales` and `templates` point to directories next to the file.
+- **`onRegistered(modules)`**: runs once all enabled modules are known. It registers `accountAuthResolver` via `registerAuthResolver`, then calls `setPersonalDataSections(resolvePersonalDataSections(modules))` so `POST /account/export` has its section list.
+- **`personalData`**: three sections.
+  - `accountExports`: `collect` returns `undefined` (the section is omitted); `erase` calls `eraseExports`.
+  - `sessions`: `collect` calls `exportSessions`; `erase` calls `eraseSessionsAndTokens`, which also removes one-time tokens.
+  - `erasureLedger`: `collect` returns `undefined`; `erase` calls `recordErasure`, which runs inside the erasure transaction.
+- **`consumers`**: handles the `WORKER_CHANNELS.ACCOUNT_EXPORT` queue (`worker.account.export`) with `runExportJob`, validated by `AccountExportJobPayloadSchema`, with `prefetch: 1`.
+- **`subscribe()`**: registers domain-event handlers.
+  - `USER_SETUP_REQUESTED`: loads the user through `accountUserService` and calls `requestAccountSetup`. It drops the request if the user no longer exists.
+  - `USER_DEACTIVATED`: `revokeFor('deactivation', userId)`.
+  - `USER_DELETION_CANCELED`: `handleRestoredByStaff`.
+  - `ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN`: `resolveAnalyticsProvider().forget(userId)`.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** — Provides the `AppModule` type this file satisfies and the `resolvePersonalDataSections` helper used in `onRegistered`.
-- **`src/kernel/authentication.ts`** — `registerAuthResolver` is called here (not at import time) to install the auth guard's token resolver for the entire app.
-- **`src/kernel/events.ts`** — `onDomainEvent` is the subscription API used in `subscribe`.
-- **`src/infrastructure/observability/analytics/index.ts`** — `resolveAnalyticsProvider().forget(userId)` is invoked on consent withdrawal.
-- **`src/modules.ts`** — The module loader that iterates registered modules and calls `registerModules`, which triggers `onRegistered`.
-- **`src/modules/account/config.ts`** — This file imports `accountConfig` and includes its `slice` in the manifest's `config` array.
-- **`src/modules/account/oauth/config.ts`** — This file imports `oauthConfig` and includes its `slice` in the manifest's `config` array.
-- **`src/modules/account/events.ts`** — Exports `ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN`, the event this module subscribes to.
-- **`src/modules/account/jobs.ts`** — Exports `accountJobs`, attached to the manifest's `jobs` field.
-- **`src/modules/account/rate-limits.ts`** — Exports `accountRateLimits`, attached to the manifest's `rateLimits` field.
-- **`src/modules/account/routes.ts`** — Exports `router`, mounted at `/account`.
-- **`src/modules/account/asyncapi.internal.yaml`** — Declares the `worker.account.export` queue that this module's `consumers` entry consumes.
-- **`src/modules/account/module.yaml`** — YAML manifest metadata (name, description) that pairs with this TypeScript module object.
-- **`src/modules/access/module.ts` / `authorization.yaml`** — The access module's authorization policies gate the `/account` routes declared here; rate-limit budgets defined in `rate-limits.ts` are consumed by the access layer.
+- **`@kernel/registry`**: supplies the `AppModule` type and `resolvePersonalDataSections`. Other modules' `personalData` declarations are gathered through it.
+- **`@kernel/authentication`**: `registerAuthResolver` installs the app-wide auth resolver.
+- **`@kernel/events`**: `onDomainEvent` is used for all subscriptions.
+- **`src/infrastructure/observability/analytics`**: `resolveAnalyticsProvider` is called to forget a user after consent is withdrawn.
+- **`./events`**: provides `ACCOUNT_ANALYTICS_CONSENT_WITHDRAWN`. The event is declared in `asyncapi.domain-events.yaml`.
+- **`./config`, `./oauth/config`, `./rate-limits`, `./routes`, `./jobs`**: supply the config slices, rate limits, router and jobs registered in the manifest.
+- **`@modules/users`**: provides the `USER_*` event constants and `accountUserService` (via `users/friends/account`). The two modules share the User document without an import-graph edge for that.
+- **`src/modules.ts`**: the module registry that loads this manifest (inferred from the neighbor listing and `registerModules` in the comments).
+- **`src/modules/access/module.ts` and `shared/rules/rate-limits.yaml`**: listed as graph neighbors, but no direct interaction is visible in this file.
 
 ## Notes
-
-- **Auth resolver is registered in `onRegistered`, not at import time.** Importing this file for a type or a test will *not* install the resolver; only a real `registerModules` run triggers it.
-- **The `collect` functions for `accountExports` and `erasureLedger` intentionally return `undefined`**, which the export pipeline interprets as "omit this section." The export row and ledger are audit artifacts, not personal-data exports.
-- **The User document is shared with the `users` module** (via `accountUserService` and the events from `@modules/users`). Both modules read/write it; a schema change there requires coordination across both modules. Credentials (TOTP secrets, etc.) live on that document by design — see `docs/modules/account-two-factor.md`.
-- **`prefetch: 1` on the export consumer** is deliberate: an export build reads every section for one account; serialising per worker prevents a burst of requests from starving others.
-- The `personalData` sections are resolved *by this module* (via `resolvePersonalDataSections(modules)` in `onRegistered`), not by the app tier — the app never collects or hands them in by name.
+- The auth resolver is installed in `onRegistered`, not at import time. Importing this file (for a type, or in a test) does not install it.
+- The export worker only assembles the sections it is handed. This module resolves the list itself in `onRegistered`, so `POST /account/export` reaches other modules without importing them.
+- This module owns `accountexports`, `sessions`, `verificationtokens` and `erasureledgers`. The User document is shared with `users`, so a schema change there must be agreed in both modules.
+- If the analytics `forget` call rejects, the dispatch fails. The outbox retries it and parks it as `dead`, which alerts.
+- The module doc references `./asyncapi.internal.yaml` for the queue declaration.

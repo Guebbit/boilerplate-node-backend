@@ -1,46 +1,37 @@
 ---
 source: scripts/mutation/run-diff.ts
-sha256: 6b6006cacfc923c184fbd4b8d833e9146bc1ea55beca37c89812dbd4adb5d25d
-generated_at: 2026-11-08T02:54:18.358451+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cd4a86f4cd723f408118784d64d45ab4b8d04ac35027399d9b4b6585ad139eb6
+context_sha256: 64489bbf663863acbac9f5dce071aaf6951a896ecdbfdb73ca66aaf53d3d439c
+generated_at: 2026-11-22T02:10:10.809171+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/mutation/run-diff.ts
 
 ## Purpose
-
-Runs a Stryker mutation pass scoped to the whole files a branch changed relative to a base ref (default `origin/main`), grades that partial run against the per-file ratchet, then overlays the result onto the full report already on disk so the stored report stays whole. It exists so a branch's mutation coverage can be checked in CI or locally without re-running the entire codebase's sweep.
+Entry point for `npm run mutation`: runs Stryker mutation testing only on the mutable source files changed on the current branch (whole files, not lines) relative to a base ref, then grades the result with the per-file baseline ratchet. It never records a baseline (`--update` is not forwarded), so a partial run can't erase the stored one.
 
 ## Key elements
-
-- **`base`** — resolved from `--base` flag or defaults to `origin/main`; the ref the diff is taken against.
-- **`changedFiles(baseCommit)`** — shells out to `git diff --name-only --diff-filter=ACMR <base>...HEAD` to list every added/changed/modified/renamed file.
-- **`baseCommit`** — result of `mergeBase(base, …)`; if undefined the script exits 0 immediately.
-- **`files`** — intersection of `changedFiles` and the project's mutable scope (`changedMutable` / `mutableFiles`); if empty, exits 0.
-- **`grade()`** — spawns `scripts/mutation/check-baseline.ts` via `npx tsx`; its exit code is the sole verdict. Stryker's own non-zero exit (thresholds.break) is intentionally ignored.
-- **`readStrykerReport(file)`** — reads and parses a Stryker JSON report file.
-- **`previous`** — snapshot of the on-disk report and its mtime *before* the Stryker run, used to detect whether Stryker actually wrote a new one.
-- **`keepReportWhole()`** — if a previous report existed and the mtime changed, calls `overlayReport` to merge this run's files into it, writes the merged JSON back, and re-renders the HTML page.
-- **Main flow** — calls `runStryker` with `--mutate <files> --force`; on completion grades, overlays, then `process.exit(verdict)`. On OOM abort exits 1; on thrown error delegates to `failScript`.
+- `base` — git ref to diff against; `--base=<ref>` flag, default `origin/main`.
+- `changedFiles(baseCommit)` — runs `git diff --name-only --diff-filter=ACMR <baseCommit>...HEAD` in `REPO_ROOT` (added, copied, modified, renamed; deletions excluded).
+- `baseCommit` — result of `mergeBase(base, 'mutation-diff')`. If `undefined`, the script exits 0 without doing anything.
+- `files` — `changedMutable(changedFiles(...), mutableFiles())`: changed files inside the mutation scope. If empty, it logs "nothing to measure" and exits 0.
+- `grade()` — spawns `npx tsx scripts/mutation/check-baseline.ts` with inherited stdio and returns its exit code (2 if killed by a signal). This is the verdict. Stryker's own non-zero exit is ignored, since it reflects `thresholds.break` on the diff's average.
+- `previous` — the report already at `REPORT_PATH` (and its mtime), if one exists.
+- `keepReportWhole()` — overlays this run's report onto `previous` with `overlayReport`, writes the merged JSON, and redraws `index.html` via `renderHtml`. Skipped if there was no earlier report or Stryker wrote no new one.
+- Main flow: `runStryker({ label, args: ['stryker.json', '--mutate', <files>, '--force'] })`. If `abortedForOom`, exit 1. Otherwise run `grade()`, then `keepReportWhole()`, then exit with the verdict. Errors go to `failScript`.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `scripts/mutation/stryker-run.ts` | Imports `runStryker` to launch Stryker with the project's shared heap-cap and concurrency settings. |
-| `scripts/mutation/mutate-scope.ts` | Imports `changedMutable` and `mutableFiles` to filter the diff down to in-scope files. |
-| `scripts/mutation/ci/merge.ts` | Imports `overlayReport`, `renderHtml`, and the `StrykerReport` type for the report-merge step. |
-| `scripts/mutation/baseline.ts` | Imports `REPORT_PATH` to locate the Stryker JSON and HTML output. |
-| `scripts/git-base.ts` | Imports `mergeBase` to resolve the branch-point commit. |
-| `scripts/cli.ts` | Imports `flagValue` to read the `--base` CLI flag. |
-| `scripts/modules-on-disk.ts` | Imports `REPO_ROOT` for path resolution and `cwd` arguments. |
-| `scripts/fail-script.ts` | Imports `failScript` as the `.catch` handler for unhandled rejections. |
+- `scripts/git-base.ts` — `mergeBase` resolves the branch point.
+- `scripts/mutation/mutate-scope.ts` — `mutableFiles` and `changedMutable` define and filter the scope.
+- `scripts/mutation/stryker-run.ts` — `runStryker` runs Stryker with the shared per-worker heap cap and concurrency, and reports `abortedForOom`.
+- `scripts/mutation/baseline.ts` — supplies `REPORT_PATH`.
+- `scripts/mutation/ci/merge.ts` — supplies `overlayReport`, `renderHtml` and the `StrykerReport` type for merging reports.
+- `scripts/modules-on-disk.ts` — supplies `REPO_ROOT`, the working directory for git and the child processes.
+- `scripts/cli.ts` — `flagValue` parses `--base`.
+- `scripts/fail-script.ts` — `failScript` is the `.catch` handler for the Stryker promise.
 
 ## Notes
-
-- **`--update` is never forwarded.** The partial run must not write a new baseline, so a stale or partial report can't erase the existing one.
-- **Whole files, not lines.** The `--mutate` argument lists file paths, not line ranges. This is a deliberate simplification; see `docs/tools/mutation-testing.md` for rationale.
-- **Exit code is the ratchet's, not Stryker's.** Stryker's `thresholds.break` firing on the diff's average is explicitly suppressed; only `check-baseline.ts` decides pass/fail.
-- **Overlay is guarded by mtime.** `keepReportWhole` compares `statSync(reportFile).mtimeMs` against the pre-run snapshot; if Stryker produced no new file (e.g., `--force` produced identical output) the overlay is skipped.
-- **Two early-exit paths (exit 0):** no resolvable base commit, or no mutable files in the diff. Both are non-blocking so the caller (CI or `npm run`) proceeds.
-- **Stryker is invoked through `runStryker`, not `npx stryker` directly**, to inherit the per-worker heap cap. Bypassing it silently drops that cap.
+- The grade runs before the overlay, so the verdict reflects only this branch's files. The overlay afterwards keeps a previously pulled sweep complete.
+- Stryker must go through `runStryker`, not a bare `npx stryker`. A direct call previously ran without the heap cap and concurrency settings.
+- Top-level code runs on import (it exits early at several points), so this is a script, not a module.

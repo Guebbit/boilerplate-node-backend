@@ -1,45 +1,55 @@
 ---
 source: src/modules/stock-alerts/service.ts
-sha256: 17fd076242b96fceb2aeeadb7d0c48698fbae75f068be125ab84f42c96433bb8
-generated_at: 2026-11-14T22:04:34.062285+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7ff7f5e70e9d5bbf0abdde7fec7011b5a747175f4ec48f1f29707ea9eeea98a9
+context_sha256: dd52b69b78882b786f9c5f17c107b146d74026b9e4a0bea45283a776c79c8db3
+generated_at: 2026-11-22T07:55:41.494717+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stock-alerts/service.ts
 
 ## Purpose
-
-Service layer for the back-in-stock (stock-alerts) feature. It exposes the buyer-facing operations (ask, cancel, list, export, hard-delete) and the "buyable again" reaction that answers every pending request with exactly one email and one inbox row, then deletes the request. The single click on "Notify me" is the buyer's sole consent for that one notification; no further mail is ever sent on the same request.
+Business logic for "back-in-stock" requests. Buyers can ask to be notified when an `out_of_stock` product becomes orderable again, cancel the request, list their own requests, and export them. When the product is no longer `out_of_stock`, each waiting request gets one email and one inbox row, and the request is then deleted. Clicking "Notify me" counts as consent for that single mail only.
 
 ## Key elements
-
-- **`stockAlertService`** (export) — the module's single service handle bundling all public functions.
-- **`list`** — returns a user's own requests (newest first) via `stockAlertRepository.findByUserId` → `presentStockAlerts`.
-- **`ask`** — registers a back-in-stock request. Rejects 404 if the product is missing, 409 (`STOCK_ALERT_PRODUCT_BUYABLE`) if the product is already buyable, or 409 (`STOCK_ALERT_LIMIT_REACHED`) if the per-account cap is hit.
-- **`cancel`** — removes the caller's request; 404 if not found.
-- **`exportRows`** — raw stored items for the personal-data (GDPR) export.
-- **`removeByUserId`** — deletes all requests inside the caller's hard-delete Mongoose transaction (`ClientSession`).
-- **`removeByProductId`** — cascades when a product leaves the catalogue.
-- **`answerOne`** — atomically deletes the alert row and announces the `STOCK_ALERT_SENT` inbox event in one transaction (`announceInTransaction`); only then calls `mailBuyer`. The delete acts as an idempotency guard.
-- **`mailBuyer`** — resolves the user, skips if the account is erased/banned/unverified, builds a localized email via `backInStockEmail` and enqueues it with `enqueueEmail`.
-- **`onBuyableAgain`** — fetches all waiting alerts for a product, resolves titles, and calls `answerOne` sequentially (each in its own transaction).
-- **`sweepBuyable`** — periodic sweep: iterates distinct product IDs, checks `isBuyable` against the current instant, and calls `onBuyableAgain`. Exists because a preorder whose release date passes produces no write event.
-- **`titleFor`** — locale-aware product-name picker: buyer's locale → `getDefaultLocale()` → any available value → `''`.
+- `stockAlertService` (the only export) bundles the handlers below.
+- `list(userId)` returns the user's requests via `findByUserId` and `presentStockAlerts`, newest first.
+- `ask(userId, productId)`:
+  - Returns 404 if the product is not found.
+  - Returns 409 `STOCK_ALERT_PRODUCT_BUYABLE` unless inventory reports `out_of_stock`.
+  - Returns 409 `STOCK_ALERT_LIMIT_REACHED` when the repository reports the cap (`NODE_STOCK_ALERTS_MAX`) for a new product.
+  - Asking twice is the same request.
+  - On success it returns the refreshed list.
+- `cancel(userId, productId)` returns 404 if nothing was removed, otherwise the refreshed list.
+- `exportRows(userId)` returns the items of `list`, for the personal-data export.
+- `removeByUserId(userId, session)` deletes an account's requests inside the caller's hard-delete transaction.
+- `removeByProductId(productId)` deletes the requests for a product removed from the catalogue.
+- `answerWaiting(productId)` loads the waiting requests and the product titles, then answers them one at a time with `answerOne`.
+- `sweepBuyable()` is the periodic pass (documented as every five minutes). It reads `distinctProductIds`, then checks availability in batches of `SWEEP_BATCH` (100). For each product that is not `out_of_stock` it calls `answerWaiting`. It returns the number of products answered.
+- Internal helpers:
+  - `answerOne` deletes the request and announces `STOCK_ALERT_SENT` in one transaction, then mails.
+  - `mailBuyer` sends the email.
+  - `titleFor` picks the product title by the buyer's locale, then the default locale, then any title.
 
 ## Relationships
-
-- **`@infrastructure/i18n`** (`t`, `getDefaultLocale`) — localizes user-facing error messages and provides the fallback locale for product titles.
-- **`@infrastructure/adapters/logger`** — logs an error in `mailBuyer` when the user lookup or email construction throws.
-- **`@infrastructure/adapters/mailer`** (`enqueueEmail`) — fires the actual back-in-stock email from `mailBuyer`.
-- **`@infrastructure/http/frontend-link`** (`frontendLink`) — builds the product URL (locale-aware) embedded in the email body.
-- **`@infrastructure/http/response`** (`generateSuccess`, `generateReject`) — shapes the HTTP responses for `ask` and `cancel`.
-- **`@kernel/outbox`** (`announceInTransaction`) — creates the `STOCK_ALERT_SENT` inbox row atomically with the alert-row deletion in `answerOne`.
-- **`@modules/products`** (`isBuyable`, `productPagePath`, `productService`) — checks buyability in `ask`/`sweepBuyable`, resolves product titles, and provides the page path for the email link.
+- **Inventory** (`@modules/inventory`): the source of `out_of_stock` state for both `ask` and the sweep.
+- **Products** (`@modules/products`): existence check, localized titles, and `productPagePath` for the product link in the mail.
+- **Outbox** (`@kernel/outbox` `announceInTransaction`): deletes the request and records the `STOCK_ALERT_SENT` event atomically. The payload carries `userId`, `productId` and `titles`, and `aggregateId` is the user.
+- **Mailer** (`enqueueEmail`) and `backInStockEmail` (`./emails`): send the mail.
+- **Frontend link** (`frontendLink`): builds the localized product URL.
+- **Response helpers** (`generateSuccess`, `generateReject`): build the API results.
+- **i18n** (`t`, `getDefaultLocale`): localized messages and the default locale.
+- **Logger**: records mail failures.
+- **Repository and presenter** (`./repository`, `./presenter`): persistence and view shaping.
+- This module also imports `@modules/users` (`getById`, `isAuthenticatable`) to decide whether a buyer can be mailed; it is not in the neighbor list above.
 
 ## Notes
-
-- **Idempotency guard:** `answerOne` deletes the row *before* mailing. A redelivered signal or a concurrent cancel finds nothing to delete and sends nothing — no double-mail is possible.
-- **Mail eligibility:** `mailBuyer` silently skips users who are erased, non-authenticatable (banned or in deletion grace), or unverified (`verifiedAt` falsy). The inbox row still stands in those cases.
-- **`enqueueEmail` never rejects** — failures are logged internally; the `void` + eslint-disable is intentional.
-- **`sweepBuyable` is the only path that answers preorders** whose release date passed without a write. It is safe to run repeatedly: answered alerts are already deleted.
-- **Sequential processing:** `onBuyableAgain` awaits each `answerOne` in order, giving each request its own transaction rather than batching. This keeps partial-failure isolation per row.
+- The delete in `answerOne` is the idempotency guard. A request that was canceled meanwhile, or whose signal is redelivered, finds nothing to delete, so no mail is sent.
+- Mail is skipped silently for these buyers, who get only the inbox row:
+  - the account is missing (erased);
+  - the account is locked (banned, or in its deletion grace period);
+  - the address is unverified (`verifiedAt` unset).
+- A mail failure is only logged. The request is already deleted and the inbox row stands.
+- Requests are answered sequentially, each in its own transaction.
+- The sweep queries inventory directly with no caller, so no permissions are judged. A hidden or removed product reads `out_of_stock`.
+- `sweepBuyable` counts products, not requests.

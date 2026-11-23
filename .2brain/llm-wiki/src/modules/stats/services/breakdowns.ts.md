@@ -1,41 +1,37 @@
 ---
 source: src/modules/stats/services/breakdowns.ts
-sha256: 0ef03b34044db33c61f79387f0c467cdcf07ff8aeb54ae228f9ce918015fa42d
-generated_at: 2026-11-14T22:02:08.567629+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0ef03b34044db33c61f79387f0c467cdcf07ff8aeb54ae228f9ce918015fa42d
+context_sha256: 8f7596f303d8eeb55db2d4cb56c1095f5aaeca9757a00ab76d3eebc61af589cc
+generated_at: 2026-11-22T07:51:53.315179+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stats/services/breakdowns.ts
 
 ## Purpose
-
-Provides the read-model aggregation layer for the sales dashboard. Each exported function orchestrates one or more domain-service calls (orders, payments, returns, invoicing), merges the results by a natural key (product, category, bucket, currency), and returns a shaped object matching a `@types` stats interface.
+Builds the sales dashboard's tables and snapshots: products, categories, a single product over time, the payments mix, operations rates, customers, and the open pipeline. Each function does one owner-service read, or two merged by key, and shapes the result for the API types. Monetary values are converted to decimal strings at this layer.
 
 ## Key elements
-
-- **`getProductStats(period, limit)`** — Top-N products by units sold; joins `orderService.productTotals` with `returnService.returnedByProduct` to compute `netUnits`.
-- **`getCategoryStats(period)`** — Net sales grouped by category (single call to `orderService.categoryTotals`).
-- **`getProductSeries(period, productId)`** — Per-bucket units ordered vs. returned for one product; iterates `period.bucketStarts` so every bucket appears (gaps filled with 0).
-- **`getPaymentMix(period)`** — Payment counts and totals grouped by method + provider (single call to `paymentService.methodMix`).
-- **`getOperationsStats(period)`** — Three rates in one response: cancellation (cohort-based), returns (bucket sums), refunds (grouped by currency via `invoicingService.moneyBuckets`). Most complex function — 4 parallel service calls.
-- **`getCustomerStats(period)`** — Total / new / returning customer counts and the returning rate.
-- **`getPipelineStats()`** — Point-in-time snapshot (no period argument): paid-not-shipped count and transfers awaiting, with optional `nearestPayBy`.
+- `getProductStats(period, limit)` – top products from `orderService.productTotals`, merged by `productId` with `returnService.returnedByProduct`. Yields `unitsOrdered`, `unitsReversed`, `netUnits` and `netSales`.
+- `getCategoryStats(period)` – net sales and units per category and currency from `orderService.categoryTotals`.
+- `getProductSeries(period, productId)` – one product's ordered and reversed units per bucket. It iterates `period.bucketStarts`, so every bucket is present and missing ones default to 0. `title` is included only when defined.
+- `getPaymentMix(period)` – `paymentService.methodMix` rows by method, provider and currency, with payment count and amount.
+- `getOperationsStats(period)` – four parallel reads that produce three rates:
+  - cancellation: the order cohort, plus `rate`
+  - returns: units ordered (from paid buckets) vs. units returned
+  - refunds: per currency, credited gross vs. invoiced gross
+- `getCustomerStats(period)` – customers, new customers, returning customers and the returning rate, from `orderService.customerCounts`.
+- `getPipelineStats()` – the only function with no period. It reports `paidNotShipped` and `awaitingTransfers` per currency (count, amount, and optional `nearestPayBy` as an ISO string).
 
 ## Relationships
-
-- **`@modules/orders` (orderService)** — Primary data source; used by every function except `getPaymentMix`.
-- **`@modules/returns` (returnService)** — Provides returned-unit data for product stats, product series, and operations stats.
-- **`@modules/payments` (paymentService)** — Sole consumer in `getPaymentMix` (`methodMix`).
-- **`@modules/invoicing` (invoicingService)** — Used only in `getOperationsStats` for `moneyBuckets` (invoiced vs. credited gross).
-- **`@domain-primitives/money`** — `toDecimalString` formats all monetary values to strings; `addMoney` aggregates gross amounts in `getOperationsStats`.
-- **`../domain/figures` (`rateOf`)** — Computes the ratio `part / whole` used for cancellation, returns, refunds, and customer rates.
-- **`./range`** — Imports `Period` (the resolved time window + bucket starts) and the `WithoutLimits<T>` generic used in return types.
-- **`@types`** — All return-shape interfaces (`ProductStats`, `CategoryStats`, etc.) are defined here.
+- Calls the `orders`, `returns`, `payments` and `invoicing` module services through their public `index.ts` entry points.
+- `@domain-primitives/money` (`src/domain-primitives/money.ts`): `toDecimalString` formats amounts, and `addMoney` sums gross invoiced and credited values.
+- `../domain/figures` (`src/modules/stats/domain/figures.ts`): `rateOf` computes every rate.
+- `./range` (`src/modules/stats/services/range.ts`): provides the `Period` input (`window`, `echo`, `bucketStarts`) and the `WithoutLimits` response wrapper.
+- `@types` (`src/types/index.ts`): the response shapes `ProductStats`, `CategoryStats`, `ProductSeries`, `PaymentMix`, `OperationsStats`, `CustomerStats` and `PipelineStats`.
+- Presumably re-exported through `src/modules/stats/services/index.ts`.
 
 ## Notes
-
-- **Gap-filling in `getProductSeries`:** The output bucket array is driven by `period.bucketStarts`, not by the service rows. Buckets with no data are emitted with `0` on both sides.
-- **`getPipelineStats` has no period:** It is a live "right now" snapshot, not a historical query. It also returns `PipelineStats` (not wrapped in `WithoutLimits`), unlike every other function.
-- **Currency handling in `getOperationsStats` refunds:** Rows are grouped by the currency set derived from `moneyBuckets`; amounts within a group are summed via `addMoney` (spread into the variadic), then rendered with `toDecimalString`.
-- **`nearestPayBy` is optional:** In `getPipelineStats` it is conditionally spread — omitted from the object entirely when the service returns `undefined`.
-- **`WithoutLimits<T>`** is a type-level utility from `./range` that strips a `limit` property from `T`; it signals to callers that the response carries no pagination metadata.
+- Each period-based result echoes `period.echo` and is typed `WithoutLimits<...>`. `getPipelineStats` returns a plain `PipelineStats`.
+- Series buckets are matched by `toISOString()` keys.
+- Refund rows are grouped by the sorted set of currencies found in the invoicing money buckets.

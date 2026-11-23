@@ -1,30 +1,34 @@
 ---
 source: src/modules/delivery/controllers/get-preorder-fulfillment-orders.ts
-sha256: 931e65440688b309dcfa666b9e5199236ea3eed36ede69701f0e6289866b1b19
-generated_at: 2026-11-08T05:26:42.746573+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 931e65440688b309dcfa666b9e5199236ea3eed36ede69701f0e6289866b1b19
+context_sha256: 8b5704053395416a15cfee8030c1c44c78c5ee659c98130ddcaf629dbdac780a
+generated_at: 2026-11-22T04:45:51.236291+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/controllers/get-preorder-fulfillment-orders.ts
 
 ## Purpose
-
-Defines the two read-only controllers behind the preorder board: one returns a paginated list of fulfillment orders, the other returns per-product unit-count summaries. Both are thin adapters that parse/validate query params and delegate to the delivery service.
+Defines the two HTTP controllers behind the preorder board's reads: `GET /delivery/fulfillment-orders` (one row per fulfillment order) and `GET /delivery/fulfillment-orders/summary` (per-product unit counts). Both are thin wrappers built with the shared list-controller factory that delegate to the delivery service.
 
 ## Key elements
-
-- **`getPreorderFulfillmentOrders`** — `createListController` instance for `GET /delivery/fulfillment-orders`. Accepts a partial of `ListPreorderFulfillmentOrdersQueryParams` plus `page`/`pageSize`. Coerces `late` (boolean) and `dueWithin` (number) from their string query-param representations before calling `deliveryService.listPreorderFulfillmentOrders`.
-- **`getPreorderSummary`** — `createListController` instance for `GET /delivery/fulfillment-orders/summary`. Accepts a partial of `SummarizePreorderFulfillmentOrdersQueryParams` plus `page`/`pageSize`. Delegates to `deliveryService.summarizePreorders`.
+- `getPreorderFulfillmentOrders` – list controller for `GET /delivery/fulfillment-orders`.
+  - Entity name: `preorderFulfillmentOrders`.
+  - Query schema: `ListPreorderFulfillmentOrdersQueryParams` extended with `page`/`pageSize`, then made `.partial()`.
+  - Input coercion: `late` is parsed as a boolean and `dueWithin` as a number, because query strings carry them as text.
+  - Runs `deliveryService.listPreorderFulfillmentOrders(parsed, request.authContext)`.
+- `getPreorderSummary` – list controller for `GET /delivery/fulfillment-orders/summary`.
+  - Entity name: `preorderSummary`.
+  - Query schema: `SummarizePreorderFulfillmentOrdersQueryParams` extended with `page`/`pageSize`, then made `.partial()`.
+  - Runs `deliveryService.summarizePreorders(parsed, request.authContext)`.
 
 ## Relationships
-
-- **`src/infrastructure/surfaces/create-list-controller.ts`** — Both controllers are built via the `createListController` factory, which handles request parsing, pagination, and response shaping.
-- **`src/infrastructure/http/schemas.ts`** — Supplies `pageSchema` and `pageSizeSchema`, extended into each controller's Zod schema.
-- **`src/modules/delivery/services/index.ts`** — Exposes `deliveryService`; the two `runList` callbacks call `listPreorderFulfillmentOrders` and `summarizePreorders` respectively, passing the parsed params and `request.authContext`.
-- **`src/modules/delivery/routes.ts`** — Registers these two controllers on their respective GET paths.
+- `src/infrastructure/http/schemas.ts` – supplies `pageSchema` and `pageSizeSchema`, which override the generated schemas' pagination fields.
+- `src/infrastructure/surfaces/create-list-controller.ts` – supplies `createListController`, which builds both controllers from `entity`, `schema`, optional `input` coercion and `runList`.
+- `src/modules/delivery/services/index.ts` – supplies `deliveryService`, called by both `runList` callbacks along with the request's `authContext`.
+- `src/modules/delivery/routes.ts` – the routes file for this module; presumably where these controllers are mounted at the paths above. The controller file itself doesn't register routes.
 
 ## Notes
-
-- `page` and `pageSize` are added to each schema via `.extend(...).partial()`, making them optional — the `createListController` factory presumably supplies defaults.
-- The `input` coercion map (`booleans: ['late']`, `numbers: ['dueWithin']`) exists only on the first controller; the summary endpoint has no such typed query params.
-- Both controllers pass `request.authContext` through to the service, so authorization context is resolved upstream (route layer) and forwarded here.
+- Because of `.partial()`, all query parameters, including the pagination ones, are optional.
+- Only the list endpoint declares `input` coercion. The summary controller has none, so its query params are used as parsed by its schema.
+- The query-param Zod schemas themselves are imported from `@api/schemas.zod`.

@@ -1,31 +1,29 @@
 ---
 source: src/modules/orders/index.ts
-sha256: a3fb755f29bdbf49317ff6fa00f9622a3cb24d81d5118617c61cdf2d0e1af917
-generated_at: 2026-11-08T06:52:18.084044+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4c8143bd9dad551ce6f3456f82789c24cc470710c789a055dea616240cb33fa4
+context_sha256: 3b26e53968c4f7841abe6f61629a0120b5cecb994d22761e8773474605f12895
+generated_at: 2026-11-22T06:15:01.312981+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/index.ts
 
 ## Purpose
-
-Public barrel for the orders module. Per the strategic DDD rule (docs/theory/strategic-ddd.md §5), this is the **only** import surface a sibling module is allowed to use. It re-exports the module's services, domain, events, emails, and model types so callers never reach into internal files directly.
+Public barrel for the Orders module. Per its doc comment, it is the only surface a sibling module may import. It re-exports the module's services, domain, events, emails and model types, and keeps `orderRepository` and the model's runtime internal.
 
 ## Key elements
-
-- `export * from './services'` — exposes order services (including `orderService.placeOrder`, the sole function that writes a new order).
-- `export * from './domain'` — exposes domain logic (likely `create` and related use-cases).
-- `export * from './events'` — exposes order-related domain events.
-- `export * from './emails'` — exposes email notification helpers tied to order lifecycle.
-- `export type * from './model'` — exposes **type-only** definitions from the order model; the runtime model and `orderRepository` remain internal.
+- `export * from './services'`: service layer, including `orderService.placeOrder`. The doc comment names `placeOrder` as the one function that writes a new order.
+- `export * from './domain'`: domain exports.
+- `export * from './events'`: event exports.
+- `export * from './emails'`: email exports.
+- `export type * from './model'`: type-only re-export of the model. No model runtime is exposed.
 
 ## Relationships
-
-- **`@modules/cart` (checkout, reorder, view, post-checkout):** Cart's checkout flow calls `orderService.placeOrder` (exported via this barrel) to persist a new order. The cart integration tests (`checkout-stock-divergence.test.ts`, `stock.test.ts`) exercise this path. Cart never touches the order repository directly.
-- **`@modules/delivery` (module, presenter, services/act, actions, announce, board, cancel-remainder, cut, deliver):** Delivery imports order domain types and services from this barrel to read order state, act on cut/delivery steps, and announce status changes. The delivery `module.ts` orchestrates which order services it calls.
+- The doc comment says the `@modules/cart` checkout and this module's own `create` both call the one function that writes a new order, never the collection directly. `src/modules/cart/services/checkout.ts` is a neighbor consistent with that.
+- Other neighbors (cart's `reorder`, `view`, `post-checkout` and the stock integration test, plus the `delivery` module's services, presenter and `module.ts`) are related through the dependency graph. They presumably import through this barrel, but the barrel's content doesn't show which symbols they use.
+- This module's reach into `users` (an erase hook and a user lookup by id) is handled in the module's own `module.ts`, not in this barrel.
 
 ## Notes
-
-- The model's **runtime** (entities, repository) is intentionally *not* re-exported here—only types. Sibling modules must go through services.
-- The module's dependency **into** `@modules/users` (`personalData.erase`, `userService.getById`) lives in `module.ts`, not in this barrel. Consumers of this file do not see or manage that coupling.
-- This file contains no logic of its own; it is purely a re-export surface. Any import path that bypasses it (e.g. `…/orders/services`) violates the DDD boundary rule.
+- New orders must be written through the single order-writing service function (`placeOrder`). Don't use `orderRepository` or the collection directly.
+- Sibling modules should import from this barrel, not from internal paths.
+- The doc comment points to a "published language" section on the barrel in the project's strategic DDD docs for the rationale.

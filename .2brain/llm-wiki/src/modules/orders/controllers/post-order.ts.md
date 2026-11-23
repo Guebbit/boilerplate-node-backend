@@ -1,33 +1,34 @@
 ---
 source: src/modules/orders/controllers/post-order.ts
-sha256: 5aff64eebf31f27638cf523bd4f094ab5dbf50b4a5218a251f516d8397844566
-generated_at: 2026-11-08T06:47:19.109351+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 948b2c3aa78d7f461d47a60aa877a893aee7412a4ba6aa042f328cfab3ab9859
+context_sha256: 0cdba6048140ea136a2642999dd7abdf53f2df50e19cedc218685c05b7c2e8b6
+generated_at: 2026-11-22T06:09:56.664825+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/controllers/post-order.ts
 
 ## Purpose
-
-Handler for `POST /orders` — the admin path that creates an order directly from an explicit payload in the request body, bypassing the cart. It validates the body, delegates to `orderService.create`, records a metric, and returns a `201` with the created order.
+Express controller for `POST /orders`: an admin creates an order directly from an explicit payload (`userId`, `email`, `items` from the body), bypassing the cart. This distinguishes it from the checkout path in `@modules/cart`.
 
 ## Key elements
-
-- **`createOrder(request, response)`** — The sole export. Parses and validates the body against the `CreateOrderBody` Zod schema, destructures `{ userId, email, items }`, calls `orderService.create(userId, email, items, callerContextOf(request))`, then either refuses the response (service-level rejection), increments `orderCreatedTotal` and sends `201` via `respondWithOrder`, or funnels errors through `catchAs`.
+- `createOrder(request, response): Promise<void>` — the only export. Flow:
+  1. Validates the body with `parseBody(CreateOrderBody, ...)`. If validation fails it returns early, since `parseBody` has already handled the response.
+  2. Calls `orderService.create(userId, email, items, callerContextOf(request))`.
+  3. If `refused(response, result)` is true, it stops.
+  4. Otherwise it increments `orderCreatedTotal` and responds with `respondWithOrder(..., 201)`.
+  5. Any rejection goes to `catchAs(response, 'createOrder')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Source of `parseBody`, `refused`, and `catchAs` (shared validation/rejection/error helpers).
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, which extracts locale/auth context from the request and passes it to the service layer.
-- **`src/modules/orders/services/index.ts`** — Provides `orderService`; the actual order-creation logic (and confirmation email) lives there.
-- **`src/modules/orders/metrics.ts`** — Exports the `orderCreatedTotal` Prometheus counter incremented on success.
-- **`src/modules/orders/controllers/respond.ts`** — Provides `respondWithOrder`, the shared serialization + status-writing helper for order payloads.
-- **`src/modules/orders/routes.ts`** — Registers `createOrder` on the `POST /orders` route.
-- **`src/types/index.ts`** — Supplies the `CreateOrderRequest` type used in the Express generics.
+- `src/infrastructure/http/controller.ts` — provides `parseBody`, `refused` and `catchAs`, which handle validation, refused-result and error responses.
+- `src/infrastructure/http/request.ts` — `callerContextOf(request)` builds the caller context passed to the service.
+- `src/modules/orders/services/index.ts` — supplies `orderService`, whose `create` does the actual work.
+- `src/modules/orders/metrics.ts` — supplies the `orderCreatedTotal` counter, incremented on success.
+- `src/modules/orders/controllers/respond.ts` — `respondWithOrder` serializes the created order. It receives the `'createOrder'` label and the status code `201`.
+- `src/types/index.ts` — source of the `CreateOrderRequest` type for the request body.
+- `src/modules/orders/routes.ts` — the route wiring that mounts this handler. The handler itself does not reference it.
 
 ## Notes
-
-- The confirmation email is the responsibility of `orderService.create`, **not** this controller. The code comment flags this explicitly: it is a fact about the order, not about the request. Don't add mail logic here.
-- `callerContextOf(request)` carries locale and other per-request context into the service — it is the bridge between HTTP concerns and domain concerns.
-- The success status is hard-coded to `201` in the `respondWithOrder` call; there is no 200 path for this endpoint.
-- The early-return after a failed `parseBody` resolves the promise with `undefined` rather than throwing — the response has already been written by `parseBody`.
+- The confirmation mail is sent by `orderService.create`, not by this controller. The inline comment says it is a fact about the order, not the request (see `CallerContext.locale`).
+- The handler returns a promise chain rather than using `async`/`await`. Validation failure returns `Promise.resolve()`.
+- `CreateOrderBody` comes from `@api/schemas.zod`.

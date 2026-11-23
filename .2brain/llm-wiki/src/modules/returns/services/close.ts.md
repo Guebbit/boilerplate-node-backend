@@ -1,41 +1,41 @@
 ---
 source: src/modules/returns/services/close.ts
-sha256: 33bd96be19e5b616f33dcbcee98c79b2a8da392e175ec5f4a3371b3006f06e1d
-generated_at: 2026-11-14T21:37:50.725062+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0f164f4727ef5a9f6032dc90ed8d0b1d9b1aca6955b84a28db5e8e2a775b0f23
+context_sha256: 3aa9c9bce416a4eba0188a6181e1c61cd829497a13b006708fec7aadb58fca74
+generated_at: 2026-11-22T07:28:46.788294+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/close.ts
 
 ## Purpose
-
-Performs the `received → closed` status transition on a return once its refund has settled, or when staff closes one manually without a refund. Two automated paths (same-request refund settlement and the async `PAYMENT_REFUNDED` listener) can race; the atomic status claim ensures only one wins and the other is a no-op.
+Finishes a return once its money has gone back by moving it `received → closed`. It is reached from `receiveReturn` after a refund that settled in the same request, and later from `module.ts`'s `PAYMENT_REFUNDED` listener when the payment sweep completes a refund the provider first refused. The move is conditional, so whichever path arrives second finds nothing to do. It also provides a staff-only "close by hand" path for returns whose money will not follow the usual way.
 
 ## Key elements
-
-- **`claimClosed`** (internal) — shared core: atomically claims the status move via `returnRepository.claimStatus` and, on success, appends a `return_closed` timeline row on the parent order. Returns `null` if the return was not in the expected source state.
-- **`closeReturn(id, actor?)`** (exported) — the automated path. Wraps `claimClosed` in `announceInTransaction` so the `return.closed` outbox event is written exactly when this call wins the race. Then calls `syncReturnStatus`. Marked `@internal`; the two caller-owners are `receiveReturn` and the `PAYMENT_REFUNDED` listener.
-- **`closeReturnByHand(id, note, context)`** (exported) — the staff path. Runs `claimClosed` inside `withTransaction`, records an audit row (`ADMIN_RETURN_CLOSED`), and returns a `200` or `404`/`409` response. Deliberately does **not** publish `return.closed`.
-- **`notClosable(id)`** (internal) — builds the `404` (not found) or `409` (`RETURN_NOT_CLOSABLE`) reject response for hand-close failures, with i18n messages.
+- **`claimClosed`** (internal): the step both close paths share. In the caller's transaction it calls `returnRepository.claimStatus` with the lifecycle's `close` from/to statuses and sets `closedAt`. If the claim succeeds, it appends a `return_closed` row to the order's timeline through the orders service. The row holds `returnId`, `refundAmount` (formatted with `padDecimal`), `currency` and, when present, `remedy`. A lost race writes no row and returns `null`.
+- **`closeReturn(id, actor?)`**: marked `@internal`, not published. It runs `claimClosed` inside `announceInTransaction` with `returnClosedEvent`, so the closed event exists exactly when this call closed the return. It then runs `syncReturnStatus` for the order. It returns the closed `ReturnDocument`, or `null` if the return was not `received` (already closed or never received). It checks state only and does not verify that the refund settled.
+- **`closeReturnByHand(id, note, context)`**: staff close for a canceled refund or one paid outside the application.
+  - It announces `RETURN_CLOSED_BY_HAND` (payload `returnId`, `orderId`; aggregate id is the order id) instead of the customer-facing closed event.
+  - It records an `ADMIN_RETURN_CLOSED` audit entry with `orderId` and the optional `note`.
+  - It syncs the order status and returns `generateSuccess(closed, 200)`.
+  - If nothing was closed, it returns the `notClosable` rejection.
+- **`notClosable`** (internal): looks the return up. It rejects with 409 and `ERROR_CODES.RETURN_NOT_CLOSABLE` if the return exists, or 404 (`returns.not-found`) if it does not.
 
 ## Relationships
-
-- **`src/modules/returns/repository.ts`** — `returnRepository.claimStatus` (atomic conditional update) and `findById` (for the 404/409 distinction).
-- **`src/modules/returns/domain/lifecycle.ts`** — supplies the `from`/`to` state pair for the close transition via `returnLifecycle`.
-- **`src/modules/orders/index.ts`** — `orderService.appendTimeline` writes the `return_closed` row on the order.
-- **`src/kernel/outbox.ts`** — `announceInTransaction` pairs the outbox event with the same DB transaction as the status move.
-- **`src/infrastructure/runtime/database.ts`** — `withTransaction` provides the Mongoose session for the hand-close path.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` logs the staff action.
-- **`src/domain-primitives/money.ts`** — `padDecimal` formats `refundAmount` for the timeline payload.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape the HTTP responses.
-- **`src/infrastructure/i18n/index.ts`** — `t()` localizes the 404/409 error messages.
-- **`src/modules/returns/module.ts`** — the `PAYMENT_REFUNDED` listener in this file calls `closeReturn` when the payment sweep completes a previously refused refund.
-- **`src/modules/returns/audit.ts`** — provides the `returnsAuditActions.ADMIN_RETURN_CLOSED` action constant.
-- **`src/modules/returns/model.ts`** — defines the `ReturnDocument` type used throughout.
+- `../repository` (`returnRepository`): `claimStatus` does the conditional status move, and `findById` backs the 404/409 decision.
+- `../domain` (`returnLifecycle`): supplies the `fromOf('close')` and `toOf('close')` statuses.
+- `@modules/orders` (`orderService`): its timeline-append method writes the order timeline row inside the same transaction.
+- `@kernel/outbox` (`announceInTransaction`): writes the event atomically with the status move.
+- `../events` (`RETURN_CLOSED_BY_HAND`) and `../audit` (`returnsAuditActions`) supply the event name and audit action.
+- `@infrastructure/observability/audit` (`recordAudit`): audits the hand close.
+- `@infrastructure/http/response` and `@infrastructure/i18n` (`t`): build the response and reject messages.
+- `@domain-primitives/money` (`padDecimal`): formats the refund amount on the timeline.
+- `../model` (`ReturnDocument`): the return document type.
+- Callers: `receiveReturn` and `module.ts`'s `PAYMENT_REFUNDED` listener, per the file's header comments.
 
 ## Notes
-
-- `closeReturn` never checks whether the refund actually settled; it only checks state. The "money went back" fact is owned by its callers, which is why the function is `@internal`.
-- `closeReturnByHand` intentionally skips the outbox announcement: the `return.closed` email tells the customer their refund is on its way, which is false when the refund was canceled or paid out-of-band.
-- The `actor` parameter (present or absent) is threaded into the order timeline row so the UI can show *who* closed it; the payment-sweep path passes `undefined`.
-- Both exported functions return `null` (not throw) when the return was not in `received` state — callers are responsible for interpreting that as a no-op.
+- The hand close deliberately does not send the customer-facing closed event, because its mail tells the customer their money went back, which did not happen.
+- `return.closed_by_hand` is internal, so the to-do that asked for this check clears itself.
+- The `note` goes only into the audit row. The timeline row carries ids and numbers only.
+- `closeReturnByHand` is called with `closed` never null in its event builder, because only a close that landed is announced.
+- `recordAudit` is called without being awaited or chained, and is not part of the transaction.

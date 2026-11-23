@@ -1,39 +1,34 @@
 ---
 source: src/modules/shop-tasks/tests/integration/delayed.test.ts
-sha256: 6d163b36f627a0768ff76556fdce6907d3cd06d1e25767804bf9587a812b244d
-generated_at: 2026-11-14T21:55:31.053341+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6d163b36f627a0768ff76556fdce6907d3cd06d1e25767804bf9587a812b244d
+context_sha256: 3ad7d1b4bfb57df3a85a63056d8f273743e3342ca8c63e23248227f1224299c6
+generated_at: 2026-11-22T07:44:15.945947+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/tests/integration/delayed.test.ts
 
 ## Purpose
-
-Integration test that pins the `fulfillment_order.delayed` event contract: a single emission must both open a `consent_due` task for the buyer **and** write a notification, and a redelivery of the same `eventId` after a failed notice must re-run a no-op task open while delivering the notice exactly once. It guards the "task-first, notice-second" ordering that makes the handler safe under outbox redelivery.
+Integration test pinning how the shop-tasks module handles the `fulfillment_order.delayed` domain event. The event is both a to-do (a consent-due task for the buyer) and a buyer notification, but a module holds only one handler per event. The test verifies the order inside that handler and the redelivery rule: open the task first (idempotent by `eventId`), then write the notice, so a redelivery after a failed notice repeats a no-op open and writes the notice only once.
 
 ## Key elements
-
-- **`delayFor(userId)`** – Builds a `DomainEventMap['fulfillment_order.delayed']` payload with `shipCountry: 'US'` (so the consent rule applies) and a fixed `eventId` context (`'e1'`).
-- **`inboxOf(userId)`** – Wraps `notificationsService.list(userId)` to return the buyer's notification items for assertion.
-- **`describe('fulfillment_order.delayed')`** – Two-test suite:
-  - *"opens the consent reminder and tells the buyer, from one event"* – Emits the event once; asserts exactly one `consent_due` task exists and the inbox contains the `shop-tasks.fulfillment-delayed` code.
-  - *"writes each once when a redelivery follows a notice that failed"* – Spies on `notificationsService.create` to reject once, emits twice with the same `eventId`; asserts the task count stays at 1 and the inbox gains exactly one entry.
-- **`beforeEach` / `afterEach`** – Resets the domain-event bus, re-registers modules, and restores mocks between tests.
+- `setupTestDb()` — sets up the test database for the suite.
+- `beforeEach` / `afterEach` — reset domain events and register `enabledModules` via `registerModules`; afterwards restore mocks and reset events again.
+- `delayFor(userId)` — builds a `fulfillment_order.delayed` payload (typed as `DomainEventMap['fulfillment_order.delayed']`) with `shipCountry: 'US'`, so the consent rule applies.
+- `inboxOf(userId)` — returns the items from `notificationsService.list(userId)`.
+- Test 1: a single event opens one `TaskKind.consent_due` task and puts one notification with code `shop-tasks.fulfillment-delayed` in the buyer's inbox.
+- Test 2: `notificationsService.create` is mocked to reject once (`'inbox down'`). The first emit leaves one task and an empty inbox. Re-emitting the same event with the same `eventId` leaves one task and one notification.
 
 ## Relationships
-
-- **`src/kernel/events.ts`** – Supplies `emitDomainEvent`, `resetDomainEvents`, and the `DomainEventMap` type; the test drives the bus directly rather than calling the handler.
-- **`src/kernel/registry.ts`** – `registerModules` wires the shop-tasks handler (and others) into the bus for each test.
-- **`src/modules.ts`** – Exports `enabledModules`, the list passed to `registerModules`.
-- **`src/modules/notifications/index.ts`** – Exports `notificationsService`; the test calls `list` to read the inbox and spies on `create` to simulate failure.
-- **`src/modules/notifications/services/index.ts`** – Underlying service implementation behind `notificationsService` (spied in the redelivery test).
-- **`src/modules/tasks/tests/factories.ts`** – Provides `findTasksOfKind` to query tasks by kind.
-- **`src/modules/users/tests/factories.ts`** – Provides `createUser` to seed a buyer row.
-- **`src/types/index.ts`** – Exports the `TaskKind` enum used to parameterise the task query.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb` initialises the in-memory MongoDB before the suite runs.
+- `@kernel/events` — supplies `emitDomainEvent`, `resetDomainEvents` and the `DomainEventMap` type.
+- `@kernel/registry` — `registerModules` wires the handlers.
+- `src/modules.ts` — `enabledModules` is the module list registered, so the real handlers run.
+- `@modules/notifications` — `notificationsService` is used to read the inbox and is spied on to simulate a failure.
+- `@modules/tasks/tests/factories` — `findTasksOfKind` looks up the created tasks.
+- `@modules/users/tests/factories` — `createUser` creates the buyer.
+- `@types` — provides `TaskKind`.
+- `@tests/setup-test-db` — provides `setupTestDb`.
 
 ## Notes
-
-- The module doc block explicitly frames these tests as **contract pins** (ordering + idempotency), not mere regression checks. If the handler reorders "notice before task" or drops the `eventId` dedup key, the second test fails.
-- `shipCountry` is hard-coded to `'US'` to ensure the consent-reminder branch fires; a different country would skip task creation and the test would silently pass with 0 tasks.
-- The redelivery test relies on the event bus logging (not throwing) a listener failure and continuing—this is the outbox-redelivery assumption stated in the inline comment.
+- The second test relies on the bus logging a failing listener and carrying on; the in-test comment says the outbox would deliver the event again, which the test simulates by emitting it a second time.
+- Both emits in the redelivery test use the same `eventId` (`'e1'`), which is what makes the task open idempotent.

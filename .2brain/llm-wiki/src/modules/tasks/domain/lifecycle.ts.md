@@ -1,50 +1,39 @@
 ---
 source: src/modules/tasks/domain/lifecycle.ts
-sha256: 9ce0d5c5232c5a6ab811c4f169452494d3ff8f678d1129ee57bcf0aab4dac8c9
-generated_at: 2026-11-08T08:33:21.868811+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a0c446b4ee583dca29bbe28cf60a614893a0f002ce1f68625a6206ce1964957b
+context_sha256: ac2d3617b68510e3d37afd7d7b43e5ed1a637855d9ff5a5a6fa23250158be3e8
+generated_at: 2026-11-22T07:59:39.578490+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/tasks/domain/lifecycle.ts
 
 ## Purpose
-
-Pure-function module that encodes every allowed status transition (the "doors") for a task. Each door is a total function from the task's current facts to either a concrete `TaskPatch` (fields to set/unset) or a typed refusal. Keeping transitions here — separate from services, repositories, or HTTP handlers — makes the state machine auditable in one place and trivially testable without I/O.
+Defines a task's lifecycle as pure functions. `status` is read-only on the wire and changes only through three "doors" (`resolve`, `markSpam`, `reopen`) and through assignment (`new` <-> `in_progress`). Each door takes the task's facts and returns either the write it owes (a set/unset patch) or a refusal. Open = `new | in_progress`; closed = `resolved | spam`.
 
 ## Key elements
-
-- **`TaskFacts`** — read-only snapshot of the fields a transition inspects (status, closedAt, respondedAt, assigned, openKey, kind, link).
-- **`TaskPatch`** — the write a transition produces: `{ set, unset }`. Consumers (repository, service) apply it; this file never touches a database.
-- **`TaskRefusal`** — closed union (`'already_resolved' | 'already_spam' | 'already_open'`) returned when a door is inapplicable.
-- **`Transition`** — discriminated union: either `{ patch }` or `{ refusal }`.
-- **`resolve(task, now)`** — moves a task to `resolved` with `resolution: 'staff'`. Stamps `closedAt` (preserved if already set) and `respondedAt` (once). Unsets `openKey`.
-- **`markSpam(task, now)`** — moves a task to `spam` with `resolution: 'spam'`. Same `closedAt` stamping, no `respondedAt`. Unsets `openKey`.
-- **`reopen(task)`** — moves a closed task back to open. Chooses `in_progress` vs `new` based on `assigned`. Unsets `closedAt` and `resolution`; restores `openKey` for linked tasks.
-- **`clear(now)`** — system-level auto-close (`resolution: 'cleared'`). Returns a bare `TaskPatch` (no refusal path) because the caller guarantees the task is still open.
-- **`isOpen(status)`** / **`OPEN_STATUSES`** — predicate and constant for the two "owes work" statuses.
-- **`openKeyOf(kind, link)`** — builds the dedup key string for a linked system task.
-- **`initialTaskStatus(suspectedSpam)`** — decides birth status (`new` or `spam`).
-- **`DUE_SOON_MS`** — `3 * DAY_MS`; threshold for the "due soon" reminder window (consumed elsewhere, not by any door here).
+- `TaskFacts` — the inputs a transition reads: `status`, `closedAt`, `respondedAt`, `assigned`, `openKey`, `kind`, optional `link`.
+- `TaskPatch` — `{ set, unset }`: fields to set and field names to unset.
+- `TaskRefusal` / `Transition` — refusal reasons (`already_resolved`, `already_spam`, `already_open`) and the door result, either `{ patch }` or `{ refusal }`.
+- `DUE_SOON_MS` — `3 * DAY_MS`: how far ahead of a deadline the single "due soon" reminder goes out, and the shortest task life that earns one.
+- `OPEN_STATUSES` / `isOpen(status)` — the statuses that still owe work.
+- `openKeyOf(kind, link)` — dedup key `kind:type:id`, one open system task per kind and record. Visitor messages have none.
+- `initialTaskStatus(suspectedSpam)` — `spam` if suspected, otherwise `new`.
+- `resolve(task, now)` — refuses if already resolved. Otherwise sets `status: resolved`, `resolution: 'staff'`, `closedAt` (kept if already set), and `respondedAt` (stamped once), and unsets `openKey`.
+- `markSpam(task, now)` — refuses if already spam. Sets `status: spam`, `resolution: 'spam'`, and `closedAt` (kept if already set). Does not touch `respondedAt`. Unsets `openKey`.
+- `reopen(task)` — refuses if already open. Sets status to `in_progress` if `assigned`, else `new`. Restores `openKey` for linked tasks. Unsets `closedAt` and `resolution`.
+- `clear(now)` — the system closes a task: `resolved` with `resolution: 'cleared'`, `closedAt: now`, and unsets `openKey`. Returns a bare `TaskPatch`, not a `Transition`.
 
 ## Relationships
-
-- **`src/types/index.ts`** — imports `TaskStatus`; every door reads/writes this enum.
-- **`src/domain-primitives/time.ts`** — imports `DAY_MS` to compute `DUE_SOON_MS`.
-- **`src/modules/tasks/domain/index.ts`** — barrel file that re-exports this module's public surface.
-- **`src/modules/tasks/domain/actions.ts`** — sibling domain module; likely composes or dispatches the transitions defined here.
-- **`src/modules/tasks/service.ts`** — orchestrator that calls `resolve` / `markSpam` / `reopen` and forwards the resulting `TaskPatch` or surfaces the refusal to the caller.
-- **`src/modules/tasks/services/system.ts`** — system automation path; calls `clear(now)` when a linked situation ends.
-- **`src/modules/tasks/services/workflow.ts`** — workflow-level service that may invoke these doors as part of a multi-step process.
-- **`src/modules/tasks/repository.ts`** — the writer that actually applies a `TaskPatch` to persistence.
-- **`src/modules/tasks/presenter.ts`** — presentation layer; may use `isOpen` / `OPEN_STATUSES` to filter or label tasks.
-- **`src/modules/tasks/tests/unit/lifecycle.test.ts`** — dedicated unit tests for every door and edge case.
-- **`src/modules/tasks/tests/unit/system-openings.test.ts`** — tests the system-open + `clear` interaction.
-- **`src/modules/shop-tasks/tests/unit/openings.test.ts`** — cross-module test that exercises these transitions through the shop-tasks domain.
+- Imports `TaskStatus` from `src/types/index.ts` and `DAY_MS` from `src/domain-primitives/time.ts`.
+- Sits in the tasks domain next to `src/modules/tasks/domain/actions.ts` and is exposed via `src/modules/tasks/domain/index.ts`.
+- Pinned by `src/modules/tasks/tests/unit/lifecycle.test.ts`, with `src/modules/tasks/tests/unit/system-openings.test.ts` and `src/modules/shop-tasks/tests/unit/openings.test.ts` among the related tests.
+- Other neighbors (`src/modules/tasks/repository.ts`, `src/modules/tasks/presenter.ts`, and the `contact`, `read`, `system` and `workflow` services under `src/modules/tasks/services/`) are linked to it in the dependency graph. The file itself only exports the pure helpers, and what each consumer does with them is not visible here.
 
 ## Notes
-
-- **`dueAt` is intentionally untouched** by every door. The retention/deadline clock belongs to the originating situation, not to the task's open/closed state. Do not add `dueAt` writes to a `TaskPatch` here.
-- **`closedAt` is preserved on re-resolve** (e.g., spam → resolved). Only the *first* close stamps it; subsequent closes keep the original value so the retention window is not extended.
-- **`respondedAt` is stamped exactly once** (nullish-coalescing pattern). `markSpam` deliberately omits it.
-- **`clear` returns a raw `TaskPatch`, not a `Transition`.** The caller is contractually responsible for confirming the task is still open before applying it; there is no refusal branch.
-- All functions are **pure and synchronous** — no I/O, no async, no side effects. The `now: Date` parameter is injected for testability.
+- `dueAt` is deliberately not touched by any door: the clock belongs to the situation, not to the reopen (for example, an FTC deadline does not restart when staff reopen a task).
+- `closedAt` is the retention clock. Closing stamps it, and reopening unsets it, which stops the clock.
+- `resolve` keeps an existing `closedAt` when going from spam to resolved. `markSpam` does the same when going from resolved to spam.
+- `clear` has no guard. Per its doc comment, the caller must apply it only to tasks that are still open, so a task staff closed first is never overwritten. Notes are kept.
+- The functions return patches and never write anything. Applying them is the caller's job.
+- The module header points to the lifecycle section of the tasks module documentation for the full description.

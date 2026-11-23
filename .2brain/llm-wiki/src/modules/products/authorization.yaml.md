@@ -1,36 +1,32 @@
 ---
 source: src/modules/products/authorization.yaml
-sha256: af69bc26299b67bedf6ec8e58658d57cd0b744f96d5d952b0843bc96d1aa8c45
-generated_at: 2026-11-08T07:41:41.159426+00:00
-model: ollama:qwen3.8:27b
+source_sha256: af69bc26299b67bedf6ec8e58658d57cd0b744f96d5d952b0843bc96d1aa8c45
+context_sha256: 620b26c40176794c02becffd4c7f926907bc193c554c1f41ec5f12f810e952e4
+generated_at: 2026-11-22T07:07:12.037108+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/authorization.yaml
 
 ## Purpose
-
-Defines the authorization rules and named rule-sets for the **Product** subject in the `products` module. It is the declarative policy layer that determines which tenant-scoped actions (read, display, create, update, delete) are permitted, separating the public storefront view from internal staff views.
+Declares the authorization rules and rule sets for the `products` module. Each rule is an action on the `Product` subject, and sets bundle those rules into named permission groups (storefront, display, management).
 
 ## Key elements
-
-- **`rules`** — Five individual rule entries, all scoped to `tenant`:
-  - `read:Product` — Active, undeleted products only (storefront view). Carries explicit conditions `active: true` and `deletedAt: null`.
-  - `display:Product` — All products regardless of publish state (staff/draft view).
-  - `create:Product` — Add a product to the catalogue.
-  - `update:Product` — Modify a product, including price and published state.
-  - `delete:Product` — Remove a product; deliberately separated from `update` because of its larger blast radius.
-- **`sets`** — Three named groupings that bundle rules for convenient reference:
-  - `ProductStorefront` — contains `read:Product`.
-  - `ProductDisplay` — contains `display:Product`.
-  - `ProductManagement` — contains `create:Product`, `update:Product`, `delete:Product`.
+- **`rules`**: five entries, all with `subject: Product`, `module: products`, `scope: tenant`:
+  - `read`: storefront view. Has `conditions` `active: true` and `deletedAt: null`, so it covers only active, undeleted products.
+  - `display`: reads every product regardless of publish state, so staff can see drafts. No conditions.
+  - `create`: adds a product to the catalogue.
+  - `update`: changes a product, including price and published state.
+  - `delete`: removes a product. Kept separate from `update` because of its larger blast radius.
+- **`sets`**: named bundles that reference rules as `action:Subject` strings:
+  - `ProductStorefront` → `read:Product`
+  - `ProductDisplay` → `display:Product`
+  - `ProductManagement` → `create:Product`, `update:Product`, `delete:Product`
 
 ## Relationships
-
-- **`src/modules/products/openapi.yaml`** — The OpenAPI contract defines the product endpoints; these authorization rules are the policy that gates which of those endpoints a given caller may invoke and under what conditions.
-- **`src/modules/products/openapi.browser-events.yaml`** — Browser-event definitions for product state changes (e.g. publish/unpublish); the `update` and `delete` rules here are the authorization prerequisites for the state transitions those events represent.
+- Neighbor `src/modules/products/openapi.yaml` is the API spec for the same module. This file doesn't reference it directly, so the link is only that both describe the products module.
 
 ## Notes
-
-- The `read` rule is the only one carrying explicit **conditions** (`active: true`, `deletedAt: null`). Every other rule is unconditionally granted at the tenant scope. This asymmetry is intentional: `display` is the broader staff-facing counterpart and must see drafts.
-- `delete` is its own rule rather than a value of `update` so that permissioning can grant edit rights without granting removal rights.
-- The `sets` are purely organizational sugar — they do not add new permission logic, they just group rules under a human-readable name for use in role/permission assignments.
+- `read` is the only rule with `conditions`. `display` has none, so it sees drafts and removed items.
+- The `ProductManagement` description says "bring back" products, but no restore rule or action is defined here. Only `create`, `update` and `delete` are listed.
+- All rules are tenant-scoped (`scope: tenant`).

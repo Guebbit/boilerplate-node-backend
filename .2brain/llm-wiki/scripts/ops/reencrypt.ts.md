@@ -1,38 +1,35 @@
 ---
 source: scripts/ops/reencrypt.ts
-sha256: d7e7785d7128e238597e602a2def4bb2b9e4d7baf9f26ab2f164e85aa5d79ce0
-generated_at: 2026-11-08T02:55:38.544001+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0a5f8e7626269ccf99b389e80942a839b44d165c370fac3411085820bfcd58c4
+context_sha256: 921731f897c8bfd28836f6f1d07255c1d86c566e040644d9b36b5118de20c24e
+generated_at: 2026-11-22T02:11:45.843726+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/ops/reencrypt.ts
 
 ## Purpose
-
-One-shot CLI script (`npm run reencrypt`) that re-encrypts every stored secret onto the newest key in its key ring after a rotation deploy. Without it, old key entries can never be dropped because nothing else migrates the rows that still reference them.
+Manual ops script (`npm run reencrypt`) that re-encrypts every stored secret onto the newest key of its ring. A key rotation prepends a new key and keeps the old one so existing rows still decrypt. Nothing else migrates those rows, so the old key cannot be dropped until this runs. Run it after the rotation deploy, then remove the old key entry.
 
 ## Key elements
-
-- **`dryRun`** – Boolean read via `hasFlag('dry-run')`; when true, no writes occur and the script only reports per-field, per-key-version counts.
-- **`walks`** – Flat array of re-encryption functions collected from `enabledModules` (only those exposing `.reencrypt`), in registration order.
-- **`runAll(remaining, total)`** – Recursively executes walks **sequentially** (one at a time, so two never contend for the same collection), accumulating a merged `ReencryptReport`.
-- **`main()`** – Calls `startJob()` → `runAll(walks)` → logs the final report via `logger.info`.
-- **Entry point** – `void runScript(undefined, main, stopDatabase)`; no job name is passed because this is never scheduled.
+- `dryRun` — true when `--dry-run` is passed. Nothing is written; per-field counts of values on each key version are reported.
+- `walks` — the `reencrypt` function of each enabled module that defines one, in registration order.
+- `runAll(remaining, total)` — runs the walks sequentially (so two never contend for the same collection), merging each report into the running total.
+- `main` — calls `startJob()`, runs all walks, then logs `Re-encryption finished.` with `dryRun` and the merged report.
+- Entry point: `void runScript(undefined, main, stopDatabase)`. The job name is `undefined` because the script is run by hand, not scheduled.
 
 ## Relationships
-
-- **`scripts/cli.ts`** – Provides `hasFlag`, used to detect `--dry-run`.
-- **`scripts/run-script.ts`** – Provides `runScript`, the wrapper that manages process lifecycle and error reporting via `process.exitCode`.
-- **`src/infrastructure/config/dotenv.ts`** – Imported for its side-effect: loads environment variables before anything else runs.
-- **`src/infrastructure/runtime/mongoose-boot.ts`** – Imported for its side-effect: sets Mongoose defaults *before* any schema is built.
-- **`src/infrastructure/runtime/database.ts`** – Provides `startJob` (open connection) and `stopDatabase` (cleanup passed to `runScript`).
-- **`src/infrastructure/security/reencrypt.ts`** – Provides `emptyReport`, `mergeReports`, and the `ReencryptReport` type used to accumulate results.
-- **`src/modules.ts`** – Provides `enabledModules`; the script iterates them to discover which modules expose a `.reencrypt` walk.
+- `src/modules.ts` — supplies `enabledModules`; each enabled module's optional `reencrypt` walk is collected into `walks`. The script names no module, so a removed module takes its walk with it.
+- `src/infrastructure/security/reencrypt.ts` — provides `emptyReport`, `mergeReports` and the `ReencryptReport` type.
+- `scripts/run-script.ts` — `runScript` wraps `main` and `stopDatabase`. It never rejects.
+- `scripts/cli.ts` — `hasFlag` parses `--dry-run`.
+- `src/infrastructure/runtime/database.ts` — `startJob` connects; `stopDatabase` is the cleanup passed to `runScript`.
+- `src/infrastructure/runtime/mongoose-boot.ts` — imported for its side effects before any model loads.
+- `src/infrastructure/config/dotenv.ts` — imported for its side effects to load environment config.
+- `src/infrastructure/adapters/logger.ts` — exports `logger`, used to emit the final report.
 
 ## Notes
-
-- **Import order matters:** `dotenv` and `mongoose-boot` must load before any Mongoose model is referenced; they are side-effect imports at the top of the file.
-- **Idempotent:** a value already encrypted with the newest key version is left untouched, so re-running the script is safe and writes nothing on the second pass.
-- **Sequential by design:** `runAll` runs walks one after another (not in parallel) to avoid two walks writing to the same collection simultaneously.
-- **Not scheduled:** there is intentionally no `docker/crontab` entry; this is a post-rotation action, not a recurring job.
-- **No floating-promise lint error:** the `void` + `eslint-disable` on the entry line is safe because `runScript` never rejects—failures surface through `process.exitCode`.
+- Import order matters: `dotenv`, then `mongoose-boot`, must come first. Mongoose defaults are read at schema build time, so `mongoose-boot` has to run before any model loads.
+- Idempotent: a value already on the newest key is not touched, so a second run writes nothing.
+- Intentionally not scheduled, so there is no `docker/crontab` entry. A rotation is an event, not a cadence.
+- The `no-floating-promises` ESLint rule is disabled on the entry line because `runScript` never rejects.

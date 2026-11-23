@@ -1,36 +1,39 @@
 ---
 source: src/modules/orders/tests/contract/timeline-variants.contract.test.ts
-sha256: 66994555eded6b8c31b6ecfb5cdf416df8f8b14d95d4db340f3e4d71d5f35904
-generated_at: 2026-11-08T07:02:57.916620+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6ce81fea043daef3af9816916752d87b208ee7790a90ea3f8491cff1c635ce92
+context_sha256: 1fe7f992c2dfa96ec21462772b5d3585d2465af7055dfbc4aa4c638c498a002a
+generated_at: 2026-11-22T06:25:40.089454+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/contract/timeline-variants.contract.test.ts
 
 ## Purpose
-
-Contract test that keeps the hand-written `oneOf` timeline variants in the module's `openapi.yaml` honest against the `OrderTimelineType` enum. It verifies that the variants split the type set exactly, that discriminator mappings are complete and correct, that the export surface mirrors the entry surface, that only approved variants carry a `text` property, that the domain audience table covers every type, and that the root (bundled) `openapi.yaml` closes variants with `unevaluatedProperties` while leaving bases open.
+A contract test that keeps the hand-written timeline `oneOf` variants in the OpenAPI spec consistent. Nothing generates the variants, so the test checks that they split `OrderTimelineType` exactly, that each discriminator `mapping` names every type once, that the export surface mirrors the API surface, and that the bundled root spec closes each variant correctly.
 
 ## Key elements
-
-- **`Schema`** — minimal structural type covering only the fields the test inspects (`enum`, `$ref`, `allOf`, `oneOf`, `properties`, `additionalProperties`, `unevaluatedProperties`, `discriminator`).
-- **`nameOf(ref)`** — extracts the trailing segment of a `$ref` string.
-- **`surfaces`** — pre-computed array of two entries (`OrderTimelineEntry` / `OrderTimelineExportEntry`), each holding the union name, base name, member names, variant details (base, type enums, data `$ref`), and the discriminator mapping.
-- **`describe.each(surfaces)`** — runs the same suite of assertions (discriminator property, exact type split, mapping integrity, one-level base composition, data-schema existence) against both surfaces.
-- **`withText(union)`** — returns the sorted list of variant names whose `allOf[1]` branch declares a `text` property.
-- **Audience-table tests** — asserts `TIMELINE_AUDIENCE.note_added === 'staff'` and that the table's keys match the contract's type set exactly.
-- **Closing tests** — reads the root `openapi.yaml` and asserts bases have *no* `additionalProperties` constraint while every variant has `unevaluatedProperties: false` and no `additionalProperties`.
+- `Schema`: minimal interface for the schema fields the checks read (`enum`, `$ref`, `allOf`, `oneOf`, `properties`, `additionalProperties`, `unevaluatedProperties`, `discriminator`).
+- `schemas`: `components.schemas` parsed from the orders module's own `openapi.yaml`, read relative to the test directory.
+- `nameOf(ref)`: returns the last segment of a local `$ref`.
+- `allTypes`: the `OrderTimelineType` enum, which the variants must partition.
+- `surfaces`: for `OrderTimelineEntry`/`OrderTimelineEntryBase` and `OrderTimelineExportEntry`/`OrderTimelineExportEntryBase`, it reads each union's members, and each variant's composed base, `type` enum values and `data` schema, plus the discriminator mapping.
+- `describe.each(surfaces)` checks per surface:
+  - the discriminator property is `type`;
+  - the variants' types partition `allTypes` with no overlap;
+  - the mapping keys equal `allTypes`, each type maps to its holding variant, and the mapped values equal the `oneOf` members;
+  - each variant composes its own base directly, and that base has no `allOf` of its own;
+  - each variant's `data` schema exists.
+- Export mirror test: the export variants have the same `types` and `data` as the entry variants.
+- `withText(union)` and the `text` test: only `...NoteAdded` and `...StatusOverridden` variants declare a `text` property, with matching names on the export surface (`Entry` replaced by `ExportEntry`).
+- Audience table tests: `TIMELINE_AUDIENCE.note_added` is `'staff'`, and its keys equal `allTypes`.
+- Bundle closing tests: they read the root bundle `openapi.yaml`, five directory levels above the test directory, and check two things. Both bases must be defined and have no `additionalProperties`. Every variant must have `unevaluatedProperties: false` and no `additionalProperties`.
 
 ## Relationships
-
-- **`src/modules/orders/domain/index.ts`** — imported for `TIMELINE_AUDIENCE`, which the audience-table tests assert against the contract's type list.
-- **`src/modules/orders/domain/timeline.ts`** — source of the `TIMELINE_AUDIENCE` constant (re-exported via `domain/index.ts`); the test's audience assertions depend on its shape.
-- Reads **`src/modules/orders/openapi.yaml`** (module-local) for all variant, discriminator, and composition checks.
-- Reads **`openapi.yaml`** at the repository root (resolved three levels up) for the closing-rule assertions, since that is the bundle consumers actually receive.
+- `src/modules/orders/domain/index.ts`: imports `TIMELINE_AUDIENCE` from the domain barrel for the audience-table tests.
+- `src/modules/orders/domain/timeline.ts`: its relationship isn't visible in this file's imports. The audience table's keys are checked against the spec's `OrderTimelineType` enum.
 
 ## Notes
-
-- The test reads **two different** `openapi.yaml` files: the module-local one for structural checks and the root bundle for closing rules. This is intentional — the root file is what a twin, integrator, or docs tool will see.
-- Closing uses JSON Schema 2020-12 semantics: variants are closed via `unevaluatedProperties: false` (not `additionalProperties: false`), and bases must remain open. A closed base would reject its own `allOf` variants.
-- The `text` property is deliberately restricted to `NoteAdded` and `StatusOverridden` variants; any new variant wanting `text` must update this test.
-- The export surface is expected to be a structural mirror of the entry surface (same variant order, same types, same data schemas, names differing only by the `Export` infix).
+- The closing rule is checked on the root bundle, not the module spec, because the bundle is what consumers read.
+- Bases must stay open. A base closed with `additionalProperties: false` would reject its own variants' extra fields, so closure is applied per variant via `unevaluatedProperties` (JSON Schema 2020-12).
+- The tests index into `allOf[0]` and `allOf[1]` by position, so a variant must be written as `[base ref, own branch]`.
+- The tests use `toSorted()`.

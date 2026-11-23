@@ -1,47 +1,39 @@
 ---
 source: src/modules/account/oauth/config.ts
-sha256: da8f9f2e42c1f772cbccc2101c07a15256ab868f1c3ff04d4d3594aa89257e99
-generated_at: 2026-11-08T04:11:59.484590+00:00
-model: ollama:qwen3.8:27b
+source_sha256: da8f9f2e42c1f772cbccc2101c07a15256ab868f1c3ff04d4d3594aa89257e99
+context_sha256: 6de1b4988b00fd0812e8122a588e029ede598bd162138f76a5b4ae4d69f5b84c
+generated_at: 2026-11-22T03:31:31.296981+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/oauth/config.ts
 
 ## Purpose
-
-Centralizes all OAuth-related environment-variable access, timeout policy, and URL-building logic so that providers and controllers never reference a `NODE_OAUTH_*` variable name or construct a redirect/callback URL themselves. It reads configuration and derives URLs; it does not hold sessions or mint tokens.
+Single place for OAuth-related configuration and URL building. It reads the `NODE_OAUTH_*` env vars, so providers and controllers never reference those names directly, and it builds the backend redirect URIs and the frontend landing-page URLs used by the OAuth flow. It reads policy only; it holds or mints no secrets or tokens.
 
 ## Key elements
-
-- **`OAuthCallbackError`** — Type extracted from the shared `REDIRECT_QUERY_ENUMS` contract; enumerates the `?error=` values the frontend callback page may receive.
-- **`OAUTH_FETCH_TIMEOUT_MS`** — `5000`; the single timeout (via `AbortSignal.timeout`) for all outbound provider HTTP calls (token exchange, GitHub profile/email fetches).
-- **`oauthConfig`** — A `defineConfig` instance declaring the four `NODE_OAUTH_{GOOGLE,GITHUB}_{CLIENT_ID,CLIENT_SECRET}` fields (`text()`, secrets flagged `sensitive`).
-- **`OAuthCredentials`** — Interface: optional `clientId` / `clientSecret` pair.
-- **`getOAuthCredentials(name)`** — Returns the credential pair for `'google'` or `'github'`; `{}` for anything else.
-- **`isOAuthProviderConfigured(name)`** — `true` only when both halves are present; the registry's "is this provider active" gate.
-- **`backendUrl(path)`** *(private)* — `new URL(path, siteConfig().NODE_URL).href`; produces an absolute URL rooted at `NODE_URL`.
-- **`oauthRedirectUri(provider)`** — The absolute `redirect_uri` this app presents to the provider (`/account/oauth/:provider/callback`). Always derived from `NODE_URL`, never from the request.
-- **`oauthCallbackUrl(provider, originalUrl)`** — Rebuilds the callback `URL` from `NODE_URL` and attaches the **raw** query string (sliced from `originalUrl`, not re-serialized from `request.query`) to preserve repeated parameters.
-- **`oauthFrontendCallbackUrl(errorCode?, continueTo?, locale?, linked?)`** — Builds the browser-redirect target on the frontend's `/oauth/callback` for the normal success/error path.
-- **`oauthFrontendMfaCallbackUrl(challenge, continueTo?, locale?)`** — Browser-redirect target when 2FA is required; carries the non-secret challenge metadata in the query string (the secret token lives in a cookie).
-- **`oauthFrontendDeletionCallbackUrl(pending, continueTo?, locale?)`** — Browser-redirect target during the account-deletion grace window; carries `purgeAt`/`expiresAt` in the query.
+- `OAuthCallbackError`: type of the `?error=` values the frontend callback page understands, derived from `REDIRECT_QUERY_ENUMS.completeOAuthLogin.error`.
+- `OAUTH_FETCH_TIMEOUT_MS` (5000): shared timeout for a provider's outbound HTTP calls (token exchange, GitHub profile/email follow-ups), meant for `AbortSignal.timeout`.
+- `oauthConfig`: `defineConfig` schema named `account-oauth` with Google and GitHub client ID/secret fields (secrets marked `sensitive`).
+- `OAuthCredentials` / `getOAuthCredentials(name)`: returns `{clientId, clientSecret}` for `'google'` or `'github'`, or `{}` for any other name.
+- `isOAuthProviderConfigured(name)`: true only when both ID and secret are set.
+- `oauthRedirectUri(provider)`: absolute `<NODE_URL>/account/oauth/<provider>/callback`, built with `new URL` through the private `backendUrl`.
+- `oauthCallbackUrl(provider, originalUrl)`: the redirect URI with the raw query string from `originalUrl` attached, returned as a `URL`.
+- `oauthFrontendCallbackUrl(errorCode?, continueTo?, locale?, linked?)`: frontend `/oauth/callback` URL with optional `error`, `linked`, `continue` and `locale` query params.
+- `oauthFrontendMfaCallbackUrl(challenge, continueTo?, locale?)`: frontend URL carrying `mfaRequired=1`, `expiresAt`, JSON-encoded `methods`, and optional `defaultMethod`, `continue` and `locale`.
+- `oauthFrontendDeletionCallbackUrl(pending, continueTo?, locale?)`: frontend URL carrying `deletionPending=1`, `purgeAt` and `expiresAt`, plus optional `continue` and `locale`.
 
 ## Relationships
-
-- **`src/infrastructure/config/define.ts`** / **`fields.ts`** — Provides `defineConfig` and the `text()` field factory used to declare the env-var shape.
-- **`src/infrastructure/http/config.ts`** — Supplies `siteConfig()` (`NODE_URL`, `NODE_FRONTEND_URL`), the base for every absolute URL this file constructs.
-- **`src/modules/account/controllers/get-oauth-start.ts`** — Reads `oauthRedirectUri` and `getOAuthCredentials` to build the provider auth request.
-- **`src/modules/account/controllers/get-oauth-callback.ts`** — Reads `oauthCallbackUrl`, `isOAuthProviderConfigured`, `OAUTH_FETCH_TIMEOUT_MS`, and the three `oauthFrontend*` URL builders to complete the callback flow.
-- **`src/modules/account/controllers/post-oauth-link-start.ts`** — Consumes the same credential/redirect-URI helpers for the "link a provider to an existing account" flow.
-- **`src/modules/account/oauth/providers/client.ts`** / **`github.ts`** — Call `getOAuthCredentials` for auth and apply `OAUTH_FETCH_TIMEOUT_MS` to their outbound `fetch` calls.
-- **`src/modules/account/oauth/providers/index.ts`** — Uses `isOAuthProviderConfigured` to decide which providers appear in the registry.
-- **`src/modules/account/tests/unit/oauth-github.test.ts`** / **`oauth-google.test.ts`** — Unit-test the credential lookup and URL-building for each provider.
-- **`src/types/index.ts`** — Source of the `MfaChallenge` and `DeletionPending` types that parameterize the MFA and deletion callback-URL builders.
+- Uses `defineConfig` (`src/infrastructure/config/define.ts`) and `text` (`src/infrastructure/config/fields.ts`) to declare the env schema.
+- Uses `siteConfig()` from `src/infrastructure/http/config.ts` for `NODE_URL` (backend base) and `NODE_FRONTEND_URL` (frontend base).
+- Imports `MfaChallenge` and `DeletionPending` types from `@types` (`src/types/index.ts`).
+- Imports `REDIRECT_QUERY_ENUMS` from `@api/redirect-query`.
+- Consumers (per the dependency graph): the OAuth controllers (`src/modules/account/controllers/get-oauth-start.ts`, `get-oauth-callback.ts`, `post-oauth-link-start.ts`), the provider files (`src/modules/account/oauth/providers/github.ts`, `index.ts`), `src/modules/account/module.ts`, and the GitHub and Google unit tests (`src/modules/account/tests/unit/oauth-github.test.ts`, `oauth-google.test.ts`).
 
 ## Notes
-
-- `oauthRedirectUri` and `oauthCallbackUrl` are deliberately **request-independent** for the scheme/host portion: deriving them from `NODE_URL` (not `req.host`/`req.protocol`) is the open-redirect guard.
-- `oauthCallbackUrl` slices the raw query off `originalUrl` rather than re-encoding from `request.query` because Express's parser collapses repeated params into arrays, which would mask a malicious duplicate `code`.
-- The `continueTo` and `locale` parameters on every frontend-URL builder are **caller-validated** (against `isSameOriginPath` / `isLocaleTag` in `oauth/state.ts`); this file does not re-validate.
-- `backendUrl` is module-private; only `oauthRedirectUri` uses it. Any new URL that must be absolute against `NODE_URL` should route through it.
-- The file intentionally contains **no** token minting, session logic, or provider-specific HTTP calls—those live in `./providers/*` and the controllers.
+- Redirect URIs always derive from `NODE_URL`, never from the request's Host, scheme or a request-supplied target. This avoids open-redirect and callback-confusion issues.
+- `backendUrl` uses `new URL` rather than string concatenation, so a `NODE_URL` with or without a trailing slash works. An unset `NODE_URL` falls back to the localhost default, which only a skipped boot check (`NODE_ENV=test`) lets through.
+- `oauthCallbackUrl` slices the raw query off `originalUrl` instead of rebuilding it from `request.query`. A rebuilt query would hide repeated parameters (such as `code`) that the OAuth library is meant to reject.
+- `continueTo` is the only request-derived part of the frontend URLs. Callers must validate it with `isSameOriginPath` (`src/modules/account/oauth/state.ts`), and `locale` with `isLocaleTag` from the same file, before passing them in.
+- The MFA and deletion URLs carry only non-secret data. The challenge token and the deletion claim check travel in cookies (`src/modules/account/oauth/mfa-redirect.ts`, `src/modules/account/oauth/deletion-redirect.ts`). The MFA function's parameter type omits `challenge` so the token can't be serialized into the URL.
+- Adding a provider means adding fields to `oauthConfig` and a branch in `getOAuthCredentials`. Any other name gets `{}` and counts as unconfigured.

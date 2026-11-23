@@ -1,33 +1,28 @@
 ---
 source: scripts/testing/run-staged-tests.ts
-sha256: aa9eecd2c3c2520457c2989056d88a19f2a5ed04ad3496108f7b85827dff8fa4
-generated_at: 2026-11-08T03:03:23.999827+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c0389674940849eb5ff35cb25586330abd1c5216d647415be99b98a9e7bd57a3
+context_sha256: 2471b04d47e12dca4a007c5d7d452bd744631d3063abf6ceff07d71c93229561
+generated_at: 2026-11-22T02:19:41.125850+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/testing/run-staged-tests.ts
 
 ## Purpose
-
-Pre-commit gate (last step of `.husky/pre-commit`, invoked as `npm run test:staged`) that runs any staged integration, contract, or fuzz test file not already covered by the lighter `complete:light` suite. Exists because `complete:light` skips all suites that require a `mongod` instance; without this, a newly added or changed integration test would first execute only at merge time.
+A pre-commit script (`npm run test:staged`, the last step of `.husky/pre-commit`) that runs, file by file, the integration, contract and fuzz tests that the commit adds or changes. The light gate (`complete:light:gates`) skips every suite that needs `mongod`, so without this step a new integration test would first run at merge time, far from the commit that broke it.
 
 ## Key elements
-
-- **`listed`** — `spawnSync` of `git diff --cached --name-only --diff-filter=AMR -z`; captures the NUL-separated list of added/modified/renamed staged paths.
-- **Git-failure guard** — If `git diff` exits non-zero, prints stderr and `process.exit(1)` so the commit is blocked.
-- **`files`** — Filters `listed.stdout` (split on `\0`) through `isOutsideLightGate(path)` and an `existsSync` check against `REPO_ROOT`.
-- **Early-exit** — If `files` is empty, logs a "no staged integration/contract/fuzz test" message and exits 0.
-- **Jest invocation** — `spawnSync('npx', ['jest', '--runInBand', '--passWithNoTests', '--runTestsByPath', ...files])` with `stdio: 'inherit'`; the script's exit code mirrors Jest's status.
+This is a top-level script with no exports. It runs in order:
+- **Staged file listing**: `spawnSync('git', ['diff', '--cached', '--name-only', '--diff-filter=AMR', '-z'])` in `REPO_ROOT`. NUL-separated output avoids filename quoting problems. Only added, modified and renamed files are kept, since a deleted test has nothing left to run.
+- **Failure handling**: if `git diff` exits non-zero, it logs the stderr and exits 1, so a git failure fails the commit instead of reading as "nothing staged".
+- **Filtering**: `files` keeps paths where `isOutsideLightGate(path)` is true and the file still exists on disk (a partial stage can drop one).
+- **Early exit**: if `files` is empty, it logs `[test:staged] no staged integration/contract/fuzz test` and exits 0.
+- **Jest run**: `npx jest --runInBand --passWithNoTests --runTestsByPath ...files` with inherited stdio. The script exits with jest's status, or 1 if there is none.
 
 ## Relationships
-
-- **`scripts/modules-on-disk.ts`** — Provides the `REPO_ROOT` constant used as the working directory for both the `git` and `jest` calls.
-- **`scripts/testing/suites.ts`** — Provides `isOutsideLightGate(path)`, the predicate that determines whether a staged test file belongs to a layer the light gate does *not* cover (integration, contract, fuzz).
+- `scripts/modules-on-disk.ts`: provides `REPO_ROOT`, used as the working directory for both `git` and `jest` and to resolve staged paths on disk.
+- `scripts/testing/suites.ts`: provides `isOutsideLightGate`, which decides which staged files this script runs.
 
 ## Notes
-
-- **Serial execution is mandatory.** The integration/contract/fuzz layers share a single in-memory `mongod`, so Jest runs with `--runInBand`; parallel workers would collide on that instance.
-- **`--runTestsByPath` + `testPathIgnorePatterns` interaction.** Paths are passed verbatim (not as regexes), but Jest's `testPathIgnorePatterns` still applies. Staged files under `tests/cluster` or `tests/broker` are silently dropped; `--passWithNoTests` then allows an otherwise-empty run to succeed. Those suites require their own Jest config and live services.
-- **NUL-delimited git output (`-z`).** Prevents quoting/whitespace mangling of file paths that contain unusual characters.
-- **`--diff-filter=AMR`.** Deliberately excludes deleted files (and copies/unmerged) — a deleted test has nothing to execute.
-- **Partial-stage guard.** `existsSync` catches the case where a path appears in the index but the file has been removed from disk (e.g. `git add` followed by `rm` without `git rm`).
+- `--runInBand` is used because these layers share one in-memory mongod, so their files must not run in parallel.
+- `--runTestsByPath` takes exact paths, not regexes, and still honours `testPathIgnorePatterns`. A staged `tests/replicas` or `tests/broker` file is dropped, and `--passWithNoTests` lets the resulting empty run pass. Those suites need their own config and real services.

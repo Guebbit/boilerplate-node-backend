@@ -1,31 +1,32 @@
 ---
 source: src/modules/payments/controllers/get-payment.ts
-sha256: 54e86142debc9fcaae275ec6e3015c0a3b2336b57f22a3a667289adf27ebf6b8
-generated_at: 2026-11-08T07:17:18.023210+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 54e86142debc9fcaae275ec6e3015c0a3b2336b57f22a3a667289adf27ebf6b8
+context_sha256: def1757b6c8850776639aacb1b082e0112ad0ddf6c00597fd02fdcb91b2701b3
+generated_at: 2026-11-22T06:41:15.883476+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/controllers/get-payment.ts
 
 ## Purpose
-
-HTTP handler for `GET /payments/:id`. Resolves a single payment by its ID and returns it as a JSON response. It exists as the destination target for the `Location` header set after a successful `POST /payments` and for operator-refund redirects that send a client back to read the payment they just interacted with.
+Express controller for `GET /payments/:id`. It returns a single payment by its own id. Per the module doc, this is where `Location` points after `POST /payments`, and the read that the operator-refund answer sends a client back to.
 
 ## Key elements
-
-- **`getPayment`** *(exported function)* — Accepts an Express `Request<{ id?: string }>` and `Response`. Extracts and validates the `:id` param, calls `paymentService.getById(id, request.authContext)`, then either short-circuits on a refusal or serialises the `Payment` via `successResponse`. Errors are delegated to `catchAs(response, 'getPayment')`.
+- `getPayment(request, response)`: the only export. It does the following:
+  1. Validates the `:id` param with `requireId`, using the not-found key `payments.not-found`. If there is no valid id, it returns `Promise.resolve()` and stops, relying on `requireId` having already written the response.
+  2. Calls `paymentService.getById(id, request.authContext)`.
+  3. If `refused(response, result)` handles the result, it returns without further output.
+  4. Otherwise it sends `successResponse<Payment>(response, result.data)`.
+  5. Any rejection goes to `catchAs(response, 'getPayment')`.
 
 ## Relationships
-
-- **`src/modules/payments/routes.ts`** — Registers `getPayment` as the handler for the `GET /payments/:id` route.
-- **`src/modules/payments/services/index.ts`** — Source of `paymentService`, whose `getById(id, authContext)` method performs the actual data fetch.
-- **`src/infrastructure/http/ids.ts`** — Supplies `requireId`, which parses the route param and emits a 404 (`payments.not-found`) if absent.
-- **`src/infrastructure/http/controller.ts`** — Supplies `refused` (short-circuit on denied access) and `catchAs` (async error → HTTP response).
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse`, the standard 200 JSON envelope writer.
-- **`src/types/index.ts`** — Source of the `Payment` type used as the generic on `successResponse`.
+- `src/infrastructure/http/ids.ts`: provides `requireId`, which extracts and validates the route id.
+- `src/infrastructure/http/response.ts`: provides `successResponse`, which sends the success payload.
+- `src/infrastructure/http/controller.ts`: provides `refused` (handles non-success service results) and `catchAs` (error handler labelled with the controller name).
+- `src/modules/payments/services/index.ts`: provides `paymentService`, whose `getById` does the actual lookup.
+- `src/types/index.ts`: provides the `Payment` type (imported via the `@types` alias) used to type the response.
+- `src/modules/payments/routes.ts`: wires this handler to the `GET /payments/:id` route.
 
 ## Notes
-
-- The handler is an async-returning function (not a class method); it fits the project's functional-controller convention.
-- `request.authContext` is forwarded to the service call, meaning authorization scoping happens inside `paymentService.getById`, not in the controller.
-- If `requireId` fails it sends its own response and the handler returns `Promise.resolve()` immediately—no further work runs.
+- The handler always returns a Promise, including on the early-exit path, so callers can treat it uniformly.
+- `request.authContext` is passed to the service, so authorization is handled there rather than in the controller.

@@ -1,33 +1,31 @@
 ---
 source: src/modules/products/tax.ts
-sha256: 194cfbfb0e026e3def117da2dfe7f550ccf6bbd7ad00e588e060ae4e15596426
-generated_at: 2026-11-08T07:49:21.879330+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 194cfbfb0e026e3def117da2dfe7f550ccf6bbd7ad00e588e060ae4e15596426
+context_sha256: 47c6d76958334b40a4a5c1138e4b26926829f2e53213944960c3318f0d12606a
+generated_at: 2026-11-22T07:14:43.707556+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tax.ts
 
 ## Purpose
-
-Resolves a product's `taxClass` into the concrete decimal VAT rate the shop will charge. It lives in the catalogue module (not `orders`) because "every product resolves to a rate" is a catalogue invariant; `orders` merely freezes the already-resolved number onto an order line.
+Resolves a product's tax class into the decimal VAT rate actually charged. It lives with the product model rather than in `orders` because "every product resolves to a rate" is a catalogue invariant. `orders` freezes whatever this returns and does not decide it.
 
 ## Key elements
-
-- **`TaxClass`** (type) — `NonNullable<Product['taxClass']>`. The set of valid tax-class values a product can hold.
-- **`RateType`** (type) — `NonNullable<Product['rateType']>`. Exported for consumers (e.g. invoice rendering) but **not resolved here**; it is passed through verbatim onto an order line.
-- **`resolveTaxRate(taxClass?: TaxClass): number`** — Returns the decimal rate: `0` for `'zero'`, `vatRateReduced()` for `'reduced'`, and `vatRateDefault()` for anything else (including `undefined`). Always returns a concrete number; there is no `null`/`undefined` return path.
+- `TaxClass`: type alias for the values a product's `taxClass` may hold. It is `NonNullable<Product['taxClass']>` and mirrors `TaxClass` on the contract.
+- `RateType`: type alias for the values a product's `rateType` may hold. It is `NonNullable<Product['rateType']>` and mirrors `RateType` on the contract. It is never resolved into anything. It is frozen onto an order line as-is, and an invoice reads it straight from that freeze.
+- `resolveTaxRate(taxClass?)`: returns the decimal rate (0.22 means 22%).
+  - `'zero'` returns `0`.
+  - `'reduced'` returns `vatRateReduced()`.
+  - Anything else returns `vatRateDefault()`. That includes `undefined` and unrecognized values.
 
 ## Relationships
-
-- **`src/modules/products/config.ts`** — Direct dependency. Provides `vatRateDefault()` and `vatRateReduced()`, the two configurable rate values this module maps to.
-- **`src/types/index.ts`** — Direct dependency. Supplies the `Product` type, from which `TaxClass` and `RateType` are derived via `NonNullable`.
-- **`src/modules/orders/services/snapshot.ts`** — Downstream consumer. Freezes the output of `resolveTaxRate` and the raw `RateType` onto an order line; invoices read both straight off that snapshot.
-- **`src/modules/products/index.ts`** — Re-exports this module's public API (`TaxClass`, `RateType`, `resolveTaxRate`) to the rest of the catalogue package.
-- **`src/modules/products/tests/unit/tax.test.ts`** — Unit tests for `resolveTaxRate`.
-- **`src/modules/orders/tests/factories.ts`** / **`src/modules/orders/tests/integration/schema-contract.test.ts`** — Order-side tests that exercise the frozen rate and `RateType` produced by this module.
+- `src/modules/products/config.ts`: supplies `vatRateDefault` and `vatRateReduced`, the actual rate values that `resolveTaxRate` returns.
+- `src/types/index.ts`: provides the `Product` type (imported via `@types`) that `TaxClass` and `RateType` are derived from.
+- `src/modules/orders/services/snapshot.ts`: the doc comments name it as the place where the resolved rate and `rateType` are frozen onto order lines. The invoice reads `rateType` from that freeze.
+- `src/modules/products/tests/unit/tax.test.ts`: unit tests for this module.
+- `src/modules/products/index.ts`, `src/modules/orders/tests/factories.ts` and `src/modules/orders/tests/integration/schema-contract.test.ts` are graph neighbors. The file content shows no direct interaction with them.
 
 ## Notes
-
-- `resolveTaxRate` has **no fall-through "no rate" branch**. An unrecognized or absent `taxClass` silently maps to `vatRateDefault()`, guaranteeing the return type is always `number` (not `number | undefined`). This is intentional so order lines can freeze a real number.
-- `RateType` is exported but deliberately **not resolved** in this file. It is a pass-through value whose semantics are defined by the contract/invoice layer, not by catalogue logic.
-- The rate values (`vatRateDefault`, `vatRateReduced`) are **functions**, not constants, implying they may read from environment or runtime configuration.
+- There is no "no rate" state. Absent or unrecognized input falls back to the standard rate, so an order line always freezes a real number.
+- Rate values come from config functions, called on each resolution. Nothing is hardcoded except the zero rate.

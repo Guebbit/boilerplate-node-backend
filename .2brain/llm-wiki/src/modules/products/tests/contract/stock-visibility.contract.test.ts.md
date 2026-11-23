@@ -1,36 +1,34 @@
 ---
 source: src/modules/products/tests/contract/stock-visibility.contract.test.ts
-sha256: ef931c9f23a25f35474df52493d84ab45327ff4d4d4f8d55e46ec52b75a4bf31
-generated_at: 2026-11-08T07:49:51.301232+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4aee9fe94864aaa1f619fa7bfca9f935e681a9b2a49d01d8eab1b0c942bf69ea
+context_sha256: 44eedbbececcbd7727d0b1249280164404f52518d1b16cbaf09f5445a851e065
+generated_at: 2026-11-22T07:15:08.835000+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/contract/stock-visibility.contract.test.ts
 
 ## Purpose
-
-Contract test asserting that the three exact stock counters (`onHand`, `reserved`, `available`) are stripped from product responses for any caller lacking the `read:StockLevel` permission, while the two boolean flags (`inStock`, `lowStock`) remain visible to everyone. It covers single-product reads, list reads, threshold behaviour, and cache isolation.
+Contract test asserting that the product HTTP answer (detail and list) carries no stock information for any caller. Stock is owned by the `inventory` module (`/products/{id}/availability` for shoppers, `/inventory/levels/{id}` for stock readers), so the product answer must be identical across roles except for role-specific views: `actions` and `translations`.
 
 ## Key elements
-
-- **`COUNTERS` / `FLAGS`** – Array constants naming the fields under test; used in every assertion.
-- **`rows(response)`** – Extracts the `items` array from a list response body.
-- **`dataOf(response)`** – Casts a response body to a flat record for single-item assertions.
-- **`describe('GET /products/{id} — the counters follow read:StockLevel')`** – Parameterised tests over guest, customer, unverified, and editor (hides counters) vs. manager, warehouse, admin (shows counters with expected values).
-- **`describe('inStock and lowStock')`** – Verifies flag logic: zero stock → both `false`; stock at threshold → `lowStock: true`; stock above threshold → `lowStock: false`; threshold is read from `NODE_LOW_STOCK_THRESHOLD`.
-- **`describe('GET /products — the list follows the same rule')`** – Confirms counters are stripped from every row in a list for guests but present for stock readers, and that a stock reader's cached response does not leak counters into a subsequent guest response.
+- `STOCK_FIELDS` – the eight stock-shaped fields that must be absent: `onHand`, `reserved`, `available`, `inStock`, `lowStock`, `buyable`, `preorder`, `backorder`.
+- `dataOf(response)` – casts a response body to a plain record.
+- `withoutRoleViews(obj)` – strips `actions` and `translations` so answers can be compared across roles.
+- `ROLES` – table of `[label, role]` pairs: guest (`undefined`), customer, unverified, editor (has product keys but not the stock key), manager, warehouse, admin.
+- `readAs(path, role)` – issues `GET path` via `api()`, adding a bearer from `authenticateAsRole(role)` unless the role is `undefined` (guest).
+- `GET /products/{id}` tests:
+  - For every role, status is 200 and none of `STOCK_FIELDS` appear in the body.
+  - A manager's answer equals a guest's after `withoutRoleViews`.
+- `GET /products` test: for every role, status is 200, the list has exactly 2 `items` (one product with `onHand: 12`, one with `0`), and no row contains a stock field.
 
 ## Relationships
-
-- **`tests/support/contract.ts`** – Imported as a side-effect (`import '@tests/contract'`) to register the shared contract-test infrastructure (matchers, global setup).
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called at module top level to provision a clean database before any test runs.
-- **`tests/support/http.ts`** – Provides `api()` for building HTTP requests and `authenticateAsRole()` for obtaining role-scoped bearer tokens.
-- **`tests/support/environment.ts`** – `setEnvironment()` is used to override `NODE_LOW_STOCK_THRESHOLD` per test case.
-- **`src/modules/products/tests/factories.ts`** – `createProduct()` seeds products with a given `onHand` value for each scenario.
+- `@modules/products/tests/factories` (`factories.ts`) – `createProduct({ onHand })` seeds the products read back.
+- `@tests/contract` (`tests/support/contract.ts`) – imported for its side effects to set up the contract-test environment.
+- `@tests/http` (`tests/support/http.ts`) – supplies `api()` (request builder) and `authenticateAsRole()` (bearer token for a role).
+- `@tests/setup-test-db` (`tests/support/setup-test-db.ts`) – `setupTestDb()` is called at module level to provision the test database.
 
 ## Notes
-
-- The security rationale is stated in the module docblock: exact counters leak sales velocity and could be used to plan inventory denial; hence they are permission-gated.
-- The last test in the list block is a **cache-poisoning guard**: it warms the list cache with an `admin` response, then verifies a subsequent unauthenticated request still receives the stripped shape. This protects against a shared cache returning a privileged payload to a guest.
-- Write-side assertions (POST/PUT/PATCH on products) are explicitly deferred to `tests/contract/product-write.test.ts`; this file only covers read visibility.
-- The threshold value is described as "shared with the stock board," meaning other modules read the same `NODE_LOW_STOCK_THRESHOLD` env var; changing it here affects those consumers in the test environment.
+- The module doc points to `tests/contract/product-write.test.ts` for product writes, which already sets up the locales those need.
+- The test passes `onHand` to `createProduct` even though the answer must not expose it, so the seed holds stock that the answer is expected to leave out.
+- `unverified` and the `editor` role are included deliberately to cover callers with different permission sets.

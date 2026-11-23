@@ -1,35 +1,44 @@
 ---
 source: src/infrastructure/persistence/serialize.ts
-sha256: 2f5ab4d3face88172de4bd2a9419cb33c1f14748199783a6aa236c899417491a
-generated_at: 2026-11-08T03:44:58.427662+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4bf982935dcc89c332d0f6aeb75137549ff65c6cf069046b9a61d8d60ea073ee
+context_sha256: 411bdfc9d036219cdd9188608e526d18e280ef78028aaa7a3a4ea183d5e57c7c
+generated_at: 2026-11-22T03:04:45.906700+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/serialize.ts
 
 ## Purpose
-
-Normalizes a stored Mongoose document into its wire/API payload shape in one place: renames `_id` → `id` (or drops it), removes `__v`, stringifies Decimal128 amounts, strips the internal edit-revision counter, pads money to the correct currency precision, and applies any model-specific extras. Because `.lean()`/`.aggregate()` return raw BSON without Mongoose's `toJSON` help, the same transform is returned for manual invocation.
+Single place where a stored document becomes a wire payload: `_id` → `id`, `__v` dropped, nothing beyond what `openapi.yaml` declares. It serves two paths with one function: Mongoose `toJSON` (which already supplies `id` and drops `__v`) and the raw `.lean()`/`.aggregate()` path, which needs all steps done by hand.
 
 ## Key elements
-
-- **`applySerialization(schema, options?)`** — sole exported function. Wires the transform into `schema.set('toJSON', …)` *and* returns it so the lean/aggregate path can call it directly.
-- **`SerializeTransform`** — type alias: `(serialized: Record<string, unknown>) => Record<string, unknown>`.
-- **`SerializeOptions`** — per-model knobs: `dropId` (delete `_id` entirely), `omit` (strip top-level keys), `after` (model-specific hook), `virtuals` (include/exclude virtuals in `toJSON`), `currency` (override the document's currency for money padding).
-- **`SerializableSchema`** (internal) — structural interface requiring `set('toJSON', …)` plus `MoneyWalkableSchema`; avoids pinning to a generic `Schema<T>` that would only accept one model's document type.
+- **`applySerialization(schema, options?)`**: builds a model's transform, registers it as the schema's `toJSON` option, and returns the transform so the model can export it for the lean/aggregate path. It is deliberately not a `schema.plugin()`, because a plugin's return value is discarded.
+- **`SerializeTransform`**: type for a function that mutates a plain object into its wire shape and returns it.
+- **`SerializeOptions`**:
+  - `dropId`: delete `_id` instead of renaming it. Used only for `audit-logs`.
+  - `omit`: top-level keys to strip.
+  - `after`: model-specific hook for nested normalization, derived fields or formats.
+  - `virtuals`: whether `toJSON` includes virtuals (default `true`).
+  - `currency`: function that returns the currency used to pad money fields. Defaults to the document's own `currency`; products pass the live shop currency.
+- **Transform order**:
+  1. Handle `_id`/`id`.
+  2. Delete `__v`.
+  3. `stringifyDecimals`.
+  4. `carryVersion`, then delete `EDIT_REVISION`.
+  5. Strip `omit` keys.
+  6. Run `after`.
+  7. `padMoneyPaths` using the resolved currency string.
+- **`textifyDatesAndIds`** (internal): walks plain objects and arrays in place, turning `Date`s into ISO text and `ObjectId`s into hex text. It uses `util.types.isDate` and the `_bsontype` tag rather than `instanceof`, so it works across realms and BSON copies.
+- **`SerializableSchema`** (internal): structural type that needs only `set('toJSON', …)` plus `MoneyWalkableSchema`. It avoids Schema generics, which would restrict it to one model's document type.
 
 ## Relationships
-
-- **`create-repository.ts`** — the lean/aggregate consumer; calls the returned `SerializeTransform` in its `normalize` helper.
-- **`money-field.ts`** — supplies `moneyPathsOf`, `stringifyDecimals`, `padMoneyPaths`, and the `MoneyWalkableSchema` type that `SerializableSchema` extends.
-- **`revision-plugin.ts`** — defines the `EDIT_REVISION` key; the transform deletes it from the wire object after `carryVersion` parks it beside the payload.
-- **`versioning.ts`** — provides `carryVersion`, which moves the edit counter to a sibling position so controllers can derive `ETag`.
-- **All `*/model.ts` files** (account, orders, cart, addresses, api-keys, audit-logs, delivery, example, inventory, locales, notifications) — each calls `applySerialization` on its schema at definition time, passing model-specific `SerializeOptions`.
+- **`create-repository.ts`**: its `normalize` does the same steps by hand on lean/aggregate results, using the transform that `applySerialization` returns.
+- **`money-field.ts`**: supplies `moneyPathsOf`, `padMoneyPaths`, `stringifyDecimals` and `MoneyWalkableSchema`.
+- **`versioning.ts`**: `carryVersion` moves the edit counter beside the object so controllers can derive the `ETag`.
+- **`revision-plugin.ts`**: exports `EDIT_REVISION`. This file reads it from the document and removes it from the wire shape.
+- **Model files** (`account`, `addresses`, `api-keys`, `audit-logs`, `cart`, `delivery`, `example`, `inventory`, `locales`): call `applySerialization` on their schemas and export the resulting transform. `audit-logs` uses `dropId`.
 
 ## Notes
-
-- Not a Mongoose plugin by design: a plugin discards its return value, but the transform must be exported for the lean/aggregate path. One direct call per model keeps both halves (toJSON wiring + exported serializer) on a single line.
-- Money padding runs **last**, after `after`, so model hooks compute on exact decimal text and nothing they add escapes the currency's places.
-- `currency` option exists for models that store no currency of their own (e.g. Products pass the live shop currency).
-- The `toJSON` transform's first argument is the Mongoose document; it reads `EDIT_REVISION` from the document (since `versionKey: false` already stripped it from `serialized`) and re-injects it before delegating to the shared transform.
-- `dropId` is used only by `audit-logs`, the sole collection with no addressable REST endpoint.
+- In the `toJSON` path, `versionKey: false` removes the counter from the output, so the `toJSON` transform copies `EDIT_REVISION` from the document into the output before running the shared transform. `carryVersion` then picks it up.
+- `textifyDatesAndIds` runs only on the `toJSON` path, after the model's `after` hook, which may still need real `Date`s (for example to cut a shop-day). The lean/list path keeps its `Date` objects because readers call `getTime()` on them.
+- Money padding is last so `after` works on exact text and anything it adds is still padded. Padding is skipped if the schema has no money paths or the resolved currency is not a string.

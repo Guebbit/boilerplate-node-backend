@@ -1,44 +1,44 @@
 ---
 source: src/modules/orders/tests/integration/service-override.test.ts
-sha256: be3c095f63482fdbfb4550a5b920a2fb084f87daae0e367d123494927603877e
-generated_at: 2026-11-14T20:55:16.644791+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cb6b7c4da5dc769d1d68b4001cdde767993059045477f23be0e4cf2f68235708
+context_sha256: f30974444bd3fea496238acc8773977ff24515f55fc3564053a95a16e5e76c5e
+generated_at: 2026-11-22T06:33:19.582841+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/service-override.test.ts
 
 ## Purpose
-
-Integration tests for `overrideStatus`, the admin "status-only" door that manually moves an order between statuses. Runs against real Mongo so that the conditional-write guarantee (a 409 if another writer lands between read and write) and the outbox-delivery path are exercised for real — behaviors a mock cannot reproduce by racing against itself.
+Integration tests for `overrideStatus` in `src/modules/orders/services/override.ts`, the admin status override. They run against a real Mongo database (via `setupTestDb`) because the guarantee under test is the conditional write, which a mock cannot race against itself.
 
 ## Key elements
-
-- **`overrideStatus`** (imported from `src/modules/orders/services/override.ts`) — the function under test; accepts order ID, target status, reason, and caller context.
-- **`withActions`** (imported from `src/modules/orders/services/actions.ts`) — used in the final test to assert that the override *menu* excludes `shipped`/`delivered` when units are still awaiting stock.
-- **Three `describe` blocks:**
-  - *digital-only order* — refuses `shipped` (no parcel), computes `withdrawUntil` from payment date when landing on `delivered`.
-  - *overrideStatus* — forward moves, timeline entry shape, `paid` is system-only, `pending` is exit-guarded, backward moves refused, race → 409 with no history written, pre-state recorded as `from`, no parcel side-effect.
-  - *the override event* — `ORDER_STATUS_OVERRIDDEN` payload shape and `at` alignment with timeline row; refused with 409 + `ORDER_OVERRIDE_AWAITING_STOCK` when stock is pending; `processing` still allowed while awaiting stock; menu omits `shipped`/`delivered` in that state.
-- **Test helpers** — `seedOrder`, `seedDigitalOrder`, `readOrder`, `timelineOf` (factories); `asAdmin`, `callerContextAs` (callers); `setupTestDb` (real Mongo); `markDomainEventsWired` / `resetDomainEvents` / `onDomainEvent` (kernel events); `settleOutboxNudges` (kernel outbox).
+- **Setup hooks**: `setupTestDb()` provisions the DB. `beforeEach` calls `markDomainEventsWired()` so the outbox relay delivers. `afterEach` calls `resetDomainEvents()`.
+- **`overrideStatus on a digital-only order`**:
+  - Refuses `shipped` with 409, leaving the status at `processing`.
+  - Moving to `delivered` sets `withdrawUntil` to `2026-03-31T23:59:59.999Z`, counted from the payment date `2026-03-01T10:00:00Z`.
+- **`overrideStatus`**:
+  - A forward move succeeds, fires `ORDER_STATUS_CHANGED` with `{orderId, from, to}`, and appends one timeline entry. The entry has type `status_overridden`, the actor, the reason text, and `data: {from, to, mode: 'status'}`.
+  - Refuses a move into `paid`.
+  - Refuses any move out of `pending`.
+  - Refuses a backward move.
+  - Answers 409 and writes no history when a concurrent write lands between read and write. The test simulates this by spying on the repository's `findByIdScoped` and updating the order via `orderModel` after the read.
+  - Records the stored pre-state as the history `from`.
+  - Creates no parcel-side effect. The test only checks that the status changes to `shipped`.
+- **`the override event`**:
+  - `ORDER_STATUS_OVERRIDDEN` fires beside the status change, with `{orderId, from, to, at, mode: 'status'}`. `at` matches the timeline row's `at`.
+  - While units await stock, the override to `shipped` is refused with 409 and code `ORDER_OVERRIDE_AWAITING_STOCK`, and nothing is written.
+  - Moving to `processing` is still allowed while units await stock.
+  - `withActions(...)` offers only `[OrderStatus.processing]` in `actions.overrideStatus` while units await stock, so `shipped` and `delivered` are left out of the menu.
 
 ## Relationships
-
-- **`src/modules/orders/services/override.ts`** — SUT; every assertion targets its return shape and side effects.
-- **`src/modules/orders/services/actions.ts`** — `withActions` is called to verify the UI-facing menu defers to the same stock guard the service enforces.
-- **`src/modules/orders/repository.ts`** — `orderRepository.findByIdScoped` is spied on (single test) to inject a concurrent `$set` between the service's read and conditional write, simulating a second process.
-- **`src/modules/orders/model.ts`** — `orderModel.updateOne` / `findByIdAndUpdate` used directly to set `fulfillment` fields (awaiting-stock fixtures) and to write the concurrent status in the race test.
-- **`src/modules/orders/events.ts`** — `ORDER_STATUS_CHANGED` and `ORDER_STATUS_OVERRIDDEN` are the two event constants subscribed and asserted on.
-- **`src/kernel/events.ts`** — `markDomainEventsWired` in `beforeEach` subscribes the process so the outbox relay can deliver; `resetDomainEvents` in `afterEach` prevents cross-test leakage.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges()` is awaited before asserting on delivered event payloads.
-- **`src/modules/orders/tests/factories.ts`** — provides seeded orders and a `timelineOf` reader for history assertions.
-- **`tests/support/callers.ts`** — `asAdmin()` and `callerContextAs('admin', 'admin-1')` supply the admin auth context every call requires.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the real Mongo connection for the suite.
-- **`src/types/index.ts`** — `OrderStatus` enum values used throughout.
+- Exercises `src/modules/orders/services/override.ts` (`overrideStatus`) and `src/modules/orders/services/actions.ts` (`withActions`).
+- Uses `src/modules/orders/model.ts` (`orderModel`) to alter or read state directly, and `src/modules/orders/repository.ts` (`orderRepository`), spying on its `findByIdScoped` for the race test.
+- Imports `ORDER_STATUS_CHANGED` and `ORDER_STATUS_OVERRIDDEN` from `src/modules/orders/events.ts`.
+- Uses `src/kernel/events.ts` (`onDomainEvent`, `markDomainEventsWired`, `resetDomainEvents`) and `src/kernel/outbox.ts` (`settleOutboxNudges`) to observe emitted events.
+- Uses `src/modules/orders/tests/factories.ts` (`seedOrder`, `seedDigitalOrder`, `readOrder`, `timelineOf`), `tests/support/callers.ts` (`asAdmin`, `callerContextAs`) and `tests/support/setup-test-db.ts`.
+- Uses `OrderStatus` from `src/types/index.ts`.
 
 ## Notes
-
-- Real Mongo is required: the 409 race test relies on a *second* Mongo write landing between the service's read and its conditional `updateOne` — impossible to simulate with in-process mocks.
-- The single `jest.spyOn` (on `orderRepository.findByIdScoped`) is the only mocking in the file and is scoped to one test; it is restored immediately after the assertion.
-- `settleOutboxNudges()` must appear before any `expect` on outbox-delivered events; without it the event may still be in the outbox queue.
-- The override is explicitly *status-only*: no shipment record is created. The test asserts this by confirming no parcel-side field changes.
-- `paid` is a system-only destination (set by the payment webhook); `pending` is exit-guarded to the offline-payment door only. Both are hard-refused by `overrideStatus` regardless of the target's forward/backward position.
+- Events are delivered through the outbox. Tests must call `await settleOutboxNudges()` before asserting on handler payloads.
+- `order.status_changed` stays the event all listeners read. The override emits `order.status_overridden` separately; the file's comment notes that `webhooks` filters on `to` alone.
+- In the race test, the spy is restored manually with `read.mockRestore()` after the call.

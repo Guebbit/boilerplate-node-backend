@@ -1,43 +1,48 @@
 ---
 source: src/modules/account/services/signup.ts
-sha256: 363c5222e79b18ad317f60a6149d103c510755ea7da19bece12d73fb2233baf8
-generated_at: 2026-11-14T18:51:35.706113+00:00
-model: ollama:qwen3.8:27b
+source_sha256: eaaf7a295870b259663dcd3e34566b3f39de80a7b1d023bc96c90220f19eea79
+context_sha256: 71001e7f403e5a7e29465fbff29b5018782d540e9142437f056acb4347768f14
+generated_at: 2026-11-22T03:42:15.977502+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/signup.ts
 
 ## Purpose
-
-Implements the `POST /account/signup` handler: validates the request body, runs two anti-abuse gates (breached-password corpus, anti-automation email policy), then creates the account and its starting role in a single database round trip. Returns a unified `ResponseSuccess<UserDocument> | ResponseReject` envelope.
+Implements `POST /account/signup`. It parses and validates the body, runs a series of gates (breached-password check, anti-automation email policy), then creates the user account through the user service. Each outcome is recorded in the audit trail, and a successful signup also emits an analytics event. Logging in lives in `./login`.
 
 ## Key elements
-
-- **`signupSchema`** (private) — Zod schema built from the API contract's `SignupBody`, extended with `analyticsConsent` (optional boolean), `termsAccepted` (must decode to `true`), and a `superRefine` that enforces `password === passwordConfirm`. Unknown keys are rejected (strict).
-- **`SignupInput`** (exported type) — `z.infer<typeof signupSchema>`; the fully-parsed shape the handler works with.
-- **`guardBreachedPassword`** (private) — Calls `assertPasswordNotBreached`; returns a 422 reject on match, `undefined` to continue.
-- **`guardEmailPolicy`** (private) — Calls `checkEmailPolicy`; on `'refused'` returns a *decoy* `ResponseSuccess` built from an unsaved Mongoose document (so the caller gets a shape-indistinguishable success with nothing persisted). Otherwise returns `undefined`.
-- **`createAccountIfEmailFree`** (private) — Single DB round trip: `emailTaken` check → 409 reject, or `registerSelfService` + `enqueueIfPending` → 200 success. Database errors are caught by the same `.catch` and returned via `rejectDatabaseEnvelope`.
-- **`signup`** (exported) — The public handler. Parses the body, chains the three gates in order (first non-`undefined` result wins), then post-processes the outcome to record audit and analytics. Distinguishes a real signup from a rung-2 decoy via `result.data.isNew`.
+- `signupSchema` (private) — the contract's `SignupBody` (strict, so unknown keys give a 422) extended with:
+  - `analyticsConsent`, which uses `optionalBooleanSchema` (the same multipart-string decode as `PUT/PATCH /account`).
+  - `termsAccepted`, which is decoded with `parseFormBoolean` and must be literal `true`.
+  - A `superRefine` that checks `passwordConfirm === password`.
+- `SignupInput` (exported type) — the inferred type of the parsed body.
+- `guardBreachedPassword` — calls `assertPasswordNotBreached`. If it reports errors, it returns a 422 reject. Otherwise it returns `undefined`.
+- `guardEmailPolicy` — calls `checkEmailPolicy`. On a `'refused'` verdict it returns a decoy success built with `accountUserService.buildSignupDecoy`, and that document is never persisted. Otherwise it returns `undefined`.
+- `createAccountIfEmailFree` — calls `emailTaken`. If the email is taken it returns a 409 `EMAIL_ALREADY_USED`. Otherwise it calls `registerSelfService` (storing `getCurrentLocale()` as `locale`) and then `enqueueIfPending`, and returns a success. A single `.catch` maps database errors through `rejectDatabaseEnvelope('auth', …)`.
+- `signup(body, callerContext)` (exported) — the entry point. If parsing fails it returns a 422 built with `validationErrors`. Otherwise it chains the gates in order: breached password, then email policy, then account creation. The first gate to answer decides the result. It then records the audit entry and the analytics event.
 
 ## Relationships
-
-- **`@infrastructure/adapters/antibot`** — calls `checkEmailPolicy` for the rung-2 gate.
-- **`@infrastructure/security/breached-passwords`** — calls `assertPasswordNotBreached` before any other check.
-- **`@infrastructure/http/response`** — uses `generateSuccess` / `generateReject` / `validationErrors` for all response shapes.
-- **`@infrastructure/http/errors`** — `rejectDatabaseEnvelope` wraps unexpected DB failures.
-- **`@infrastructure/http/request`** — `parseFormBoolean` decodes multipart boolean strings for `termsAccepted`.
-- **`@infrastructure/http/schemas`** — `optionalBooleanSchema` reused for `analyticsConsent`.
-- **`@infrastructure/i18n`** — `t` for user-facing messages; `getCurrentLocale` stored on the new account for later async work.
-- **`@infrastructure/observability/audit`** — `recordAudit` logs success/failure of signup.
-- **`@infrastructure/observability/analytics`** — `emitAnalyticsEvent` / `buildAnalyticsBase` fire the `USER_SIGNED_UP` event.
-- **`../consent-record`** — `analyticsAnswer` and `termsAcceptance` shape the consent data passed to account creation and the decoy.
-- **`../analytics` / `../audit`** — event-name and action-name constants.
+- **Infrastructure gates**:
+  - `src/infrastructure/security/breached-passwords/index.ts` supplies the password check.
+  - `src/infrastructure/adapters/antibot.ts` supplies `checkEmailPolicy`.
+- **HTTP layer**:
+  - `src/infrastructure/http/response.ts` provides `generateSuccess`, `generateReject`, `validationErrors` and the response types.
+  - `src/infrastructure/http/errors.ts` provides `rejectDatabaseEnvelope`.
+  - `src/infrastructure/http/request.ts` provides `parseFormBoolean`.
+  - `src/infrastructure/http/schemas.ts` provides `optionalBooleanSchema`.
+- **i18n**: `t` is used for the validation and conflict messages, and `getCurrentLocale` supplies the locale stored on the new user.
+- **Audit and analytics**:
+  - `src/infrastructure/observability/audit.ts` provides `recordAudit`, called with the account audit action `AUTH_SIGNED_UP` from `src/modules/account/audit.ts`.
+  - `src/infrastructure/observability/analytics/index.ts` provides `emitAnalyticsEvent` and `buildAnalyticsBase`, used with the account analytics event `USER_SIGNED_UP` from `src/modules/account/analytics.ts`.
+- **Consent**: `analyticsAnswer` and `termsAcceptance` from `src/modules/account/consent-record.ts` are spread into both the decoy and the real registration payloads.
+- **Users module**: `accountUserService` (from `@modules/users/friends/account`) does all persistence. `UserDocument` is the return type.
+- `src/modules/account/services/index.ts` and `src/infrastructure/adapters/logger.ts` are graph neighbors, but this file does not reference either.
 
 ## Notes
-
-- **Gate order is load-bearing:** breached-password → email-policy → DB lookup. A breached password short-circuits before the email policy runs, so a script with a known-bad hash never hits the decoy path.
-- **`isNew` is read backwards in the audit block:** a *new* (unsaved) Mongoose document on a "success" result means the decoy was returned — i.e., no account exists. `result.data.isNew === true` is therefore treated as a *failure* for audit purposes.
-- **`analyticsConsent` has no "leave unchanged" meaning at signup** (there is no prior value); absent is stored as `false`. This differs from the same field's semantics on `PUT/PATCH /account`.
-- **The decoy document is never persisted.** The only observable difference from a real success is that `isNew` remains `true` and no DB write occurred — the audit path relies on exactly that.
-- **`locale` is captured at signup time** (`getCurrentLocale()`) so downstream jobs (queued email, nightly batch) can render without needing the original `Accept-Language` header.
+- **Decoy success**: a refused email-policy verdict returns the same shape as a real signup, so a script gets nothing to iterate on.
+- **`isNew` check**: `result.data.isNew` is true only for the unsaved decoy, so in the audit step `isNew === true` means no account was created. Failures and decoys are audited as `outcome: 'failure'` with actor `'anonymous'`, and no analytics event is emitted for them. Real signups are audited as `'success'` with the new user's id as actor and role `'user'`.
+- **Gate order**: the breach check runs first, since a breached password fails signup regardless of anything else. Only after that do the email-policy check and the database lookup run.
+- **Absent consent**: absent `analyticsConsent` is stored as `false`, because there is no prior value at signup.
+- **No image**: signup takes no image.
+- **`callerContext`**: it is used only for the audit and analytics records.

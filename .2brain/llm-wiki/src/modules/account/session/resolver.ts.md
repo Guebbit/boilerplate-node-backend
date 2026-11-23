@@ -1,33 +1,32 @@
 ---
 source: src/modules/account/session/resolver.ts
-sha256: 1fb42f074b408de6e61de12235d7a01218216ebe9e04b76061bfc7956a002f24
-generated_at: 2026-11-08T04:29:54.876319+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8a854b5ff77a731b07426df4fb9091fcdfd612593f9b1117cf88517268e731ab
+context_sha256: d79ca269459980c245a69910cdf14b67daa7ce075f692853860725550f4418d0
+generated_at: 2026-11-22T03:48:39.283825+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/session/resolver.ts
 
 ## Purpose
-
-Provides the account module's concrete `AuthResolver` so the kernel can turn a presented credential (Bearer token or session cookie) into an `AuthContext` for its auth guard. It is a thin delegation layer: every method forwards to whichever session strategy the deployment has activated, keeping the kernel decoupled from account-specific auth logic.
+Defines `accountAuthResolver`, the account module's implementation of the kernel's `AuthResolver` port ("who is making this request"). It turns a presented bearer token or cookie into the `AuthContext` a guard checks, delegating all credential meaning to whichever session strategy the deployment runs.
 
 ## Key elements
-
-- **`accountAuthResolver: AuthResolver`** — the sole export. Implements the kernel's `AuthResolver` port:
-  - `fromBearer` / `fromCookie` — resolve a credential via `activeStrategy()`.
-  - `watchCookie` — registers a cookie for change-watching, delegated to the active strategy.
-  - `cookieAuthenticates` — pass-through getter on the active strategy.
-  - `clearDeadCookie` — calls `destroySessionCookie(response)` to invalidate the session cookie server-side.
+- `accountAuthResolver: AuthResolver`: the only export, a thin object that forwards to the active strategy:
+  - `fromBearer(token, options)` calls `activeStrategy().resolveBearer(...)`.
+  - `fromCookie(token, options)` calls `activeStrategy().resolveCookie(...)`.
+  - `watchCookie(token)` calls `activeStrategy().watchCookie(...)`.
+  - `cookieAuthenticates()` returns the active strategy's `cookieAuthenticates` flag.
+  - `clearDeadCookie(response)` calls `destroySessionCookie(response)` directly, without going through the strategy.
 
 ## Relationships
-
-- **`src/kernel/authentication.ts`** — supplies the `AuthResolver` interface that `accountAuthResolver` satisfies.
-- **`src/modules/account/module.ts`** — registers this resolver with the kernel via `registerAuthResolver` inside its `onRegistered` hook (not at import time).
-- **`src/modules/account/session/strategy.ts`** — source of `activeStrategy()`; every credential-resolution method delegates here.
-- **`src/modules/account/session/cookies.ts`** — source of `destroySessionCookie`, used by `clearDeadCookie`.
-- **`src/modules/account/tests/unit/session-strategy.test.ts`** — exercises the strategy layer that this resolver wraps; failures surface as unresolved credentials or rejections through this file.
+- `src/kernel/authentication.ts`: supplies the `AuthResolver` type this object implements.
+- `src/modules/account/module.ts`: installs `accountAuthResolver` through `registerAuthResolver` in its `onRegistered` hook, not at import time.
+- `src/modules/account/session/strategy.ts`: provides `activeStrategy()`. Every strategy lookup happens at call time, so the strategy is chosen per call rather than fixed when the module loads.
+- `src/modules/account/session/cookies.ts`: provides `destroySessionCookie`, used by `clearDeadCookie`.
+- `src/modules/account/tests/unit/session-strategy.test.ts`: a neighbor in the dependency graph. The file does not show how it is used there.
 
 ## Notes
-
-- Three distinct failure modes are intentionally collapsed at the guard boundary: a *bad credential* (resolves a miss), a *valid credential whose account is gone* (resolves `undefined`), and an *outage* (rejects). The guard returns `401` for the first two to prevent account-existence enumeration; the distinction is preserved only in the internal miss reason for auditing.
-- Registration timing matters: `module.ts` installs the resolver in `onRegistered`, so importing this file alone does **not** wire it into the kernel.
+- The doc comment distinguishes three failure outcomes. A bad credential resolves a miss. A valid credential whose user no longer exists resolves `undefined`. An outage rejects.
+- The guard answers the first two with the same `401`, so callers cannot tell whether an account exists. The distinction survives only in the miss reason the guard counts and audits.
+- Related docs: the file's `@see` points to the "choosing the session mode" section; the session mode itself is defined in `src/modules/account/session-mode.ts`. The proof semantics in `./auth-context` are shared across strategies.

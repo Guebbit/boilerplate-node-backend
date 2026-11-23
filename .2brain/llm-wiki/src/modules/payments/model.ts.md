@@ -1,50 +1,51 @@
 ---
 source: src/modules/payments/model.ts
-sha256: 9a569be9f074a5b18ce6e7e4da0f2606d21585a987e2386879bf4e62c427e333
-generated_at: 2026-11-14T21:00:55.432772+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ee845e14c2a3d0d684098052115dae6f35988229304ae367ca89877a68bf4373
+context_sha256: 8872668a2a912183d1da1100e1060bf3559fb2a5400e40198a4c6e22b3564500
+generated_at: 2026-11-22T06:46:03.372148+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/model.ts
 
 ## Purpose
-
-Defines the Mongoose schema and document interfaces for the `payments` collection — one document per order, made a database fact by a unique index on `orderId`. It is the single source of truth for the payment lifecycle status (`PaymentStatus`), refund attempt records, dispute records, and the provider reference, so that the enum values on the wire and in the database cannot drift apart.
+Mongoose model and TypeScript types for the payments module. There is one payment document per order, enforced by a `unique` index on `orderId`, so a retry after a decline re-confirms the same document instead of creating a second one. The status vocabulary is the provider-facing lifecycle (`requires_confirmation`, `requires_action`, `processing`, `succeeded`, `declined` as retryable, `canceled` as terminal). It is separate from the order's customer-facing status and comes from `PaymentStatus` in the `@types` contract, so the enum and the wire format cannot diverge.
 
 ## Key elements
-
-- **`PaymentDocument`** — the main document interface: `orderId` (unique), `userId?`, `amount`, `currency`, `status`, `provider`, `providerRef?`, `cardLast4?`, `method`, `amountRefunded`, `refunds[]`, `disputes[]`, `handledCancelEvents[]`, plus hand-recorded fields (`reference`, `receivedAt`, `transferReference`, `payBy`).
-- **`RefundRecord`** — embedded sub-document per refund attempt. Carries its own `idempotencyKey`, `attempts`, `attemptedAt` (fence token), `nextAttemptAt`, `settledByHand`, `settledAt`, `reversedAt`, `reversedAfterSettling`, and optional `lines` / `shipping` for credit-note input.
-- **`RefundLine`** — `{ productId, quantity }`; the minimal product-line data `invoicing` needs to look up a VAT rate. No cross-module reference.
-- **`DisputeRecord`** — embedded, unique per `disputeRef`. Holds `kind`, `status`, `reason`, `fundsWithdrawn`, `evidenceDueBy`, `observedAt` (out-of-order fence), `dashboardUrl`.
-- **`RefundSettlement`** — the payload a settlement write records: `providerRefundRef?`, `settledByHand?`, `attempt?` (fence token), `from?` (allowed source statuses for a hand settle).
-- **`PaymentModel`** — `Model<PaymentDocument>` type alias; the actual Mongoose model is registered at the bottom of the file.
-- **`refundSchema`** — the `Schema<RefundRecord>` instance with `moneyPath`, enums, and validation constraints.
+- `PaymentDocument` (interface): the payment record. Fields:
+  - Identity and amounts: `orderId`, optional `userId` (unset when the account is erased), `amount` and `currency` (frozen at intent creation), `amountRefunded`.
+  - Status and provider: `status`, `provider`, `providerRef`, `method`.
+  - Manual payments: `reference` and `receivedAt`, set only when a payment is recorded by hand.
+  - Bank transfer: `transferReference` and `payBy`.
+  - Card: `cardLast4`.
+  - Embedded lists and dedup: `refunds`, `disputes`, `handledCancelEvents`.
+- `RefundRecord` (interface): one record per refund attempt. It carries:
+  - Money and status: `amount`, `currency`, `status`, `reason`.
+  - Provider retry safety: `idempotencyKey`.
+  - Return linkage: optional `returnId`, `lines` (`RefundLine[]`) and `shipping`.
+  - Legal deadline: `dueBy` and `dueRule`.
+  - Provider answer: `providerRefundRef` and `failureReason`.
+  - Retry and fencing: `attempts`, `attemptedAt` (fence token) and `nextAttemptAt`.
+  - Settlement: `settledByHand`, `paidOutside`, `settledAgainstDispute` and `settledAt`.
+  - Reversal: `reversedAt` and `reversedAfterSettling`.
+- `RefundLine` (interface): `productId` and `quantity` of a returned line, so a credit note can find the VAT rate.
+- `DisputeRecord` (interface): a bank dispute embedded on the payment. It is unique per `disputeRef` and only overwritten by a newer report, using `observedAt` as the fence. It has `kind`, `status`, `reason`, `amount`, `evidenceDueBy`, `fundsWithdrawn`, `openedAt`, `closedAt` and `dashboardUrl`.
+- `RefundSettlement` (interface): what settling a refund records beyond status. It holds the provider refund ref, the hand-settle flag, the dispute id, the attempt fence and the allowed `from` statuses.
+- `PaymentModel` (type): `Model<PaymentDocument>`.
+- `refundSchema`: the embedded refund sub-schema, built with `moneyPath`. It is addressed by its own `_id`. The rest of the schema definition and the model export are beyond the part of the file shown here.
 
 ## Relationships
-
-- **`src/infrastructure/persistence/money-field.ts`** — provides `moneyPath` and `moneyPlugin`, used to type monetary fields as decimal strings with non-negative validation.
-- **`src/infrastructure/persistence/serialize.ts`** — provides `applySerialization`, applied to the schema so documents serialize consistently (money, dates, enums) when they leave the process.
-- **`src/modules/payments/repository.ts`** — owns all queries against this model; the model file contains no query logic (noted in the `PaymentModel` doc comment).
-- **`src/modules/payments/services/refund-settlement.ts`** — reads/writes `RefundRecord` fields (`status`, `settledAt`, `providerRefundRef`, `attemptedAt`) when settling or failing a refund attempt.
-- **`src/modules/payments/services/disputes.ts`** — upserts `DisputeRecord` entries on the document when the provider reports a dispute.
-- **`src/modules/payments/services/external-refunds.ts`** — opens new `RefundRecord` entries on the hand-settled or provider-refused paths.
-- **`src/modules/payments/services/intent.ts`** — creates the initial payment document and transitions `status` through the provider lifecycle.
-- **`src/modules/payments/services/effects.ts`** — applies side-effect writes such as `amountRefunded` increments and `handledCancelEvents` appends to the document.
-- **`src/modules/payments/services/notify.ts`** — reads document state to decide what notifications to emit.
-- **`src/modules/payments/services/offline.ts`** — handles offline/hand-settled payment recording against this document.
-- **`src/modules/payments/services/announce.ts`** — publishes domain events derived from document transitions.
-- **`src/modules/payments/services/list.ts`** — reads documents for staff-facing list views.
-- **`src/modules/payments/presenter.ts`** — shapes the document into the wire payload, stripping fields marked "never published" (`providerRef`, `lines`, `attempts`).
-- **`src/modules/payments/index.ts`** — barrel export; re-exports the model, interfaces, and `PaymentModel` type.
-- **`scenarios/flows/backdate.ts`** — test/flow scenario that manipulates `createdAt` / `settledAt` timestamps on the document to simulate time passage.
+- Imports `moneyPath` and `moneyPlugin` from `persistence/money-field` for decimal money fields, and `applySerialization` from `persistence/serialize`. It also imports `isPlainObject` from `object-guards`.
+- Imports the enums and `PaidOutside` from `@types`: `PaymentStatus`, `PaymentMethod`, `RefundStatus`, `RefundReason`, `RefundFailureReason`, `RefundDueRule`, `OutsideMoneyMethod`, `Dispute*`.
+- The file's own comments say that queries live in `./repository` and rules live in `./services`. The service files (`announce`, `disputes`, `effects`, `external-refunds`, `intent`, `list`, `notify`, `offline`), `repository.ts`, `presenter.ts` and `index.ts` are graph neighbors of the model. The visible content does not show how each one uses it.
+- `scenarios/flows/backdate.ts` is also a graph neighbor. The visible content does not show how it relates.
 
 ## Notes
-
-- **Fence-token pattern**: `attemptedAt` on a `RefundRecord` acts as a compare-and-swap token. A settle or failure write must match on the same `attemptedAt` value, so a slow stale attempt cannot overwrite a newer one. The same pattern appears in `RefundSettlement.attempt`.
-- **`amountRefunded` is incremented at refund-open time**, not at settlement. This is what prevents two racing partial refunds from exceeding the original payment.
-- **`handledCancelEvents`** is an idempotency log for `order.canceled` outbox events. A redelivered event finds its id here and is a no-op, even if staff voided the original refund in the meantime.
-- **`reversedAt` is set once and never cleared.** Once a refund is reversed, the sweep will not resend it; a redelivered provider report finds nothing left to change.
-- **`userId` is unset (not nulled) when the account is erased**, mirroring the `orders` convention. No other PII is stored on the payment document.
-- **`providerRef` is unique-indexed** and is the webhook's sole lookup key. Two payments answering to one reference would settle the wrong order, which is why uniqueness is enforced at the DB level.
-- **Enum values come from `@types`** (the shared contract), not from local string literals, so the DB enum and the wire vocabulary stay in lockstep.
+- Several fields are internal or staff-only and are never published on the wire: `providerRef`, `idempotencyKey`, `lines`, `shipping`, `attempts`, `attemptedAt`, `nextAttemptAt`, `settledAgainstDispute`, `handledCancelEvents` and the refund's `providerRefundRef`. `dueBy` reaches the wire only through the attention row. `transferReference` is published only inside `nextAction`.
+- The provider's own error wording is never stored. `failureReason` is a closed code.
+- `attemptedAt` is a fence token. A settle or failure write lands only on a `pending` record that still carries the same value, which stops a slow old attempt from overwriting a newer one.
+- `reversedAt` is set once and never cleared. `reversedAfterSettling` distinguishes a bounce of a settled refund from a refusal while the refund was still open.
+- `amountRefunded` counts a refund the moment it is opened. This stops two racing partial refunds from returning more than was paid.
+- `handledCancelEvents` holds outbox ids, so a redelivered `order.canceled` event refunds nothing.
+- `providerRef` is unique and indexed because webhooks look payments up by it. It is absent on `manual` payments.
+- `payments` stores plain ids (`returnId`, `productId`) and does not reference the `returns` or `invoicing` modules.

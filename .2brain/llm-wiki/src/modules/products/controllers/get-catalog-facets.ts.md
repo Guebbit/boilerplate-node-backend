@@ -1,26 +1,26 @@
 ---
 source: src/modules/products/controllers/get-catalog-facets.ts
-sha256: c9e285a716161697df009b639bc11e7228735820242522b607f6112491e86948
-generated_at: 2026-11-08T07:42:18.898142+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c9e285a716161697df009b639bc11e7228735820242522b607f6112491e86948
+context_sha256: 99ef81aa2bc0fbc9f5b884366ee5347d8cdb4fd59b5eecd1f61a3e94545113e6
+generated_at: 2026-11-22T07:07:43.744883+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/controllers/get-catalog-facets.ts
 
 ## Purpose
-Thin HTTP adapter that exposes the catalogue's category and tag facet counts (the storefront's filter chips) as a `GET /products/facets` response. It delegates all logic to the product service and only shapes the HTTP reply.
+Express controller for `GET /products/facets`. It returns the category and tag facet counts for the public catalogue, which the storefront uses as filter chips. It is a thin adapter from the product service's `facets()` to the standard success and error response shapes.
 
 ## Key elements
-- **`getCatalogFacets(request, response)`** — The sole export. Calls `productService.facets()`, wraps the result in `successResponse<CatalogFacetsResponse>`, and funnels any rejection through `catchAs(response, 'getCatalogFacets')` for a standard error shape.
+- `getCatalogFacets(request, response)`: the only export. It calls `productService.facets()`. On success it sends the result with `successResponse<CatalogFacetsResponse>`. On failure it passes the error to `catchAs(response, 'getCatalogFacets')`.
 
 ## Relationships
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse`, the utility that serialises a payload into the project's standard success envelope.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, the shared error-handler factory that produces the standard error response for a given operation name.
-- **`src/modules/products/services/index.ts`** — Source of the `productService` singleton whose `facets()` method performs the actual facet-count query.
-- **`src/types/index.ts`** — Exports the `CatalogFacetsResponse` type that parameterises the success payload.
-- **`src/modules/products/routes.ts`** — Registers `getCatalogFacets` as the handler for the `GET /products/facets` route.
+- `../services` (`productService`): supplies `facets()`, which does the actual work. The search service file is a sibling in the same services module, but this controller only uses the `productService` exported from the index.
+- `@infrastructure/http/response` (`successResponse`): formats the success payload.
+- `@infrastructure/http/controller` (`catchAs`): builds the error handler. The label `'getCatalogFacets'` identifies this controller.
+- `@types` (`CatalogFacetsResponse`): types the response payload.
+- `../routes`: the route layer that wires this handler to `/products/facets`.
 
 ## Notes
-- The doc-comment states the endpoint is **public** and **cache-tagged** with the same products tag that invalidates the catalogue listing; any catalogue mutation busts this response.
-- The handler signature accepts an `express` `Request` object but never reads from it — all state is derived from the service call.
-- Error handling is entirely delegated to `catchAs`; there is no local `try/catch` or per-error status-code logic in this file.
+- The doc comment says the endpoint is public and cached like the product listing. It also says the products cache tag invalidates it when the catalogue changes. No caching logic appears in this file, so it is handled elsewhere.
+- The handler returns a promise chain rather than using `async/await`. Errors are not caught in the handler itself. They are routed through `catchAs`.

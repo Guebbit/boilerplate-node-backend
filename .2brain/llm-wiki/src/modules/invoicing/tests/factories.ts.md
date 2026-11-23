@@ -1,29 +1,24 @@
 ---
 source: src/modules/invoicing/tests/factories.ts
-sha256: cbf1d8a22243548070ecc2ae2654dcca4a9ed5778f3e97baa4f062a6d813b2a7
-generated_at: 2026-11-08T06:16:31.297920+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:37:26.820796+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/tests/factories.ts
 
 ## Purpose
-
-Test helpers for the invoicing module. Provides a polling wrapper around the asynchronous "freeze invoice" side-effect (triggered by a fire-and-forget `ORDER_STATUS_CHANGED` listener) and re-exports the internal `issueCreditNote` service so sibling tests can exercise it without going through the public service surface.
+Test helpers for the invoicing module. Invoices are frozen by a fire-and-forget `ORDER_STATUS_CHANGED` listener, so tests can't read them synchronously. This file provides a way to wait for that invoice and re-exports the credit-note issuing function for tests that need one.
 
 ## Key elements
-
-- **`waitForInvoice(orderId: string)`** – Polls `invoicingRepository.findInvoiceByOrderId` via the `eventually` helper until an invoice appears or the window expires, then returns it. Throws if the invoice was never frozen.
-- **Re-export of `issueCreditNote`** – Re-exported from `../services/issue-credit-note`. The doc comment notes this function is *not* on the public `invoicingService`; it is invoked only by the module's own `payment.refunded` listener in production, so tests import it directly from here.
+- `waitForInvoice(orderId)`: polls with `eventually` until the invoice lookup for `orderId` returns a truthy value. It then fetches the invoice again and returns it. It throws `Error('the invoice was never frozen')` if none is found.
+- `issueCreditNote` (re-export from `../services/issue-credit-note`): freezes a credit note from the amounts given. It is meant for a sibling module's test of whatever reads a credit note.
 
 ## Relationships
-
-- **`src/modules/invoicing/repository.ts`** – Imports `invoicingRepository` and calls `findInvoiceByOrderId` to poll for the frozen invoice.
-- **`src/modules/invoicing/services/issue-credit-note.ts`** – Source of the re-exported `issueCreditNote` function.
-- **`tests/support/eventually.ts`** – Provides the `eventually` polling utility used by `waitForInvoice`.
-- **Integration tests** (`credit-note-catch-up.test.ts`, `issue-credit-note.test.ts`, `issue-invoice.test.ts`, `reencrypt.test.ts`, `retention.test.ts`), **`src/modules/stats/tests/integration/stats.test.ts`**, and **`tests/contract/ownership-shop.contract.test.ts`** – All consume this module's exports to await async invoicing effects or to call `issueCreditNote` in isolation.
+- `src/modules/invoicing/repository.ts`: `waitForInvoice` reads through `invoicingRepository.findInvoiceByOrderId`, imported from it.
+- `src/modules/invoicing/services/issue-credit-note.ts`: the source of the re-exported `issueCreditNote`.
+- `tests/support/eventually.ts`: provides the `eventually` polling helper, imported via the `@tests/eventually` alias.
+- The invoicing integration tests (`correct-invoice`, `credit-note-catch-up`, `issue-credit-note`, `issue-invoice`, `reencrypt`, `retention`), `src/modules/stats/tests/integration/stats.test.ts` and `tests/contract/ownership-shop.contract.test.ts` are its neighbors in the dependency graph, so they are its consumers.
 
 ## Notes
-
-- The "freezing" of an invoice is fire-and-forget (event-driven listener), not a synchronous return from the order-payment path. Any test that needs the resulting invoice must go through `waitForInvoice` rather than expecting it from the call that triggered it.
-- `issueCreditNote` is intentionally absent from the public service API; importing it from the service would be a sign of a test-architecture mistake. This module is the sanctioned test-facing entry point.
+- `issueCreditNote` is deliberately not on `invoicingService`. In production only this module's own `payment.refunded` listener runs it, so tests reach it through this file.
+- `waitForInvoice` waits on the repository directly rather than on an event, so the "polling window" is whatever `eventually` defines.

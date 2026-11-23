@@ -1,29 +1,26 @@
 ---
 source: src/modules/observability/tests/unit/parked-jobs.test.ts
-sha256: 6aebdc857a4afa4c1562545785eef78effa464acc2b7f78dc65cd90c74459cd2
-generated_at: 2026-11-08T06:44:11.492346+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b88b441cd8e6b3c9a77fb105c90f026c14aa0616a4d7fbd37fa5a1012fc230d2
+context_sha256: 257fd38a357d76aa204db73838cbf4a47169d15516c9f2328e0b81d890febd8e
+generated_at: 2026-11-22T06:06:02.752065+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/tests/unit/parked-jobs.test.ts
 
 ## Purpose
-
-Unit test for `queueHealth`, the queue half of `GET /observability/health`. It verifies that `queueHealth` is a faithful pass-through of `parkedCounts()`—no transformation, no filtering—by mocking the queue adapter and asserting the returned array is unchanged.
+Unit tests for `queueHealth`, the queue half of `GET /observability/health`. They check that `queueHealth` passes the result of `parkedCounts()` straight through with no transformation. The behavior of `parkedCounts` itself (channel handling, broker calls) is tested elsewhere, in `tests/unit/infrastructure/adapters/queue.test.ts`. This file covers only the wiring.
 
 ## Key elements
-
-- **`parkedCountsMock`** — `jest.fn()` stand-in for the real `parkedCounts` function; each test sets `mockResolvedValue` to a fixed array.
-- **`jest.mock('@infrastructure/adapters/queue')`** — replaces the queue adapter module so no real broker call is made.
-- **`queueHealth`** — the service under test, imported from `../../services/parked-jobs`.
-- **Test 1: "reports every queue parkedCounts answers with, unchanged"** — asserts a non-empty result (two queues with differing `parked` counts) round-trips exactly.
-- **Test 2: "answers empty when parkedCounts reaches no queue at all"** — asserts that an empty array from `parkedCounts` propagates as `[]`.
+- `parkedCountsMock`: a `jest.fn()` that stands in for `parkedCounts`. Each test sets its resolved value.
+- `jest.mock('@infrastructure/adapters/queue', ...)`: replaces the queue adapter module with a `parkedCounts` that delegates to `parkedCountsMock`.
+- Test "reports every queue parkedCounts answers with, unchanged": the mock resolves with `worker.email.send` (parked 2) and `worker.image.digest` (parked 0). `queueHealth()` is expected to resolve with the same array.
+- Test "answers empty when parkedCounts reaches no queue at all": the mock resolves with `[]`. `queueHealth()` is expected to resolve with `[]`.
 
 ## Relationships
-
-- **`src/modules/observability/services/parked-jobs.ts`** — the module under test. `queueHealth` is imported from here; the test confirms it delegates to (and does not reshape the output of) `parkedCounts` from the queue adapter.
+- Imports `queueHealth` from `../../services/parked-jobs` (`src/modules/observability/services/parked-jobs.ts`), the unit under test.
+- Mocks `@infrastructure/adapters/queue`, the module that `queueHealth` calls `parkedCounts` from, so no real broker is touched.
 
 ## Notes
-
-- Scope is intentionally narrow: this file tests only the wiring. The broker-level behavior of `parkedCounts` (channel open, broker calls) is covered in `tests/unit/infrastructure/adapters/queue.test.ts`.
-- The wire shape `ObservabilityHealth.queues` is identical to `parkedCounts`'s return type, so there is no mapping step to test—unlike the `jobHealth` sibling which does Date-to-string conversion.
+- `jest.mock` is declared before the `queueHealth` import so the mocked adapter is in place when the service loads.
+- The header comment contrasts this with `jobHealth`, which maps Dates to strings. `queueHealth` needs no mapping, because the `ObservabilityHealth.queues` wire shape is exactly what `parkedCounts` returns.

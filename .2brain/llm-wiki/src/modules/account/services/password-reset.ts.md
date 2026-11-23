@@ -1,45 +1,56 @@
 ---
 source: src/modules/account/services/password-reset.ts
-sha256: b70c58c33c4c2471aaeb2ddba27cf3c0e0880aa2c3bbc4d139230a8eb27f95d2
-generated_at: 2026-11-14T18:47:33.246963+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ee79244c226f609e55f2481a97806ccc0838d8ed594828aab83ec0d82f8c98fe
+context_sha256: 8eabb8304e4442e4a0e91d55a48738af154fe0a10437c465aa31aa61344369f4
+generated_at: 2026-11-22T03:39:20.296740+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/password-reset.ts
 
 ## Purpose
-
-Implements the completion step of a password reset (the handler behind `POST /account/password/reset/confirm`). Given a token from a mailed link, it validates the new password, confirms the link is live, rejects breached passwords, then atomically spends the token and writes the new password in a single transaction. On success it marks the account verified, clears 2FA state, stamps terms acceptance if missing, records an audit row, and sends a confirmation email.
+Completes a password reset from the mailed link. It finds the live reset token, validates the new password, then spends the token and writes the password in one transaction, and finally notifies the account owner. Requesting the link lives in `./password-reset-request`.
 
 ## Key elements
-
-- **`completePasswordReset`** *(exported)* — Entry point. Validates the password pair, looks up the live token, delegates to `resetWith` on success, or returns a uniform 422 (`resetLinkRefused`) for unknown/expired/spent tokens. Catches database errors via `rejectDatabaseEnvelope`.
-- **`resetWith`** — Post-token-found flow. Enforces the terms-acceptance tick (only when the account has no record), runs the breached-password check, then calls `spendThen` to atomically delete the token and write the new password. If the token spend fails, the link is returned unspent.
-- **`markResetCompleted`** — Write-callback passed into `passwordWrite`. Resets `mfaFailures`/`mfaLockedUntil`, calls `markVerified`, and stamps `termsAcceptance()` if the account has no existing record.
-- **`afterReset`** — Post-success side effects. Fire-and-forget audit row (`recordAccountAudit`) and confirmation email (`sendAccountMail`). Both are `void`-ed; their failures log a warning but never fail the reset.
-- **`resetLinkRefused`** — Builds the 422 `ResponseReject` via `refuseLink`, using the i18n key `account.reset.token-not-found`. Deliberately indistinguishable from unknown vs. expired vs. already-used.
+- `completePasswordReset(token, password, passwordConfirm, context, termsAccepted?)` — the only export, backing `POST /account/password/reset/confirm`. It runs these steps in order:
+  1. Validate the password pair with `validatePasswordChange`. A bad pair returns a 422.
+  2. `findLiveToken` looks the token up. This is a read only.
+  3. `resetWith` does the rest.
+  4. Database errors are mapped through `rejectDatabaseEnvelope('auth', …)`.
+- `resetWith` (internal) — runs once the link is found:
+  - It requires `termsAccepted === true` when the account has no `termsAcceptedAt`, and answers a 422 field error on `termsAccepted` otherwise.
+  - It runs the breached-password check (`assertPasswordNotBreached`).
+  - It calls `spendThen(PASSWORD_RESET_TOKEN_TYPE, token, passwordWrite(...))`, which spends the token and writes the password in one transaction.
+  - If the spend finds no token (the link was used concurrently), it returns the refused-link response.
+  - On success it runs `afterPasswordWrite`, then `afterReset`.
+- `markResetCompleted` (internal) — the mutation applied during the password write:
+  - It zeroes `mfaFailures` and clears `mfaLockedUntil`.
+  - It calls `markVerified`, since the mailbox is proven.
+  - If the account has no Terms record, it assigns `termsAcceptance()`.
+- `afterReset` (internal) — runs only on success. It does two fire-and-forget things:
+  - It records the `AUTH_PASSWORD_RESET_COMPLETED` audit row. A failure to audit is logged as a warning and does not fail the reset.
+  - It sends the `resetConfirmEmail` through `sendAccountMail`. The mail uses the recipient's own locale first, with the request's locale as the fallback. It lists the user's OAuth providers.
+- `resetLinkRefused` (internal) — the 422 for a dead link, via `refuseLink(context, 'password_reset', 'account.reset.token-not-found')`.
 
 ## Relationships
-
-- **`src/modules/account/services/tokens.ts`** — `findLiveToken` locates the holder; `spendThen` performs the atomic token-delete + password-write transaction; `refuseLink` shapes the 422 for dead links.
-- **`src/modules/account/services/password.ts`** — `validatePasswordChange` checks the pair before any token lookup; `passwordWrite` executes the password set inside the `spendThen` transaction; `afterPasswordWrite` handles post-write session revocation.
-- **`src/modules/account/services/verification.ts`** — `markVerified` stamps the address as verified (the reset link serves as proof of mailbox ownership).
-- **`src/modules/account/services/mail.ts`** — `sendAccountMail` enqueues the confirmation email at normal priority.
-- **`src/modules/account/services/caller.ts`** — `recordAccountAudit` writes the audit row (fire-and-forget).
-- **`src/modules/account/audit.ts`** — `accountAuditActions.AUTH_PASSWORD_RESET_COMPLETED` action constant.
-- **`src/modules/account/consent-record.ts`** — `termsAcceptance()` generates the default Terms record for staff-created accounts that lack one.
-- **`src/modules/account/emails.ts`** — `resetConfirmEmail`, `greetableName`, `recipientLocale` build the confirmation message.
-- **`src/infrastructure/security/breached-passwords/index.ts`** — `assertPasswordNotBreached` rejects passwords found in breach datasets.
-- **`src/infrastructure/http/response.ts`** — `generateReject`, `fieldError`, and the `ResponseSuccess`/`ResponseReject` union types.
-- **`src/infrastructure/http/errors.ts`** — `rejectDatabaseEnvelope` converts unexpected DB errors into a safe envelope.
-- **`src/infrastructure/i18n/index.ts`** — `t()` for the terms-acceptance error message.
-- **`src/infrastructure/adapters/logger.ts`** — `logger.warn` on swallowed audit-lookup failures.
+- `./tokens`: provides `findLiveToken`, `spendThen` and `refuseLink`.
+- `./password`: provides `validatePasswordChange`, `passwordWrite` and `afterPasswordWrite`.
+- `./verification`: `markVerified`.
+- `./mail` and `../emails`: `sendAccountMail`, `resetConfirmEmail`, `greetableName` and `recipientLocale`.
+- `./caller` and `../audit`: `recordAccountAudit` and `accountAuditActions`.
+- `../consent-record`: `termsAcceptance`.
+- `@infrastructure/security/breached-passwords`: `assertPasswordNotBreached`.
+- `@infrastructure/http/response` and `@infrastructure/http/errors`: `generateReject`, `fieldError`, the response types, and `rejectDatabaseEnvelope`.
+- `@infrastructure/i18n`: `t` for the terms-not-accepted message.
+- `@infrastructure/adapters/logger`: the audit-failure warning.
+- `../token-types`: `PASSWORD_RESET_TOKEN_TYPE`.
 
 ## Notes
-
-- **Spend is always last.** Every rejection path (bad pair, missing terms tick, breached password, dead link) returns *before* the token is consumed, so a user can retry. The `spendThen` call is the only point of no return.
-- **Audit and email are fire-and-forget.** Both are `void`-ed with `.catch` (audit) or an intrinsic "never rejects" guarantee (mail). A queue outage or DB hiccup after the password write must not surface as a failed reset.
-- **Locale for the confirmation email** uses `recipientLocale(user.locale, context)` — the user's stored locale is primary; the request's `Accept-Language` is only a fallback, since the link is often clicked on a shared device.
-- **`oauthAccounts` is `select: false`** in the schema but is still read (with `?? []`) to enumerate providers in the email copy. The eslint-disable comment flags that the TypeScript types are misleading here.
-- **Terms acceptance is conditional.** The `termsAccepted !== true` guard only fires when `user.termsAcceptedAt` is absent (e.g., a staff-created account). Normal users who already accepted skip this check entirely.
-- **Uniform 422 for dead links.** Unknown, expired, and already-spent tokens all produce the identical response to prevent token enumeration.
+- Ordering matters. Everything before the token spend is a read, and the spend comes last. A refused password (mismatch, breach, missing Terms tick) therefore never burns the link. The atomic spend also settles two simultaneous uses of one link.
+- A failing password write rolls back the spend, so the link stays live for a retry.
+- Unknown, expired and already-used links all return the same 422 on purpose.
+- The Terms refusal happens only after the link is found, so only the holder of a live token ever sees it.
+- The audit row and confirmation mail are fire-and-forget. The password has already changed by then, so neither can turn a successful reset into an error.
+- Completing a reset clears the 2FA lock deliberately, because anyone who can read the mailbox already has the account's recovery path.
+- The `account.sessions_revoked` event is emitted with the password write, not in this file.
+- The same find/spend split is used by `two-factor-challenge.ts`.

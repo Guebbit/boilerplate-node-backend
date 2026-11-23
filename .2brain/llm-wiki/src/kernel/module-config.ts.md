@@ -1,32 +1,30 @@
 ---
 source: src/kernel/module-config.ts
-sha256: ef5f2dd6c2d11dc4ee240f9e25310bf1deed90705eea615e6b200efb562f9298
-generated_at: 2026-11-08T03:54:10.640093+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7e4ce0b66e14409b8b48616d97ee50fbb23e86378c0eb123eb7c35fa8dd6ba04
+context_sha256: b6a6ba1dd58ceed39249312d2120a945f63baa5aa57c7eeccb4b62981d379b99
+generated_at: 2026-11-22T03:13:29.181758+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/kernel/module-config.ts
 
 ## Purpose
-
-Boot-time configuration gate. It collects every config slice contributed by the enabled modules (their declared slices plus auto-generated rate-limit budgets) and the app-level slices handed in by the caller, then validates all of them in a single pass so a misconfigured deployment reports every problem at once instead of one per restart.
+The boot-time configuration gate. It collects every config slice the application requires (from modules and from the caller) and validates them in a single pass, so a misconfigured deployment reports all its problems at once rather than one per restart. It lets the kernel stay adapter-agnostic: modules declare their own slices, and anything else is passed in by the caller.
 
 ## Key elements
-
-- **`configSlicesOf(appModule)`** — Returns one module's slices in declaration order: its `appModule.config` array, followed by a generated rate-limit budget slice (via `rateLimitBudgetConfig`) if `appModule.rateLimits` is non-empty.
-- **`moduleConfigSlices(appModules)`** — Flattens `configSlicesOf` across a list of modules, preserving module order.
-- **`assertModuleConfig(appModules, appSlices)`** — Public entry point. Combines caller-supplied `appSlices` with all module slices and delegates to `assertConfig`. Throws a single `ConfigError` enumerating every failure.
+- `configSlicesOf(appModule)`: returns one module's slices: its declared `appModule.config` (if any), plus a generated rate-limit budget slice named `<module name>-rate-limits` when the module declares `rateLimits`.
+- `moduleConfigSlices(appModules)`: flat-maps `configSlicesOf` over the module list, preserving module order.
+- `assertModuleConfig(appModules, appSlices)`: runs `assertConfig` over `appSlices` followed by all module slices. It throws a single `ConfigError` listing every problem.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** — Supplies the `AppModule` type that all three functions operate on.
-- **`src/infrastructure/config/define.ts`** — Provides `assertConfig` (the validation engine) and the `ConfigSlice` type; this file is a thin orchestration layer over it.
-- **`src/infrastructure/http/config.ts`** — Provides `rateLimitBudgetConfig`, used to turn a module's `rateLimits` declaration into a config slice.
-- **`src/app/config.ts`** — The caller that supplies `appSlices` (config belonging to neither a module nor the kernel).
+- `src/kernel/registry.ts`: provides the `AppModule` type, whose `config`, `rateLimits` and `name` fields are read here.
+- `src/infrastructure/config/define.ts`: provides `assertConfig` (the validator) and the `ConfigSlice` type.
+- `src/infrastructure/http/config.ts`: provides `rateLimitBudgetConfig`, used to turn a module's `rateLimits` into a slice.
+- `src/app/config.ts`: the caller that supplies `appSlices`, meaning the config that belongs to no module and that the kernel must not name.
+- Tests: `tests/unit/kernel/module-config.test.ts` covers this file directly. Module tests (account, orders, payments, products, shop, webhooks), `tests/unit/app/config.test.ts` and `tests/unit/scripts/setup/first-run.test.ts` are related through the dependency graph.
 
 ## Notes
-
-- Under `NODE_ENV=test`, presence and cross-field rules are skipped (Jest builds its own environment per suite), but **shape rules still run**.
-- The demo profile receives no exemption; it satisfies the gate the same way any production deployment does, by setting every variable the slices require (`REQUIRED_DEFAULTS` in `scenarios/run-server.ts`).
-- Rate-limit budget slices are *derived* from the module's declared `rateLimits`, not stored independently. Deleting a module therefore deletes its gate automatically.
-- The kernel deliberately never names an adapter; app-level configuration that doesn't belong to any module is injected by the caller as `appSlices` rather than hardcoded here.
+- Under `NODE_ENV=test`, presence and cross-field rules are skipped, but shape rules still apply.
+- The demo profile has no exemption. It must set every variable that a slice asks for.
+- Because rate-limit slices are generated from the module's own declarations, removing a module also removes its config gate.
+- App-level slices come first in the validated list, followed by module slices.

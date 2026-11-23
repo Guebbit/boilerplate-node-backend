@@ -1,42 +1,40 @@
 ---
 source: src/modules/cart/domain/rules.ts
-sha256: b4ab06b34008d831b3e0a8a16aa02220c8eb3d6b97025a83576c65f03ead3718
-generated_at: 2026-11-08T05:13:32.090869+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ad0b5993415359ddcf227ca1193e4dfc3cac7824ff972f7862ba8b5ba18b8232
+context_sha256: 2a0bca8cfe4ce6aacc2b95f80889a2965f3aacd743f990d4ab565ffa1bebd493
+generated_at: 2026-11-22T04:32:38.945763+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/domain/rules.ts
 
 ## Purpose
-
-Pure decision functions for the cart domain: given joined cart-line data, they return a verdict (ok / refused + reason) without touching status codes, i18n, or the network. The service layer maps each verdict to a response. This keeps the "why is checkout blocked?" logic testable and free of side effects.
+Pure cart rules for the domain layer: data in, verdict out, with no status codes or i18n. The `services/` layer maps the verdicts to responses. The file decides whether a cart may be checked out, how much a basket weighs, and whether it needs shipping.
 
 ## Key elements
-
-- **`CartLineCandidate`** – The input shape for `evaluateCheckout`. `product: null` signals a hard-deleted product (the join couldn't find it); a non-null product with `active: false` / `deletedAt` signals a soft-delete. `available` is pre-computed by the caller because the domain layer forbids importing sibling modules.
-- **`UnavailableCartLine`** – A single line refused because its product is gone. `title` is optional (absent for hard-deletes).
-- **`CheckoutShortfall`** – A single line refused because stock is insufficient. Carries `requested` count and a `LineAvailability` enum value (never `in_stock`/`removed`); deliberately omits remaining stock to respect `read:StockLevel` access control.
-- **`WeighedCartLine`** – Minimal shape for weight/shipping predicates (`quantity`, `product.weight`, `product.requiresShipping`).
-- **`basketWeight(lines)`** – Sum of `weight × quantity` for shipped lines only. `requiresShipping: false` (digital goods) contributes zero. Absent `requiresShipping` counts as shipped (schema default).
-- **`needsShipping(lines)`** – `true` if any line is shipped.
-- **`evaluateShippingRequirement(lines, method, hasAddress)`** – Returns `ShippingRequirementVerdict`: digital-only → ok; physical line without a method → `method-required`; method with `requiresAddress` but no address → `address-required`.
-- **`evaluateCheckout(lines)`** – The gate for cart→order. Checks in order: empty → all lines' availability (via `lineAvailability`) → collect `removed` lines → collect non-buyable, non-removed lines as shortfalls. Returns `CheckoutVerdict`.
-- **`CheckoutVerdict`** – Discriminated union: `ok`, `empty`, `product-unavailable` (with line list), `insufficient-stock` (with shortfall list).
-- **`isShippedLine`** – (module-private) Single predicate shared by `basketWeight` and `needsShipping` so the two can never disagree.
+- `CartLineCandidate`: a cart line as the rules see it, with an optional joined `product`. `product: null` means a hard-deleted product. Soft-deleted or deactivated products still resolve, with `active` and `deletedAt` set. `product.available` is computed by the caller, and a missing value reads as zero.
+- `UnavailableCartLine`: a line refused because no sellable product backs it (`productId`, optional `title`).
+- `CheckoutShortfall`: a line refused for stock or sale status. It carries `productId`, `title`, `requested` and `availability`, which excludes `in_stock`, `preorder`, `backorder` and `removed`. It never exposes the remaining stock count.
+- `WeighedCartLine`: the minimal line shape (`quantity`, `product.weight`, `product.requiresShipping`) used by the weight and shipping helpers.
+- `basketWeight(lines)`: total grams, summing `weight * quantity` over shipped lines only. A missing weight or quantity counts as 0.
+- `needsShipping(lines)`: `true` if any line ships.
+- `evaluateShippingRequirement(lines, method, hasAddress)`: returns `ShippingRequirementVerdict`. The result is `ok`, `method-required` or `address-required`. A digital-only basket needs neither.
+- `evaluateCheckout(lines)`: returns `CheckoutVerdict`. The result is `ok`, `empty`, `product-unavailable` (with `lines`) or `insufficient-stock` (with `shortfalls`). It reports every offending line, not just the first.
+- `isShippedLine` (private): the predicate shared by `basketWeight` and `needsShipping`.
 
 ## Relationships
-
-- **`./availability.ts`** – Imports `isBuyable` and `lineAvailability`; these are the shared availability rules also used by the cart view and merge paths.
-- **`@types` (`src/types/index.ts`)** – Imports the `LineAvailability` type, which bounds the `availability` field on `CheckoutShortfall`.
-- **`services/checkout.ts`** – Consumes `evaluateCheckout`, `basketWeight`, and `evaluateShippingRequirement`, then maps verdicts to HTTP responses.
-- **`services/view.ts`** – Produces the joined lines (`readCartLines`) that become `CartLineCandidate[]`; its unscoped join is what makes `product: null` a reliable "hard-deleted" signal.
-- **`domain/index.ts`** – Re-exports the public API of this module.
-- **`tests/unit/domain-rules.test.ts`** / **`tests/unit/stock-rule.test.ts`** – Unit tests covering the verdict logic above.
+- `src/modules/cart/domain/availability.ts`: `evaluateCheckout` calls `lineAvailability` for each line and uses `isBuyable` to decide which lines become shortfalls.
+- `src/types/index.ts`: provides the `LineAvailability` type used by `CheckoutShortfall`.
+- `src/modules/cart/services/checkout.ts`: the doc comments say `basketWeight` is used to refuse a checkout whose chosen method doesn't fit.
+- `src/modules/cart/services/view.ts`: the comments say its `readCartLines` join produces the `CartLineCandidate` shape, including `product: null`. It also uses `basketWeight` to filter delivery methods (advisory).
+- `src/modules/cart/services/items.ts`: appears in the dependency graph. The file shares the availability rule with "the merge", but the comments don't say how the file interacts with `items.ts`.
+- `src/modules/cart/domain/index.ts`: a graph neighbor, not referenced in the file's content.
+- `src/modules/cart/tests/unit/domain-rules.test.ts` and `src/modules/cart/tests/unit/stock-rule.test.ts`: unit tests for these rules.
 
 ## Notes
-
-- The file is intentionally **unshared** with `orders`' `checkOrderLines` — a cart is a draft, an order a commitment; they mirror each other but must evolve independently.
-- `evaluateCheckout` compares against **availability**, not raw units on hand. A product with 40 units all promised shows `available: 0` and is correctly refused.
-- All refused lines are reported, not just the first, to avoid the customer binary-searching their basket.
-- `product.available` is computed by the **caller** (the `@modules/products` domain), not here; the domain layer's import boundary forbids sibling-module computation. Absent reads as `0` — "nothing to sell" is the safe failure direction for a rule whose job is to refuse.
-- `basketWeight` and `needsShipping` use a shared private `isShippedLine` predicate so "counts toward weight" and "needs a shipping method" are structurally unable to diverge.
+- Refusal reasons are named strings because the checkout-failure analytics event reports them verbatim.
+- The checks run in a fixed order: empty cart, then unavailable (`removed`) lines, then stock shortfalls. Each stage collects all offending lines.
+- `evaluateCheckout` is only the pre-flight check. The concurrency-safe guarantee is `inventory`'s conditional reserve, which re-checks the same rule inside the write.
+- `evaluateCheckout` mirrors `orders`' `checkOrderLines` on purpose and does not share its code, because a cart is a draft and an order is a commitment.
+- The domain layer may not import sibling modules, so `available` is supplied by the caller (`@modules/products`' `availableStock`).
+- A missing `requiresShipping` counts as shipped.

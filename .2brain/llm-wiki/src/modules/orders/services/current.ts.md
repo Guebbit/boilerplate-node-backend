@@ -1,33 +1,32 @@
 ---
 source: src/modules/orders/services/current.ts
-sha256: d9358d19b9cbe2fa3210403a7412e694c8f3a6269e47a566da75ffc6181e99d1
-generated_at: 2026-11-08T06:56:53.220459+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 387dc2d2a75d1889cfa615174980535bd2c8536cdbdf0b1440935d2f8b8881e8
+context_sha256: ab7ef1aae3451683377d1eb94bb2025d94ae1e508feb71dfa78ff87b15f237e2
+generated_at: 2026-11-22T06:19:50.359378+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/current.ts
 
 ## Purpose
-
-Resolves each order line's live product images (`imageUrl`, `thumbnailUrl`) from the catalogue at the serialization boundary. It exists because the frozen order snapshot schema (`orderLineProductSchema`) deliberately omits image fields, so callers need a single, batched lookup that enriches serialized orders just before they leave the API layer.
+Resolves each order line's live product picture from the catalogue at the serialization boundary. The frozen order-line snapshot carries no `imageUrl`/`thumbnailUrl`, so this module looks them up in one batched query per response and attaches them to each line as `current`.
 
 ## Key elements
-
-- **`resolveCurrentImages<T extends OrderShape>(orders: T[]): Promise<T[]>`** — The sole export. Collects all distinct catalogue `product.id` values across the passed-in orders, issues one `findManyByIds` query, then mutates each line in place to attach a `current` object (or leaves it absent if the product was hard-deleted). Returns the same array it received.
-- **`OrderLineCurrent`** — Shape of the attached field: optional `imageUrl` and `thumbnailUrl`.
-- **`OrderLineShape` / `OrderShape`** — Minimal structural types describing what this module reads from a serialized order line and order shell, keeping the generic `<T>` contract loose enough for both list and single-order responses.
-- **`linesOf`** — Narrows an order's `items` to `OrderLineShape[]`, returning `[]` if `items` is not an array.
-- **`distinctProductIds`** — Builds a deduplicated `Set` of string ids across all orders, ready for the `$in` query.
+- `resolveCurrentImages(orders)` (exported): takes one or many serialized orders and collects the distinct string `line.product.id` values. If there are none, it returns the orders unchanged. Otherwise it calls `productService.findManyByIds` once, builds an id-to-product map, and sets `line.current` on each matching line. It mutates the input and returns the same array, as a `Promise`.
+- `distinctProductIds` (internal): gathers the unique catalogue ids across all orders' lines. These ids make up the `$in` lookup.
+- `linesOf` (internal): returns `order.items` if it is an array, otherwise `[]`.
+- `OrderLineCurrent`, `OrderLineShape`, `OrderShape` (internal interfaces): deliberately loose shapes covering both list and single-order responses.
 
 ## Relationships
-
-- **`src/modules/products/index.ts`** — Provides `productService`, which this file imports. The call used is `productService.findManyByIds(ids)`, returning lean, untransformed rows keyed by `_id`.
-- **`src/modules/products/services/index.ts`** — Implementation behind that `findManyByIds` call; this file depends only on its contract (ids in, product docs out).
-- **`src/modules/orders/services/actions.ts`** and **`src/modules/orders/services/read.ts`** — Upstream callers that serialize orders and then pass the result array through `resolveCurrentImages` before the response is sent. Both shapes (admin-hydrated, owner-scoped) are compatible because this module only reads `items[].product.id`.
+- Imports `productService` from `@modules/products` (`src/modules/products/index.ts`) and uses only its `findManyByIds`, which returns lean, untransformed rows keyed by `_id`.
+- The neighbors `src/modules/orders/services/actions.ts`, `src/modules/orders/services/read.ts` and `src/modules/products/services/index.ts` are not imported here, and the visible content shows no direct interaction with them. The docs say the input is the already-serialized order shape, past `applyOrderTransform`. They also say both admin-hydrated and owner-scoped orders are accepted.
 
 ## Notes
-
-- **Mutates in place.** The caller must treat the returned array as its own; there is no clone step. This is intentional—the input is already a fresh, serialized shape owned by the caller.
-- **One query per response.** No matter how many orders or lines are in the batch, exactly one `findManyByIds` call fires (or zero if no lines reference a product id).
-- **Absent vs. empty `current`.** A hard-deleted catalogue product means `current` is never set on that line. A live product with no image fields yields `current: {}`. The frontend renders the same placeholder in both cases, so callers need not distinguish.
-- **Id type guard.** Only values where `typeof line.product?.id === 'string'` are collected and resolved; numeric or missing ids are silently skipped.
+- Three outcomes per line:
+  - Product found with pictures: `current` has `imageUrl` and/or `thumbnailUrl`.
+  - Product found with no pictures: `current` is `{}`.
+  - Product hard-deleted: `current` is left absent.
+  The frontend draws a placeholder in the last two cases.
+- Only truthy `imageUrl`/`thumbnailUrl` values are copied.
+- Lines whose `product.id` is not a string are skipped.
+- The query cost is one extra query per response, regardless of the number of orders or lines.

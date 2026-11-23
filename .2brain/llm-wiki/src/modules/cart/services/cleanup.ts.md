@@ -1,30 +1,28 @@
 ---
 source: src/modules/cart/services/cleanup.ts
-sha256: 28b260e7699fcd5ac6d7221a83b110d532038897f068f01149eaab14f59e92da
-generated_at: 2026-11-08T05:16:42.518715+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 28b260e7699fcd5ac6d7221a83b110d532038897f068f01149eaab14f59e92da
+context_sha256: 95c938645e5f0400c62be46f4eb8e2b81c4ec51391a7ae1d6036c09d442ca692
+generated_at: 2026-11-22T04:35:38.220275+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/services/cleanup.ts
 
 ## Purpose
-
-Provides the two cleanup entry points the cart module exposes for when entities it references (a user or a product) are hard-deleted elsewhere. Neither function is reachable from a cart route; they are hooks and event handlers wired up in the module manifest so that other modules can trigger cart-side tidying.
+Cleanup entry points that other modules call when something a cart references but does not own disappears: a user or a product. Neither function is reachable from a cart route. Nothing else tidies up carts after these deletions.
 
 ## Key elements
-
-- **`cartDeleteByUserId(userId, session)`** — Deletes the user's cart document. Accepts a `ClientSession` so the delete joins the caller's hard-delete transaction. Registered as the `personalData.erase` hook in the cart module manifest.
-- **`productRemoveFromCartsById(id, titles)`** — Removes a product from every cart via `cartRepository.removeProductFromAll`, then emits `CART_LINES_REMOVED` (with `userIds`, `productId`, `titles`) if any carts were affected. Registered as a domain-event handler via the module's `subscribe()` method.
+- `cartDeleteByUserId(userId, session)`: deletes a user's whole cart for a hard account deletion, by calling `cartRepository.deleteByUserId`. It serves as the module's `personalData.erase` hook. The `ClientSession` joins the delete to the caller's hard-delete transaction.
+- `productRemoveFromCartsById(id, titles)`: removes a product from every user's cart via `cartRepository.removeProductFromAll`. That call returns the affected user IDs. If any were affected, it emits `CART_LINES_REMOVED` with `{ userIds, productId, titles }`. `titles` is the product's names by locale, taken from the `product.deleted` event.
 
 ## Relationships
-
-- **`src/kernel/events.ts`** — Imports `emitDomainEvent`; this is the sole mechanism by which `productRemoveFromCartsById` announces the removal to listeners. A rejected promise from a downstream handler is what the kernel reads to log a failure.
-- **`src/modules/cart/events.ts`** — Imports the `CART_LINES_REMOVED` constant, which is the event name emitted after a product is stripped from carts.
-- **`src/modules/cart/repository.ts`** — Imports `cartRepository`; both exports delegate their actual data work (`deleteByUserId`, `removeProductFromAll`) to this repository.
-- **`src/modules/cart/services/index.ts`** — Re-exports these two functions so other modules can import them through the services barrel.
+- `src/modules/cart/repository.ts`: `cartRepository` does the actual data work (`deleteByUserId`, `removeProductFromAll`).
+- `src/modules/cart/events.ts`: supplies the `CART_LINES_REMOVED` event constant.
+- `src/kernel/events.ts`: `emitDomainEvent` publishes the announcement. It treats a rejected handler promise as a failed handler and logs it.
+- `src/modules/cart/services/index.ts`: the services barrel, which presumably re-exports these functions (not shown in this file).
 
 ## Notes
-
-- The two functions have **different error semantics** by design: `cartDeleteByUserId` runs inside the caller's transaction, so a throw aborts that transaction; `productRemoveFromCartsById` runs as a domain-event handler, where a rejected promise is caught and logged by `emitDomainEvent` rather than propagating.
-- `productRemoveFromCartsById` emits **nothing** when no cart contained the product (early return on empty `userIds`), so listeners must not assume the event fires on every product deletion.
-- `cartDeleteByUserId` is distinct from the route-level `cartRemove` (which empties a still-existing cart); this one deletes the cart document entirely because the owning user is gone.
+- The two functions have different failure semantics. `cartDeleteByUserId` is a direct hook, not a domain event, so a throw aborts the caller's transaction. `productRemoveFromCartsById` is an event handler, so a rejected promise is logged and skipped.
+- `cartDeleteByUserId` is distinct from `cartRemove`, which empties a cart the user still has.
+- No event is emitted when no cart held the product.
+- The cart module announces the removal and never imports whoever notifies the owners.

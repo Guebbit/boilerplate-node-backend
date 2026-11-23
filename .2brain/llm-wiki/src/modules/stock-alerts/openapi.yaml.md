@@ -1,41 +1,43 @@
 ---
 source: src/modules/stock-alerts/openapi.yaml
-sha256: 9ddb7cee99347182836d9403918ef1f4c4a6fe5106b08597f9d1068accddb972
-generated_at: 2026-11-14T22:04:03.686426+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:55:03.116740+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stock-alerts/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 contract for the stock-alerts module. It defines the REST surface for letting an authenticated user create, list, and cancel "notify me when this product is back in stock" requests, and declares the module's contribution to the account data export (`x-personal-data`). It also registers module-specific error codes that the bundler surfaces to clients.
+OpenAPI 3.1.0 contract (v0.1.0) for the `stock-alerts` module. It describes the endpoints that let an authenticated user ask to be notified once, by one mail and one inbox message, when a product they cannot currently order becomes orderable again. It also declares the module's error codes and its section of the account data export.
 
 ## Key elements
-
-- **`tags: StockAlerts`** — single tag, tagged with `x-family: Catalogue`, under which all three operations are grouped.
-- **`x-error-codes`** — two module-level 409 codes:
-  - `STOCK_ALERT_LIMIT_REACHED` — account already holds `NODE_STOCK_ALERTS_MAX` (default 100) requests for *other* products.
-  - `STOCK_ALERT_PRODUCT_BUYABLE` — the target product is currently orderable, so a request is refused.
-- **`x-personal-data.stockAlerts`** — schema fragment the bundler merges into `POST /account/export`; an array of `StockAlert` objects.
-- **`GET /stock-alerts`** (`listStockAlerts`) — returns the caller's open requests, newest first. No pagination (capped by the 100-request limit). Empty list ≠ 404.
-- **`POST /stock-alerts`** (`createStockAlert`) — idempotent create; body is `{ productId }`. Always returns the full open-request list. 409 for the two error codes above; 404 for hidden/deleted product; 422 for missing/malformed `productId`.
-- **`DELETE /stock-alerts/{productId}`** (`deleteStockAlert`) — cancels one request. 404 if the caller does not hold it (stale client).
-- **`components.schemas`**:
-  - `CreateStockAlertRequest` — `{ productId: Id }`, no extra properties.
-  - `StockAlert` — `{ productId, createdAt }`; the caller identity is implicit (auth header), not stored in the record.
-  - `StockAlertsResponse` — `{ items: StockAlert[] }`.
+- **Tag `StockAlerts`** (`x-family: Catalogue`): groups all operations in this module.
+- **`GET /stock-alerts`** (`listStockAlerts`): returns the caller's open requests, newest first. It is never paginated and never returns 404, because an empty list is the same as no requests. Responses: 200, 401.
+- **`POST /stock-alerts`** (`createStockAlert`): records a request for the `productId` in the body.
+  - It is idempotent. Asking again for the same product returns the same 200.
+  - It always returns the whole list, as `StockAlertsResponse`.
+  - Responses: 200, 401, 404 (product hidden or deleted), 409, 422 (missing or malformed `productId`).
+- **`DELETE /stock-alerts/{productId}`** (`deleteStockAlert`): cancels the caller's own request and returns the remaining list. A request the caller does not hold gives 404, so a stale client knows. Responses: 200, 401, 404.
+- **`x-error-codes`**:
+  - `STOCK_ALERT_LIMIT_REACHED` (409): the account already holds `NODE_STOCK_ALERTS_MAX` requests (default 100). Re-asking for a product already waited for is never refused.
+  - `STOCK_ALERT_PRODUCT_BUYABLE` (409): the product can be ordered now.
+  - `createStockAlert` maps `409` to both codes through an operation-level `x-error-codes`.
+- **`x-personal-data.stockAlerts`**: an array of `StockAlert`. This is the module's section of the `POST /account/export` response, which the bundler adds to `AccountExportResponse`.
+- **Schemas**:
+  - `CreateStockAlertRequest`: requires `productId`.
+  - `StockAlert`: `productId` and `createdAt` (date-time).
+  - `StockAlertsResponse`: `{ items: StockAlert[] }`.
+  - All three are `additionalProperties: false`.
 
 ## Relationships
+The file has no graph neighbors, so no dependency-graph interactions are recorded. Its only external references are `$ref` pointers by relative path into the shared contract `shared/contracts/openapi.root.yaml`, which is not a graph neighbor. These pointers cover:
+- Responses: `Unauthorized`, `NotFound`, `Conflict`, `ValidationError`.
+- Parameter: `ProductIdPathParam`.
+- Schema: `Id`.
 
-- **`shared/contracts/openapi.root.yaml`** — every cross-module `$ref` (shared `Id` schema, `ProductIdPathParam`, and the standard 401/404/409/422 response objects) resolves into this file. The relative path `../../../shared/contracts/openapi.root.yaml` is used throughout.
-- **`src/modules/stock-alerts/module.yaml`** — the module manifest; the bundler reads `x-personal-data` and `x-error-codes` from this OpenAPI file and merges them into the root spec and account-export schema respectively.
-- **`src/modules/stock-alerts/module.ts`** — the TypeScript implementation that satisfies these endpoints; the operation IDs (`listStockAlerts`, `createStockAlert`, `deleteStockAlert`) are the contract binding between the two.
+All operations use `bearerAuth`.
 
 ## Notes
-
-- The list is the parent resource: a single `StockAlert` has no dedicated GET or URL. All read paths return `StockAlertsResponse`.
-- A request is **single-use**: it is deleted server-side when fulfilled (stock becomes available). It never transitions to an "answered" state visible to the client.
-- `POST` is idempotent by product: re-asking for the same `productId` returns 200 with the unchanged list, not a duplicate entry.
-- The 100-request cap (`NODE_STOCK_ALERTS_MAX`) is environment-configurable; the OpenAPI description states the default but the runtime value can differ.
-- The `productId` parameter on `DELETE` uses the shared `ProductIdPathParam`, so its name and format are governed by `openapi.root.yaml`, not this file.
+- A request is single-use. It is deleted once answered, so answered requests never appear in the list.
+- The description says a product counts as orderable again with shelf units, an open backorder, a preorder with allowance left, or back on sale.
+- The `x-personal-data` section is tied to the module: the file's comment says removing the module removes the section.
+- `NODE_STOCK_ALERTS_MAX` is the configurable cap (default 100). The contract only names it, and the file shows no implementation.

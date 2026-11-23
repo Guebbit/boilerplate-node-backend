@@ -1,30 +1,31 @@
 ---
 source: src/modules/orders/domain/backorder.ts
-sha256: 54697dee51f612c392e6b8c4fd7ccc6fd4e5518d6fe1e99c4c36bdd294d24bb2
-generated_at: 2026-11-08T06:48:03.691700+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 59620ca1c50f091412bbf8c2dbc75452538409c48f82510eb93475abfbd91d82
+context_sha256: d5cc6118934491c1c70786ed6f35fd450da374e7fee2e784f853f00664ebdc76
+generated_at: 2026-11-22T06:10:41.779192+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/domain/backorder.ts
 
 ## Purpose
-
-Defines the "owed" portion of an order line — how many units are backordered and when the buyer was promised delivery. Pure domain logic: it computes a frozen snapshot at order-placement time so that later catalogue changes (e.g. restock-date edits) don't silently alter what was already promised to the buyer.
+Pure domain module describing what an order freezes about the units it owes (backordered units): how many are owed and the day they were promised. It exists so that the owed quantity and its promise date are computed in one place when an order is placed. The file's header points to further background in its `@see` reference (the backorders section of the inventory-reservations doc).
 
 ## Key elements
-
-- **`OwedLine`** (interface) — The frozen owed-part of one order line. Carries `backorderedQuantity` (units the shelf couldn't cover), `promisedAt` (the delivery promise date), and `promiseDated` (whether that date came from the product's restock date vs. the 30-day default).
-- **`owedLineOf`** (function, pure) — Given the uncovered quantity, an optional restock date, the placement instant, and the default promise days, returns an `OwedLine` or `undefined` (when nothing is owed). The promise date is the restock date when one exists; otherwise `placedAt + promiseDays × DAY_MS`.
+- `OwedLine` (interface): the frozen owed part of one order line.
+  - `backorderedQuantity`: number of units owed.
+  - `promisedAt`: the promised date.
+  - `promiseDated`: a boolean that is set when `promisedAt` is the product's own restock date rather than the 30-day default. This determines whether the buyer is told "by <date>" or "within 30 days", and a later change to the catalogue's date moves only a promise that was product-dated.
+- `owedLineOf(owed, restockDate, placedAt, promiseDays)`: returns an `OwedLine`, or `undefined` when `owed` is not greater than 0 (the shelf covered everything).
+  - `promisedAt` is `restockDate` if given, otherwise `placedAt + promiseDays * DAY_MS`.
+  - `promiseDated` is `restockDate !== undefined`.
+  - `promiseDays` is documented as coming from `shop`'s `BACKORDER_PROMISE_DAYS`.
 
 ## Relationships
-
-- **`src/domain-primitives/time.ts`** — Imports `DAY_MS` to convert the `promiseDays` parameter into milliseconds when computing the default promise date.
-- **`src/modules/orders/domain/index.ts`** — Barrel/re-export file for the orders domain; makes `OwedLine` and `owedLineOf` available to consumers of the domain module.
-- **`src/modules/orders/services/place.ts`** — Caller in the order-placement service; invokes `owedLineOf` to freeze the owed portion of each line before persisting the order.
-- **`src/modules/delivery/tests/factories.ts`** — Test factory that constructs `OwedLine`-shaped fixtures for delivery-related test suites.
+- Imports `DAY_MS` from `src/domain-primitives/time.ts` (via `@domain-primitives/time`) to convert days into milliseconds.
+- The other listed neighbors (`src/modules/orders/domain/index.ts`, `src/modules/orders/services/place.ts`, `src/modules/delivery/tests/factories.ts`) are related through the dependency graph. This file's contents don't show how they use it, but its `placedAt` and `promiseDays` parameters correspond to order placement.
 
 ## Notes
-
-- `promiseDated` is the critical flag: it records *why* a specific date was chosen. If the restock date in the catalogue is later changed, only promises where `promiseDated` is `true` are eligible to shift; `false` promises stay anchored to the original 30-day calculation.
-- The function returns `undefined` (not a zero-quantity object) when `owed === 0`, so callers must guard against absence rather than checking a quantity of zero.
-- `promiseDays` is not a constant here — it is injected by the caller (`shop`'s `BACKORDER_PROMISE_DAYS`), keeping the domain function parameterised and testable.
+- The function is pure: it takes `placedAt` as a parameter and does not read the clock or configuration itself.
+- The "30-day" default is not hardcoded here; the caller supplies `promiseDays`.
+- `restockDate` is checked with `??`/`!== undefined`, so only `undefined` counts as "no restock date".

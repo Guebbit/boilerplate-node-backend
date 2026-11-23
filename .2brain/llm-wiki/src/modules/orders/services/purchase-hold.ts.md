@@ -1,44 +1,46 @@
 ---
 source: src/modules/orders/services/purchase-hold.ts
-sha256: 03e1a8d8ff43fc90aa4bfaf5ee709f56c7a52f4e5cd018ced50000e8bbcc412a
-generated_at: 2026-11-14T20:45:28.656184+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e2520bb492ffbf20f9c13d783b9bbf9446153a95c093c4e38291001f0963d5e7
+context_sha256: aa4f1a4162138ba9bbc07a79f754fd7512ab6dba9324726e5b3797dbdbe493e2
+generated_at: 2026-11-22T06:22:22.591000+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/services/purchase-hold.ts
 
 ## Purpose
-
-Reacts to `order.canceled` domain events to enforce an automated purchase-hold rule. It counts a buyer's cancellations within a configurable window and either pauses their next checkout (unpaid cancels from `customer`, `withdrawal`, or `reservation_expired` causes) or flags the account for staff review (paid cancels only). The goal is to catch bot or loop behavior while leaving legitimate statutory withdrawals unblocked.
+Implements the shop's automatic response to repeated cancellations, triggered by the `order.canceled` event. The `orders` module owns the cancellation count (from order timeline rows), while the `users` module owns the hold and the review flag. Every cancel is still processed normally. The rule only blocks the buyer's next checkout, or flags the account for review, and it notifies staff when a pause is placed.
 
 ## Key elements
-
-- **`COUNTED_CAUSES`** — `ReadonlySet<string>` of the only cancellation causes that feed the counter (`customer`, `withdrawal`, `reservation_expired`). All other causes (staff, erasure, payment mismatch) are excluded.
-- **`Findings`** (interface) — Internal result shape: `pauseUntil` (Date | undefined) and `review` (boolean).
-- **`findingsFor(userId, now)`** — Queries `userService.purchaseHoldCountingSince` and `orderRepository.findCanceledIdsOf`, then `orderEventRepository.findBuyerCancelTimes` for both paid and unpaid sets. Passes results through the pure `purchaseHoldUntil` to compute `pauseUntil` and `review`.
-- **`actOn(userId, findings)`** — If `pauseUntil` is set, calls `takeAutomaticPurchaseHold` and emits `ORDER_PURCHASE_HOLD_PLACED`. Otherwise, if `review` is true, calls `userService.flagPurchaseHoldReview`. No-op if neither condition holds.
-- **`considerPurchaseHold(payload)`** — **Exported** entry point. Filters on `COUNTED_CAUSES`, loads the order to resolve `userId`, then chains `findingsFor` → `actOn`. Catches all errors and logs them without rethrowing.
+- **`considerPurchaseHold({ orderId, cause })`**: the only export, and the handler for `order.canceled`.
+  - It ignores any cause outside `COUNTED_CAUSES`.
+  - It loads the order and returns quietly if the order has no `userId` (walk-in order or erased account).
+  - Otherwise it computes findings and acts on them.
+  - It catches all errors and logs them with `logger.error`, so it never rejects.
+- **`COUNTED_CAUSES`**: the set `customer`, `withdrawal` and `reservation_expired`. Staff, erasure and payment-mismatch cancels are excluded.
+- **`Findings`**: an internal shape with `pauseUntil` (a `Date` or `undefined`) and `review` (a boolean).
+- **`findingsFor(userId, now)`**: reads the user's `purchaseHoldCountingSince`, then splits the buyer's canceled orders into paid and unpaid. It fetches buyer cancel times for each group and runs `purchaseHoldUntil` with the configured count limit and window in days.
+  - Unpaid cancels reaching the limit produce `pauseUntil`.
+  - Paid cancels reaching the limit set `review`.
+- **`actOn(userId, findings)`**:
+  - If there is a `pauseUntil`, it calls `takeAutomaticPurchaseHold` as the system caller. If the hold was actually taken, it emits `ORDER_PURCHASE_HOLD_PLACED` with `tenantId`, `userId` and `until` as an ISO string.
+  - If only `review` is set, it calls `userService.flagPurchaseHoldReview`.
+  - If neither is set, it does nothing.
 
 ## Relationships
-
-- **src/modules/orders/domain/index.ts** — Barrel import for `purchaseHoldUntil`, the pure threshold-and-date function.
-- **src/modules/orders/domain/purchase-hold.ts** — Defines `purchaseHoldUntil`, re-exported through the domain barrel above.
-- **src/modules/orders/config.ts** — Supplies `purchaseHoldCancelCount()` and `purchaseHoldWindowDays()` (the threshold and window).
-- **src/modules/orders/repository.ts** — `orderRepository.findById` resolves the buyer; `orderEventRepository.findBuyerCancelTimes` retrieves timestamped cancel events for the counted order IDs.
-- **src/modules/orders/events.ts** — Exports `ORDER_PURCHASE_HOLD_PLACED`, emitted after a successful hold.
-- **src/modules/orders/services/index.ts** — Re-exports `considerPurchaseHold` for subscribers.
-- **src/modules/users/index.ts** — Barrel that provides `userService` (which carries `purchaseHoldCountingSince` and `flagPurchaseHoldReview`).
-- **src/modules/users/services/purchase-hold.ts** — Owns the hold state and review flag; this file calls `purchaseHoldCountingSince` (reset anchor) and `flagPurchaseHoldReview`.
-- **src/modules/users/services/index.ts** — Barrel through which the user-service methods are exposed.
-- **src/modules/users/friends/orders.ts** — `takeAutomaticPurchaseHold` performs the actual pause write.
-- **src/kernel/events.ts** — `emitDomainEvent` and the `DomainEventMap['order.canceled']` payload type.
-- **src/kernel/permissions.ts** — `systemCallerContext('User')` supplies the caller identity for service calls.
-- **src/kernel/access/tenant.ts** — `DEPLOYMENT_TENANT_ID` stamped on the emitted event.
-- **src/infrastructure/adapters/logger.ts** — Logs the caught error so the failure is visible without propagating.
+- **`src/modules/orders/config.ts`**: supplies `purchaseHoldCancelCount()` and `purchaseHoldWindowDays()`.
+- **`src/modules/orders/domain/index.ts`** (re-exporting `src/modules/orders/domain/purchase-hold.ts`): `purchaseHoldUntil` is the calculation of when a hold would end.
+- **`src/modules/orders/repository.ts`**: `orderRepository` provides `findById` and `findCanceledIdsOf`. `orderEventRepository` provides `findBuyerCancelTimes`.
+- **`src/modules/orders/events.ts`** and **`src/kernel/events.ts`**: `ORDER_PURCHASE_HOLD_PLACED` is emitted through `emitDomainEvent`. The `DomainEventMap` type describes the incoming payload.
+- **`src/modules/users/index.ts`** (`userService`) and **`src/modules/users/friends/orders.ts`**: the users-side API. It provides `purchaseHoldCountingSince`, `flagPurchaseHoldReview` and `takeAutomaticPurchaseHold`. The users module also has `src/modules/users/services/purchase-hold.ts`, a neighbor in the graph that sits on the users side of this rule.
+- **`src/kernel/permissions.ts`** and **`src/kernel/access/tenant.ts`**: `systemCallerContext('User')` and `DEPLOYMENT_TENANT_ID` are used for the system-initiated calls and the event payload.
+- **`src/infrastructure/adapters/logger.ts`**: used to log failures.
 
 ## Notes
-
-- **Errors are swallowed (logged, not thrown).** The count is derived state, not a monotonic counter, so the next `order.canceled` event for the same buyer will recompute identically and act then. Throwing here would block downstream event processing (e.g., refund email).
-- **At-least-once delivery is safe.** A hold that is already taken resets the counting anchor to its own `setAt`, and `flagPurchaseHoldReview` is idempotent — a redelivered event is a no-op.
-- **Paid cancels never pause.** Pre-dispatch cancellation is a statutory withdrawal; it only sets the review flag so a human can inspect the account.
-- **Orders with no buyer (erased account) are skipped silently** after the `findById` lookup returns a null/undefined `userId`.
+- **Pause vs. review:**
+  - Only unpaid cancels (customer or withdrawal) and expired reservations can pause an account.
+  - Paid cancels, which are statutory withdrawals before dispatch, only flag the account for review and never pause it.
+  - Both counts use the same limit and window.
+- **Idempotency:** At-least-once event delivery is safe. A taken hold restarts the count at its own `setAt`, and an already-set flag is left alone. The staff event is emitted only when `takeAutomaticPurchaseHold` reports the hold was taken.
+- **Error handling:** Errors are swallowed on purpose. The count is derived state, so the next cancel will find the same cancels and act then. A rejection would also block the order's later events, such as the refund mail.
+- The file's module doc points to the "purchase hold" section of the orders module documentation for the broader rule.

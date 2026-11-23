@@ -1,43 +1,38 @@
 ---
 source: src/modules/account/two-factor/delivered-codes.ts
-sha256: 57fd9c9f1fcfaf558876e72a48b669b5bd403c49b31d5919c7b7a935fba24b44
-generated_at: 2026-11-08T04:52:01.354854+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8edfa7f6a69c74df8313c0f93f20c978730c19ab25d2442879bd4e6c8283ce49
+context_sha256: 4d222ecb84b617b32b2deb0711f0bfe3d1bd0fe06932f0b3973ea0f2c2a97dd7
+generated_at: 2026-11-22T04:10:52.773327+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/two-factor/delivered-codes.ts
 
 ## Purpose
-
-Pure logic for the short numeric codes a "delivered" two-factor method (e.g. email) produces: generation, hashing for at-rest storage, TTL/attempt/cooldown checks, and the final match/miss verdict. It reads and writes only an in-memory `DeliveredCodeState` entry — never the database — so the time-bound rules are testable against an injected clock.
+Defines the short numeric codes sent by "delivered" two-factor methods (e.g. email): minting, storage form, and the checks that decide whether a code is still usable. It is pure. It reads and writes a method entry but never touches the database, so TTL, attempt and cooldown rules can be tested against a fixed clock.
 
 ## Key elements
-
-- **`DELIVERED_CODE_DIGITS`, `DELIVERED_CODE_TTL_MS`, `DELIVERED_CODE_RESEND_SECONDS`, `DELIVERED_CODE_MAX_ATTEMPTS`** — exported constants sourced from `twoFactorRules` (generated from `rules.yaml`). 6 digits, 10-min TTL, configurable resend window, 5 max guesses.
-- **`hashDeliveredCode(code)`** — HMAC-SHA256 using an HKDF subkey (info `"delivered-code"`) derived from the TOTP encryption keyring's `[0]` entry. Returns the hex digest stored in `entry.codeHash`.
-- **`generateDeliveredCode()`** — zero-padded 6-digit string from `crypto.randomInt` (CSPRNG).
-- **`deliveryCooldownRemaining(entry, now)`** — wraps the shared `cooldownRemaining` with this method's resend window.
-- **`armDeliveredCode(entry, code, now)`** — stamps the hashed code, sent-at, expires-at, and resets attempt counter on the entry.
-- **`DeliveredCodeVerdict`** — union type `'none' | 'expired' | 'match' | 'miss'`.
-- **`checkDeliveredCode(entry, code, now)`** — pure comparison returning a verdict. Does **not** mutate the entry; spending the attempt counter is the caller's job.
+- `DELIVERED_CODE_TTL_MS`, `DELIVERED_CODE_RESEND_SECONDS`, `DELIVERED_CODE_MAX_ATTEMPTS`: exported constants read from `twoFactorRules.deliveredCodes` (`rules.generated`). The digit count is a private constant from the same source.
+- `hashDeliveredCode(code)`: returns the hex HMAC-SHA256 of the code. The key is an HKDF subkey (info `delivered-code`) of the newest key in the TOTP encryption key ring.
+- `generateDeliveredCode()`: returns a zero-padded code from `crypto.randomInt` (CSPRNG).
+- `deliveryCooldownRemaining(entry, now?)`: seconds until another send is allowed, anchored on `entry.codeSentAt`. Returns 0 when a send may proceed.
+- `armDeliveredCode(entry, code, now?)`: mutates the entry with the new `codeHash`, `codeSentAt` and `codeExpiresAt` (now + TTL), and resets `codeAttempts` to 0. Any code already in flight is replaced.
+- `DeliveredCodeVerdict`: `'none' | 'expired' | 'match' | 'miss'`.
+- `checkDeliveredCode(entry, code, now?)`: compares a typed code with the one in flight and returns a verdict.
+  - `none`: no hash or expiry is stored, or attempts have reached the maximum.
+  - `expired`: the expiry time has passed.
+  - `match` / `miss`: constant-time comparison of the stored hash with the hash of the typed code.
 
 ## Relationships
-
-- **`src/infrastructure/security/constant-time.ts`** — provides `constantTimeEqual`, used by `checkDeliveredCode` to avoid timing leaks during hash comparison.
-- **`src/infrastructure/security/subkey.ts`** — provides `deriveSubkey`, used to derive the per-purpose HMAC key from the shared encryption key.
-- **`src/modules/account/session/config.ts`** — provides `getTotpEncryptionKeyRing`, the source of the `[0]` key for HMAC derivation.
-- **`src/modules/account/cooldown.ts`** — provides the shared `cooldownRemaining` helper that `deliveryCooldownRemaining` delegates to.
-- **`src/modules/users/index.ts` / `src/modules/users/model.ts`** — defines the `DeliveredCodeState` type (fields: `codeHash`, `codeSentAt`, `codeExpiresAt`, `codeAttempts`) that this module reads and writes.
-- **`src/modules/account/two-factor/delivered-code-verify.ts`** — the write-side companion: after `checkDeliveredCode` returns a verdict, that file performs the conditional DB write (spend the attempt, clear the code).
-- **`src/modules/account/two-factor/methods/email.ts`** — the delivered method that calls `generateDeliveredCode` + `armDeliveredCode` and then sends the code.
-- **`src/modules/account/services/two-factor-enrollment.ts`, `two-factor-outcomes.ts`, `reauth.ts`** — higher-level services that orchestrate the flow: enrollment triggers a delivery, reauth/verification consumes the verdict.
-- **`src/modules/account/two-factor/index.ts`** — barrel re-export.
-- **`src/modules/account/tests/unit/two-factor.test.ts`** — unit tests exercising the TTL, attempt, and cooldown paths with a fixed clock.
+- `session/config` supplies `getTotpEncryptionKeyRing()`. `infrastructure/security/subkey` derives the HMAC key from its newest entry.
+- `infrastructure/security/constant-time` provides `constantTimeEqual` for hash comparison.
+- `../cooldown` provides the shared `cooldownRemaining`, which this file calls with its own anchor and window.
+- `@modules/users` (`index.ts`, `model.ts`) supplies the `DeliveredCodeState` entry type that these functions read and write.
+- `delivered-code-verify.ts` does the actual spending of a code and counting of attempts, as conditional writes through the users data layer. This file's check is deliberately read-only.
+- `src/modules/account/two-factor/index.ts`, `src/modules/account/two-factor/methods/email.ts`, the services (`reauth`, `two-factor-enrollment`, `two-factor-outcomes`) and `src/modules/account/tests/unit/two-factor.test.ts` are related neighbors in the graph. This file shows no direct interaction with them.
 
 ## Notes
-
-- **Pure / no I/O.** This module never touches the database. The split into read (this file) vs. write (`delivered-code-verify.ts`) is deliberate: two parallel requests can both *read* the same entry, but only one can *conditionally write* (spend) it.
-- **Single key, no rotation fallback.** The HMAC always uses keyring `[0]` (newest). A rotation mid-TTL-window invalidates the in-flight code — accepted trade-off, documented in `docs/tools/security.md`.
-- **HMAC ≠ stretching.** The code space is only 10⁶; the HMAC exists so a leaked DB dump doesn't let an attacker brute-force codes offline. The real rate-limit is `MAX_ATTEMPTS` (5).
-- **Injectable clock.** Every time-sensitive function accepts an optional `now: Date` parameter, defaulting to `new Date()`. Tests pass a fixed value.
-- **Rules are generated.** All tunable constants come from `rules.generated.ts` (compiled from `rules.yaml`); do not hard-code values.
+- The attempt cap (`DELIVERED_CODE_MAX_ATTEMPTS`), not the hash, is what protects the six-digit space against online guessing. The HMAC only keeps a database dump from yielding codes without the environment key.
+- Only the ring's newest key is used. A key rotation while a code is in flight invalidates that code, which is accepted because codes live at most one TTL.
+- `checkDeliveredCode` must stay side-effect free. A read-then-write on a loaded copy would let parallel requests both spend one code or both count one guess.
+- `now` is injectable on the time-dependent functions for testing.

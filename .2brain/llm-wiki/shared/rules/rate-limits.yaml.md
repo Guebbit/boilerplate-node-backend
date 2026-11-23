@@ -1,30 +1,28 @@
 ---
 source: shared/rules/rate-limits.yaml
-sha256: ac0e2a22b7afbdfbc1bb17554ae85a4e4c2c0fbdb7ae9883aeb892b6e767d246
-generated_at: 2026-11-08T03:10:09.676068+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ac0e2a22b7afbdfbc1bb17554ae85a4e4c2c0fbdb7ae9883aeb892b6e767d246
+context_sha256: f079a17f8c11631b2f9ef9b8f02eff87647c51e5b8bde040d27ae13af590af8f
+generated_at: 2026-11-22T02:26:51.198636+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/rate-limits.yaml
 
 ## Purpose
-
-Declares the kernel-wide rate-limit budgets (global browsing, API-key requests, image uploads) as structured data. It is the single source of truth from which `npm run regenerate` emits `src/infrastructure/http/middlewares/rate-limits.generated.ts`. The file itself is never read at runtime.
+Declares the kernel's rate-limit budgets as data: the browsing brake (`global`), the api-key brake (`apiKey`) and the upload brake (`uploads`). Modules declare their own budgets in their `module.yaml` under `rateLimits:` using the same fields.
 
 ## Key elements
+Each entry is keyed by its `namespace` in camelCase and has these fields: `name`, `namespace`, `environmentVariable`, `defaultMax`, `windowMs`, `bounds` (a prose description of what the budget covers), `audited`, and optionally `onStoreError`.
 
-- **`rateLimits.global`** – Default budget for every request hitting the surface. Keyed by IP; a valid api-key request is refunded from this bucket. `onStoreError: pass` lets traffic through if the Redis store is down (browsing guard, not a credential guard).
-- **`rateLimits.apiKey`** – Budget keyed on the credential (API key) rather than the client address, so partners behind a shared NAT or CDN each get their own allowance. Audited.
-- **`rateLimits.uploads`** – Budget for image-upload routes. Sized lower (20) because the `worker.image.digest` pipeline is CPU-bound and a burst of well-formed uploads can saturate resources the global budget was not tuned for. Audited.
-- **Per-entry fields** – `name`, `namespace` (camelCase key), `environmentVariable`, `defaultMax`, `windowMs` (`shared` → `NODE_RATE_LIMIT_WINDOW_MS`, or a literal ms value), `bounds` (human-readable rationale), `audited`, and optionally `onStoreError` (absent = `memory`).
+- **`global`** ("Browsing (global)", namespace `global`): env `NODE_RATE_LIMIT_MAX`, default 100, not audited. It covers every request. A request carrying a valid api-key is refunded once it ends and counts against that key instead. A fake key does not earn the refund. It is the only budget with `onStoreError: pass`, so requests go through while the limits Redis is down.
+- **`apiKey`** ("Api-key requests", namespace `api-key`): env `NODE_API_KEY_RATE_LIMIT_MAX`, default 120, audited. It is keyed on the credential rather than the address.
+- **`uploads`** ("Image uploads", namespace `uploads`): env `NODE_UPLOAD_RATE_LIMIT_MAX`, default 20, audited. It covers routes that accept an image upload, because image processing (`worker.image.digest`) is CPU-bound.
 
 ## Relationships
-
-- **`src/modules/account/module.yaml`** – Module-level rate limits live under `rateLimits:` in each module's `module.yaml` using the same field schema. The account module's own budgets are the closest neighbor; the kernel budgets here act as the outer envelope that a module's per-route limits sit inside.
+- `shared/rules/metrics.yaml` and `src/modules/account/module.ts` are graph neighbors. The file content shows no direct interaction with either, so none is described here.
 
 ## Notes
-
-- This file is **data, not code**. Key-generation logic, success/skip semantics, and store-error fallbacks remain in `rate-limit.ts`. Editing this YAML does not change runtime behavior until `npm run regenerate` is run.
-- `windowMs: shared` is a sentinel, not a number — it resolves to the `NODE_RATE_LIMIT_WINDOW_MS` environment variable at generation time.
-- `onStoreError` is optional; when omitted the fallback store is `memory`. Only the `global` entry overrides this to `pass`.
-- The `bounds` field is a free-text rationale, not a configuration value. It documents *why* a budget exists but is ignored by the generator.
+- The file is not read at boot. `npm run regenerate` generates TypeScript from it, so edit this file and rerun that command rather than editing the generated output by hand.
+- Key generators, what counts as a success and what is skipped stay in code, not in this file.
+- `windowMs` is in milliseconds, or the literal `shared` for `NODE_RATE_LIMIT_WINDOW_MS`. All three entries use `shared`.
+- If `onStoreError` is absent, it means `memory`.

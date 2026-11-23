@@ -1,42 +1,42 @@
 ---
 source: src/infrastructure/config/fields.ts
-sha256: f180d7a5f10ff8349e1044d8ce5e4494b64be5099a3a0d758089147510230885
-generated_at: 2026-11-14T17:56:25.444046+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2931ec317a54204fc17824c389f9f2ae740ec366206d2566a873a623a0d703cf
+context_sha256: e481a582e27c6db55ce8937e293b8b39695ec86d4f2ff26e996ad70d0038ac46
+generated_at: 2026-11-22T02:44:05.819772+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/config/fields.ts
 
 ## Purpose
-
-Field builders for declaring configuration variables. Each builder (`int`, `decimal`, `flag`, `choice`, `text`, `email`, `timeZone`, `currency`, `country`, `countries`, `locale`, `locales`, `secret`, `csv`, `keyRing`, `versionedKeyRing`) returns a `Field<T>` that pairs a Zod parse rule with an optional boot-time `Presence` check. Every builder enforces the same invariant: a blank string is treated as unset, and a set-but-malformed value is a hard error—never a silent fallback.
+Defines the field builders used to write a configuration slice (`int`, `decimal`, `flag`, `choice`, `text`, `email`, `timeZone`, `currency`, `country`, `countries`, `locale`, `locales`, `secret`, `csv`, `keyRing`, `versionedKeyRing`). Every environment variable is read through one parser with one rule: values are trimmed, a blank counts as unset, and a value that is set but wrong is an issue, never a silent fallback. Presence rules (length, placeholder, production-only) are kept as data on the field and checked only at boot.
 
 ## Key elements
+- `TRUTHY_WORDS` / `FALSY_WORDS`: accepted boolean vocabularies (`1/true/yes/on`, `0/false/no/off`), case-insensitive.
+- `parseBooleanWord(word)`: decodes one word to `true`/`false`, or `undefined` if it isn't a boolean word. It uses `Set` lookups so caller-controlled text can't hit inherited `Object.prototype` members.
+- `Presence`: boot-time rule with `minLength`, `placeholder`, `minBytes` (minimum decoded key size, hex or base64), `productionOnly`, and `skipWhen(environment)`.
+- `Field<T>`: `{ schema: z.ZodType<T>, presence?, sensitive }`. A sensitive field's value is never echoed into error messages.
+- `CommonOptions`: `required` (a `Presence`) and `sensitive`.
+- `build(inner, options)` (internal): wraps a Zod rule. It runs `blankAsUnset` first, applies `.optional()`, then fills in `default` through a transform. `verbatim` skips the trim and blank step.
+- `RangeOptions`: `min`, `max` and `lessThan` bounds for numbers. `rangeLabel` and `boundedNumber` (internal) build the error label and the Zod number rule.
+- `int`: whole-string base-10 integers only. `5mb`, `0x10`, `1e3` and `1.5` are refused. Parsed with radix 10.
+- `decimal`: whole-string `[+-]digits[.digits]`. `.5` and `1e-1` are refused.
+- `flag`: uses `z.stringbool` with the truthy and falsy words, case-insensitive.
+- `choice(allowed, options)`: a closed set, lower-cased. `allowed` may be a function, for registries populated late.
+- The other builders listed in the module doc (`text`, `email`, `timeZone`, `currency`, `country`, `locale`, `secret`, `csv`, `keyRing`, `versionedKeyRing` and so on) are declared in the part of the file beyond what was visible here.
 
-- **`Field<T>`** — the shape every builder returns: a Zod `schema`, an optional `Presence` rule, and a `sensitive` flag (suppresses the value in error messages).
-- **`Presence`** — boot-time-only constraints: `minLength`, `placeholder` (must not still equal the `.env-example` value), `minBytes` (minimum decoded key size for HMAC/HKDF keys), `productionOnly`, and `skipWhen(env)` for conditional requirements.
-- **`build<T>`** — internal factory that wraps a Zod rule with `z.preprocess(blankAsUnset, …)` and `.optional().transform(…)` so a `default` fills in for unset values. Accepts a `verbatim` flag to skip trimming.
-- **`int` / `decimal`** — whole-string regex gates (`/^[+-]?\d+$/`, `/^[+-]?\d+(\.\d+)?$/`) then range checks via `boundedNumber`. Refuses hex, exponents, unit suffixes.
-- **`flag`** — maps a fixed vocabulary (`1/true/yes/on`, `0/false/no/off`, case-insensitive) to a boolean via `z.stringbool`.
-- **`choice<const T>`** — lower-cases the input and checks membership against a static array or a lazy `() => T[]` function (for registries populated at runtime).
-- **`parseBooleanWord`** / **`TRUTHY_WORDS`** / **`FALSY_WORDS`** — exported for reuse outside the builder (e.g., query-string or form parsing). Uses `Set.has` deliberately to avoid prototype-chain lookups.
-- **`RangeOptions`** / **`CommonOptions`** — shared option shapes passed to builders.
+Most builders are overloaded: passing a `default` makes the result `Field<T>`, and omitting it makes `Field<T | undefined>`.
 
 ## Relationships
-
-- **`src/infrastructure/config/store.ts`** — provides the `Environment` type imported here; `Presence.skipWhen` accepts an `Environment` argument so a rule can be waived conditionally based on the current environment.
-- **`src/infrastructure/config/define.ts`** — the slice-defining layer that consumes these builders to declare named config objects.
-- **`src/domain-primitives/money.ts`** — provides `isIso4217Code`, used by the `currency` builder to validate ISO-4217 codes.
-- **`src/infrastructure/i18n/locale-tag.ts`** — provides `canonicalLocale` and `isWellFormedLocale`, used by the `locale` / `locales` builders.
-- **`src/app/config.ts`**, **`src/infrastructure/http/config.ts`**, **`src/infrastructure/i18n/config.ts`**, **`scenarios/config.ts`**, **`src/infrastructure/adapters/config.ts`** — downstream config slices that call these builders to declare their variables.
-- **`scripts/docs/document-facts.ts`** — inspects field metadata (labels, presence rules) to generate documentation.
-- **`scripts/contracts/generate-shared-rule-schemas.ts`** — consumes field schemas to emit shared contract artifacts.
+- Imports `isIso4217Code` from `src/domain-primitives/money.ts` to validate currency codes.
+- Imports `canonicalLocale` and `isWellFormedLocale` from `src/infrastructure/i18n/locale-tag.ts` for the locale fields.
+- Imports the `Environment` type from `src/infrastructure/config/store.ts`, used by the `skipWhen` option of `Presence`.
+- `src/infrastructure/config/define.ts` is the other file in the config layer. It presumably consumes `Field` objects to define slices, though that is not shown here.
+- `src/app/config.ts`, `scenarios/config.ts`, and the schema and docs scripts (`scripts/contracts/generate-shared-rule-schemas.ts`, `scripts/docs/document-facts.ts`) are listed as neighbors. The visible part of this file doesn't show how they use these builders.
 
 ## Notes
-
-- **`Set` over object for word lookup:** `parseBooleanWord` uses `Set.has` rather than `'word' in obj` or `obj[word]` because a plain object's prototype chain would make `'constructor' in {}` return `true`. This is a deliberate prototype-pollution guard for caller-controlled input.
-- **`parseInt(text, 10)`** is used explicitly so a zero-padded string like `"0900"` is not parsed as octal.
-- **`.optional().transform(v => v ?? default)`** is used instead of Zod's `.default()` because `.default()`'s typing does not accept a generic `T` (see Zod API notes).
-- **`verbatim: true`** on a builder option skips the `blankAsUnset` preprocessing entirely—meant for values whose exact bytes matter (e.g., a base64 secret that may legitimately contain leading/trailing whitespace as part of the encoding).
-- **Presence checks never run on every read.** They are boot-time-only, gated by `NODE_ENV`, so a developer can leave a secret unset without a per-request penalty.
-- The file is truncated in the source above; the remaining builders (`text`, `email`, `timeZone`, `currency`, `country`, `countries`, `locale`, `locales`, `secret`, `csv`, `keyRing`, `versionedKeyRing`) follow the same `build(…)` pattern.
+- Presence checks run at boot and are skipped under `NODE_ENV=test`. They are not parse rules, because an unset secret is valid on a developer machine.
+- `minBytes` suits operator-generated keys such as `openssl rand -hex 32`. Leave it off for third-party-issued secrets such as a provider's `whsec_` signing secret.
+- `build` uses `.optional().transform(...)` rather than `.default()`, because Zod's `.default()` typing refuses a generic `T`.
+- `skipWhen` receives the raw environment, so it must read its selector the same way that selector's own field does.
+- The module's doc comment points to the "add a variable" section of the configuration operations docs.

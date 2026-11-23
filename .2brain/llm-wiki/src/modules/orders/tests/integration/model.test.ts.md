@@ -1,38 +1,34 @@
 ---
 source: src/modules/orders/tests/integration/model.test.ts
-sha256: 6e2ce9a564b86b91b0b1acbecae2f44e9a55cb600e068e56bd1193e8909c7844
-generated_at: 2026-11-14T20:52:25.894603+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b66f46c2dc7fd391b524623b04538b9a946421eacc7377e1f62f6abfe9ccb7bb
+context_sha256: 1adf209766a8d1acb5cc001e76bf0ca2b0eaf9e613179a95ed9bd711aaa9c26c
+generated_at: 2026-11-22T06:29:30.446908+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/model.test.ts
 
 ## Purpose
-
-Integration tests that verify the order serialization contract across both Mongoose `toJSON` paths and raw `.aggregate()` output: internal fields (`_id`, `__v`) must never appear in wire-shaped results, embedded product snapshots must be normalized the same way, and order-line subdocs must not carry their own `_id`. Also guards against a schema-level pitfall (index smuggling from the embedded product schema) and pins the `transferInstructions` absence rule for legacy bank-transfer orders.
+Integration tests for the orders module's serialization and schema behavior. They check that orders never leak `_id`/`__v` on any response path (hydrated `toJSON` and `.aggregate()` results), that embedded product snapshots are normalized, and that embedded order items carry no `_id`. They also cover `transferInstructions` and an index-hygiene check on the order schema.
 
 ## Key elements
-
-- **`describe('order serialization')`** — three tests:
-  - *toJSON test*: calls `order.toJSON()` on a hydrated doc; asserts `id` is present, `__v` is absent (checked via `JSON.stringify`), items have no `_id`, and the embedded product is normalized.
-  - *Aggregate test*: calls `orderService.search()`; casts the first result with `asStub` and asserts the same invariants on the plain-JS shape.
-  - *Scoped `getById` test*: calls `orderService.getById(id, { userId })`; asserts the return is a real Mongoose document (has `toJSON`), not a pre-normalized wire object.
-- **`describe('transferInstructions')`** — verifies a pending `bank_transfer` order with no `transferReference` yields `transferInstructions: undefined` (no fallback to the raw id).
-- **`describe('embedded product snapshot indexes')`** — inspects `orderSchema.indexes()` directly and asserts no index path contains `product`, preventing silent index creation on the orders collection from the nested schema.
+- **`order serialization`** suite:
+  - `toJSON` on a hydrated order exposes `id`, omits `__v`, and strips `_id` from both items and the embedded product (which gets `id`).
+  - `orderService.search()` aggregate rows are normalized the same way (24-hex `id`, no `_id` on the order, items, or embedded product).
+  - A scoped `orderService.getById(id, { userId })` returns a real Mongoose document (has `toJSON`), not the aggregate wire shape.
+- **`transferInstructions`** suite: a pending `bank_transfer` order with no `transferReference` has no `transferInstructions` in its JSON, so no reference is fabricated from the raw id.
+- **`embedded product snapshot indexes`** suite: asserts that `orderSchema.indexes()` has no index involving `product`, so the embedded product schema's indexes are not copied onto orders.
 
 ## Relationships
-
-- **`src/modules/orders/model.ts`** — imports `orderSchema` to read its index list for the smuggling guard.
-- **`src/modules/orders/services/index.ts`** — imports `orderService` to exercise `search()` (aggregate path) and `getById()` (hydrated path).
-- **`src/modules/orders/tests/factories.ts`** — imports `createOrder` and `toOrderItem` to seed fixture data.
-- **`src/modules/products/tests/factories.ts`** — imports `createProduct` for the embedded-snapshot fixture.
-- **`src/modules/users/tests/factories.ts`** — imports `createUser` to satisfy the order's `user` reference.
-- **`tests/support/setup-test-db.ts`** — imports `setupTestDb`; called once at module top level to prepare the in-memory DB before any test runs.
-- **`tests/support/stub.ts`** — imports `asStub` to type-cast aggregate results (plain objects) so properties can be inspected in the serialization test.
+- `src/modules/orders/model.ts`: `orderSchema` is inspected directly for its indexes.
+- `src/modules/orders/services/index.ts`: the `orderService` it exports is exercised through `search()` and `getById()`.
+- `src/modules/orders/tests/factories.ts`: `createOrder` and `toOrderItem` build the fixtures.
+- `src/modules/products/tests/factories.ts` and `src/modules/users/tests/factories.ts`: `createProduct` and `createUser` supply the order's product and user.
+- `tests/support/setup-test-db.ts`: `setupTestDb()` is called at module level to provide the test database.
+- `tests/support/stub.ts`: `asStub` casts aggregate results to a plain record.
 
 ## Notes
-
-- `setupTestDb()` is invoked at **module scope** (outside any `describe`/`beforeAll`), so it runs during import; Jest's single worker per file keeps this safe, but it means the DB is ready before the first `it` block is even discovered.
-- The `__v` assertion uses `JSON.stringify(json)).not.toContain('__v')` rather than a direct `toBeUndefined` check, which catches both `undefined` and `0` values.
-- The index-smuggling test is a **schema fact guard**, not a behavioral test: it fails if someone later adds an `.index()` call to `orderLineProductSchema` without also adding `excludeIndexes` at the embed site in `orderSchema`.
-- `asStub` is a zero-cost type cast (no runtime wrapper); it exists solely to satisfy TypeScript when inspecting raw aggregate output.
+- Aggregation output is plain JS and bypasses `toJSON`, like `.lean()`. The module header says it is mapped manually via `applyOrderTransform`.
+- Embedded items have no `_id` because `orderItemSchema` sets `_id: false`, matching OpenAPI's `OrderItem` of `{product, quantity}`.
+- The index test is placed here rather than in the generic index suite because it covers this module's schema. Per the test's comment, Mongoose copies a nested schema's indexes onto the embedding schema unless `excludeIndexes` is set at the embed site.
+- The test comment says `applyTransferInstructions` no longer falls back to the raw id for orders that lack `transferReference`.

@@ -1,48 +1,40 @@
 ---
 source: src/modules/payments/tests/integration/settlement-email.test.ts
-sha256: a3ea9b08c0208f7a64095fc23bc8fe3370d0080a5417dfd639469f8c27fd272b
-generated_at: 2026-11-08T07:37:21.116378+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6b8bc0a60fddf0c7b6d57bbbe6e2cac66d01a799ecb670c68bf070217f121515
+context_sha256: 02bc34c3058849bb9c79ab2297e6a1e532a79e72e4b983cf4847b73cf054c6f0
+generated_at: 2026-11-22T07:02:20.586776+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/settlement-email.test.ts
 
 ## Purpose
-
-Integration test that pins the `payment.succeeded` listener's contract: the buyer receives exactly one `payments.payment-received` email when a payment actually commits stock, and receives none on a decline or on a no-op retry of an already-settled payment. The placed-order confirmation email is deliberately out of scope here.
+Integration test pinning that a payment settling to `succeeded` emails the buyer a "payment received" message (template `payments.payment-received`). The placed-order confirmation only says the order was received, so this mail is the paid notice. It asserts the mail is sent only on the write that actually commits stock, never on a decline or on a retry of an already-settled payment.
 
 ## Key elements
-
-- **`orderFor()`** — builds a user, a product (`$25.00`), and a single-line order, returning them for a test to pay against.
-- **`paidMailSent()`** — inspects the mocked `enqueueEmail` calls for the `payments.payment-received` template.
-- **`GOOD_METHOD`** (`'pm_card_visa'`) — opaque Stripe-style payment-method handle used for successful confirmations.
-- **Three `it` blocks** (single `describe`):
-  1. *mails the buyer once the payment settles and the stock actually commits* — happy path; asserts `envelope.to` equals the order's email.
-  2. *sends no payment-succeeded mail for a declined attempt* — uses `FAKE_DECLINE_METHOD`; asserts absence after `settleOutboxNudges()`.
-  3. *sends only one payment-succeeded mail even if confirm is called again* — calls `confirmPayment` twice with the same payment ID; asserts exactly one enqueue call.
-- **`jest.mock('@infrastructure/adapters/mailer')`** — replaces `enqueueEmail` with `jest.fn()` so no real mail is sent.
-- **`beforeEach`** — clears the mail mock and re-registers `paymentsModule` into the checkout pipeline.
-- **`afterEach`** — calls `resetDomainEvents()` and `jest.restoreAllMocks()`.
+- `mockEnqueueEmail`: the mocked `enqueueEmail` (module mocked via `jest.mock`), standing in for the mail queue; tests inspect which templates were enqueued.
+- `GOOD_METHOD` (`pm_card_visa`): opaque payment-method reference used for successful confirms.
+- `orderFor()`: creates a user, a product priced `25.00`, and an order with one item.
+- `paidMailSent()`: true if any enqueued mail used the `payments.payment-received` template.
+- Test cases:
+  - Successful confirm: mail is enqueued, with `envelope.to` equal to `order.email`.
+  - Decline (`FAKE_DECLINE_METHOD`): no payment-succeeded mail.
+  - Second `confirmPayment` on an already-succeeded payment: still exactly one mail.
 
 ## Relationships
-
-- **`src/modules/payments/services/index.ts`** — calls `paymentService.createIntent` and `paymentService.confirmPayment`; this is the system under test.
-- **`src/modules/payments/module.ts`** — registered via `registerCheckoutModules` so the `payment.succeeded` event listener is wired in.
-- **`src/infrastructure/adapters/mailer.ts`** — mocked; the test asserts against its `enqueueEmail` spy.
-- **`src/kernel/events.ts`** — `resetDomainEvents` clears in-memory domain-event subscriptions between tests.
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges` flushes pending outbox nudges; used before negative assertions to ensure no stray mail arrives.
-- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules` wires the payments module into the test checkout pipeline.
-- **`tests/support/callers.ts`** — `asCustomer` and `testCallerContext` provide the caller/actor context expected by the payment service.
-- **`tests/support/eventually.ts`** — `eventually` polls asynchronously because the mail send is fire-and-forget and performs a real Mongo read before enqueuing.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the in-memory/test database.
-- **`scenarios/support/doubles/payments/fake.ts`** — supplies `FAKE_DECLINE_METHOD` for the decline-path test.
-- **`src/modules/users/tests/factories.ts`** — `createUser`.
-- **`src/modules/products/tests/factories.ts`** — `createProduct`.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem`.
+- `@tests/setup-test-db` (`setupTestDb`): provides the real Mongo test database.
+- `@infrastructure/adapters/mailer`: `enqueueEmail` is replaced with a jest mock.
+- `@modules/users`, `products`, `orders` test factories: seed the user, product, and order.
+- `@modules/payments/services` (`paymentService`): `createIntent` and `confirmPayment` are the code under test.
+- `@modules/payments/module` and `@tests/checkout-modules` (`registerCheckoutModules`): register the payments module before each test.
+- `@scenarios/support/doubles/payments/fake`: supplies `FAKE_DECLINE_METHOD` to trigger a decline.
+- `@kernel/events` (`resetDomainEvents`): clears domain event registrations after each test.
+- `@kernel/outbox` (`settleOutboxNudges`): flushes pending outbox work before absence assertions.
+- `@tests/callers` (`asCustomer`, `testCallerContext`): caller identity and context for service calls.
+- `@tests/eventually`: polls until the mail has been enqueued.
 
 ## Notes
-
-- The mail send is **fire-and-forget** and its first step is a **real Mongo read**, so it does not complete within one tick of `confirmPayment` resolving. Positive assertions must use `eventually(paidMailSent)`; negative assertions use `settleOutboxNudges()` to give any straggler a chance to appear before asserting absence.
-- The email template name is the string literal `'payments.payment-received'` — if the template is renamed in the mailer, this test breaks silently (the spy simply never matches).
-- `GOOD_METHOD` is intentionally an opaque handle; the test never touches a real card number or Stripe API.
-- The test file lives under `tests/integration/` but imports from the production `src/` tree; it relies on a running test DB (via `setupTestDb`) rather than pure unit mocks for the order/payment state.
+- The mail send is fire-and-forget and begins with a real Mongo read, so positive assertions use `eventually(paidMailSent)` rather than awaiting a single tick.
+- Absence assertions (decline, retry) have nothing to wait on, so they call `settleOutboxNudges()` to give any stray mail a chance to appear before asserting.
+- The retry case relies on `SETTLEABLE_PAYMENT_STATUSES` excluding `succeeded`, so the second confirm settles nothing new.
+- `beforeEach` clears the mock and re-registers modules; `afterEach` resets domain events and restores mocks.

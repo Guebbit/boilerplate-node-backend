@@ -1,29 +1,25 @@
 ---
 source: src/modules/audit-logs/index.ts
-sha256: 48f6b6c18b2f577f90f025255a2c46d403ea47261067c669aefe12177eee1b80
-generated_at: 2026-11-08T05:07:39.568448+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c9ed82e65e326a3d36cc0fcd7abb78338a856bccc0ae24c46bc7cbf47d720cc0
+context_sha256: 674528b4b9bb39540c4a3f043e68b238c365b8843ba5413b13c20c97b362628d
+generated_at: 2026-11-22T04:26:28.433157+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/audit-logs/index.ts
 
 ## Purpose
-
-Barrel (public API) file for the audit-logs module. It is the **only** surface a sibling module is allowed to import from, enforcing the strategic-DDD boundary rule described in `docs/theory/strategic-ddd.md` §5. It exposes the module's service values and model types in a single re-export statement.
+Public barrel for the audit-logs module. Per its doc comment, it is the only surface sibling modules may import from this module. It re-exports the module's service and its model types.
 
 ## Key elements
-
-- `export * from './service'` — Re-exports all **value** bindings (classes, functions, etc.) from `service.ts`.
-- `export type * from './model'` — Re-exports all **type-only** bindings (interfaces, type aliases) from `model.ts`. Using `export type` ensures these are erased at compile time and do not appear in the emitted JS.
+- `export * from './service'`: re-exports all runtime exports of `service.ts`.
+- `export type * from './model'`: re-exports only the types from `model.ts`, so no runtime values leak from the model.
 
 ## Relationships
-
-- **`src/modules/audit-logs/service.ts`** — Source of all value exports. Importers of this barrel get the service's runtime API.
-- **`src/modules/audit-logs/model.ts`** — Source of all type exports. Importers get the domain types without a runtime import cost.
-- **`src/modules/observability/controllers/get-observability-audit.ts`** — Downstream consumer; imports through this barrel rather than reaching into `service.ts` or `model.ts` directly.
+- `./service`: all of its exports are surfaced here.
+- `./model`: its types are surfaced here (type-only).
+- `src/modules/observability/controllers/get-observability-audit.ts`: a graph neighbor in another module. Per the barrel rule, it should consume audit-logs through this file rather than through internal paths. The file content does not show what it imports.
 
 ## Notes
-
-- The doc comment references `module.ts` as the file that "registers the write path itself at import time." `module.ts` is **not** re-exported from this barrel; it is a separate entry point with a side-effect import, not part of the public surface.
-- The type-only re-export (`export type *`) is intentional: consumers of the model types never pull a runtime dependency on `model.ts`.
-- See `docs/modules/audit-logs.md` for the broader module design context.
+- The doc comment says that the module's `module.ts` registers the write path from its `onRegistered` hook.
+- Anything not exported here is internal to the module. Adding a new public export means adding it to `service.ts` or `model.ts` (or a new `export` line here).

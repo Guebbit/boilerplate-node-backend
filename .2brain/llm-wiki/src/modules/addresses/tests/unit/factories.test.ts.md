@@ -1,35 +1,31 @@
 ---
 source: src/modules/addresses/tests/unit/factories.test.ts
-sha256: 26c90e7587dbe0b1ba41a9bb6b8d03b911d691d0d0cf49f23ea65af23c66e5f2
-generated_at: 2026-11-08T04:58:06.150606+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f5f632e2b74fa248ef59520d4d73c290d1e3a190d1d8fb0296f3a6e0cdd053ca
+context_sha256: ce0dfb6473df737135435be4c4fce6425a9bc812214cafbef27e54b7e9fdcd95
+generated_at: 2026-11-22T04:17:10.745346+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/tests/unit/factories.test.ts
 
 ## Purpose
-
-Unit tests for the `makeAddressBook` fixture builder. They verify that the factory produces MongoDB-ready documents with correct `ObjectId` instances, respects optional-field absence (key not present vs. set to `undefined`), and passes deliverable fields through unchanged.
+Unit tests for `makeAddressBook`, the address-book fixture builder in `@modules/addresses/factories`. They pin down the shape of the documents the factory produces. In particular, every address entry gets its own `_id`, because address-book lines are addressed by id (e.g. `PUT /account/addresses/:addressId`). A fixture without ids would seed a book whose entries can't be edited or deleted.
 
 ## Key elements
-
-- **`USER` / `ADDRESS`** — Hardcoded 24-hex-char strings used as test identifiers for the owner and a single address entry.
-- **`DELIVERABLE`** — A constant object with the six required address fields (`fullName`, `street`, `city`, `zip`, `country`, `default`). Spread into item objects in individual tests.
-- **`describe('makeAddressBook')`** — Six `it` blocks covering:
-  - `userId` is a real `Types.ObjectId` (not a string).
-  - `items` key is entirely absent when no items are supplied.
-  - Each entry receives its own `ObjectId` (`_id`) from the supplied `id`.
-  - Deliverable fields pass through unchanged.
-  - Optional `label`/`phone` are absent (checked via `Object.hasOwn`, not value comparison).
-  - Optional `label`/`phone` are preserved when explicitly provided.
+- `USER`, `ADDRESS`: fixed hex ObjectId strings used as the owner id and the entry id.
+- `DELIVERABLE`: the required address fields per the schema (`fullName`, `street`, `city`, `zip`, `country`, `default`).
+- `describe('makeAddressBook')` cases:
+  - `userId` is stored as a real `Types.ObjectId` that stringifies back to the input.
+  - `items` is absent (checked with `Object.hasOwn`) when none are given.
+  - Each entry's `_id` is an `ObjectId` built from the supplied `id`.
+  - The deliverable fields pass through unchanged (`toMatchObject`).
+  - `label` and `phone` are absent keys, not `undefined` values, when not supplied.
+  - `label` and `phone` are kept when supplied.
 
 ## Relationships
-
-- **`src/modules/addresses/factories.ts`** — The sole production dependency; exports `makeAddressBook`, the function under test.
-- **`mongoose` (`Types`)** — Used in assertions to confirm that `userId` and `_id` are `Types.ObjectId` instances rather than plain strings.
+- Imports only `makeAddressBook` from `src/modules/addresses/factories.ts`, the module under test. It also imports `Types` from `mongoose` to check ObjectId instances.
 
 ## Notes
-
-- The module doc-comment explains why address entries must carry an `_id` (unlike cart/wishlist fixtures): the edit/delete routes (`PUT /account/addresses/:addressId`) name entries by their own id, so a missing `_id` makes entries unaddressable.
-- Tests use `Object.hasOwn` rather than truthiness checks to assert key *absence*. The comment on the "omits label/phone" test explains the rationale: a key present with value `undefined` serializes differently in MongoDB than a key that is absent.
-- `items` is tested as wholly absent (not an empty array) when no items are passed, matching how the factory handles the optional field.
+- The absent-versus-`undefined` assertions matter. An `undefined` key would be stored as nothing rather than left absent, which is a different document from the one intended.
+- The factory takes `id` on input items and emits `_id` on output items.
+- Unlike the cart and wishlist builders, this factory always assigns an entry `_id`.

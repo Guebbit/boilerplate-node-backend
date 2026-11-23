@@ -1,31 +1,34 @@
 ---
 source: shared/cases/log-redaction.cases.yaml
-sha256: da325d19ab9afd1c91791a0a5e8843a7dcc97e835e80f7ba015e5600a5ace324
-generated_at: 2026-11-14T17:44:08.222918+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:21:28.237623+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/cases/log-redaction.cases.yaml
 
 ## Purpose
-
-Behavioral spec (pinned test cases) for how log output is scrubbed before it leaves the process. Both the BEnode backend and its PHP twin run this file against their own loggers, so the YAML is the single source of truth for redaction rules. Each `redact` case is paired with a `keep` case that defines the boundary.
+A shared, language-neutral test-case table that pins what a log line hides. The header says it is run by BEnode and by the PHP twin against their own loggers, so both backends redact identically. Every `redact` case is paired with a `keep` case that bounds it (to prevent over-redaction).
 
 ## Key elements
+The file has a single top-level `cases:` list. Each entry has `name`, `kind`, and `expect`, plus `key` or `input` depending on kind.
 
-- **`kind: key`** – Declares whether the *value* under a given key name is replaced or left intact. Covers passwords, API keys, cookies (`__Host-device`, `__Host-oauth_state`, etc.), OAuth tokens, and compound fragments (`webhookSecret`, `x-hub-signature`). Also pins keys that must *not* be eaten (e.g. `idempotencyKey`, `statusCode`, `code`).
-- **`kind: message`** – Pins replacement of address-shaped tokens (email, IPv4, IPv6) embedded in free-text log lines. The expected output uses the placeholder `{hash:X}`, where `X` is the canonical form (lowercased, port stripped). Also pins what is *not* an address (npm scopes, `@2x` suffixes, clock times, ObjectIds, version strings, `Class::method`).
-- **`kind: traceUrl`** – Pins how a request target recorded in an OTel span is scrubbed. Listed secrets become the literal string `REDACTED` (the OTel `url.query` marker, no brackets). Emails/IPs in *unlisted* parameters become `{hash:X}` digests, same as `message`.
-- **`{hash:X}` placeholder** – Represents the keyed digest of `X`; the digest algorithm and key live in the backend, not here. The file only asserts *what* gets hashed and *how* it is canonicalised before hashing.
+- **kind `key`** (`key`, `expect: redact|keep`): whether the value under a log field or header name is replaced or left alone.
+  - Redacted: `password`, `newPassword`, `x-api-key`, `Antibot-Challenge-Token`, the `__Host-device`, `__Host-oauth_state` and `__Host-oauth_deletion_challenge` cookies, `webhookSecret`, `x-hub-signature`, the bare `key`, and `email` (pseudonymised).
+  - Kept: `idempotencyKey`, `statusCode`, `code`, `linkCount`, `to`.
+- **kind `message`** (`input` → `expect`): address-shaped text in a free-text message becomes a pseudonym. `{hash:X}` in `expect` stands for the keyed digest of X, the same digest the `email` field gets.
+  - Covered: emails (plus tags, Unicode local parts and domains, subdomains, trailing full stop, several per line, uppercase lowercased before hashing); IPv4 (port kept outside the hash); IPv6 (compressed, full, loopback, IPv4-mapped, uppercase lowercased).
+  - Left alone: `@types/node`, a retina image suffix (`@2x.png`), clock times, ObjectIds, `999.1.1.1`, `1.2.3.4.5`, `Cache::get`, an existing `hmac:…` digest, and messages with nothing to hide.
+- **kind `traceUrl`** (`input` → `expect`): a request target as a span would record it.
+  - A listed secret parameter's value becomes `REDACTED` (for example `email`, and the OAuth `code` and `state`).
+  - An email or IP in any other parameter's value becomes `{hash:X}`.
+  - A query with no secret is unchanged.
 
 ## Relationships
-
-- **`shared/cases/crypto.cases.yaml`** – The `{hash:X}` placeholder references a keyed digest whose algorithm, key, and canonicalisation rules are specified in the crypto cases file. Log-redaction cases depend on that definition to be deterministic; both files must agree on how `X` is normalised (lowercasing, port stripping) before the digest is computed.
+- `shared/cases/crypto.cases.yaml` is a sibling case file in the same directory. Both are shared case tables, but nothing in this file's content references it directly.
 
 ## Notes
-
-- The file is **not** executed directly; it is consumed by test runners in each backend. Changing a `name` or `expect` value changes the contract both backends must honour.
-- `{hash:X}` is a *placeholder in expected output*, not a runtime template. The actual digest value differs per environment (key-dependent); tests resolve it via the shared crypto helper.
-- `REDACTED` (no brackets) is the OTel `url.query` convention for fully-withheld values; it is distinct from the `{hash:…}` pseudonymisation used for identifiable-but-derivable data.
-- Canonicalisation before hashing: lowercased, port stripped. A plus-tag (`+`) and Unicode local/domain parts are preserved as part of the address.
-- The boundary cases (`idempotencyKey` ≠ `key`, `linkCount` ≠ `linkurl`, `@types/node` ≠ address, `999.1.1.1` ≠ IPv4) exist to prevent over-matching; adding a new redaction rule requires adding a sibling `keep` case.
+- The mask itself is code in each backend. These rows only pin its behavior.
+- `X` in `{hash:X}` is the address as hashed: lowercased, without the port. That is why `203.0.113.7:443` yields `{hash:203.0.113.7}:443`.
+- The `traceUrl` marker is `REDACTED` without brackets, matching the OTel `url.query` convention.
+- In `traceUrl`, the percent-encoded `ada%40example.com` is handled whatever its encoding. The `Ada%40Example.com` case shows it is decoded and lowercased before hashing.
+- Several `keep` cases guard against substring over-matching: `idempotencyKey` vs the bare `key`, and `linkCount` vs `linkurl`.

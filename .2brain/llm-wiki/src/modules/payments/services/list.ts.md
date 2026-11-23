@@ -1,50 +1,39 @@
 ---
 source: src/modules/payments/services/list.ts
-sha256: 248d77696a30b52769262fd0abcd47f0050abbeb31e9e969e68d3ff7650ea38c
-generated_at: 2026-11-14T21:07:52.462901+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b5f8e69227881d4950a583e746c948c25fd1f76e0e78188389f78d55abcf3a7f
+context_sha256: d044c5493f1f006b9f86acaa8423a0cfb9aa10cfa9ac51f20abfc915f4fd2b47
+generated_at: 2026-11-22T06:51:18.949212+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/list.ts
 
 ## Purpose
-
-Provides the three read-side query functions behind the staff Payments page: a paginated payment list with order context, a cross-payment refund list, and a "needs attention" digest of problems that require a human. All three return `display:Payment`-shaped rows carrying provider identifiers.
+The staff-side read services behind the Payments page: a filtered/paginated payment list, a cross-payment refund list, and a "needs attention" list of problems that require a person. All three are `display:Payment` routes, so rows carry provider ids.
 
 ## Key elements
-
-- **`listPayments(filters, authContext?)`** — Returns one page of payments. Canonicalises a `transferReference` via `parseReference` (invalid codes short-circuit to an empty page), builds label sub-filters (`displayStatusFilter`, `openDisputeFilter`), delegates to the repository for a staff search, then batch-resolves order numbers/emails via `orderService`.
-- **`listRefunds(filters)`** — Returns one page of refunds across all payments (newest first) by calling the repository's refund search and mapping each `RefundRow` through `refundRow`.
-- **`listAttention()`** — Aggregates six parallel repository queries (stale refunds past a threshold, final refusals, manual refunds, reversed refunds, over-refunded payments, open disputes) and merges them into a single `PaymentAttentionItem[]`. Deduplicates over-refunded rows against the other refund buckets.
-- **`staffRow(payment, order?, authContext?)`** — Internal mapper that spreads `withActions` and conditionally adds `orderNumber`/`email`.
-- **`refundRow(row)`** — Internal mapper turning a `RefundRow` into a `RefundListItem` with optional fields spread in conditionally.
-- **`refundAttention(row, kind)`** — Builds a `PaymentAttentionItem` from a single refund; sets `since` to `reversedAt` for reversed refunds, `createdAt` otherwise; attaches `refundDueBy`/`refundDueRule` via `dueByOf`.
-- **`exceedingRows(payments)`** — Flags refunds where the running total exceeds the payment amount (kind `refund_exceeds_remaining`), reporting the overshoot via `exceedsBy`.
-- **`disputeRows(payments)`** — Builds attention items for disputes in `needs_response` status, including the `alreadyRefunded` amount from `refundedForGood`.
-- **`refundedForGood(payment)`** — Sums succeeded, non-reversed refund amounts on a payment.
-- **`ATTENTION_LIMIT`** (100) — Cap per attention source query.
+- `listPayments(filters, authContext?)` – paginated, filtered payment search. Normalizes `transferReference` via `parseReference` (an invalid code returns an empty page), builds label filters from `displayStatus` and `disputed`, calls `paymentRepository.searchStaff` with `callerScope(authContext)`, then batch-fetches order numbers and emails and attaches them to each row.
+- `staffRow` (internal) – builds a list row from a stored payment using `withActions(payment, undefined, authContext)`, so no order document is read. `pay` stays false and the row carries the same `actions.refund` as the order page panel. It adds `orderNumber` and `email` when the order is known.
+- `listRefunds(filters)` – a page of refunds across all payments, newest first, via `paymentRepository.searchRefunds`, mapped by `refundRow` to `RefundListItem` with ISO date strings.
+- `listAttention()` – returns `{ items: PaymentAttentionItem[] }`, oldest first, combining several sources. It uses a cutoff of `paymentAttentionMinutes()` and `findOpenRefundRows` with a per-source `ATTENTION_LIMIT` of 100. The documented kinds are: refunds open past the threshold, refunds the provider refused for good (reported at once), refunds the provider took back, refunds over the room left, payments refunded past what was paid, disputes awaiting an answer, and refunds owed by hand.
+- Attention row builders (internal):
+  - `refundAttention` – row from an open refund. A reversed refund's `since` is its `reversedAt`, otherwise `createdAt`.
+  - `dueByOf` – adds `refundDueBy` and `refundDueRule` only when the refund has a legal deadline. Goodwill refunds get none.
+  - `exceedingRows` – one row per open refund that `exceedsRemaining`, with an `exceedsBy` amount.
+  - `overRefundedRows` – one row per over-refunded payment, skipping payments already held by `exceedingRows`.
+  - `disputeRows` – one row per dispute in `needs_response`, with `dueBy` from the evidence deadline and `alreadyRefunded` when settled, non-reversed refunds exist (`refundedForGood`).
 
 ## Relationships
-
-- **`src/modules/payments/repository.ts`** — Exports `paymentRepository` (used for all data access: staff search, refund search, open-refund queries, over-refunded and open-dispute lookups) and the `RefundFilters`/`RefundRow` types consumed here.
-- **`src/modules/orders/index.ts`** — Exports `orderService`, which this file calls (`findManyByIds`) to batch-resolve order numbers and emails for the payment list.
-- **`src/modules/payments/domain/index.ts`** — Re-exports the domain helpers used here: `displayStatusFilter`, `openDisputeFilter`, `parseReference`, `refundDueBy`, `exceedsBy`, `exceedsRemaining`.
-- **`src/modules/payments/domain/transfer-reference.ts`** — Source of `parseReference` for canonicalising transfer-reference codes.
-- **`src/modules/payments/domain/display-status.ts`** — Source of `displayStatusFilter`.
-- **`src/modules/payments/domain/disputes.ts`** — Source of `openDisputeFilter` and dispute-related types.
-- **`src/modules/payments/domain/lifecycle.ts`** — Source of `refundDueBy` and refund-status helpers used by the attention logic.
-- **`src/domain-primitives/money.ts`** — `addMoney`, `NO_MONEY`, `padDecimal`, `toDecimalString`, `toMinorUnits` for all monetary arithmetic and formatting.
-- **`src/domain-primitives/time.ts`** — `MINUTE_MS` constant for the stale-refund cutoff calculation.
-- **`src/infrastructure/persistence/search.ts`** — `buildPaginatedMeta` and `normalizePagination` for pagination metadata.
-- **`src/modules/payments/config.ts`** — `paymentAttentionMinutes()` determines the staleness threshold for the attention list.
-- **`src/modules/payments/model.ts`** — Type definitions `PaymentDocument` and `RefundRecord` used throughout.
-- **`src/modules/payments/services/index.ts`** — Re-exports this module's public functions (`listPayments`, `listRefunds`, `listAttention`) as part of the services barrel.
+- `src/modules/orders/index.ts` – the list batch-fetches order numbers and emails from `orders` once per page, the same shape `inventory` uses to name products.
+- `src/modules/payments/repository.ts` (`paymentRepository`, `RefundFilters`, `RefundRow`) – supplies `searchStaff`, `searchRefunds` and `findOpenRefundRows`.
+- `src/modules/payments/domain/` – filter builders (`displayStatusFilter`, `openDisputeFilter`), reference parsing (`parseReference`), and refund and dispute rules (`refundDueBy`, `exceedsRemaining`, `exceedsBy`), imported through the domain index.
+- `src/modules/payments/config.ts` – `paymentAttentionMinutes()` sets the age threshold for open refunds.
+- `src/modules/payments/model.ts` – `PaymentDocument` and `RefundRecord` types.
+- `src/infrastructure/persistence/search.ts` – `buildPaginatedMeta` and `normalizePagination` (used for the empty-page meta), and the `PaginatedMeta` type.
+- `src/domain-primitives/money.ts` and `src/domain-primitives/time.ts` – minor-unit arithmetic and decimal formatting for amounts (`addMoney`, `subtractMoney`, `toMinorUnits`, `toDecimalString`, `padDecimal`), and `MINUTE_MS`.
+- `./scope` (`callerScope`) and `./view` (`withActions`) – caller scoping and per-row actions.
 
 ## Notes
-
-- An invalid `transferReference` (unparseable code) returns an **empty page**, not an error — there is no "did you mean" feedback to staff.
-- The `listAttention` function issues **six concurrent** repository queries; each is capped at `ATTENTION_LIMIT` (100). Over-refunded refund IDs are collected into a `Set` and excluded from the stale/refused/reversed buckets to avoid duplicates.
-- `reversed_refund` attention rows set `since` to `reversedAt` (when the bounce happened), not `createdAt`.
-- The `alreadyRefunded` field on dispute rows is only included when the total exceeds zero minor units (`NO_MONEY`).
-- `staffRow` intentionally does **not** set `pay` to true — the payer's own "pay" action is excluded from the staff list row.
-- `./scope` (`callerScope`) and `./view` (`withActions`) are sibling service files not listed in the graph neighbors; they handle caller scoping and per-row action availability respectively.
+- An invalid `transferReference` yields an empty page rather than an error, so staff cannot tell that an almost-right code was close.
+- `displayStatus` and `disputed` filters are not row fields. They are passed to the repository as an `$and` of label filters.
+- A payment shows `refund_exceeds_remaining` rows or one `over_refunded` row, not both.

@@ -1,33 +1,32 @@
 ---
 source: src/modules/returns/controllers/get-return-options.ts
-sha256: cf453a9da806d0d93cbd1c05029bf06aa553781feb56112743e53c4cf1588d74
-generated_at: 2026-11-08T07:55:49.792111+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cf453a9da806d0d93cbd1c05029bf06aa553781feb56112743e53c4cf1588d74
+context_sha256: 3de0d157c81f54965aa7c7d81613e5b9eda9e63c5325ae8be2c238ebdabc135e
+generated_at: 2026-11-22T07:21:14.470694+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/controllers/get-return-options.ts
 
 ## Purpose
-
-Controller for `GET /returns/options?orderId=`. Given an order ID, it asks the return service what the order can still send back and cancel (with the refund each cancel would owe), then serializes that into a JSON response. The server computes the options; the client only displays them.
+Express controller for `GET /returns/options?orderId=`. It reports what an order can still send back and still cancel, along with the refund each cancel would owe. The server computes these values and the client only displays them.
 
 ## Key elements
-
-- **`getReturnOptions`** (exported const) — Express handler. Validates `orderId` via the `GetReturnOptionsQueryParams` zod schema, reads `request.authContext`, delegates to `returnService.getReturnOptions`, and writes a success or refusal response.
-- **`parseBody(GetReturnOptionsQueryParams, …)`** — Reuses the shared param-validation helper from the HTTP infrastructure (despite the name, it validates `request.query` here).
-- **`refused(response, result)`** — Shared guard: if the service result carries a refusal, it sends the error response and short-circuits.
-- **`catchAs(response, 'getReturnOptions')`** — Shared catch-all that maps unhandled rejections to a structured error response tagged with the controller name.
+- `getReturnOptions(request, response)`: the exported request handler.
+  - Validates `request.query` against `GetReturnOptionsQueryParams` using `parseBody`. If validation fails it returns early.
+  - Reads `request.authContext`, which the handler assumes the `isAuth` middleware has already set.
+  - Calls `returnService.getReturnOptions(parsed.orderId, authContext)`.
+  - If `refused(response, result)` is true, the handler stops. Otherwise it responds with `successResponse<ReturnOptions>(response, result.data)`.
+  - Rejections are passed to `catchAs(response, 'getReturnOptions')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Source of `catchAs`, `parseBody`, and `refused`; the generic request-validation / error-mapping layer.
-- **`src/infrastructure/http/response.ts`** — Source of `successResponse`, the standard 200-envelope writer.
-- **`src/modules/returns/routes.ts`** — Registers `getReturnOptions` on the `GET /returns/options` route (with `isAuth` middleware upstream).
-- **`src/modules/returns/services/index.ts`** — Exports `returnService`, whose `.getReturnOptions(orderId, authContext)` method performs the actual domain logic.
-- **`src/types/index.ts`** — Exports the `ReturnOptions` type used as the generic on `successResponse` and as the service's return shape.
+- `src/infrastructure/http/controller.ts` provides `parseBody`, `refused` and `catchAs`, which handle query validation, refused service results and error handling.
+- `src/infrastructure/http/response.ts` provides `successResponse`, which builds the success reply.
+- `src/modules/returns/services/index.ts` exports `returnService`, which holds the business logic called here.
+- `src/types/index.ts` provides the `ReturnOptions` type used for the response payload.
+- `src/modules/returns/routes.ts` is the neighbor that wires this handler to the route. This is inferred from the file's role, since the handler itself doesn't show it.
 
 ## Notes
-
-- `request.authContext!` uses a non-null assertion; correctness depends on the `isAuth` middleware having run first (enforced by route registration, not by this file).
-- `parseBody` is the shared name for input validation even when the input is a query string, not a request body.
-- The `catchAs` second argument (`'getReturnOptions'`) is a log/trace tag, not a dynamic lookup.
+- The handler uses a non-null assertion on `request.authContext!`. It is only safe if `isAuth` runs before it.
+- The handler is not `async`. It returns early with `undefined` on validation failure, and otherwise returns the promise chain.
+- `parseBody` is used on `request.query`, not on a body.

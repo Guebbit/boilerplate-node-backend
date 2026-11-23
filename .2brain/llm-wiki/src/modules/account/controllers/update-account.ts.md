@@ -1,38 +1,35 @@
 ---
 source: src/modules/account/controllers/update-account.ts
-sha256: 0ac61b3e79618bcc2254881e52ce2c64f5fd1bec392e1c0a3ada2568b52a8d43
-generated_at: 2026-11-14T18:35:03.063493+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:28:01.981355+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/update-account.ts
 
 ## Purpose
-
-Implements the `PUT /account` (full replace) and `PATCH /account` (partial merge) handlers for the caller's own account record. Both are produced in one call to the shared `createUpdateController` factory. The handler never reads an `id` from the request; it always targets `request.authContext.id`. Email changes are explicitly excluded and handled by a separate `POST /account/email-change` endpoint.
+Defines the HTTP controllers for `PUT /account` (replace) and `PATCH /account` (merge). Both act on the caller's own account: there is no id in the request, only `request.authContext.id`. The email is not editable here; it changes only through `POST /account/email-change`.
 
 ## Key elements
-
-- **`replaceAccount`** – `PUT /account` handler. Replaces the account profile with the full body validated against `ReplaceAccountBody` (with a `wellFormedLocale` check on `locale`).
-- **`updateAccount`** – `PATCH /account` handler. Merges a partial body validated against `UpdateAccountBody` (same `locale` refinement).
-- **`idFrom`** – Resolves the target id from `request.authContext.id`; the handler is guaranteed to run after the `isAuth` middleware.
-- **`update` callback** – Delegates to `writeWithUploadedImage`, which streams any multipart avatar upload, then calls `accountService.updateProfile(id, changes, callerContext)`.
-- **`present` callback** – Shapes the response via `accountUserService.toAccount(user, tenantRole)`, pulling the role straight from the already-resolved auth context.
-- **`keptWhenOmitted: ['imageUrl']`** – A `PUT` that does not include `imageUrl` preserves the existing avatar rather than clearing it.
-- **`input: { booleans: ['analyticsConsent'] }`** – Treats `analyticsConsent` as a string in multipart requests and coerces it to a boolean.
+- `replaceAccount` / `updateAccount`: exports destructured from `createUpdateController(...)`, handling PUT and PATCH respectively.
+- `replaceSchema` / `patchSchema`: `ReplaceAccountBody` and `UpdateAccountBody` from `@api/schemas.zod`, each with `locale` overridden by `wellFormedLocale(...)`.
+- `input: { booleans: ['analyticsConsent'] }`: the one boolean sent as a string when an edit carries an avatar (multipart).
+- `keptWhenOmitted: ['imageUrl']`: a PUT that omits the avatar keeps the current one, since clients cannot send it back.
+- `idFrom`: returns `request.authContext!.id`.
+- `update`: wraps `accountService.updateProfile(id, { ...changes, ...image }, callerContextOf(request))` in `writeWithUploadedImage`, which handles the uploaded image. `updateProfile` merges the fields and audits the change itself.
+- `present`: maps the updated user with `accountUserService.toAccount(user, request.authContext!.roles.tenant)`.
+- Factory options also set `versioned: true` and `entity: 'account'`.
 
 ## Relationships
-
-- **`src/infrastructure/surfaces/create-update-controller.ts`** — Provides the `createUpdateController` factory that wires validation, ID resolution, update, and response-shaping into a ready-made handler pair.
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf`, used to extract the caller context passed to the service call.
-- **`src/infrastructure/http/uploads.ts`** — Supplies `writeWithUploadedImage`, which handles multipart avatar upload/streaming before the profile write.
-- **`src/infrastructure/http/schemas.ts`** — Supplies `wellFormedLocale`, a Zod refinement applied to the `locale` field on both schemas.
-- **`src/modules/account/services/index.ts`** — Exports `accountService`, the domain object whose `.updateProfile` method performs the actual merge and audit of the profile change.
-- **`src/modules/users/friends/account.ts`** — Exports `accountUserService`, whose `.toAccount` method maps the stored user record into the API response shape using the tenant role.
-- **`src/modules/account/routes.ts`** — Mounts `replaceAccount` and `updateAccount` on the `PUT`/`PATCH /account` routes (behind the `isAuth` guard).
+- `src/infrastructure/surfaces/create-update-controller.ts`: provides the factory that builds both handlers.
+- `src/infrastructure/http/request.ts`: provides `callerContextOf`, which supplies the caller context passed to the service.
+- `src/infrastructure/http/uploads.ts`: provides `writeWithUploadedImage`.
+- `src/infrastructure/http/schemas.ts`: provides `wellFormedLocale`.
+- `src/modules/account/services/index.ts`: exports `accountService`, whose `updateProfile` performs the update.
+- `src/modules/users/friends/account.ts`: exports `accountUserService`, whose `toAccount` builds the response.
+- `src/modules/account/routes.ts`: mounts these handlers. They rely on every mount running after `isAuth`.
 
 ## Notes
-
-- **Email is intentionally absent.** Both `ReplaceAccountBody` and `UpdateAccountBody` reject an `email` key. Email changes follow a separate verification flow (`POST /account/email-change`); do not add it to these schemas.
-- **No second role lookup.** The response `present` callback reads `request.authContext.roles.tenant` directly. A profile edit never changes the role, so a service-level re-fetch is unnecessary.
-- **Multipart boolean quirk.** Clients that send `analyticsConsent` as part of a multipart (avatar) request will transmit it as the string `"true"`/`"false"`; the `input.booleans` config handles the coercion.
+- The `authContext!` non-null assertions are safe only because `isAuth` runs before these handlers.
+- The role in the response comes from the already-resolved auth context, as in `get-account.ts`. A profile edit never changes it, so there is no second lookup.
+- The schemas refuse `email`.
+- The module doc comment points to `docs/modules/account.md#proving-an-address` for the email-change flow.

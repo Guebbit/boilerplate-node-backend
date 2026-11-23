@@ -1,32 +1,33 @@
 ---
 source: src/modules/orders/audit.ts
-sha256: 2f44922363ac49fa88d1f47d6335219d9109d787c39378e48ed0762ec29631ff
-generated_at: 2026-11-08T06:45:10.490126+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 24b0c1aa74008877fb3d13f2dba537e7d931addd9686a52cf34c23a224bd396a
+context_sha256: aa833ae6b96b01a81e5354abf5e3788b5c25a566c15aad0e57ac47682f83fd30
+generated_at: 2026-11-22T06:07:44.776500+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/audit.ts
 
 ## Purpose
-
-Declares the audit-action vocabulary for the orders module and registers it into the application-wide `AuditActionMap` via TypeScript module augmentation. Every service and controller in `src/modules/orders/` references one of these constants when it writes an audit record, so the set of valid `orders` actions lives in exactly one place.
+Declares the audit actions the orders module emits and registers them into the app-wide audit action union through TypeScript module augmentation, rather than a shared enum. Action names carry no `admin.`/`user.` prefix by default, because `actorRole` on each audit record already says who acted (e.g. `order.created` fires for both admin writes and customer checkouts). The only exceptions are actions that only staff can produce.
 
 ## Key elements
-
-- **`ordersAuditActions`** (exported const object) — the full set of action strings this module owns:
-  - `ADMIN_ORDER_VIEWED`, `ADMIN_ORDERS_EXPORTED`, `ADMIN_ORDER_ADDRESS_CORRECTED`, `ADMIN_ORDER_NOTE_ADDED`, `ADMIN_ORDER_NOTE_DELETED` — admin/staff-only actions (prefixed `admin.`).
-  - `ORDER_CREATED`, `ORDER_UPDATED`, `ORDER_DELETED`, `ORDER_RESTORED`, `ORDER_CANCELED`, `ORDER_STATUS_OVERRIDDEN` — lifecycle actions that can originate from either a customer or an admin; the `actorRole` field on the record disambiguates.
-- **`declare module '@infrastructure/observability/audit'`** — augments the shared `AuditActionMap` interface so `orders` is a valid module key typed to this object's values.
+- `ordersAuditActions` – a `const` object mapping constant names to action strings:
+  - Order lifecycle: `ORDER_CREATED` (`order.created`), `ORDER_UPDATED`, `ORDER_DELETED`, `ORDER_RESTORED`.
+  - `ORDER_CANCELED` (`order.canceled`) – the one order write a customer performs. `metadata` carries `cause`, `refund` and `paid`.
+  - `ORDER_STATUS_OVERRIDDEN` (`order.status_overridden`) – an admin skipped or corrected the normal lifecycle. `metadata` carries mode/from/to/reason.
+  - Admin reads and exports: `ADMIN_ORDER_VIEWED` (`admin.order.viewed`), `ADMIN_ORDERS_EXPORTED` (`admin.orders.exported`). The export's `metadata` carries the filter and the row count, never a row.
+  - Admin corrections: `ADMIN_ORDER_ADDRESS_CORRECTED`, `ADMIN_ORDER_BILLING_CORRECTED`.
+  - Admin notes: `ADMIN_ORDER_NOTE_ADDED`, `ADMIN_ORDER_NOTE_DELETED`.
+- `declare module '@infrastructure/observability/audit'` – augments `AuditActionMap` with an `orders` key. Its type is the union of the values of `ordersAuditActions`.
 
 ## Relationships
-
-- **Services** (`cancel.ts`, `crud.ts`, `export.ts`, `override.ts`, `remove.ts`, `address.ts`, `timeline.ts`) — each emits the corresponding constant from `ordersAuditActions` when it performs its mutation. For example, `cancel.ts` emits `ORDER_CANCELED`; `override.ts` emits `ORDER_STATUS_OVERRIDDEN`; `export.ts` emits `ADMIN_ORDERS_EXPORTED`.
-- **Controller** (`get-order.ts`) — emits `ADMIN_ORDER_VIEWED` when staff open another customer's order.
-- **Integration tests** (`create-audit.test.ts`, `update-audit.test.ts`, `delete-restore-audit.test.ts`, `cancel.test.ts`, `export.test.ts`, `notes.test.ts`, `shipping-address.test.ts`) — assert that the correct action string and metadata shape are written for each scenario.
+The neighbors listed are the files tied to this vocabulary:
+- Services (`src/modules/orders/services/address.ts`, `billing.ts`, `cancel.ts`, `crud.ts`, `export.ts`, `override.ts`, `remove.ts`, `timeline.ts`) and `src/modules/orders/controllers/get-order.ts` are the order write, read and export paths that relate to these actions. The page does not show which service emits which action.
+- Integration tests under `src/modules/orders/tests/integration/` (`billing-address`, `cancel`, `create-audit`, `delete-restore-audit`, `export`, `notes`) cover the audit behavior of these flows.
+- Augments `@infrastructure/observability/audit`; the file's header refers to the same declare-by-augmentation pattern in another module's audit file.
 
 ## Notes
-
-- Actions use a flat string union (not a shared enum). Module augmentation is the registration mechanism; see `src/modules/account/audit.ts` for the pattern.
-- No `user.` / `admin.` prefix on lifecycle actions (`order.*`): the `actorRole` field on the audit record already records who acted, so a single `order.created` covers both admin writes and customer checkout.
-- **Metadata privacy convention (enforced by comment, not type):** `ADMIN_ORDER_EXPORTED` carries filter + row count, never row data. `ADMIN_ORDER_ADDRESS_CORRECTED` never carries the address. `ADMIN_ORDER_NOTE_ADDED`/`_DELETED` carry the note id and text **length**, never the text itself. `ORDER_CANCELED` carries `cause`, `refund`, and `paid` booleans.
-- These audit records are distinct from the route-level counters `cartCheckoutTotal` / `orderCreatedTotal`, which count HTTP requests, not order entities.
+- Privacy convention in `metadata`: it never carries addresses, VAT numbers, export rows or note text. Notes record the entry id and the text's length only.
+- `ADMIN_ORDER_VIEWED` has the `admin.` prefix because only the wide (staff) read produces it.
+- These audit actions are distinct from the `cartCheckoutTotal`/`orderCreatedTotal` metrics, which count route requests, not audit-trail orders.

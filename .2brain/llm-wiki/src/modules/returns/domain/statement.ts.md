@@ -1,39 +1,36 @@
 ---
 source: src/modules/returns/domain/statement.ts
-sha256: 9aa8077d963d71c754c44eeedf3ad56695a7ddc1183830d5e3c20034d8668c35
-generated_at: 2026-11-08T07:58:48.652110+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 113b115a65e7ec8b182684650c86687a42cd831d2db217c9d2704a044e889fa1
+context_sha256: 682cf0a75c992236115b31ef0cc5bb9ede2c2c3b608ccfbd95ce557f37c47199
+generated_at: 2026-11-22T07:24:35.087050+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/domain/statement.ts
 
 ## Purpose
-
-Defines the "statement" — the date (`requestedAt`) and channel (`statedVia`) recorded when a buyer or staff member makes a return request or withdrawal. Provides a single pure validation function (`checkStatement`) that enforces *who* may supply each field and whether the supplied date is plausible, encoding the rule that timing is judged on the day the message was **sent**, not read (CRD Art. 11(2)).
+Pure domain rule that decides the "statement" a return is written with: the date the buyer made the request or withdrawal (`requestedAt`) and, for withdrawals, the channel used (`statedVia`). Buyers get server-stamped values; staff recording a phone call, email or letter supply them. Timing is judged on the day the statement was sent, not the day the shop read it (CRD Art. 11(2)).
 
 ## Key elements
-
-- **`StatementInput`** (interface) — The input contract: caller identity (`byBuyer`), `reason`, `kind`, optional caller-supplied `requestedAt` / `statedVia`, plus `orderCreatedAt` and `now` for range checks.
-- **`Statement`** (interface) — The value to persist: `requestedAt: Date` and, on a withdrawal only, `statedVia: ReturnStatementChannel`.
-- **`StatementVerdict`** (type) — Discriminated union: `{ ok: true } & Statement` or `{ ok: false, field, reason }` where `reason` is one of `'forbidden' | 'required' | 'future' | 'before-order'`.
-- **`rangeRefusal`** (private) — Rejects a date that is after `now` or before `orderCreatedAt`; returns the applicable reason or `undefined`.
-- **`staffStatement`** (private) — Validates the staff path: withdrawal requires both fields; non-withdrawal `cancellation` forbids `requestedAt`; non-withdrawal forbids `statedVia`.
-- **`checkStatement`** (exported) — Public entry point. If `byBuyer`, rejects any caller-supplied field and stamps `now` / `'online'` (on withdrawal). Otherwise delegates to `staffStatement`.
+- `StatementInput`: the input to the rule. It holds `byBuyer`, `reason`, `kind`, the optional `requestedAt` and `statedVia` the request carried, `orderCreatedAt` and `now`.
+- `Statement`: the stored result, `requestedAt: Date` plus an optional `statedVia` (set on withdrawals only).
+- `StatementVerdict`: either `{ ok: true } & Statement`, or `{ ok: false, field, reason }`. The field is `requestedAt` or `statedVia`. The reason is `forbidden`, `required`, `future` or `before-order`.
+- `checkStatement(input)`: the exported entry point.
+  - **Buyer caller:** sending either field is `forbidden`. Otherwise it returns `requestedAt = now`, plus `statedVia: 'online'` when the reason is `withdrawal`.
+  - **Staff caller:** delegates to `staffStatement`.
+- `staffStatement` (private):
+  - A withdrawal requires both `requestedAt` and `statedVia`.
+  - A non-withdrawal forbids `statedVia`.
+  - A `cancellation` kind with a non-withdrawal reason forbids `requestedAt`.
+  - If `requestedAt` is omitted on a non-withdrawal, it defaults to `now`.
+- `rangeRefusal` (private): rejects a staff-given date that is after `now` (`future`) or before `orderCreatedAt` (`before-order`). There is no other backdating limit.
 
 ## Relationships
-
-- **`./lifecycle.ts`** — Imports `ReturnKind` and `ReturnReason` types used in `StatementInput` and the validation logic.
-- **`@types` (`src/types/index.ts`)** — Imports `ReturnStatementChannel` and `StaffStatementChannel`.
-- **`services/create.ts`** — Calls `checkStatement` when a new return is opened.
-- **`services/cancel-remainder.ts`** — Calls `checkStatement` for remainder-cancellation requests.
-- **`services/outcome.ts`** — Calls `checkStatement` when recording a withdrawal or staff-initiated action.
-- **`domain/index.ts`** — Barrel re-exports of this module's public API.
-- **`tests/unit/domain.test.ts`** — Unit tests exercising the buyer/staff branches and edge cases.
+- Imports the `ReturnKind` and `ReturnReason` types from `src/modules/returns/domain/lifecycle.ts`, and the `ReturnStatementChannel` and `StaffStatementChannel` types from `src/types/index.ts`.
+- Re-exported through the domain barrel `src/modules/returns/domain/index.ts` for the services and tests. The other neighbors are `src/modules/returns/services/create.ts`, `src/modules/returns/services/cancel-remainder.ts` and `src/modules/returns/services/outcome.ts`, along with `src/modules/returns/tests/unit/domain.test.ts`. Only the type-only imports above are visible in this file, so how each of those files uses the rule is not shown here.
 
 ## Notes
-
-- **Pure module.** No I/O, no clock reads beyond the `now` the caller passes; safe to test in isolation.
-- **Buyer path is minimal.** The buyer never supplies `requestedAt` or `statedVia`; the server stamps them. Any attempt to send either is rejected as `'forbidden'`.
-- **Backdating is allowed for staff**, with only two bounds: not in the future, not before the order was created. The audit trail (staff identity) is the only other safeguard.
-- **`statedVia` is withdrawal-only.** On any non-withdrawal reason it must be absent; on a withdrawal it is mandatory for staff and auto-set to `'online'` for the buyer.
-- **`cancellation` kind + non-withdrawal reason** is a special case: `requestedAt` is explicitly forbidden because a remainder cancel carries no "asking date."
+- The module is pure: it has no I/O and takes `now` as input.
+- Verdicts are returned as values, not thrown. Callers must map `field` and `reason` to their own errors.
+- The staff check order is: missing `requestedAt`, then forbidden `requestedAt`, then range, then `statedVia`. The first failure wins.
+- Backdating is intentionally unrestricted beyond the order's creation date, because the audit row names the staff member.

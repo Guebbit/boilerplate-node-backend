@@ -1,37 +1,37 @@
 ---
 source: src/modules/returns/services/cancel-right.ts
-sha256: e2d0f00a1334ea5850a54b08ced2fcfcd13d62fca309ed6aea3e1479979b2c15
-generated_at: 2026-11-08T08:02:00.361680+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 15481e7f517aad2062b701086d2b452a4cf3c5634a6307b00245dbd2d4b28b99
+context_sha256: f93afcbaa73fa2f627ff22ffacec36f25557de14940fd4361c2e80b9d7275908
+generated_at: 2026-11-22T07:28:00.110852+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/cancel-right.ts
 
 ## Purpose
-
-Single source of truth for *who may cancel a remainder* (the unshipped portion of an order). Both the enforcement gate (`cancel-remainder.ts`) and the UI-facing options read (`options.ts`) call this one function so the button never promises what the door would refuse.
+Single rule for "who may cancel a remainder" (the not-yet-shipped part of a fulfillment order). It is shared by the two askers, the door that refuses (`cancel-remainder.ts`) and the options read that offers (`options.ts`), so the UI cannot offer a cancellation that the backend then rejects.
 
 ## Key elements
+- `CancelRefusal` — union type `'window-closed' | 'excluded' | 'no-key'`: the buyer's two limits, or staff lacking the refund key.
+- `cancelRefusalOf(order, authContext, remainder, statedAt?)` — returns the first refusal reason for this caller, or `undefined` if they may cancel.
+  - `statedAt` is set when staff record a withdrawal the buyer stated outside the shop. It is absent for the buyer (judged at "now") and for staff cancelling for their own reasons (no withdrawal to judge).
 
-- **`CancelRefusal`** (exported type) — Union of three refusal reasons: `'window-closed'`, `'excluded'`, `'no-key'`.
-- **`cancelRefusalOf(order, authContext, remainder, statedAt?)`** (exported function) — Returns the first applicable refusal reason, or `undefined` when cancellation is permitted. Decision order:
-  1. Non-buyer without `create:Refund` ability → `'no-key'`.
-  2. Staff recording a buyer-stated withdrawal outside the statutory window → `'window-closed'`.
-  3. Any of the remainder's product lines fall in Art.-16 excluded items **and** the shop has already started (`processing`+) → `'excluded'`.
+## Rule logic (in order)
+1. Not the buyer and no `create:Refund` ability → `'no-key'`.
+2. Not the buyer and no `statedAt` → `undefined` (staff cancelling on their own; no further limits).
+3. Judge at `statedAt ?? new Date()`. If `order.withdrawUntil` is set and that moment is past `withdrawalClosesAt(order.withdrawUntil)` → `'window-closed'`.
+4. If the shop has not started the order (`hasShopStarted(order.status)` is false) → `undefined`.
+5. Otherwise, if any remainder product belongs to an item with `isExcludedFromWithdrawal` (Art. 16, made to order) → `'excluded'`; else `undefined`.
 
 ## Relationships
-
-- **`cancel-remainder.ts`** — calls `cancelRefusalOf` as its gate before executing a cancellation.
-- **`options.ts`** — calls `cancelRefusalOf` to decide whether to surface a "cancel" option to the caller.
-- **`@modules/orders/index.ts`** — provides `hasShopStarted`, `isBuyer`, `isExcludedFromWithdrawal`, `withdrawalClosesAt`, and the `OrderDocument` type (re-exported from `domain/lifecycle.ts`, `domain/withdrawal.ts`, `domain/rules.ts`, `model.ts`).
-- **`@kernel/ability.ts`** — supplies `holds` for the `create:Refund` permission check.
-- **`@kernel/permissions.ts`** — supplies `callerForSubject` to resolve the ability subject from the auth context.
-- **`@modules/returns/domain`** (`index.ts` / `quantities.ts`) — provides the `ProductQuantity` type for the remainder parameter.
-- **`@types`** (`index.ts` / `auth-context.ts`) — provides the `AuthContext` type.
-- **`fulfillment.test.ts`** (delivery module) — integration-level test that exercises cancellation flows passing through this rule.
+- `@kernel/permissions` (`callerForSubject`) and `@kernel/ability` (`holds`) — check the `create` / `Refund` key for non-buyers.
+- `@modules/orders` (index; types from `model.ts`, helpers from the domain files) — supplies `isBuyer`, `hasShopStarted`, `isExcludedFromWithdrawal`, `withdrawalClosesAt` and the `OrderDocument` type.
+- `@types` — `AuthContext` for the caller.
+- `../domain` — `ProductQuantity` type for the remainder lines.
+- `cancel-remainder.ts` and `options.ts` — the two consumers of `cancelRefusalOf`.
 
 ## Notes
-
-- `statedAt` is only set when staff record a buyer-stated withdrawal on a specific past date; it is `undefined` for the buyer acting in real time and for staff cancelling for their own (non-withdrawal) reasons. The function treats `undefined` as "no withdrawal clock to judge" and skips the window check for non-buyers.
-- The excluded-item check (Art. 16, made-to-order) only fires *after* the shop has started (`hasShopStarted`). If the order is still `paid`, even excluded goods can be cancelled — the whole group is still the buyer's.
-- A buyer who is also staff is always treated as the buyer (the `!buyer` guards on both the key check and the `statedAt` shortcut ensure staff powers never bypass the buyer's limits).
+- The order's buyer is judged by the withdrawal rules even if they are also staff, because the buyer check comes first.
+- Excluded goods can be cancelled only while the order is `paid`. Once it is `processing`, that group is the shop's work and stays.
+- Excluded products are matched by `String(item.product._id)` against the remainder's `productId`.
+- The function is pure apart from reading the current time when `statedAt` is absent.

@@ -1,31 +1,35 @@
 ---
 source: src/modules/account/tests/unit/presenter.test.ts
-sha256: 875ac0cf97a4ab7dee82b411113c97aaf87b4c7dc9e0b07c1fc698a8346aa973
-generated_at: 2026-11-14T19:15:57.938638+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 875ac0cf97a4ab7dee82b411113c97aaf87b4c7dc9e0b07c1fc698a8346aa973
+context_sha256: eff64750cdd494d2e3e3015a6e8ff03318a99623e66b58e986e909b1e1f02f70
+generated_at: 2026-11-22T04:07:27.300344+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/presenter.test.ts
 
 ## Purpose
-
-Unit tests for the account presenter's three wire-mapping functions. They verify that stored domain objects (`SessionRow`, export request rows) are shaped correctly for the API response and—critically—that the credential (`tokenHash`) never appears in the serialized output.
+Unit tests for the account presenter, treated as a pure mapping from a stored session row or export request to its wire shape. The tests also assert that the session credential (`tokenHash`) never appears in the output.
 
 ## Key elements
-
-- **`row`** – A shared `SessionRow` stub (via `asStub`) that carries a `tokenHash` credential, so tests can assert it stays out of the wire shape.
-- **`describe('presentSession')`** – Two cases: (1) happy-path mapping of `familyId → id`, dates, `device`, and the `current` flag (set by the third boolean argument); (2) that absent `lastUsedAt`/`device` are omitted from the result and the credential string is absent from `JSON.stringify` of the wire.
-- **`describe('presentExportSession')`** – Confirms the wire uses the row's own `expiresAt` and does **not** include a `current` field (unlike `presentSession`).
-- **`describe('presentExport')`** – Covers the export-request wire across three statuses (`building`, `ready`, `failed`): `id`/`createdAt`/`status` are always present; `expiresAt` appears only for `ready`; `actions.download` is `true` only for `ready`; `actions.request` is `false` when `building`, `true` otherwise.
+- `row`: a `SessionRow` stub (built with `asStub`) with a fixed `familyId`, dates, device and a `tokenHash` of `'a-credential-digest'`. It is used to prove the credential does not leak.
+- `describe('presentSession')`:
+  - Maps `familyId` to `id`, `startedAt` to `createdAt`, and the passed-in date to `expiration`. It also maps `lastUsedAt` and `device`, and sets `current` from the third argument.
+  - When `lastUsedAt` and `device` are undefined, the keys are omitted. The serialized output never contains the credential string.
+- `describe('presentExportSession')`:
+  - Uses the row's own `expiresAt` as `expiration`.
+  - Has no `current` property.
+- `describe('presentExport')`, using an `exportRow` with `_id`, `createdAt` and `expiresAt`:
+  - Returns `id`, `status`, `createdAt` and `actions`.
+  - Includes `expiresAt` only when the status is `ready`. It is absent for `failed`.
+  - `actions.download` is true only when `ready`.
+  - `actions.request` is false for `building` and true for `ready` and `failed`.
 
 ## Relationships
-
-- **`src/modules/account/presenter.ts`** – The module under test. This file imports and exercises `presentSession`, `presentExportSession`, and `presentExport`.
-- **`src/modules/account/repository.ts`** – Source of the `SessionRow` type used to type the test stubs.
-- **`tests/support/stub.ts`** – Provides `asStub<T>`, a helper that lets tests build a partial `T` with only the fields they care about while satisfying the type.
+- Tests `presentSession`, `presentExportSession` and `presentExport` from `src/modules/account/presenter.ts`.
+- Imports the `SessionRow` type from `src/modules/account/repository.ts`, used only for typing the stub rows.
+- Uses `asStub` from `tests/support/stub.ts` (imported as `@tests/stub`) to build partial rows as typed stubs.
 
 ## Notes
-
-- The security invariant "credential never reaches the wire" is pinned by a `JSON.stringify` containment check, not just a `toHaveProperty` absence check—this catches accidental nesting or renamed keys.
-- `presentSession`'s `expiration` field is set from the **caller-supplied** date (second argument), whereas `presentExportSession` reads `expiresAt` off the row itself. This distinction is intentional and asserted separately.
-- All date assertions use ISO-8601 strings with `.000Z` millisecond suffixes, matching `Date.prototype.toISOString()` output.
+- The tests are pure: there is no database or mocking, and `Types.ObjectId` is used only to produce fixed ids.
+- `presentSession` takes the expiration date as a separate argument, whereas `presentExportSession` reads it from the row.

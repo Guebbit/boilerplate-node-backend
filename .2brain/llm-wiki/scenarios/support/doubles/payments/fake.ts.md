@@ -1,53 +1,55 @@
 ---
 source: scenarios/support/doubles/payments/fake.ts
-sha256: 62185d14d13ac00de04ebfbadc1f38d952819c5391f8c8c5a5d16f3370763d43
-generated_at: 2026-11-14T17:17:52.221921+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7402709fdfc6f724ab39153afc80d9a9b97ad43b628cf1047982dc718d7bbd31
+context_sha256: b0709059dbf50c654f17f58656d133f257dd737ec3a99d78dc6b08d740b48b4c
+generated_at: 2026-11-22T01:47:48.471211+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/support/doubles/payments/fake.ts
 
 ## Purpose
-
-A fake payment service provider (PSP) that lives outside `src/` and is registered only by the dev preload and Jest setup. It mimics the shape a real provider (e.g. Stripe) presents to the application — intent references, asynchronous states (`requires_action`, `processing`), terminal states, and HMAC-signed webhooks — so that demos and every e2e/contract/integration test can walk 3-D Secure, webhook, refund, and dispute paths without a real provider account. It never makes external network calls.
+The fake PSP (payment service provider): a test double that is never shipped. It lives outside `src/` and is registered only by the development doubles and the jest setup (`./register`). It makes no external calls, but imitates a real PSP's shape. It hands back an intent reference for the browser to finish against, answers with asynchronous states (`requires_action`, `processing`) as well as terminal ones, and signs its webhooks. Demos and e2e tests can therefore exercise the 3-D Secure and webhook paths without a provider account.
 
 ## Key elements
-
-- **`TEST_METHODS`** – Maps provider test-token references (`pm_card_declined`, `pm_card_authentication_required`, `pm_card_processing`) to their initial and settled `ProviderPaymentState`. Any unrecognised reference succeeds with its last-four taken from the reference tail.
-- **`FAKE_SUCCESS_METHOD` / `FAKE_DECLINE_METHOD`** – Convenience constants for the default success and decline references.
-- **In-memory state maps** (`outcomes`, `intents`, `receiptOverrides`, `refundFailures`, `disputes`, `refundObjects`, `refundTimeouts`, `pendingRefundIntents`, idempotency keys) – Deliberately non-persistent; an unknown intent answers `open` (settles nothing).
-- **`setFakeOutcome`** – Test lever: pre-loads a settled state so `retrieve` returns it as if the customer finished at the provider without a server-side `confirm` (enables webhook-arrives-before-confirm scenarios).
-- **`setFakeReceipt`** – Test lever: overrides `amountReceived`, `currency`, or `paymentId` on a `succeeded` answer.
-- **`setFakeRefundFailure`** – Test lever: makes refunds on an intent throw a closed `RefundFailureReason`.
-- **`setFakeRefundTimeout`** – Test lever: next refund executes at the "provider" but the response is lost (`provider_unavailable`); one-shot.
-- **`setFakeRefundPending` / `setFakeRefundOutcome`** – Test levers: hold refunds in `pending` state, then settle or fail them individually.
-- **`addFakeExternalRefund`** – Test lever: injects a refund that only appeared in the provider's dashboard (shows in `listRefunds`, not elsewhere).
-- **`setFakeDispute` / `fakeDisputeOf`** – Test levers: record and retrieve the latest dispute state per intent/dispute pair.
-- **`signFakeDelivery`** – Serialises a `ProviderWebhookEvent` to JSON and returns the body plus the `WEBHOOK_SIGNATURE_HEADER` (via `signWebhookPayload`), ready for `paymentService.receiveWebhook` or an HTTP POST.
-- **`withReceipt`** (internal) – Enriches a `succeeded` state with prepared/overridden receipt fields before returning it.
+- `TEST_METHODS` (internal): maps opaque method references to behaviour.
+  - `pm_card_declined` gives `declined`, last4 `0002`.
+  - `pm_card_authentication_required` gives `requires_action`, last4 `3155`, settling to `succeeded`.
+  - `pm_card_processing` gives `processing`, last4 `0000`, settling to `succeeded`.
+  - Any other reference succeeds, with its last four digits taken from the reference's tail.
+- `FAKE_SUCCESS_METHOD` (`pm_card_visa`): the reference the demo panel sends by default.
+- `FAKE_DECLINE_METHOD` (`pm_card_declined`): the one refused reference.
+- In-memory state maps:
+  - `outcomes`: the eventual outcome of a confirmed intent, read by `retrieve`.
+  - `intents`: amount, currency and payment id each intent was prepared with.
+  - `receiptOverrides`.
+  - `refundFailures`.
+  - `disputes`.
+  - `refundObjects`.
+  - Sets for refund timeouts and pending-refund intents.
+- `withReceipt` (internal): fills a `succeeded` state with `amountReceived`, `currency` and `paymentId`. It uses the override first, then the prepared values. Other states report no money.
+- Test levers (exported):
+  - `setFakeReceipt`: makes `succeeded` report a different amount, currency or payment id.
+  - `setFakeOutcome`: sets what `retrieve` answers, as if the customer finished at the provider without any `confirm` reaching the server. This is the only way for a webhook to find an unconfirmed outcome.
+  - `setFakeRefundFailure`: makes refunds on an intent refuse with a given `RefundFailureReason`, or clears it with `undefined`.
+  - `setFakeRefundTimeout`: one-shot. The next refund executes at the provider but the answer is lost (`provider_unavailable`).
+  - `setFakeRefundPending`: holds refunds as `pending` until `setFakeRefundOutcome` settles them.
+  - `addFakeExternalRefund`: adds a dashboard-made refund, with no record id, that appears only in `listRefunds`. It returns its refund id (`re_dashboard_<n>`).
+  - `setFakeDispute`: records a dispute state and returns a `ProviderWebhookEvent` (`evt_dispute_<ref>_<observedAt>`).
+  - `fakeDisputeOf`: reads back the last dispute state held.
+  - `signFakeDelivery`: JSON-serialises an event and signs it with `signWebhookPayload`, returning `{ body, headers }` keyed by `WEBHOOK_SIGNATURE_HEADER`.
+- Idempotency support: `KEY_WINDOW_MS` (one day, from `DAY_MS`) and the `KeyedAnswer` type record what an idempotency key first produced, mirroring Stripe. `FakeRefund` and `stateOf` model a provider-side refund object and its status slice.
+- The imports (`createHmac`, `IncomingHttpHeaders`, `logger`, `FINAL_REFUND_FAILURES`, `PaymentInFlightError`, `PaymentProviderError`, `verifyWebhookSignature`, `WebhookRejected`, `PaymentProvider`) point to a `PaymentProvider` implementation and webhook verification, but that part lies beyond the visible portion of the file.
 
 ## Relationships
-
-- **`scenarios/support/doubles/payments/register.ts`** – Imports and registers this fake as the active `PaymentProvider` in the dev preload and Jest global setup.
-- **`scenarios/support/doubles/payments/levers.ts`** – Re-exports or wraps the `setFake*` / `addFake*` functions so test files import from a single entry point.
-- **`src/modules/payments/providers/index.ts`** – The file implements the `PaymentProvider` interface and consumes the `ProviderPaymentState`, `ProviderRefundState`, `ProviderDisputeState`, and `ProviderWebhookEvent` types defined there.
-- **`src/modules/payments/providers/webhook-signature.ts`** – Uses `signWebhookPayload` to sign deliveries and relies on `WEBHOOK_SIGNATURE_HEADER` for the header name.
-- **`src/modules/payments/providers/errors.ts`** – Imports `PaymentProviderError`, `PaymentInFlightError`, and `WebhookRejected` to throw or detect in the fake's responses.
-- **`src/modules/payments/domain/index.ts`** – Imports `FINAL_REFUND_FAILURES` to validate closed refund-failure codes.
-- **`src/domain-primitives/time.ts`** – Imports `DAY_MS` to size the idempotency-key window (one day from first use).
-- **`src/infrastructure/adapters/logger.ts`** – Imports `logger` for diagnostic output inside the fake.
-- **`src/modules/invoicing/tests/integration/credit-note-catch-up.test.ts`** – Drives the fake through its levers to exercise credit-note and refund-catch-up flows.
-- **`src/modules/payments/tests/contract/api.contract.test.ts`** – Exercises the fake's confirm/retrieve/refund/dispute API surface against the contract.
-- **`src/modules/payments/tests/deliver.ts`** – Uses `signFakeDelivery` to hand signed webhook deliveries to the payment service.
-- **`src/modules/payments/tests/integration/announce.test.ts`** – Drives webhook-announce scenarios through the fake.
-- **`src/modules/payments/tests/integration/cancel-redelivery.test.ts`** – Exercises cancel-and-redelivery paths against the fake.
-- **`src/modules/payments/tests/integration/canceled.test.ts`** – Exercises canceled-intent flows against the fake.
+- `src/modules/payments/providers/index.ts` supplies the `PaymentProvider` contract, state types (`ProviderPaymentState`, `ProviderRefundState`, `ProviderDisputeState`, `ProviderWebhookEvent`), the error classes, and the webhook signing and verification helpers and header name. The fake is built against these.
+- `src/modules/payments/domain/index.ts` supplies `FINAL_REFUND_FAILURES`.
+- `src/domain-primitives/time.ts` supplies `DAY_MS`, used for the idempotency window.
+- `src/infrastructure/adapters/logger.ts` supplies the logger.
+- `scenarios/support/doubles/payments/register.ts` registers the fake. `scenarios/support/doubles/payments/levers.ts` sits alongside it in the same doubles folder.
+- The payments and invoicing tests (`src/modules/payments/tests/integration/announce.test.ts`, `src/modules/payments/tests/integration/canceled.test.ts`, `src/modules/payments/tests/integration/cancel-redelivery.test.ts`, `src/modules/payments/tests/contract/api.contract.test.ts`, `src/modules/invoicing/tests/integration/credit-note-catch-up.test.ts`) and `src/modules/payments/tests/deliver.ts` are the likely consumers of the levers and signing helper.
 
 ## Notes
-
-- All state is in-process memory. A restart or a second worker forgets everything; `retrieve` for an unknown reference intentionally answers `open` so the application settles nothing rather than guessing.
-- The idempotency-key window mirrors Stripe: one day from the key's *first* use, not each subsequent call.
-- `setFakeRefundTimeout` is one-shot — the flag clears itself after the next refund on that intent.
-- `setFakeRefundFailure` accepts `undefined` to *clear* a previously set failure; passing a value sets or overwrites it.
-- Method references are opaque handles (e.g. `pm_card_visa`), never card numbers; last-four digits are derived from the reference tail for unlisted methods.
-- The file is a `@module` (no default export); all public API is named exports.
+- All state is module-level and in-memory. A restart or a second worker forgets it, so `retrieve` answers `open` for an unknown reference. `open` settles nothing, which is the intended safe default.
+- `setFakeDispute` only returns the event. The caller must sign it with `signFakeDelivery` and hand it to `paymentService.receiveWebhook`, or post it to the real webhook route.
+- Method references are opaque handles, never card numbers.

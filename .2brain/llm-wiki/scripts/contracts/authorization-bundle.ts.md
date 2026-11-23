@@ -1,36 +1,37 @@
 ---
 source: scripts/contracts/authorization-bundle.ts
-sha256: 37e8ec4b40ca5dcef9c3e97589e7c49301b99ed483b4bf2e0bb4b58725995445
-generated_at: 2026-11-14T17:22:49.583174+00:00
-model: ollama:qwen3.8:27b
+source_sha256: dc2fd3c081ae81c767d96e8cf58c07a82c17cee42b689962c52417338a1f7a1f
+context_sha256: 9efadf0ef00bc6f26dd65dad14b67476939817ec186766123b31f3540c99a358
+generated_at: 2026-11-22T01:53:54.751404+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/authorization-bundle.ts
 
 ## Purpose
-
-Assembles the committed `shared/authorization-keys.generated.yaml` by splicing together per-module authorization fragments and a root residual file. Each rule/set lives in its own module's `authorization.yaml`, so deleting a module drops its rules automatically. The assembled file is also consumed by a PHP backend, which is why the splice is done as raw text rather than a YAML AST merge.
+Generates `shared/authorization-keys.generated.yaml` by splicing one `authorization.yaml` fragment per module, plus a `core` fragment and a root residual file, into a single committed bundle. Run via `npm run regenerate`. Because fragments live in their modules, a deleted module's rules disappear with it. The bundle is shared with a PHP twin that also reads it.
 
 ## Key elements
-
-- **`assembleAuthorizationKeys()`** (exported) — reads the root file, splits it at the `# %AUTHORIZATION_RULES%` / `# %AUTHORIZATION_SETS%` markers, discovers all on-disk fragments, orders them via `PREFERRED_ORDER`, and returns the fully spliced YAML text.
-- **`fragmentBlocks(section)`** — reads one fragment, validates that every rule/set entry declares `module: <section>` (fail-closed on mismatch), and returns the raw `rules` and `sets` text blocks with headings stripped.
-- **`sectionsOnDisk()`** — returns module folders that contain an `authorization.yaml`, plus the special `core` section.
-- **`fragmentPath(section)`** — resolves the fragment file: `shared/contracts/authorization-keys.core.yaml` for `core`, otherwise `src/modules/<section>/authorization.yaml`.
-- **`PREFERRED_ORDER`** — fixed array of 17 section names that preserves the original hand-written file's ordering (keeps the PHP twin's diff small).
-- **Module-level side effect** — the last line calls `writeOrCheck(OUTPUT_FILE, assembleAuthorizationKeys(), …)`, so simply importing/running the script writes or checks the output file.
+- `ROOT_FILE` (`shared/contracts/authorization-keys.root.yaml`): preamble, `version`, `actions`, `implies`, `scopes`, closing note. Contains the `# %AUTHORIZATION_RULES%` and `# %AUTHORIZATION_SETS%` marker comments where the sections are spliced in.
+- `CORE_FILE` (`shared/contracts/authorization-keys.core.yaml`): app-level rules and sets (e.g. `read:Translation`, `update:Translation`) that belong to `core` rather than a module.
+- `OUTPUT_FILE`: `shared/authorization-keys.generated.yaml`, the committed bundle that backends read at boot.
+- `PREFERRED_ORDER`: the section order of the original hand-written file, kept to keep PHP-side diffs small. `core` sits between `locales` and `users`.
+- `fragmentPath(section)`: resolves `core` to `CORE_FILE` and any other section to `src/modules/<section>/authorization.yaml`.
+- `fragmentBlocks(section)`: reads the fragment's raw text and returns its `rules` and `sets` blocks with headings and trailing newlines stripped. It throws if the file is missing, or if any rule or set declares a `module` other than the section it lives in.
+- `sectionsOnDisk()`: modules that have an `authorization.yaml`, plus `core`.
+- `assembleAuthorizationKeys()` (exported): builds the final text. It checks that both markers are present in the root file, orders sections by `PREFERRED_ORDER` with extras appended, joins the rules and non-empty sets blocks with blank lines, and splices them in at the markers.
+- The last statement runs `writeOrCheck(...)` at import time, so it writes the file, or under `--check` compares it.
 
 ## Relationships
-
-- **`scripts/contracts/fragments.ts`** — imports `readAuthorizationFragment` to parse a fragment for the misattribution check before the raw-text split.
-- **`scripts/contracts/section-order.ts`** — imports `orderSections` to sort discovered sections into `PREFERRED_ORDER` (extras appended).
-- **`scripts/contracts/generated-file.ts`** — imports `writeOrCheck` to write the output or, under `--check`, verify it is not stale.
-- **`scripts/modules-on-disk.ts`** — imports `REPO_ROOT`, `MODULES_ROOT`, and `modulesWith` for path construction and fragment discovery.
-- **`scripts/contracts/asyncapi-bundles.ts`** — no import; referenced in the header comment as the contrast case (AST merge) that this file deliberately avoids.
+- `./section-order`: `orderSections` applies `PREFERRED_ORDER` to the sections found on disk.
+- `./fragments`: `readAuthorizationFragment` parses a fragment so `fragmentBlocks` can check each entry's `module`.
+- `./generated-file`: `writeOrCheck` writes the output or, in `--check` mode, fails if the committed file is stale.
+- `../modules-on-disk`: provides `REPO_ROOT`, `MODULES_ROOT` and `modulesWith` for path building and module discovery.
+- `./asyncapi-bundles`: a contrast point only. That file merges channel maps through the YAML AST, while this one splices text. There is no code dependency.
 
 ## Notes
-
-- The splice is intentionally text-based, not a YAML merge: every authored byte (quoting, description wrapping) must survive intact because the PHP twin reads the file directly.
-- `core` is not a real module folder; it maps to `shared/contracts/authorization-keys.core.yaml` and holds app-level rules (e.g. `read:Translation`) that don't belong to a single module.
-- The `--check` contract here is deliberately kept out of `bundle-registry.ts` because "shared" in that registry means the frontend holds a copy — a different sharing story than the PHP-twin relationship this file has.
-- The root file is expected to contain two sentinel markers (`# %AUTHORIZATION_RULES%`, `# %AUTHORIZATION_SETS%`); their absence is a hard error.
+- Splicing is textual on purpose. Entries are flat, self-contained list items, so this keeps every authored byte and avoids the YAML stringifier re-wrapping descriptions or re-quoting scalars.
+- The markers are YAML comments, so the root file still parses as one document with no `rules` or `sets` field of its own.
+- The bundle is deliberately not in `bundle-registry.ts`. There, `shared` means the paired frontend holds a copy, whereas this file is shared with a PHP repository this repo cannot access or test against.
+- The module-attribution check fails closed. A fragment whose entries name another module is rejected, not silently accepted.
+- Importing the module has side effects, because it writes or checks the output file immediately.

@@ -1,34 +1,29 @@
 ---
 source: src/modules/orders/domain/export.ts
-sha256: f00d8f821e2ff8d3d7956507c7e61f50b394348f387a9730fd839948e02a259d
-generated_at: 2026-11-08T06:48:20.589049+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2cbd0634c5bc6e3d6e05cc98b43c8d75e05e3baf74500d92c5d2c2ae948c74b4
+context_sha256: 2604110f2b0d7210428fe6ead3850ef30395c109e0d758cf56e3eced3acf3e30
+generated_at: 2026-11-22T06:11:14.031808+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/domain/export.ts
 
 ## Purpose
-
-Defines the shape and mapping of a single orders-CSV row: which columns appear (and in what order), what fields an order must supply, and the pure function that converts an order into a row of cells. It exists so the CSV contract is declarative, testable, and decoupled from the transport (writing, escaping, streaming) handled elsewhere.
+Defines the shape of one line of the orders CSV export: which columns exist, what an order must supply, and how an order list row is mapped to a CSV row. The columns mirror the order list, plus `currency`. Addresses are deliberately left out because they are field-encrypted at rest and an export should not decrypt them.
 
 ## Key elements
-
-- **`ORDER_CSV_COLUMNS`** — `as const` tuple listing the 13 CSV headers in file order. The string value of each entry is both the key and the header.
-- **`OrderCsvColumn`** — Union type of the column names, derived from the tuple.
-- **`OrderCsvSource`** — A `Pick` of `Order` fields (plus optional `createdAt`/`paidAt` as `string | Date | undefined`) that a row needs. Intentionally excludes address fields.
-- **`isoOf`** (private) — Normalises a stored `Date`, its ISO string, or `undefined` into an ISO-8601 UTC string (or `''`).
-- **`toOrderCsvRow`** (exported) — Pure mapping from an `OrderCsvSource` to `Record<OrderCsvColumn, string | number>`. `lines` maps to `totalItems`, `units` to `totalQuantity`; `paymentMethod` falls back to `''`.
+- `ORDER_CSV_COLUMNS`: the columns in file order (`createdAt`, `orderNumber`, `status`, `paymentStatus`, `fulfillmentStatus`, `returnStatus`, `email`, `lines`, `units`, `total`, `currency`, `paymentMethod`, `paidAt`). Each key is also the header.
+- `OrderCsvColumn`: union type of those column names.
+- `OrderCsvSource`: the input type. It is a `Pick` of `Order` (`orderNumber`, `status`, `paymentStatus`, `fulfillmentStatus`, `returnStatus`, `email`, `totalItems`, `totalQuantity`, `totalPrice`, `currency`, `paymentMethod`), plus optional `createdAt` and `paidAt` as `string | Date`. A normalized repository row carries a `Date`; a serialized one carries an ISO string.
+- `toOrderCsvRow(order)`: a pure function returning a `Record<OrderCsvColumn, string | number>`. `lines` comes from `totalItems` (the count of order lines) and `units` from `totalQuantity`. `total` comes from `totalPrice`.
+- `isoOf` (private): formats a date as ISO 8601 in UTC, or `''` if undefined.
 
 ## Relationships
-
-- **`src/types/index.ts`** — Provides the `Order` interface that `OrderCsvSource` picks fields from.
-- **`src/modules/orders/domain/index.ts`** — Barrel re-export for the orders domain; makes `ORDER_CSV_COLUMNS`, `OrderCsvColumn`, `OrderCsvSource`, and `toOrderCsvRow` available to consumers.
-- **`src/modules/orders/services/export.ts`** — The service that iterates orders, calls `toOrderCsvRow` per row, and writes/escapes the CSV. Formula-escaping (`escape_formulas`) lives there, not here.
-- **`src/modules/orders/tests/unit/export.test.ts`** — Unit tests exercising `toOrderCsvRow` and the column list.
+- Imports the `Order` type from `src/types/index.ts` (via the `@types` alias).
+- `src/modules/orders/services/export.ts` and `src/modules/orders/tests/unit/export.test.ts` are the neighbors that would use these exports. Their contents are not shown here.
+- `src/modules/orders/domain/index.ts` is a sibling neighbor in the same domain folder. Its contents are not shown here.
 
 ## Notes
-
-- **No address fields.** Both billing and shipping addresses are field-encrypted at rest; an export does not justify decryption, so they are simply absent from the column set.
-- **Email is included as-is.** `zod.email()` accepts `+cmd@…` patterns, so a cell can begin a spreadsheet formula. The doc comment explicitly delegates escaping to the CSV writer (`escape_formulas` in the service layer), not to this module.
-- **Date fields are optional and dual-typed.** `createdAt` and `paidAt` accept `Date` (repository-normalised rows) or `string` (serialised rows); `isoOf` handles both, returning `''` for `undefined`.
-- **`lines` ≠ `units`.** `lines` is the count of order line items (`totalItems`); `units` is the summed quantity across those lines (`totalQuantity`). They are distinct columns.
+- This file does not escape formula-injection characters. The email is in the file and `zod.email()` accepts values like `+cmd@example.com`, so a cell can start a formula. Escaping is the CSV writer's job (`escape_formulas`).
+- Missing `paymentMethod` becomes `''`. Missing `createdAt` or `paidAt` also becomes `''`.
+- `isoOf` calls `new Date(value).toISOString()`, which throws a `RangeError` on an unparseable date string.

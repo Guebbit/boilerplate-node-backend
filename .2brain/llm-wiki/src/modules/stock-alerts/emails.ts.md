@@ -1,35 +1,28 @@
 ---
 source: src/modules/stock-alerts/emails.ts
-sha256: 947edf718d99beffa753186aaf8079b6cbd64a3148855c421481f957e70b8c5a
-generated_at: 2026-11-08T08:27:56.109944+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 947edf718d99beffa753186aaf8079b6cbd64a3148855c421481f957e70b8c5a
+context_sha256: 2770bc9745f7aadd08c3e09cd8767f9b46ad18764bb798d7d2c26be0e244f19f
+generated_at: 2026-11-22T07:54:04.265481+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stock-alerts/emails.ts
 
 ## Purpose
-
-Builds the single email the stock-alerts module sends — a "back in stock" notification. It turns a product name, a product URL, a buyer's name, and a locale into a finished, localized `EmailContent` object ready for the mailer to render. By design it is the only email in this module and carries no cross-promotion.
+Builds the single email the stock-alerts module sends: "back in stock". It produces finished, localized strings (language passed as an argument, mirroring `@modules/account/emails`) for one product and a link to it, with no other promotional content.
 
 ## Key elements
-
-- **`BackInStockEmailInput`** (interface) — the two values the caller must supply: `title` (product name in the recipient's language) and `productUrl` (link to the product page on the paired frontend).
-- **`backInStockEmail(locale, name, input)`** (exported function) — calls `translator(locale)` to resolve every string, then returns an `EmailContent` with:
-  - `template: 'stock-alerts.back-in-stock'` (the mailer template to render)
-  - `subject` — localized with the product title interpolated
-  - `data` — an object containing `locale`, `pageMetaTitle`, `greeting`, `body`, `once`, `linkLabel`, `linkUrl`, and `footer`
+- `BackInStockEmailInput` — interface with `title` (product name in the recipient's language) and `productUrl` (product page on the paired frontend).
+- `backInStockEmail(locale, name, input)` — returns an `EmailContent` with:
+  - `template: 'stock-alerts.back-in-stock'`
+  - `subject` built from the product title
+  - `data`: `locale`, `pageMetaTitle`, `greeting` (uses `name`), `body` (uses `title`), `once`, `linkLabel`, `linkUrl` (the `productUrl`), and `footer`.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/mailer.ts`** — imports the `EmailContent` type that `backInStockEmail` returns.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — imports the `translator` factory used to produce the locale-specific `t()` function.
-- **`src/modules/stock-alerts/service.ts`** — the caller that invokes `backInStockEmail` when an alert fires (via the module index).
-- **`src/modules/stock-alerts/index.ts`** — re-exports this file's public surface to the rest of the application.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — exercises the rendered template that this function targets.
+- `src/infrastructure/adapters/mailer.ts` — supplies the `EmailContent` type that this file's return value conforms to.
+- `src/infrastructure/i18n/index.ts` — supplies `translator(locale)`, used to resolve all text keys.
 
 ## Notes
-
-- The module doc-comment is a **design constraint**, not just documentation: there is exactly one email, no additional promotional content may be added. Treat this as intentional scope, not an oversight.
-- `locale` appears in two roles: it drives translation *and* is forwarded into `data.locale` so the mailer template can use it at render time.
-- The footer key is the shared `'email.footer'`, not a stock-alerts-specific key — it will always match whatever the global footer string is at render time.
-- The `once` data field is a short reassurance line (e.g., "no further alerts will be sent"); its exact wording lives entirely in i18n.
+- All strings come from i18n keys under `stock-alerts.email-back-in-stock.*`, except the footer, which uses the shared `email.footer` key.
+- The function is pure formatting: no sending, no lookups. The caller must provide the already-localized product title and URL.
+- The template name `stock-alerts.back-in-stock` must match a template known to the mailer.

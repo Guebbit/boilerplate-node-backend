@@ -1,32 +1,32 @@
 ---
 source: shared/rules/defaults.yaml
-sha256: 691cf5262ab61b23a3a34700627f01840a5600e8e0b215541325c4469051d6ed
-generated_at: 2026-11-08T03:09:04.756248+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 691cf5262ab61b23a3a34700627f01840a5600e8e0b215541325c4469051d6ed
+context_sha256: 77926a1c026ee9650ef3ae1184efc1855168e8ab45114392840a7d8f8eac7592
+generated_at: 2026-11-22T02:25:41.799774+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/defaults.yaml
 
 ## Purpose
-
-Single source of truth for the fallback numeric limits both backends start from when no environment variable is set. It is a build-time template, not a runtime config file: `npm run regenerate` reads it and emits `src/infrastructure/config/defaults.generated.ts`.
+Holds the plain-number default values that both backends start from. Each value has an environment variable that overrides it. The number in this file is what the setting means when that variable is unset.
 
 ## Key elements
+All values sit under a top-level `defaults:` key.
 
-- **`defaults.responseCache`** – `devTtlMaxSeconds` (30 s dev-only TTL ceiling) and `maxBytes` (256 KiB cached-body cap).
-- **`defaults.idempotency`** – `retentionHours` (24 h replay window for stored responses).
-- **`defaults.pagination`** – `pageSize` (10 rows/page when the caller omits a limit).
-- **`defaults.images`** – `maxInputPixels` (50 M-pixel decompression-bomb cap), `maxDimension` (2048 px longest side of a stored original), `thumbnailDimension` (320 px), `quarantineRetentionHours` (24 h before a quarantined upload is treated as abandoned).
-- **`defaults.uploads`** – `maxBytes` (5 MiB maximum accepted upload body).
-
-Each key is paired in-line with the environment variable that overrides it (e.g. `NODE_REDIS_CACHE_MAX_BYTES`, `NODE_MAX_UPLOAD_BYTES`).
+- `responseCache.devTtlMaxSeconds` (30): the longest TTL a development run may request, in seconds. Env var: `NODE_REDIS_CACHE_DEV_TTL_MAX`.
+- `responseCache.maxBytes` (262144, 256 KiB): the largest body the cache stores. Env var: `NODE_REDIS_CACHE_MAX_BYTES`.
+- `idempotency.retentionHours` (24): hours a stored response can be replayed. Env var: `NODE_IDEMPOTENCY_RETENTION_HOURS`.
+- `pagination.pageSize` (10): rows per page when the caller gives no limit. Env var: `NODE_SETTINGS_PAGINATION_PAGE_SIZE`.
+- `images.maxInputPixels` (50000000): the most pixels a decoder may open, which acts as a decompression-bomb cap. Env var: `NODE_IMAGE_MAX_INPUT_PIXELS`.
+- `images.maxDimension` (2048): the longest side of a stored original. Env var: `NODE_IMAGE_MAX_DIMENSION`.
+- `images.thumbnailDimension` (320): the longest side of a thumbnail. Env var: `NODE_IMAGE_THUMBNAIL_DIMENSION`.
+- `images.quarantineRetentionHours` (24): hours a quarantined upload is left alone before it counts as abandoned. Env var: `NODE_QUARANTINE_RETENTION_HOURS`.
+- `uploads.maxBytes` (5242880, 5 MiB): the largest accepted upload body. Env var: `NODE_MAX_UPLOAD_BYTES`.
 
 ## Relationships
-
-- **shared/contracts/openapi.root.yaml** – The OpenAPI contract documents these same limits (upload size, pagination default, image dimension caps) as request/response constraints. Changing a value here is expected to keep the generated defaults and the published spec in agreement.
+- `shared/rules/images.yaml` is a sibling rules file. The `images.*` defaults here are image-related numbers, and the graph links the two files. This file does not show how they interact, so check `images.yaml` for that.
 
 ## Notes
-
-- **Not read at boot.** The YAML is consumed only by the codegen step; the runtime reads `defaults.generated.ts`. Editing this file has no effect until `npm run regenerate` is run.
-- The numbers represent "unset-variable" fallbacks, not hard ceilings in the code. Any env var listed in the inline comments takes precedence at runtime.
-- Byte values are written as raw integers (e.g. `262144` for 256 KiB, `5242880` for 5 MiB) rather than human-readable strings, so the generated TypeScript can use them directly as numeric comparisons.
+- The file is not read at boot. Per its header comment, `npm run regenerate` generates a TypeScript defaults file from it, so edits take effect only after regeneration.
+- The comments in the file document each value's environment variable, so keep them accurate when adding or renaming settings.

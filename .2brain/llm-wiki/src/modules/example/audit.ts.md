@@ -1,28 +1,24 @@
 ---
 source: src/modules/example/audit.ts
-sha256: 4621e89ab73ab3ade54bd9e3eded8cfdebc48fb48345b46fdb1e288e26379f55
-generated_at: 2026-11-08T05:47:57.207046+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:06:36.014935+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/audit.ts
 
 ## Purpose
-
-Declares the set of audit actions the example module can emit (create, update, status change, delete, cover change) and registers them into the app-wide `AuditActionMap` union via TypeScript module augmentation. The concrete values are generated from `rules.yaml` into `rules.generated`; this file's role is purely to widen the shared type so downstream consumers see this module's actions as a valid discriminant.
+Declares the audit actions emitted by the `example` module. It re-exports the generated action vocabulary and augments the app-wide `AuditActionMap` type, so the global audit action union grows only when this module is enabled. The actions cover create, update, status change, delete and cover change of an example, and are listed in `rules.yaml`.
 
 ## Key elements
-
-- **`exampleAuditActions`** (re-export from `./rules.generated`) — A const object whose keys are the audit action names for this module and whose values are the corresponding literal types. Sourced from `rules.yaml` at codegen time.
-- **`declare module '@infrastructure/observability/audit'`** — Augments the global `AuditActionMap` interface so that `example` is a recognized action-family key. No runtime code is emitted; this is a type-level registration only.
+- `exampleAuditActions`: re-exported from `./rules.generated`. This is the action vocabulary generated from `rules.yaml`.
+- `declare module '@infrastructure/observability/audit'`: a module augmentation that adds an `example` key to `AuditActionMap`. Its value type is the union of the values of `exampleAuditActions`.
 
 ## Relationships
-
-- **`services/crud.ts`**, **`services/cover.ts`**, **`services/transition.ts`** — The runtime services that *emit* audit events tagged with the actions declared here (create/update/delete → crud, cover change → cover, status change → transition). This file supplies the type vocabulary they reference when logging.
-- **`tests/integration/capabilities.test.ts`**, **`tests/integration/service.test.ts`** — Integration tests that exercise those services and therefore assert against the audit actions defined in this file.
+- The file's doc comment says the actions are for create, update, status change, delete and cover change. These match the neighbors `src/modules/example/services/crud.ts`, `src/modules/example/services/transition.ts` and `src/modules/example/services/cover.ts`, which are the likely emitters. This is inferred from the names, since the file has no runtime imports of them.
+- `src/modules/example/tests/integration/service.test.ts` and `src/modules/example/tests/integration/capabilities.test.ts` are related through the dependency graph. The file does not show how they use it.
+- Outside the neighbor list, the file imports the generated `./rules.generated` and augments `@infrastructure/observability/audit`.
 
 ## Notes
-
-- The file is **type-only** in effect: the sole runtime artifact is the re-export of a generated const. No logic lives here.
-- Adding a new auditable action requires editing `rules.yaml` and regenerating `rules.generated`; the augmentation line does not need manual updates because it references `keyof typeof exampleAuditActions`.
-- The JSDoc points to `docs/tools/winston.md` for the broader audit-logging pipeline and to `modules/account/audit.ts` as a reference for the same augmentation pattern in another module.
+- It holds no runtime logic. The only runtime effect is the re-export, and the augmentation exists purely at the type level.
+- Edit `rules.yaml` to change the actions rather than this file, because the vocabulary is generated.
+- The doc comment points to `src/modules/account/audit.ts` for why augmentation is used, and to an audit-events section of a docs page on winston logging.

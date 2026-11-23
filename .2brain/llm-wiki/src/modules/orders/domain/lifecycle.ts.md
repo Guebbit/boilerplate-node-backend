@@ -1,54 +1,51 @@
 ---
 source: src/modules/orders/domain/lifecycle.ts
-sha256: c762e93fd2470ef08b5eee7262ac741eb7fa75d9a82a22a48863513132842227
-generated_at: 2026-11-14T20:35:07.555166+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 631669daed02d5727646e39e1a1df33c94a45888d7671b4ddef4ec7c23470484
+context_sha256: eebf9a47904ea86e251b2a72adfe187b3865be4e8046babe84ec4d32afdee14d
+generated_at: 2026-11-22T06:12:12.546681+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/domain/lifecycle.ts
 
 ## Purpose
-Single source of truth for the order status lifecycle: which status may follow which, and which actor (`customer`, `admin`, `system`, `withdrawal`) is permitted to make each move. The status *set* comes from the `OrderStatus` enum; this file adds the directed edges and actor restrictions. Services name an event to read the `from`/`to`/`actors` triple rather than hard-coding status comparisons.
+Defines the order lifecycle: which status may follow which, and which actor may make each move. The status set itself comes from the contract (`OrderStatus`); this file adds the edges and the actors on each edge, so the two live in one entry. It only decides which `from` set a conditional write (`updateStatusIfIn` in the orders repository) is handed; the race between writers is settled by that write.
 
 ## Key elements
-- **`OrderActor`** — Union type: `'customer' | 'admin' | 'system' | 'withdrawal'`. `system` means "nobody may make this by hand"; `withdrawal` is the consumer's statutory right (Directive Art. 9).
-- **`OrderEvent`** — Interface describing one named move: `from` (statuses it may start from), `to` (destination), `actors` (who may make it).
-- **`ORDER_EVENTS`** — Const map of all lifecycle edges keyed by event name (`pay`, `process`, `ship`, `reopen`, `reship`, `deliver`, `fulfillmentComplete`, `expire`, `cancel`, `cancelInFulfillment`). Satisfies `Record<string, OrderEvent>`.
-- **`UNDELIVERABLE_EVENT`** — The `processing → canceled` edge for a lost parcel nobody reshipped. Deliberately excluded from `ORDER_EVENTS` to avoid polluting the `statusesLeadingTo` query used by `cancel()`.
-- **`OrderEventName`** — `keyof typeof ORDER_EVENTS`; the set of valid event names.
-- **`canTransition(from, to, actor)`** — Returns whether the actor may make the move. Stays in the same status is never a transition.
-- **`isPayable(status)`** — Whether the order can still be paid (`pending` only).
-- **`canProcessOrder(status)`** — Whether fulfillment may start (`paid` only). Keyed on the `process` event's own `from` set so pre-check and conditional write never disagree.
-- **`isAwaitingGoods(status)`** — Whether goods are still to be handed over (`paid` or `processing`). Uses `ORDER_STATUS_TRAITS`.
-- **`canShip(status)`** — Whether shipping or digital completion is open (`processing` only).
-- **`canRecordArrival(status)`** — Whether a shipment's arrival can be recorded (`processing` or `shipped`).
-- **`hasShopStarted(status)`** — Whether the order is past `paid` (anything past the first fulfillment move, including `canceled`).
-- **`paymentSettled(status)`** — Whether the order's hold should be `committed` or later. Delegates to `ORDER_STATUS_TRAITS`.
-- **`canOverrideTo(from, to, digitalOnly?)`** — Forward-only admin override rule using its own `OVERRIDABLE_SEQUENCE` array (`paid → processing → shipped → delivered`). Deliberately separate from `canTransition` so an override can skip a `from` gate.
-- **`defineLifecycle`** (imported) — Validates the table at load time and exposes the `canTransition` query.
+- **`OrderActor`**: `'customer' | 'admin' | 'system' | 'withdrawal'`. `system` is narrower than `admin` (moves nobody makes by hand). `withdrawal` is the consumer's right of withdrawal, wider than a customer cancel because it also reaches `processing`.
+- **`OrderEvent`**: an edge shape with `from` (also the conditional write's `from` set), `to`, and `actors`.
+- **`ORDER_EVENTS`**: the table of named events:
+  - `system`-only: `pay` (pending→paid), `process` (paid→processing), `ship` (processing→shipped), `reopen` (shipped→processing), `reship` (delivered→processing), `deliver` (shipped→delivered), `fulfillmentComplete` (processing→delivered), `expire` (pending→canceled).
+  - `cancel` (pending/paid→canceled): customer, admin, withdrawal.
+  - `cancelInFulfillment` (processing→canceled): admin, withdrawal.
+- **`UNDELIVERABLE_EVENT`**: the `processing→canceled` edge for a lost parcel nobody reshipped. It has no actors and is deliberately kept out of `ORDER_EVENTS`.
+- **`OrderEventName`**: the key type of `ORDER_EVENTS`.
+- **`canTransition(from, to, actor)`**: whether a declared edge allows that actor. It delegates to a `defineLifecycle` instance, and staying in the same status is never a transition.
+- **Status predicates**:
+  - `isPayable`: true when `system` may move the status to `paid` (so `pending` only).
+  - `canProcessOrder`: checks the `process` event's `from` (`paid`).
+  - `isAwaitingGoods`: reads `ORDER_STATUS_TRAITS` (`stockCommitted && beforeDispatch`, so `paid`/`processing`).
+  - `canShip`: checks the `ship` event's `from` (`processing`).
+  - `canRecordArrival`: true for `processing` or `shipped`.
+  - `hasShopStarted`: not payable and not processable, so it includes `canceled`.
+  - `paymentSettled`: reads `stockCommitted` from the traits.
+- **`canOverrideTo(from, to, digitalOnly?)`**: a separate forward-only rule for admin overrides. It follows the sequence `paid → processing → shipped → delivered` and only lands on `processing`, `shipped` or `delivered`. With `digitalOnly`, `shipped` is never a target.
+- A helper that lists the statuses an override from `from` could land on follows `canOverrideTo`. The visible content cuts off before it.
 
 ## Relationships
-- **`src/domain-primitives/lifecycle.ts`** — Provides `defineLifecycle`, which this file calls to validate the event table and expose the `canTransition` predicate.
-- **`src/modules/orders/domain/status-traits.ts`** — Exports `ORDER_STATUS_TRAITS`; consumed by `isAwaitingGoods` and `paymentSettled` for `stockCommitted` / `beforeDispatch` flags.
-- **`src/modules/orders/domain/index.ts`** — Barrel re-export for the `orders/domain` module.
-- **`src/modules/orders/services/cancel.ts`** — Reads the `cancel` / `cancelInFulfillment` events and the `from` sets to build conditional writes.
-- **`src/modules/orders/services/fulfillment.ts`** — Uses `fulfillmentComplete` and `canShip` to guard digital completion and remainder-cancel flows.
-- **`src/modules/orders/services/actions.ts`** — Calls `canTransition` and `canOverrideTo` for actor-authorization and admin-override checks.
-- **`src/modules/delivery/services/process.ts`** — Records the `process` move (`paid → processing`) via `markProcessing`, gated by `canProcessOrder`.
-- **`src/modules/delivery/services/ship-gate.ts`** — Guards shipment creation behind `canShip`.
-- **`src/modules/delivery/services/deliver.ts`** — Records the `deliver` move (`shipped → delivered`).
-- **`src/modules/delivery/services/lost.ts`** — Uses `UNDELIVERABLE_EVENT` for `markUndeliverable` and the `reopen` event for a reshipped parcel.
-- **`src/modules/delivery/services/holds.ts`** — Checks `isAwaitingGoods` to decide whether a hold applies.
-- **`src/modules/delivery/services/ensure.ts`** — Pre-checks before recording delivery progress; reads `canRecordArrival`.
-- **`src/modules/delivery/services/progress.ts`** — Tracks per-shipment progress; relies on `canShip` / `canRecordArrival`.
-- **`src/modules/delivery/services/actions.ts`** — Higher-level delivery actions that compose the above service calls.
-- **`src/modules/orders/domain/fulfillment.ts`** — Domain logic for fulfillment lines; interacts with `canShip` and `fulfillmentComplete`.
+- **`@domain-primitives/lifecycle`** (`src/domain-primitives/lifecycle.ts`): supplies `defineLifecycle`, which validates the table at load and produces the edge queries.
+- **`./status-traits`** (`src/modules/orders/domain/status-traits.ts`): `ORDER_STATUS_TRAITS` backs `isAwaitingGoods` and `paymentSettled`.
+- **`@types`**: provides `OrderStatus` and `OrderActions`.
+- **Consumers** (graph neighbors that depend on this file, not shown in its content): the delivery services (`actions`, `deliver`, `ensure`, `holds`, `lost`, `process`, `progress`, `ship-gate`) and the order services (`actions`, `cancel`, `fulfillment`), plus `src/modules/orders/domain/fulfillment.ts` and `src/modules/orders/domain/index.ts`. The file's own comments confirm these links:
+  - `markProcessing` and `markUndeliverable` use the `process` and undeliverable `from` sets.
+  - `cancel()` reads `statusesLeadingTo(canceled, 'system')`.
+  - `payments` is the only caller of `pay`.
+  - `delivery` records the `ship`, `deliver` and start events.
 
 ## Notes
-- **`system` ≠ "higher authority".** It means "nobody may trigger this from a request; it follows a fact another module already recorded." All forward business moves (`pay`, `process`, `ship`, `deliver`, `reopen`, `reship`, `fulfillmentComplete`, `expire`) are `system`-only.
-- **Backward moves (`reopen`, `reship`) are `system`-only** so an admin override can never walk an order backward; `canOverrideTo` is forward-only by construction.
-- **`UNDELIVERABLE_EVENT` is intentionally outside `ORDER_EVENTS`.** Including it would make `statusesLeadingTo(canceled, 'system')` match `processing`, causing the generic `cancel()` service to start matching in-fulfillment orders.
-- **`canProcessOrder` / `canShip` read the event's `from` array directly**, not `canTransition`, so the pre-check and the conditional write (`updateStatusIfIn`) in the repository are guaranteed to use the same `from` set.
-- **`canOverrideTo` is a separate rule**, not a widened `canTransition`. It exists to *skip* a `from` gate; reusing the lifecycle table would defeat the override.
-- **`digitalOnly` flag** in `canOverrideTo`: a fully-digital order goes `processing → delivered` with no `shipped` intermediate, so `shipped` is excluded as a valid override target.
-- The file references `docs/theory/tactical-ddd.md` §1 for the design rationale.
+- Each event keeps its `from`, `to` and actors on one entry, so a service names the event and never guesses a `from`.
+- `UNDELIVERABLE_EVENT` is deliberately outside `ORDER_EVENTS`. Giving that edge a `system` actor would make `statusesLeadingTo(canceled, 'system')` include `processing`, and the system cancels would then match orders in fulfillment.
+- `expire` is separate from `cancel` so the reservation sweep never cancels an order that landed a payment in the same race.
+- `reopen` and `reship` are the only backward moves, and both are `system`-only. `canOverrideTo` is forward-only, and is deliberately not built on `canTransition`, because an override exists to skip the `from` gate the normal lifecycle enforces.
+- `canProcessOrder` and `canShip` read the event's `from` directly instead of calling `canTransition`, so a pre-check and the conditional write cannot disagree.
+- An admin override never lands on `paid` or `canceled`. Cancel has its own endpoint, and leaving `pending` goes only through the offline-payment door.

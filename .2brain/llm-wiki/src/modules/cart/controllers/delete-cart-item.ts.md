@@ -1,32 +1,32 @@
 ---
 source: src/modules/cart/controllers/delete-cart-item.ts
-sha256: 7b4a52b0158beb77d8e551981ad2680b245946595bf6b40e3b1e00b44965f649
-generated_at: 2026-11-08T05:11:18.870220+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T04:30:19.227298+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/controllers/delete-cart-item.ts
 
 ## Purpose
-
-Thin HTTP adapter that handles `DELETE /cart/items/:productId`. It extracts and validates the product ID from the URL, delegates the actual removal to `cartService.removeItemById`, and shapes the HTTP response (success or error). Exists so the service layer stays transport-agnostic.
+Controller for `DELETE /cart/items/:productId`. It is a thin HTTP adapter over `cartService.removeItemById`. It removes one product from the authenticated user's cart and returns the updated cart.
 
 ## Key elements
-
-- **`deleteCartItem(request, response)`** (named export) — the sole handler. Reads `userId` from `request.authContext`, validates `productId` via `requireId`, calls `cartService.removeItemById(userId, productId, callerContextOf(request))`, then responds with the updated `CartResponse` (200) or an error.
+- `deleteCartItem(request, response)`: the exported Express handler.
+  - Reads the user id from `request.authContext!.id`. The non-null assertion assumes auth middleware has already run.
+  - Validates the `productId` path param with `requireId`. If the param is invalid, `requireId` has already answered the request, so the handler returns early.
+  - Calls `cartService.removeItemById(userId, productId, callerContextOf(request))`.
+  - If `refused(response, result)` reports that the service refused the request, it stops. Otherwise it sends `successResponse<CartResponse>(response, result.data, 200)`.
+  - Rejections are handled by `.catch(catchAs(response, 'deleteCartItem'))`.
 
 ## Relationships
-
-- **`src/modules/cart/routes.ts`** — registers `deleteCartItem` as the handler for the `DELETE /cart/items/:productId` route.
-- **`src/modules/cart/services/index.ts`** — provides `cartService.removeItemById`, the business-logic call this controller delegates to.
-- **`src/infrastructure/http/ids.ts`** — `requireId` validates the `productId` path segment; on failure it writes a 404 and short-circuits the handler.
-- **`src/infrastructure/http/request.ts`** — `callerContextOf` extracts caller metadata from the request to pass into the service.
-- **`src/infrastructure/http/response.ts`** — `successResponse` serializes the `CartResponse` payload.
-- **`src/infrastructure/http/controller.ts`** — `refused` inspects a rejected service result and writes the appropriate error status; `catchAs` wraps unexpected exceptions into a uniform error response.
-- **`src/types/index.ts`** — supplies the `CartResponse` type for the success payload.
+- `src/modules/cart/services/index.ts` (`cartService`): provides `removeItemById`. Per the file's doc comment, the service returns a 404 if the item is not in the cart.
+- `src/infrastructure/http/ids.ts` (`requireId`): validates the path segment. It is configured with `notFound: 'cart.item-not-found'`, `name: 'productId'` and `surface: 'path'`.
+- `src/infrastructure/http/request.ts` (`callerContextOf`): builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts` (`successResponse`): formats the 200 response.
+- `src/infrastructure/http/controller.ts` (`refused`, `catchAs`): handle service refusals and thrown errors.
+- `src/types/index.ts` (`CartResponse`): the response payload type.
+- `src/modules/cart/routes.ts`: presumably where this handler is mounted. That file is not shown here.
 
 ## Notes
-
-- A malformed or missing `productId` path segment produces the **same** 404 body (`cart.item-not-found`) as a product that simply isn't in the cart. This is intentional to avoid leaking whether a given product ID exists in the catalog.
-- `request.authContext!` uses a non-null assertion — the route is expected to sit behind an auth middleware that populates it; there is no fallback if it is absent.
-- The function returns a Promise chain (`.then/.catch`) rather than using `async/await`; this matches the project's controller convention (see `catchAs`).
+- A malformed `productId` returns the same 404 message key (`cart.item-not-found`) as a product that is not in the cart. The two cases are indistinguishable to the client.
+- The path segment is the only source of `productId`.
+- The handler returns early without a value on the validation and refusal paths. This relies on the helpers having already written the response.

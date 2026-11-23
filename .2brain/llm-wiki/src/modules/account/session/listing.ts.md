@@ -1,39 +1,44 @@
 ---
 source: src/modules/account/session/listing.ts
-sha256: 746bd599e676b8c57a87512c804127722b826baee5f2ea562a7014a077f97524
-generated_at: 2026-11-14T18:58:09.529954+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1f76256d47f5563e41880fda2d23a9a91ef2126e2445ebbbf99f73aa7bb33874
+context_sha256: 8dce6442c328cf25a6c7bedee7e8f1ecb0d3203b59686f52ba4ee995a176cc50
+generated_at: 2026-11-22T03:47:59.396091+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/session/listing.ts
 
 ## Purpose
-
-Lists an account's live sessions for one session mode, returning them as the wire `Session` array. It deduplicates JWT refresh families, filters out rows that are effectively dead (pre-epoch, idled, past staff cap), and marks the caller's own session as `current`.
+Builds the account's live sessions as the wire's `Session` list. It is shared by both session modes (`SessionMode`), which differ only in which rows belong to them and how a request identifies its own session.
 
 ## Key elements
-
-- **`newestPerFamily(rows)`** — Reduces a list of `SessionRow`s to one row per `familyId`, keeping the row with the largest `_id` (time-ordered). Preserves input order.
-- **`listSessions(mode, userId, credential)`** — Main entry point. Fetches live rows, the user record, and the caller's roles in parallel; filters; deduplicates; and maps each surviving row through `presentSession`. Returns `Promise<Session[]>`.
-- **`endsAt(row, roles)`** *(module-private)* — Computes the effective session end time as the earlier of the row's `expiresAt` and the staff lifetime cap (when applicable).
+- **`listSessions(mode, userId, credential)`**: Returns `Promise<Session[]>` of the caller's live sessions for one mode, newest sign-in first.
+  - Loads live rows, the authenticatable user and the caller's deployment-tenant roles in parallel.
+  - Drops rows that no longer count as sessions (see Notes).
+  - Marks `current` by hashing `credential` and matching it against `tokenHash`.
+  - Collapses rows to one per family and maps each through `presentSession`.
+- **`newestPerFamily(rows)`**: Exported. Keeps one row per `familyId` and preserves input order. The row with the larger `_id` wins, since `_id` is time-ordered.
+- **`endsAt(row, roles)`** (private): The earlier of the row's `expiresAt` and the staff lifetime cap (`staffCapEndsAt`), if one applies.
 
 ## Relationships
-
-- **`src/infrastructure/security/hash-token.ts`** — `hashToken` hashes the caller's credential so it can be compared against stored token hashes to determine which family is `current`.
-- **`src/kernel/access/tenant.ts`** — Supplies `DEPLOYMENT_TENANT_ID` for the roles lookup.
-- **`src/modules/access/index.ts`** — Provides `accessService`, used to obtain the caller's roles.
-- **`src/modules/account/domain/epoch.ts`** — `predatesSessionEpoch` filters out rows stamped before a ban/epoch reset (`tokensValidAfter`).
-- **`src/modules/account/presenter.ts`** — `presentSession` shapes a `SessionRow` into the wire `Session`.
-- **`src/modules/account/repository.ts`** — Provides `sessionRepository` (the data source for live session rows) and the `SessionRow` type.
-- **`src/modules/account/session-mode.ts`** — `SessionMode` type parameterises which rows belong to the caller.
-- **`src/modules/account/session/idle.ts`** — `hasIdledOut`, `hasOutlivedStaffCap`, and `staffCapEndsAt` drive the dead-row filter and the `endsAt` calculation.
-- **`src/modules/users/friends/account.ts`** — Provides `accountUserService`, used to fetch the user record (needed for `tokensValidAfter`).
-- **`src/types/auth-context.ts`** — `AuthContext` and `Session` types used in signatures and return values.
-- **`src/modules/account/tests/unit/session-listing.test.ts`** — Unit tests for this module.
+- **`../repository`**: supplies the live rows via its `sessionRepository` and defines the `SessionRow` type.
+- **`@modules/users/friends/account`**: supplies the authenticatable user, whose `tokensValidAfter` is used for the epoch check.
+- **`@modules/access`** (and its `services`): supplies the caller's roles for the deployment tenant. The tenant id comes from `@kernel/access/tenant`.
+- **`../domain/epoch`**: `predatesSessionEpoch` checks a row's `authTime` against the user's epoch.
+- **`./idle`**: `hasIdledOut`, `hasOutlivedStaffCap` and `staffCapEndsAt` apply the staff idle and lifetime limits.
+- **`@infrastructure/security/hash-token`**: `hashToken` digests the caller's credential for comparison.
+- **`../presenter`**: `presentSession` shapes each row into the wire `Session`.
+- **`../session-mode`**: provides the `SessionMode` type.
+- **`@types`**: provides `AuthContext` (for `roles`) and `Session`.
+- **`src/modules/account/tests/unit/session-listing.test.ts`**: the unit test for this file.
 
 ## Notes
-
-- **`_id` as a timestamp proxy.** `newestPerFamily` uses string comparison on `_id` to pick the "newest" row in a family. This relies on `_id` being time-ordered (e.g. a `Date.now()`-based id). It is not a general sort.
-- **Lazy expiry.** Idled or staff-capped sessions are not deleted server-side; they are filtered out at read time in `listSessions`. A session only "ends" when someone next presents it, so the list filter is the only gate.
-- **`current` is best-effort.** If the caller has no credential (API key, bare access token), `digest` is `undefined` and every row is honestly reported as `current: false`.
-- **JWT grace-window duplicates.** A single JWT sign-in can produce two live rows (original + refresh successor) within the grace window. `newestPerFamily` collapses them so the UI shows one entry per sign-in.
+- A `jwt` family can hold two live rows at once, because two refreshes inside the grace window each mint a successor. `newestPerFamily` stops one sign-in from being listed twice under one id.
+- Rows are excluded if any of these holds:
+  - The user's session epoch (`tokensValidAfter`) is later than the row's `authTime`. A ban moves the epoch without deleting rows. Rows with no `authTime` are never excluded on this basis.
+  - The staff idle limit has been exceeded. Idle time is measured from `lastUsedAt`, falling back to `startedAt`.
+  - The staff lifetime cap has been exceeded.
+- Idle and cap expiry are otherwise only enforced when someone presents the session, so without this filter such rows would still be listed.
+- A caller with no credential (for example an API key or a bare access token) gets every row with `current: false`.
+- `current` is computed on the filtered rows before family collapsing. A match on any row in a family marks the whole family as current.
+- The endpoint only lists the authenticated caller's own sessions, and rows of the other mode are never shown.

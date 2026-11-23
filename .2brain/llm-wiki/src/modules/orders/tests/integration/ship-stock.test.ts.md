@@ -1,41 +1,45 @@
 ---
 source: src/modules/orders/tests/integration/ship-stock.test.ts
-sha256: 4f0d46ec63bc1ade221f6d345540bd8f6e45b1944c1782bc3899f91ee4afedcc
-generated_at: 2026-11-08T07:10:38.145538+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d2df1be73adc348721e2c293bd2a0550b78cb33128de164d84af6ae4eef65059
+context_sha256: 16c5c25486569c0eef073dc4e7ad310bebe80c5073738442b257c88bd8aee1ce
+generated_at: 2026-11-22T06:34:03.268410+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/ship-stock.test.ts
 
 ## Purpose
-
-Integration tests verifying that stock leaves the shelf (`onHand`) when a shipment is dispatched via `shipStock`, that subsequent status moves (`shipped`, `delivered`) take nothing further, and that an admin override past dispatch takes only the unshipped remainder. Runs against a real MongoDB instance with no service mocking.
+Integration tests, run against a real Mongo database, for when stock actually leaves the shelf. They check that a shipment (`shipStock`) takes its own units off `onHand` in its own transaction, that status moves (`markShipped`, `markDelivered`) only report the fact and take nothing, and that the admin override is the one status move that dispatches stock itself, taking whatever has not yet left.
 
 ## Key elements
-
-- **`paidOrderHolding(status, digital?)`** – Fixture helper: creates a product (10 on hand), seeds an order at the given status, reserves 3 units, and commits the hold. Returns `{ orderId, productId }`.
-- **`stillClaimed(orderId)`** – Convenience assertion helper wrapping `inventoryService.isStockBoundToOrder`.
-- **`shipRows(productId)`** – Counts `ship`-reason movement rows in the inventory ledger for a product.
-- **`describe('paying and processing')`** – Asserts that moving an order to `processing` via `overrideStatus` leaves stock counters and the claim untouched.
-- **`describe('shipStock')`** – Three cases: partial ship (1 of 3), full ship (ends the hold, then `markShipped`/`markDelivered` take nothing), and rollback safety (thrown error inside `withTransaction` leaves counters unchanged).
-- **`describe('the admin override')`** – Three cases: override directly to `shipped`/`delivered` from `paid`; override `shipped→delivered` does not double-take; override after a partial `shipStock` takes only the remainder (produces a second ledger row).
+- `setupTestDb()` and `afterEach(jest.restoreAllMocks)` set up the DB and mock cleanup.
+- `paidOrderHolding(status, digital?)` is a helper. It creates a product with `onHand: 10` and seeds an order in the given status, either digital-only or regular. It then reserves 3 units and commits them, which is the starting state for every dispatch. It returns `{ orderId, productId }`.
+- `stillClaimed(orderId)` wraps `inventoryService.isStockBoundToOrder`. It is true while the hold is held or committed, and false after it ships or is released.
+- `shipRows(productId)` counts the `StockMovementReason.ship` ledger rows for a product via `inventoryService.listMovements`.
+- `describe('paying and processing')`: an admin override to `processing` leaves the counters at `{ onHand: 10, reserved: 3, available: 7 }` and the order still claimed.
+- `describe('shipStock')` has three cases:
+  - A partial shipment of 1 unit gives `{ 9, 2, 7 }`, keeps the hold, and writes 1 ship row.
+  - Shipping all 3 units ends the hold. A following `markShipped` and `markDelivered` take nothing more, leaving `{ 7, 0, 7 }` and still 1 ship row.
+  - If the caller's transaction throws after `shipStock`, nothing moves and the hold stays.
+- `describe('the admin override')` has three cases:
+  - An override from paid to `shipped` or `delivered` (via `it.each`) takes all 3 units off the shelf.
+  - Overriding a shipped order (already shipped via `inventoryService.shipForOrder`) to `delivered` does not take the units twice, leaving 1 ship row.
+  - After 1 unit has shipped in a shipment, an override to `shipped` takes only the remaining units, leaving `{ 7, 0, 7 }` and 2 ship rows.
 
 ## Relationships
-
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises the real MongoDB connection for the whole file.
-- **`tests/support/callers.ts`** – `callerContextAs('admin', 'admin-1')` supplies the admin identity required by `overrideStatus`.
-- **`src/modules/orders/tests/factories.ts`** – `seedOrder`, `seedDigitalOrder` create order documents at a given status.
-- **`src/modules/products/tests/factories.ts`** – `createProduct({ onHand })` seeds inventory; `countersOf(productId)` reads back `{ onHand, reserved, available }` for assertions.
-- **`src/modules/inventory/index.ts`** – `inventoryService` provides `reserveForOrder`, `commitForOrder`, `isStockBoundToOrder`, `shipForOrder`, and `listMovements`.
-- **`src/types/index.ts`** – `OrderStatus` and `StockMovementReason` enums used throughout.
-- **`src/infrastructure/runtime/database.ts`** – `withTransaction(session => …)` wraps `shipStock` calls so the test can verify rollback isolation.
-- **`src/modules/orders/services/fulfillment.ts`** – `shipStock` (primary SUT) and `refreshShelf` (post-commit cache bust).
-- **`src/modules/orders/services/status.ts`** – `markShipped`, `markDelivered` exercised to confirm they perform no stock movement.
-- **`src/modules/orders/services/override.ts`** – `overrideStatus` exercised as the admin path that dispatches its own stock take.
+- `tests/support/setup-test-db.ts` supplies `setupTestDb`.
+- `tests/support/callers.ts` supplies `callerContextAs('admin', 'admin-1')` for the override calls.
+- `src/modules/orders/tests/factories.ts` supplies `seedOrder` and `seedDigitalOrder`.
+- `src/modules/products/tests/factories.ts` supplies `createProduct` and `countersOf`.
+- `src/modules/inventory/index.ts` supplies `inventoryService`, used for `reserveForOrder`, `commitForOrder`, `shipForOrder`, `isStockBoundToOrder` and `listMovements`.
+- `src/modules/orders/services/fulfillment.ts` supplies `shipStock` and `refreshShelf`.
+- `src/modules/orders/services/status.ts` supplies `markShipped` and `markDelivered`.
+- `src/modules/orders/services/override.ts` supplies `overrideStatus`.
+- `src/infrastructure/runtime/database.ts` supplies `withTransaction`, which wraps `shipStock` calls.
+- `src/types/index.ts` supplies `OrderStatus` and `StockMovementReason`.
+- `src/modules/inventory/services/index.ts` is a neighbor, but the file does not import it directly. It reaches inventory through `@modules/inventory`.
 
 ## Notes
-
-- Despite `jest.restoreAllMocks()` in `afterEach`, no mocks are actually set up in these tests; the call is likely a defensive convention carried from other test files.
-- `refreshShelf` is invoked **after** the transaction commits because the catalogue cache cannot be rolled back with the session.
-- The full-ship test asserts exactly **one** `ship` ledger row even though `markShipped`/`markDelivered` follow, confirming those status moves do not write their own movement.
-- The "no double-take" override test calls `inventoryService.shipForOrder` explicitly before the override, simulating the state where stock was already removed by a prior `shipStock` path.
+- `shipStock` is called with a `session` inside `withTransaction`. A code comment says the availability entry cannot roll back, so the tests call `refreshShelf([productId])` after the commit to delete it.
+- The counters in `countersOf` assertions read as `{ onHand, reserved, available }`.
+- The tests use `jest.restoreAllMocks`, but this file sets up no mocks itself.

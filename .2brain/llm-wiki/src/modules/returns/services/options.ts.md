@@ -1,37 +1,40 @@
 ---
 source: src/modules/returns/services/options.ts
-sha256: 4ab512cc3df8efc47c8d05460be95bbf22bf692fc1a201573e6df82ee7b69beb
-generated_at: 2026-11-08T08:04:33.047493+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8c2114e224662aa305fbc63d73dcd66afdf53da3fe77d3abe96b6533d5ad0549
+context_sha256: 5ad496ddafe36c0c0d875ee4998a8f8bacac2e5a95e08faef331414c5ada73c2
+generated_at: 2026-11-22T07:30:26.259598+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/options.ts
 
 ## Purpose
-
-Computes, in one authoritative pass, what an order can still return and what it can still cancel. By centralising the quantity math, refund calculation, and reason-deadline checks here, no client (or other service) needs to re-derive returnable/cancelable state.
+Computes, in one place, what an order can still send back and what it can still cancel, so clients never re-derive quantities or refunds. It exposes a single read, `getReturnOptions`, which returns the returnable lines, the reasons the caller may name, and the cancelable fulfillment orders with the refund each cancellation would owe.
 
 ## Key elements
-
-- **`getReturnOptions`** (exported) — the sole public entry point. Resolves the order for the caller, then in parallel fetches existing returns, shipped quantities, and fulfillment remainders, and assembles a `ReturnOptions` payload (reasons, exceptions, returnable lines, cancelable lines with exact refund amounts).
-- **`readableOrder`** (internal) — resolves which order the caller may inspect: staff holding `read:Return` see any order; everyone else is restricted to their own via `ownOrder`.
-- **`offeredReasons`** (internal) — determines which `ReturnReason` values are available to the caller (buyer: only open-deadline reasons; staff with `update:Return`: all reasons, plus a list of past-deadline non-withdrawal reasons as `exceptions`).
-- **`optionLines`** (internal) — converts a product→quantity map into display lines, attaching the frozen product title and a `withdrawable` flag.
-- **`OfferedReasons`** (internal interface) — shapes the result of `offeredReasons` (`reasons`, `exceptions`, `staff`).
+- **`getReturnOptions(orderId, authContext)`**: the only export. It returns `ResponseSuccess<ReturnOptions>` or a 404 reject (`returns.order-not-found`) when the caller cannot read the order. It loads the order's returns, shipped quantities and cancellable remainders, then builds the payload:
+  - `orderId`, `currency`, `reasons`, `exceptions`
+  - `returnable`: empty when there are no reasons. Otherwise it is shipped quantities minus goods already coming back, via `returnableQuantities`.
+  - `cancelable`: one entry per remainder, with `refundAmount`, `shippingRefund` and a `cancel` boolean.
+- **`readableOrder`** (private): staff holding `read:Return` get any order through `orderService.getById`. Everyone else goes through `ownOrder`, so only their own orders.
+- **`offeredReasons`** (private): decides which reasons the caller may name.
+  - **Buyer:** the reasons whose frozen deadline is still open (`reasonsOpenAt`).
+  - **Staff with `update:Return`:** every `ReturnReason`. `exceptions` lists the non-withdrawal reasons already past their deadline, as a preview of what opening them would waive. `staff` is `true`.
+  - **Anyone else:** no reasons.
+- **`optionLines`** (private): turns a product → quantity map into lines. It drops zero quantities, uses the title the order froze for the product, and sets `withdrawable` to false for withdrawal-excluded products.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — wraps all output in `generateSuccess` / `generateReject` envelope.
-- **`src/infrastructure/i18n/index.ts`** — imports `t` for the 404 message.
-- **`src/kernel/ability.ts`** — calls `holds` to check `read:Return` and `update:Return` abilities.
-- **`src/kernel/permissions.ts`** — calls `callerForSubject` to build the ability-check subject.
-- **`src/modules/delivery/index.ts`** — calls `deliveryService.shippedQuantities` and `deliveryService.remainderOptions` to get what has shipped and what remainders exist.
-- **`src/modules/orders/index.ts`** — calls `orderService.getById`, uses `isBuyer` and `isExcludedFromWithdrawal`, and consumes the `OrderDocument` type.
-- **`src/modules/returns/domain/index.ts`** — imports `holdsReturnedGoods`, `isGuaranteeReason`, `isReasonOpen`, `reasonsOpenAt`, `returnableQuantities`, `wireLines`, and the `ProductQuantity` type.
+- **`@modules/orders`**: provides `orderService`, `isBuyer`, `isExcludedFromWithdrawal` and the `OrderDocument` type.
+- **`@modules/delivery`**: `deliveryService` supplies the shipped units and the cancellable remainders per fulfillment order (`remainderOptions`).
+- **`@kernel/permissions` and `@kernel/ability`**: `callerForSubject` and `holds` check `read:Return` and `update:Return`.
+- **`@infrastructure/http/response`**: `generateSuccess` and `generateReject` build the result.
+- **`@infrastructure/i18n`**: `t` localises the 404 message.
+- **`../domain` (returns domain)**: provides `holdsReturnedGoods`, `wireLines`, `returnableQuantities`, `isGuaranteeReason`, `isReasonOpen`, `reasonsOpenAt` and `ProductQuantity`.
+- **Sibling services**: `cancellationRefundOn` (refund amounts), `frozenDeadlinesOf` (deadlines), `cancelRefusalOf` (cancel permission), `ownOrder` (ownership).
+- **`../repository`**: the order's existing returns are read from `returnRepository`.
 
 ## Notes
-
-- **Excluded-goods gate (Art. 16):** items flagged `isExcludedFromWithdrawal` are hidden from `returnable` unless the caller is staff or at least one open reason is a guarantee reason (defect / wrong item). The `excludedOffered` boolean captures this.
-- **No open reasons → empty returnable:** if `reasons.length === 0`, the returnable array is short-circuited to `[]` without calling `returnableQuantities`.
-- **`cancel` boolean mirrors the door:** the `cancelable[].cancel` flag is computed with the same `cancelRefusalOf` predicate used by the actual cancel endpoint, so the UI never surfaces a button that would be refused server-side.
-- **Staff exceptions are informational only:** they preview which non-withdrawal reasons are past their deadline (and would therefore be waived) without actually opening anything.
+- Excluded goods (Art. 16 withdrawal exclusions) appear in `returnable` only when the caller is staff, or when at least one offered reason is a guarantee reason (`isGuaranteeReason`). A defect or wrong item applies to made-to-order goods too.
+- A buyer with no open reasons gets an empty `returnable`, meaning no form is offered.
+- `cancel` is `true` exactly when `cancelRefusalOf` returns `undefined`. It reuses the rule the cancel endpoint applies, so the UI never offers an action that would be refused.
+- Only returns that pass `holdsReturnedGoods` count against what is returnable.

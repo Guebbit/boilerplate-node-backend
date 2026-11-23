@@ -1,30 +1,25 @@
 ---
 source: src/modules/notifications/tests/factories.ts
-sha256: b4530f7dfec182b070e15eb6035e175176adc60319a8ffd1c7615fff16ebfa61
-generated_at: 2026-11-08T06:34:51.913068+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b4530f7dfec182b070e15eb6035e175176adc60319a8ffd1c7615fff16ebfa61
+context_sha256: 9c174982adf3830e211abc6237638afbcf88b83a772ef3e6add0b9f266d0451f
+generated_at: 2026-11-22T05:57:19.352569+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/tests/factories.ts
 
 ## Purpose
-
-Test-persistence layer for notifications. The in-memory BUILDER (`makeNotification`) lives in `../factories.ts`; this file wraps it with a database write so integration and contract tests can create real documents. It also exposes a simple count helper for assertions that verify *nothing* was written.
+Database-touching test factories for the notifications module. The pure builder (`makeNotification`) lives one level up in `src/modules/notifications/factories.ts`; this file only persists what it returns and offers a count helper for assertions.
 
 ## Key elements
-
-- **`createNotification(overrides: NotificationOverrides): Promise<NotificationDocument>`** — Builds a notification via `makeNotification`, then persists it through `notificationRepository.create`. The `overrides` object carries the owner (`userId`) and any case-specific fields.
-- **`countNotifications(): Promise<number>`** — Runs `notificationModel.countDocuments({})` with no filter; returns the total number of notification rows regardless of owner. Intended as a "nothing was written" guard in tests.
+- `createNotification(overrides)` — builds a notification via `makeNotification(overrides)` and saves it with `notificationRepository.create`, returning a `Promise<NotificationDocument>`. `overrides` must identify the owner (`userId`). Per its doc comment, it persists "past the cap and the live push".
+- `countNotifications()` — returns the total number of notifications in the collection (`notificationModel.countDocuments({})`), regardless of owner. Tests use it to prove that nothing was written.
 
 ## Relationships
-
-- **`src/modules/notifications/factories.ts`** — Provides the pure builder (`makeNotification`) and the `NotificationOverrides` type that this file delegates to before persisting.
-- **`src/modules/notifications/repository.ts`** — Supplies `notificationRepository.create`, the single write path used here.
-- **`src/modules/notifications/model.ts`** — Supplies `notificationModel` (for `countDocuments`) and the `NotificationDocument` return type.
-- **Test consumers** (`tests/integration/service.test.ts`, `tests/integration/staff.test.ts`, `tests/contract/api.contract.test.ts`, `src/modules/shop-tasks/tests/integration/notices.test.ts`, `src/modules/shop-tasks/tests/integration/staff-notices.test.ts`, `tests/contract/ownership-contract.test.ts`, `tests/integration/erasure.test.ts`, `src/modules/account/tests/contract/shop.contract.test.ts`, `src/modules/account/tests/integration/export.test.ts`) — Import `createNotification` / `countNotifications` to seed or assert notification state in cross-module scenarios.
+- Imports `makeNotification` and the `NotificationOverrides` type from `src/modules/notifications/factories.ts` (the builder).
+- Imports `notificationRepository` from `src/modules/notifications/repository.ts` to persist, and `notificationModel` / `NotificationDocument` from `src/modules/notifications/model.ts` to count and type results.
+- Used as a test helper by notifications tests (`src/modules/notifications/tests/contract/api.contract.test.ts`, `src/modules/notifications/tests/integration/service.test.ts`, `src/modules/notifications/tests/integration/staff.test.ts`), by account tests (`shop.contract.test.ts`, `export.test.ts`), by shop-tasks tests (`notices.test.ts`, `staff-notices.test.ts`), and by the cross-module `tests/contract/ownership-contract.test.ts` and `tests/integration/erasure.test.ts`.
 
 ## Notes
-
-- Do **not** import this file for unit tests that don't need a real DB row; use `makeNotification` from `../factories.ts` directly to stay in memory.
-- `countNotifications` is intentionally unscoped (counts *all* documents). Use it only as a zero-check ("no new rows appeared"), not as a per-user assertion.
-- The file is a `@module` (no default export); always named-import the two functions.
+- Keep the builder and persistence separate: put pure construction logic in `src/modules/notifications/factories.ts` and DB-touching code here.
+- `countNotifications` is global, not per user, so it is suited to "nothing was created" assertions rather than per-owner counts.

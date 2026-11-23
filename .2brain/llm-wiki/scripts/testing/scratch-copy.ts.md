@@ -1,31 +1,30 @@
 ---
 source: scripts/testing/scratch-copy.ts
-sha256: 508a0a604ee35fad3f7b8b0177631f67ba0878ab56df697bb7dbc6ee0757bfeb
-generated_at: 2026-11-14T17:43:29.772496+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e7a75687966119d91be94a796a62b6757592ea7130b24e85e777946bfe80cc83
+context_sha256: cea576e315214a36b725bd140f0c3358f784f5c07f3d137d3dd22906d9f13eba
+generated_at: 2026-11-22T02:20:08.636668+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/testing/scratch-copy.ts
 
 ## Purpose
-
-Provides a disposable copy of the repo checkout that the `measure:*` scripts can mutate (strip a shop, scaffold a module) and then run the repo's own checks against. The copy isolates destructive experiments from the real working tree so the measurement reflects the source change, not an environment failure.
+Builds a disposable copy of the checkout that the `measure:*` scripts can freely damage (strip the shop, scaffold a module) before running the repo's own checks against what remains. The measurement concerns the state of the *source* after a change, so dependencies are symlinked rather than reinstalled.
 
 ## Key elements
-
-- **`SKIP_ENTRIES`** – Set of top-level paths (`node_modules`, `.git`, `.claude`, `tmp`) excluded from the `cpSync` copy; they are regenerated or symlinked instead.
-- **`runIn(scratch, command, commandArguments)`** – Runs a command with `cwd` set to the scratch tree via `spawnSync`. Returns a boolean (exit 0 = success). Never throws, because a non-zero exit is typically the measurement result, not a script bug. Uses `gitEnvironment()` from `git-base` to strip `GIT_*` variables.
-- **`assembleScratchCopy(repoRoot, scratch)`** – Wipes and rebuilds the scratch directory: copies the checkout (skipping `SKIP_ENTRIES`), symlinks `node_modules`, injects `"preserveSymlinks": true` into the scratch `tsconfig.json`, then runs `git init` + `git add --all` inside the scratch so downstream tools (e.g. `regenerate`'s module-graph step) can use `git ls-files`. Throws if the git setup fails.
+- `runIn(scratch, command, commandArguments)` — runs a command in the scratch root via `spawnSync` with inherited stdio. Returns `true` only if it exits 0 and never throws, since a failing command is usually the measurement itself. The environment comes from `gitEnvironment()`, which drops every `GIT_*` variable.
+- `assembleScratchCopy(repoRoot, scratch)` — wipes and recreates `scratch`, then:
+  1. Copies `repoRoot` with `cpSync`, skipping the top-level entries `node_modules`, `.git`, `.claude` and `tmp` (`SKIP_ENTRIES`).
+  2. Symlinks the real `node_modules` into the scratch tree.
+  3. Patches the copied `tsconfig.json` to add `"preserveSymlinks": true` after `"strict": true,`.
+  4. Runs `git init --quiet` and `git add --all`. It throws an `Error` if either fails.
 
 ## Relationships
-
-- **`scripts/git-base.ts`** – Imports `gitEnvironment`, which builds an env object with all `GIT_*` variables removed. This prevents `git add --all` in the scratch tree from accidentally hitting the real repo's index when the script runs under a git hook.
-- **`scripts/testing/measure-scaffold.ts`** – Primary consumer. Calls `assembleScratchCopy` to obtain the workspace, makes its scaffold mutation, then invokes `runIn` to execute the repo's own checks (type-check, lint, etc.) and record the result.
-- **`tests/unit/scripts/testing/scratch-copy.test.ts`** – Unit tests exercising `assembleScratchCopy` and `runIn` in isolation.
+- `scripts/git-base.ts` — supplies `gitEnvironment()`, used by `runIn` so git commands in the scratch folder cannot touch the real repository's index when run under a git hook.
+- `scripts/testing/measure-scaffold.ts` — a neighbor in the graph, presumably a consumer of this module's scratch copy.
+- `tests/unit/scripts/testing/scratch-copy.test.ts` — unit tests for this module.
 
 ## Notes
-
-- **Scratch location matters.** `scratch` must live *outside* `repoRoot`; `fs.cpSync` throws if the destination is a subdirectory of the source.
-- **`node_modules` is a symlink, not a copy.** This keeps setup fast and avoids a redundant `npm install`, but it introduces a TypeScript resolution quirk: types reached through the link trigger TS2883 ("an artifact of the measurement, not of the code"). The file patches the scratch `tsconfig.json` to add `"preserveSymlinks": true` to work around this.
-- **`runIn` never throws.** Callers get a `true`/`false` and must decide whether a non-zero exit is an expected measurement or a real error. Do not rely on `try/catch` around it.
-- **Git in scratch is minimal.** Only `init` + `add --all` run; there is no commit, no remote, and no config beyond what `gitEnvironment` supplies.
+- `scratch` must be **outside** `repoRoot`, because `fs.cpSync` refuses a destination inside its own source.
+- `preserveSymlinks` works around TS2883: a symlinked `node_modules` resolves outside the scratch tree, and TypeScript then refuses to name types reached through it. The patch is a plain string replace, so it silently does nothing if `tsconfig.json` has no exact `"strict": true,` text.
+- The scratch copy is made a git repository because `regenerate`'s module-graph step uses `git ls-files` to find which files each module owns.

@@ -1,26 +1,30 @@
 ---
 source: src/modules/notifications/controllers/delete-notifications.ts
-sha256: 5e8aae6bb753e8f27d6327382e806c3cd0d6bc73f6b7192a3028ac177fbfbf41
-generated_at: 2026-11-08T06:30:30.107781+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5e8aae6bb753e8f27d6327382e806c3cd0d6bc73f6b7192a3028ac177fbfbf41
+context_sha256: 42cab71af3da031a017e6dd8346a2adcc38a761b54505a6370a4d8adc1c03f4e
+generated_at: 2026-11-22T05:52:49.136010+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/controllers/delete-notifications.ts
 
 ## Purpose
-Thin HTTP adapter that handles the `DELETE /notifications` endpoint, delegating to `notificationsService.dismissAll` to remove all of the caller's notifications (optionally scoped to a single `audience`). It exists to keep route wiring in `routes.ts` decoupled from the service layer.
+Express controller for `DELETE /notifications`. It is a thin HTTP adapter that deletes (dismisses) all of the caller's notifications, optionally limited to a single `audience`, by delegating to `notificationsService.dismissAll`.
 
 ## Key elements
-- **`deleteNotifications`** (exported function) — Express handler. Parses `request.query` against `DismissAllNotificationsQueryParams`, calls `notificationsService.dismissAll(userId, audience)`, and responds `204 No Content` on success.
+- `deleteNotifications(request, response)` — the exported handler.
+  - Validates `request.query` against `DismissAllNotificationsQueryParams` (from `@api/schemas.zod`) using `parseBody`. If validation fails, it returns without further work. The response for the failure is handled by `parseBody`, which receives `response`.
+  - Calls `notificationsService.dismissAll(request.authContext!.id, parsed.audience)`.
+  - On success, sends an empty response via `noContentResponse(response)`.
+  - On error, `catchAs(response, 'dismissAllNotifications')` handles the failure.
 
 ## Relationships
-- **`src/infrastructure/http/controller.ts`** — Imports `parseBody` (validates query against a Zod schema, short-circuits the handler on failure) and `catchAs` (standardises error serialisation for the `dismissAll` call).
-- **`src/infrastructure/http/response.ts`** — Imports `noContentResponse` to send the `204` response.
-- **`src/modules/notifications/services/index.ts`** — Imports `notificationsService`; the sole business-logic call in this file is `dismissAll`.
-- **`src/modules/notifications/routes.ts`** — The route file that binds `deleteNotifications` to `DELETE /notifications` (this file is the controller target).
+- `src/infrastructure/http/controller.ts` — provides `parseBody` (query validation) and `catchAs` (error-to-response handling, labelled `'dismissAllNotifications'`).
+- `src/infrastructure/http/response.ts` — provides `noContentResponse`, used for the success reply.
+- `src/modules/notifications/services/index.ts` — exports `notificationsService`, whose `dismissAll` does the actual deletion.
+- `src/modules/notifications/routes.ts` — the route layer that wires this handler to `DELETE /notifications`. The file itself doesn't show this wiring.
 
 ## Notes
-- Despite the name `deleteNotifications`, the underlying operation is a *dismiss*, not a hard delete — the service method is `dismissAll`.
-- The function reads `request.query` (not `request.body`) via `parseBody`, so clients must pass `audience` as a query parameter.
-- `request.authContext!.id` is asserted non-null; the route is expected to sit behind an auth middleware that populates `authContext`.
-- The handler is fire-and-forget on the promise chain (`.then` / `.catch`); no `async`/`await` is used, which is the convention for this codebase's controllers.
+- Despite the name `parseBody`, it is used here to validate the **query string**, not the body.
+- The user id comes from `request.authContext!.id`. The non-null assertion assumes authentication middleware has already populated `authContext`.
+- `audience` is optional by the file's description ("or only one `audience`"). Its exact type and allowed values are defined in the schema, not in this file.

@@ -1,36 +1,39 @@
 ---
 source: src/modules/account/openapi.yaml
-sha256: e2e0177075ec00227db501fd8531f734d1b22acfd1b86e8e218c426d47840d01
-generated_at: 2026-11-14T18:39:13.898438+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:33:29.533488+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 module contract for the **account** domain. It declares the module's tags, custom error codes, its slice of the personal-data export payload, and the full request/response schemas for authentication and self-service profile endpoints. It exists as the single source of truth for the account API surface so that clients, bundlers, and code generators can consume it without parsing handler code.
+OpenAPI 3.1 contract fragment for the `account` module. It declares the module's tags, error codes, personal-data export section and the `/account` endpoints (profile read/replace/update/delete, email change, and others past the visible portion). A bundler merges it with the shared root contract and other modules' fragments.
 
 ## Key elements
-
-- **`tags`** — Declares two operation families (`Auth`, `Account`), both marked `x-family: Core`, used by the bundler to group routes.
-- **`x-error-codes`** — Module-local error-code registry (e.g. `EMAIL_ALREADY_CURRENT`, `EMAIL_CHANGE_TOO_SOON`, `SESSION_IDLE`, `TWO_FACTOR_RESEND_TOO_SOON`) with HTTP status and human description. Referenced inline via `x-error-codes` on individual operations.
-- **`x-personal-data`** — Declares the `sessions` array (schema `ExportSession`) that the bundler injects into `AccountExportResponse` for `POST /account/export`. Removing this key removes the section from the export.
-- **`paths./account`** — `GET` (current profile + `abilities` + `activity`), `PUT` (full replace), `PATCH` (merge-patch), `DELETE` (lock + grace-period erase). Marked `x-versioned: [get, put, patch]` so the bundler adds `If-Match`/`412`/`ETag` handling.
-- **`paths./account/email-change`** — `POST` to start a pending email change (requires fresh session, optional `otp`). Marked `x-versioned: [post]`.
-- **Schemas referenced locally** — `ReplaceAccountRequest`, `UpdateAccountRequest`, `AccountDeletion`, `ExportSession`, `RequestEmailChangeRequest`, etc., defined in `#/components/schemas` (truncated in the excerpt but implied by the `$ref`s).
-- **Shared schema/response refs** — `AccountView`, `Account`, `Unauthorized`, `ValidationError`, `TooManyRequests`, `Conflict` are all `$ref`'d from `shared/contracts/openapi.root.yaml`.
+- **`tags`**: `Auth` (sign up, log in, refresh, end session, email recovery/verification) and `Account` (the signed-in user's profile, credentials, two-factor, data export and deletion). Both are in `x-family: Core`.
+- **`x-error-codes`** (top level): module-specific codes with HTTP status and description. These are `EMAIL_ALREADY_CURRENT`, `EMAIL_ALREADY_USED`, `EMAIL_ALREADY_VERIFIED`, `EMAIL_CHANGE_ALREADY_PENDING`, `EMAIL_CHANGE_TOO_SOON`, `EMAIL_VERIFY_RESEND_TOO_SOON`, `SESSION_IDLE` and `TWO_FACTOR_RESEND_TOO_SOON`. The 429 codes carry `details.retryAfter`.
+- **`x-personal-data.sessions`**: this module's section of the `POST /account/export` response. The bundler adds it to `AccountExportResponse`, with items of type `ExportSession`.
+- **`/account`**:
+  - `GET getAccount` returns `AccountView`, which includes `abilities` and `activity`.
+  - `PUT replaceAccount` replaces the whole profile; `analyticsConsent` is required.
+  - `PATCH updateAccount` merges fields (RFC 7396) and accepts `application/merge-patch+json`.
+  - `DELETE requestAccountDelete` returns 202 `AccountDeletion`.
+- **`/account/email-change`**: `POST requestEmailChange` sets `pendingEmail`. It returns the `AccountView` body and documents the 401, 409 and 429 error codes.
+- **Per-operation `x-error-codes`**: maps a status to the codes it can return, for example `'409': [EMAIL_ALREADY_CURRENT, ...]`.
+- **Local schemas** (under `#/components/schemas`): `ReplaceAccountRequest`, `UpdateAccountRequest`, `RequestEmailChangeRequest`, `AccountDeletion`, `ExportSession` and the multipart variants of the profile requests.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — This file `$ref`s shared schemas (`AccountView`, `Account`) and shared responses (`Unauthorized`, `ValidationError`, `TooManyRequests`, `Conflict`) from that root. The account module inherits its base types and standard error envelopes from there.
-- **`src/modules/account/rules.yaml`** — The `abilities` object returned by `GET /account` (and carried on sign-in / token refresh) is the server-side rules packed for client evaluation. `rules.yaml` is the source of those rules; this spec documents their shape via the shared `AccountView` schema.
-- **`src/modules/api-keys/module.ts`** — Listed as a graph neighbor; no direct `$ref` or textual dependency is visible in the truncated content of this file.
+- **`src/modules/access/openapi.yaml`** and **`src/modules/addresses/openapi.yaml`**: sibling module contracts that follow the same fragment pattern. The visible portion shows no direct references to them.
+- **`src/modules/account/asyncapi.internal.yaml`**: the module's internal async contract. The visible portion does not reference it.
 
 ## Notes
-
-- **Bundler directives (`x-versioned`)** — Not standard OpenAPI. The bundler reads these to inject `If-Match`/`ETag`/`412` on the listed verbs and `ETag`+`Content-Location` on POST 2xx. They have no runtime effect outside the bundler.
-- **`x-error-codes` on operations** — Extends the module-level list with per-operation codes (e.g. `REAUTH_REQUIRED` on 401 for destructive actions). Handlers must return these exact codes; the spec is the contract.
-- **`PUT` vs `PATCH` semantics** — PUT clears optional fields it doesn't mention (RFC 9110 §9.3.4) and *requires* `analyticsConsent`. PATCH follows RFC 7396 merge-patch: omitted fields are unchanged, `null` clears. `email` in either body is rejected 422.
-- **`DELETE /account`** — Returns `202`, not `200`. The account is locked immediately and erased after `NODE_ACCOUNT_DELETION_GRACE_DAYS` (capped at one calendar month per GDPR Art. 12(3)). Requires a critically fresh session; 2FA accounts also need an `otp` proof.
-- **Rate-limit annotations** — `429` responses carry `details.retryAfter`; `uploadLimiter` sits in front of PUT/PATCH (see `routes.ts`).
+- **Bundler-driven extensions**:
+  - `x-versioned: [...]` on a path asks the bundler to add `If-Match` and 412 to the listed writes, and `ETag` to the 200s.
+  - On `/account/email-change`, the bundler also adds `Content-Location`.
+  - `x-personal-data` is merged into the export response.
+- **Shared root contract**: the file `$ref`s a shared root contract (`../../../shared/contracts/openapi.root.yaml`) for `AccountView`, `Account` and the `Unauthorized`, `ValidationError`, `TooManyRequests` and `Conflict` responses.
+- **ETag semantics**: the edit part of the `/account` ETag is the stored account's revision, which a role change moves. An older `If-Match` then gets 412. The body part changes on every read because of `lastActiveAt`.
+- **Client-side abilities**: `abilities` in `AccountView` has no authority. The server re-checks every request.
+- **Out-of-scope fields**: role, account state, email and password cannot be changed through PUT or PATCH. An `email` in the body gets 422, and the email goes through `/account/email-change`.
+- **Account deletion**: the account is locked at once and erased after `NODE_ACCOUNT_DELETION_GRACE_DAYS` (30 by default, at most one calendar month). It can be restored until then. The call needs a critically fresh session, and an armed second factor needs an `otp` proof, otherwise `401 REAUTH_REQUIRED`.
+- **Email change**: it needs a fresh session. The old address gets a 7-day undo link.

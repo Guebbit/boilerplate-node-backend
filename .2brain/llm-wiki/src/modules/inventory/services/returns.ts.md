@@ -1,33 +1,31 @@
 ---
 source: src/modules/inventory/services/returns.ts
-sha256: 25cfd745185e11759d9f9f3eaf454adc95acb7b7c6bfea0aa6120c82ef8cbf61
-generated_at: 2026-11-08T06:03:26.757414+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0ce90058189152de6e4017d7758e0a66eed3d8de350703d4444b39cef3e30913
+context_sha256: 5176682522f30c2f83cffa80fa2ca6f8c434f60b84150287248a3782f8d65292
+generated_at: 2026-11-22T05:23:29.847974+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/services/returns.ts
 
 ## Purpose
-
-Provides a single entry point for restocking goods that a customer returned and staff received. It creates `restock` ledger movements for each line and immediately re-allocates the returned units to waiting backorders, all within the caller's Mongoose transaction so the operation is atomic.
+Puts returned goods (units a customer sent back and staff received) back into stock, inside a transaction owned by the caller. It writes one `restock` ledger movement per line, then runs backorder allocation so waiting buyers are served from the newly sellable units.
 
 ## Key elements
+- `restockReturnedLines(lines, context, session)` — the only export. It takes the following arguments:
+  - `lines`: `{ productId, quantity }[]`, the goods that came back.
+  - `context`: `reference` names the order and `note` names the return.
+  - `session`: the caller's mongoose `ClientSession`.
 
-- **`restockReturnedLines(lines, context, session)`** — the sole export. Takes an array of `{ productId, quantity }` lines, a `{ reference, note }` context (order id and return name), and the caller's `ClientSession`. Returns `Promise<void>`. Internally it:
-  1. Calls `applyToEveryLine` with `StockMovementReason.restock` to write one movement per line.
-  2. Chains `allocateWithin` over the distinct product IDs so the restocked units are immediately offered to backorders.
-- **At-most-once guarantee** — not enforced here; it relies on the caller performing the return's own `approved → received` transition in the same transaction. This file does not check or mutate return state.
+  It returns `Promise<void>`. It first calls `applyToEveryLine` with `StockMovementReason.restock`. It then calls `allocateWithin` with the product IDs of the lines. It throws if any line's counters refuse the restock.
 
 ## Relationships
-
-- **`./transition`** — imports `applyToEveryLine`, which iterates over the lines and applies a stock-movement operation per line within the given session.
-- **`./allocate`** — imports `allocateWithin`, called after restocking to serve backordered customers from the newly available units.
-- **`@types`** — imports the `StockMovementReason` enum (uses `.restock`).
-- **`./index.ts`** — barrel re-export; downstream consumers import `restockReturnedLines` through the services index.
+- `src/modules/inventory/services/transition.ts` — supplies `applyToEveryLine`, which writes the per-line `restock` movements. The `session` parameter's contract is documented by reference to `forgetAvailability` in this module.
+- `src/modules/inventory/services/allocate.ts` — supplies `allocateWithin`, which allocates the restocked products to backorders after the movements are written.
+- `src/types/index.ts` — supplies the `StockMovementReason` enum (`restock` is used here).
+- `src/modules/inventory/services/index.ts` — a graph neighbor of this file; the file content shows no direct interaction with it.
 
 ## Notes
-
-- The function **never throws a domain-specific error**; any failure surfaces as a generic `Error` from the counter logic inside `applyToEveryLine`. The caller is expected to let the transaction roll back.
-- `allocateWithin` is called with **distinct product IDs only** (quantities are dropped). It presumably re-runs its own allocation logic across all backordered lines for those products.
-- The caller is responsible for calling `refreshStockCacheForProducts` (see `./transition`) in the same session; this file does not touch caches.
-- No reservation/hold is created or released here — the original order's hold remains in `shipped` state.
+- It claims no reservation. The order's hold stays `shipped`. At-most-once behavior comes from the return's own `approved → received` transition, so the caller must run that transition and this function in the same transaction.
+- A refused line throws. Atomicity relies on the caller's transaction, because a half-restocked return is considered worse than none.
+- The `backorder_allocated` rows that allocation may write are announced by the caller, in the same session, together with its own nudge. This function does not announce anything itself.

@@ -1,41 +1,43 @@
 ---
 source: docker/deploy.sh
-sha256: 3e954b87470ef8e713e9ece6df60bee8d40c7f7c515d1bec872ef331e2ceb7bc
-generated_at: 2026-11-08T02:20:15.732542+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cec6f198eac5c07b50ef253a0430b9aa4364f40af7571ba54ff84abc63691749
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T01:29:56.445554+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/deploy.sh
 
 ## Purpose
-
-Single-client production deploy script. It brings up (or rolls back) one client's compose stack via podman or docker, verifies the stack is genuinely healthy (setup exited 0, app and cron are running/healthy, `/readyz` responds), and automatically reverts to the previous good image on failure. The client's `deploys.log` is the sole record of what to roll back to.
+Bash script that deploys one client's production compose stack, checks it came up healthy, and automatically reverts to the previous good image if it did not. It supports an explicit rollback mode. Every good state is appended to the client's `deploys.log`, which is the only record of what to go back to. The script's header comment points to `docs/operate/deployment-hardening.md` for the design and runbook.
 
 ## Key elements
-
-- **`compose()`** – Thin wrapper that calls `$ENGINE compose` with the client's `.env` file and the production compose file.
-- **`container_of(service)`** – Resolves a service's container ID via project/service labels.
-- **`state_of(service)`** – Returns `status exit-code restart-count health` for one container (or a "missing" sentinel).
-- **`probe_ready()`** – Hits `/readyz` from inside `app` using `node -e "fetch(...)"` (image has no curl).
-- **`wait_healthy(scope)`** – Polls loop (default 240 s). `full` scope also requires `setup` to have exited 0. Fails fast on crash-loop restarts, exited/dead states, or unhealthy healthchecks.
-- **`record(event)`** – Appends `<UTC timestamp> <event> <APP_IMAGE>` to `clients/<client>/deploys.log`.
-- **`current_good()` / `previous_good()`** – Read the last / second-to-last distinct image from `deploys.log`.
-- **`run_previous(image)`** – `compose up -d --no-build --no-deps app cron` with a given image; deliberately skips `setup` so rollback never touches data.
-- **`show_logs()`** – Dumps `--tail 40` for database, setup, app, cron plus database health-probe output for diagnostics.
-- **`prune_images()`** – Removes local `boilerplate-api:<tag>` images beyond the last `$KEEP` good ones (no-registry path only).
-- **Main flow** – Two modes: `deploy` (build-or-pull → `up --no-build` → `wait_healthy full` → record or auto-rollback) and `--rollback` (`run_previous` → `wait_healthy partial` → record).
+- **Usage**: `docker/deploy.sh <client> [image]` deploys. With no image it builds `app` locally and tags it `boilerplate-api:<git sha>`, with `-dirty` appended if the tree has changes. `docker/deploy.sh <client> --rollback` re-runs the previous good image without `setup`.
+- **Environment**: `CONTAINER_ENGINE` (podman by default, or docker), `DEPLOY_TIMEOUT` (default 240 s), `DEPLOY_KEEP` (default 5 local images kept). `COMPOSE_PROFILES` is read by compose; when `backup` is among them, the backup image is built and checked as well.
+- **Exit codes**: `0` good. `1` the new image failed and the previous one is running again. `2` nothing healthy is running. `64` bad usage or missing env file for the client.
+- `compose()`: wraps `$ENGINE compose --env-file clients/<client>/.env -f compose.yaml -f compose.production.yaml`.
+- `service_active()`: checks a service against `compose config --services`, so profile handling is left to compose.
+- `state_of()` / `container_of()`: find a container by compose project and service labels, then read status, exit code, restart count and health with `inspect`.
+- `probe_ready()`: runs `fetch('/readyz')` inside `app` with `node -e`, because the image has no curl.
+- `wait_healthy(full|partial)`: polls every 3 s until the timeout.
+  - **Services checked**: `app`, `worker`, `worker-heavy` and `cron`. `full` also requires `setup` to have exited 0, and `backup` to be up when its profile is on. `partial` is used for rollbacks.
+  - **Failure conditions**: it returns 1 on any restart, an exited, stopped, dead or removing container, or an unhealthy one. It also fails on timeout.
+  - **Success condition**: nothing pending and `/readyz` answers.
+- `record()` / `current_good()` / `previous_good()`: write and read `<UTC time> <deploy|auto-rollback|rollback> <image>` lines in the log.
+- `run_previous()`: `compose up -d --no-build --no-deps` for only `app`, `worker`, `worker-heavy` and `cron`.
+- `show_logs()`: prints the last 40 log lines per service, plus the database's health probe output.
+- `prune_images()` / `prune_backup_images()`: remove old local images. `prune_images` keeps the last `$KEEP` good images and the `latest` tag. `prune_backup_images` keeps `latest` and the current `BACKUP_IMAGE`.
 
 ## Relationships
-
-- **`docker-compose.production.yml`** – The compose file this script orchestrates. Referenced via `DEPLOY_COMPOSE_FILE` (defaults to `docker-compose.production.yml`) and passed to every `compose()` call with `-f`. Services defined there (`setup`, `app`, `cron`, `database`) are the ones this script starts, inspects, and health-checks.
+No graph neighbors. The script is standalone and interacts only with the container engine, `git`, and the compose files and per-client env and deploy log files it reads and writes at runtime.
 
 ## Notes
-
-- **Container engine defaults to podman**, not docker. Set `CONTAINER_ENGINE=docker` to switch.
-- **Health is read via `inspect`, not `up --wait`**, because podman-compose 1.6's `--wait` exits 0 even when a container has crashed or is unhealthy.
-- **`--no-build` is always passed to `up`** to prevent compose from silently rebuilding over the intended image.
-- **Exit codes are the contract:** 0 = healthy, 1 = new image failed but auto-rollback restored the previous one, 2 = nothing healthy is running (no previous image or rollback also failed).
-- **`deploys.log` is append-only** and is the single source of truth for rollback targets; there is no external state store.
-- **Client name is validated** against `^[a-z0-9][a-z0-9_-]*$`; a valid `clients/<client>/.env` must exist before any action.
-- **`prune_images` strips the `localhost/` prefix** that podman adds to locally-built image refs before comparing against the log.
-- The script `cd`s to the repo root (parent of `docker/`) so all relative paths resolve from there.
+- The client name must match `^[a-z0-9][a-z0-9_-]*$`.
+- The explicit `-f` flags disable compose's auto-loading of `compose.override.yaml`, so the dev stack cannot be layered onto a server.
+- Health is polled via `inspect` instead of `up --wait`. podman-compose 1.6 exits 0 for crashed or unhealthy containers even with `--wait`.
+- Any container restart counts as a crash loop and fails the deploy.
+- With a user-supplied image, the script pulls only if the image is missing locally and does not prune. Local pruning happens only on the build-here path.
+- The backup image is always built locally and tagged with the sha, never pulled from a registry.
+- `compose up` failing does not abort the script. It prints logs and falls through to the health check and the rollback path.
+- With no previous good image, a failed deploy exits 2. A failed rollback also exits 2.
+- Rollback never runs `setup`, so it does not touch the data.

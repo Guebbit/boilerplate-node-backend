@@ -1,33 +1,32 @@
 ---
 source: src/modules/returns/services/stats.ts
-sha256: ca601b487ce9ce533be272d681ce03f8c3801414367768aaa139349c4a7c9351
-generated_at: 2026-11-08T08:06:24.774961+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 879eed8cf44ecfd2d1019460de6ddfbf21aa49122b8e55b1d0b959f2623f7103
+context_sha256: 0d08f810048981fd4910faa720c688d0a119d5345bf83af62f1145d902649e08
+generated_at: 2026-11-22T07:32:30.992347+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/stats.ts
 
 ## Purpose
-
-Aggregation queries that report how many units were received back (returned) within a time window, broken down by currency-bucket, by product, or by bucket for a single product. All three functions delegate to the `sumReceived` repository method with a different MongoDB group-by pipeline.
+Statistics queries over returned goods. A return counts on the day its goods were received (`receivedAt`), the same moment the stock went back on sale. The file wraps `returnRepository.sumReceived` with three different aggregation shapes and maps the raw rows into plain result objects.
 
 ## Key elements
+- `ReturnedBucket`: row type `{ currency, bucket: Date, units }`.
+- `returnedBuckets(window)`: units received back grouped by currency and time bucket. The window's bucket size sets the grain, via `bucketOf('$receivedAt', window)`.
+- `returnedByProduct(window)`: units per product, grouped by `$lines.productId` and summed over every currency and bucket in the window. The id is converted with `String(...)`.
+- `returnedSeries(productId, window)`: units of one product per bucket. It passes `toObjectId(productId)` as a third argument to `sumReceived`, so the product filter is applied inside the aggregation.
 
-- **`ReturnedBucket`** — interface for one row of `returnedBuckets`: `{ currency, bucket, units }`.
-- **`returnedBuckets(window)`** — groups by currency and time bucket (via `bucketOf`), sums `lines.quantity`. Returns `ReturnedBucket[]`.
-- **`returnedByProduct(window)`** — groups by `lines.productId`, sums `lines.quantity`. Returns `{ productId, units }[]` (productId is cast to `string`).
-- **`returnedSeries(productId, window)`** — groups by time bucket only, filtered to one product (passed as `toObjectId(productId)`). Returns `{ bucket, units }[]`.
+All three sum `$lines.quantity`.
 
 ## Relationships
-
-- **`@infrastructure/persistence/report`** — supplies the `ReportWindow` type and the `bucketOf` aggregation helper used to bucket `$receivedAt` per the window's granularity.
-- **`@infrastructure/persistence/create-repository`** — supplies `toObjectId`, used in `returnedSeries` to coerce the product id for the filter.
-- **`../repository`** — provides `returnRepository`, whose `sumReceived` method executes the actual MongoDB aggregation; each function in this file passes a different `group` stage and (optionally) a filter id.
-- **`../services/index.ts`** — barrel file that re-exports these functions so consumers import from the module root.
-- **`../tests/integration/stats.test.ts`** — integration tests exercising all three exported functions against a live/seeded database.
+- `src/modules/returns/repository.ts`: provides `returnRepository`. Each function calls its `sumReceived(window, groupSpec, productId?)` method. This file supplies the `$group` spec and reshapes the rows.
+- `src/infrastructure/persistence/report.ts`: provides `ReportWindow` (a half-open window plus bucket size) and `bucketOf`, which builds the bucket expression.
+- `src/infrastructure/persistence/create-repository.ts`: provides `toObjectId`, used to convert the product id in `returnedSeries`.
+- `src/modules/returns/services/index.ts`: a neighbor in the graph, presumably the services entry point that exposes these functions.
+- `src/modules/returns/tests/integration/stats.test.ts`: the integration test for these stats.
 
 ## Notes
-
-- The module doc comment clarifies the business rule: a return is counted on the day its goods were **received back** (`$receivedAt`), not on the day the customer initiated it.
-- `sumReceived` is called with a typed generic for the row shape; the `_id` field is always unpacked manually in the `.then` mapper — there is no generic that flattens it automatically.
-- In `returnedByProduct`, `_id` is typed as `unknown` in the generic and then `String(row._id)` is used to satisfy the public `productId: string` contract (the DB value may be an ObjectId or a plain string depending on how the product was stored).
+- Windows are half-open.
+- `returnedByProduct` ignores bucket size, while `returnedBuckets` and `returnedSeries` use it.
+- Only `returnedSeries` filters by product. The other two aggregate across all products, with `returnedByProduct` grouping by product.

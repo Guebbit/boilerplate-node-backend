@@ -1,31 +1,32 @@
 ---
 source: src/modules/account/tests/integration/email-change-ttl.test.ts
-sha256: a09bcd8d4baa5089bf2bccdb23628b529e81a729da89b46d8ce21ee91798df7d
-generated_at: 2026-11-14T19:02:35.710593+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a09bcd8d4baa5089bf2bccdb23628b529e81a729da89b46d8ce21ee91798df7d
+context_sha256: eb19fd740bfda4becffa6e97e0c93b0edbbc9399094954b871ab9d2f99b8bfe2
+generated_at: 2026-11-22T03:54:36.062118+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/email-change-ttl.test.ts
 
 ## Purpose
-
-Integration test that pins the user-facing TTLs of the two tokens issued by an email-change request: the confirmation link (24 h) and the undo link (7 days). The durations are asserted against **literal** millisecond values rather than the constants the production code reads, so the test guards the promise made on the account page and in the mail, not internal consistency.
+Integration test that pins the lifetimes of the two tokens issued when a user requests an email change: the confirmation link sent to the new address and the undo link sent to the old one. Durations are asserted against literal values (24 hours and 7 days) rather than the constants the production code reads, so the test reflects what the account page and mail promise to users.
 
 ## Key elements
-
-- **`HOUR_MS`** — local constant (3 600 000 ms) used to build the expected durations.
-- **`describe('an email change request')` / `it(…)`** — the single test case. Authenticates as a user, POSTs to `/account/email-change`, then inspects the token rows for that user and asserts `expiresAt − sentAt` equals `24 * HOUR_MS` for `email-change` and `7 * 24 * HOUR_MS` for `email-change-undo`.
-- **`beforeEach`** — forces `NODE_MAIL_TRANSPORT` to `'outbox'` so no real mail is sent.
+- `HOUR_MS`: local constant, one hour in milliseconds, used to express the expected lifetimes.
+- `describe('an email change request')` with a single test: authenticates as a `'user'`, POSTs `/account/email-change` with `{ email: 'new@example.com' }`, expects a 200, then reads the user's token rows.
+- `lifetimeOf(type)`: local helper that finds the token row of a given type and returns `expiresAt - sentAt` in milliseconds (or `undefined` if no such row exists).
+- Assertions:
+  - `email-change` token lifetime is `24 * HOUR_MS`.
+  - `email-change-undo` token lifetime is `7 * 24 * HOUR_MS`.
+- `beforeEach` sets `NODE_MAIL_TRANSPORT` to `'outbox'` via `setEnvironment`.
 
 ## Relationships
-
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module scope to provision a clean database before the suite runs.
-- **`tests/support/environment.ts`** — `setEnvironment()` overrides the mail-transport setting per test.
-- **`tests/support/http.ts`** — `api()` provides the HTTP client for the POST; `authenticateAs('user')` creates a user and returns a bearer token.
-- **`src/modules/account/tests/factories.ts`** — `tokenRowsOf(userId)` queries the token table and returns the stored rows (with `type`, `sentAt`, `expiresAt`), which the test inspects.
+- `src/modules/account/tests/factories.ts`: supplies `tokenRowsOf(userId)`, which returns the user's token rows from which lifetimes are computed.
+- `tests/support/http.ts`: supplies `api()` (the HTTP client used for the request) and `authenticateAs('user')` (returns the `user` and a `bearer` Authorization value).
+- `tests/support/setup-test-db.ts`: `setupTestDb()` is called at module level to set up the test database.
+- `tests/support/environment.ts`: `setEnvironment` is used to configure the mail transport per test.
 
 ## Notes
-
-- The test intentionally avoids importing the production TTL constants. If the constants change, this test will fail, forcing a conscious decision about the user-facing promise.
-- Lifetime is derived as `expiresAt − sentAt` (both stored on the token row), so it is independent of when the assertion runs.
-- Only one user (`'user'`) is exercised; there is no multi-user or re-request scenario.
+- Lifetimes are measured as `expiresAt - sentAt` on the stored rows, so the test depends on both timestamps being set on the token rows.
+- If a token type is missing from the rows, `lifetimeOf` returns `undefined` and the assertion fails.
+- The literal durations are deliberate: changing the production constants should require updating this test.

@@ -1,30 +1,26 @@
 ---
 source: src/modules/products/tests/unit/product-page-path.test.ts
-sha256: 4a77041edb006d25c2826d9e14daa7c40296d1822e7e775f739baa888b04d478
-generated_at: 2026-11-08T07:54:15.374409+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4a77041edb006d25c2826d9e14daa7c40296d1822e7e775f739baa888b04d478
+context_sha256: 6d4eac1ed787cc716c220a06ba8de4a07ee71020df949cac8cd1b850d441814c
+generated_at: 2026-11-22T07:19:23.945090+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/unit/product-page-path.test.ts
 
 ## Purpose
-
-Unit tests for `productPagePath`, the single source of truth for a product's URL slug. This file exists to lock down that the function correctly substitutes the product id into the path template, respects the `NODE_FRONTEND_LINK_PRODUCT` environment override, and safely encodes the id (treating `$&` as literal text rather than a regex substitution token).
+Unit tests for `productPagePath`, the function that builds the path of a product's page. Per the file's header comment, this is the single setting that both the sitemap and the back-in-stock mail read, so these tests pin its behavior.
 
 ## Key elements
-
-- **`describe('productPagePath')`** — top-level suite covering three behaviors:
-  - *fills the id into the default template* — asserts the default `products/{id}` shape.
-  - *follows NODE_FRONTEND_LINK_PRODUCT* — uses `withEnvironmentOverrides` to set a custom template (`shop/item-{id}`) and verifies substitution.
-  - *encodes an id, and reads `$&` in it as text* — confirms the id is URL-encoded and that `$&` is not interpreted as a special regex replacement character.
+- **`productPagePath` describe block**: three tests:
+  - Default template: `productPagePath('65f0abc')` returns `products/65f0abc`.
+  - Environment override: with `NODE_FRONTEND_LINK_PRODUCT` set to `shop/item-{id}`, the result is `shop/item-65f0abc`. The override runs inside `withEnvironmentOverrides`, and the callback returns `Promise.resolve()`.
+  - Encoding: `productPagePath('a/b$&c')` returns `products/a%2Fb%24%26c`. The id is URL-encoded, and `$&` is treated as literal text rather than as a replacement pattern.
 
 ## Relationships
-
-- **`src/modules/products/config.ts`** — source of the `productPagePath` function under test. The test imports it directly (`../../config`).
-- **`tests/support/environment.ts`** — provides `withEnvironmentOverrides`, a helper that temporarily sets process env vars for the duration of the callback. Used here to simulate `NODE_FRONTEND_LINK_PRODUCT`.
+- Imports `productPagePath` from `src/modules/products/config.ts` (via `../../config`), which is the code under test.
+- Imports `withEnvironmentOverrides` from `@tests/environment`, which maps to `tests/support/environment.ts`. It temporarily sets environment variables such as `NODE_FRONTEND_LINK_PRODUCT` for the duration of a callback.
 
 ## Notes
-
-- The `{id}` placeholder in the template is a simple string replacement, **not** a regex `String.replace`. The third test exists specifically to guard against a naive `.replace('{id}', id)` implementation, which would interpret `$&` in the id as "the matched substring."
-- `withEnvironmentOverrides` returns a `Promise` (the test returns `Promise.resolve()`), so the env restoration is async-safe even if the callback throws.
-- The file's JSDoc block states this path is consumed by **both** the sitemap generator and the back-in-stock email — a change to the template therefore has two downstream effects.
+- The `$&` test indicates that the `{id}` substitution must not use special replacement patterns. The test does not show how `config.ts` implements this.
+- The override test returns a promise from `withEnvironmentOverrides`, so the helper appears to take a callback that returns a promise.

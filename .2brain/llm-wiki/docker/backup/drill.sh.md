@@ -1,55 +1,46 @@
 ---
 source: docker/backup/drill.sh
-sha256: 178d230990da8abce6939d244ddd8836935007231e58e59a542717b8b5494187
-generated_at: 2026-11-08T02:18:50.507406+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0b213aafa92ff764aa34498acb61bb61aef16ed4d63a90500d423821864ce68d
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T01:28:05.187031+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/backup/drill.sh
 
 ## Purpose
-
-A single, self-contained end-to-end proof of the entire backup pipeline. Using only `docker run` (no compose, no published ports), it spins up a production-shaped replica-set Mongo, runs real restic backups into a local repository, verifies deduplication, restores into a throwaway instance, checks the Gatus heartbeat, exercises the scheduler, tests a damaged repository, and validates the rclone append-only "second machine" kit. It leaves nothing behind and exits non-zero on any failure. Invoked via `npm run backup:drill`.
+End-to-end proof of the backup system using plain `docker run` (no compose, no host ports). It builds the backup image, starts a production-style replica-set Mongo, seeds it, backs it up with restic, and checks deduplication, restore, failure detection, heartbeats and scheduling. Everything runs on one private `--internal` Docker network and is cleaned up afterwards. Run it with `npm run backup:drill` (CI job `backup-drill`).
 
 ## Key elements
+- **Setup variables**: `ID` (`bdrill$$`) is used as the label, network name and resource prefix. `TMP` is a temp dir holding secrets. `IMAGE` defaults to `boilerplate-backup:drill` and can be overridden with `BACKUP_DRILL_IMAGE`. `MONGO_IMAGE` and `RCLONE_IMAGE` are scraped from `compose.yaml` and `compose.backup-server.yaml`. `GATUS_IMAGE` defaults to a pinned Gatus image.
+- `step`, `die`: print a heading; fail with `BACKUP DRILL FAILED: ...`.
+- `cleanup` (EXIT trap): removes all containers, volumes and the network labelled `$ID`, deletes `$TMP`, and prints PASSED only if exit code is 0 and `PASS=1`. `BACKUP_DRILL_KEEP` skips the teardown.
+- `run`, `volume`: `docker run` / `docker volume create` with the drill label so cleanup finds them.
+- `backup_image <script> [args]`: runs one script from the backup image once, mimicking the `backup` service (user 1000, read-only, all caps dropped, secrets mounted, `/repo` and `/cache` volumes). It honours `BACKUP_REPOSITORY`, `BACKUP_HEARTBEAT_URL` and the `EXTRA` array of extra flags.
+- `raw_size`: reads restic's deduplicated raw-data size from `restic stats`.
+- `mongosh_root`: runs mongosh as root inside the database container over TLS.
+- `throwaway`: starts a fresh no-auth Mongo with the alias `restore-drill-db`.
+- `drill`: runs `backup-restore-drill` the way the `restore-drill` compose service does.
+- `heartbeat_state` / `expect_heartbeat`: query Gatus's status API for the `backup` external endpoint and wait for `success` to be `true` or `false`.
 
-- **`step` / `die`** — Step-heading printer and fatal-exit helper.
-- **`cleanup`** — `trap … EXIT` handler; removes all labelled containers, volumes, the network, and the temp dir. Skips removal if `BACKUP_DRILL_KEEP` is set.
-- **`run`** — Wraps `docker run` so every container carries the `$ID` label for cleanup.
-- **`volume`** — Creates a labelled Docker volume.
-- **`backup_image`** — Runs the backup image with hardening flags (`--read-only --cap-drop ALL`, tmpfs, secret mounts) and a chosen entrypoint script (`backup-job`, `backup-restore-drill`, `bash`, …). Accepts extra flags via the global `EXTRA` array.
-- **`raw_size`** — Calls `restic stats --mode raw-data --json` inside the image and extracts `total_size`.
-- **`mongosh_root`** — `docker exec` into the database container with root TLS credentials to run a JS snippet.
-- **`throwaway`** — Starts a one-off `mongod --noauth` on a tmpfs volume for restore-target use.
-- **`drill`** — Runs the `backup-restore-drill` entrypoint against the throwaway Mongo.
-- **`heartbeat_state` / `expect_heartbeat`** — Query Gatus's status API and poll until the expected `true`/`false` result appears.
+## Flow (as visible)
+1. Build the image from `docker/Dockerfile.backup`.
+2. Generate random secrets, create the internal network and volumes.
+3. Start Mongo with `docker/mongo-entrypoint.sh`, `docker/mongo-init.js` and `docker/mongo-rs-init.sh`, using keyFile and TLS, `--noscripting`, and the `backup` role.
+4. Seed three collections of 4000 docs each, plus an upload and mail-spool/documents files.
+5. Run backup 1, then insert 100 users and run backup 2, then backup 3 with no change. Backup 3 must add less than 1/20 of run 1's size or the drill dies.
+6. Run the restore drill against a throwaway Mongo.
+7. Start Gatus. A good run, with the token passed as a file, must report `success=true`. A run with `MONGO_BACKUP_USER=nobody` (token passed as a variable) must fail and report `success=false`.
+8. Start a scheduler container with an every-minute schedule. The visible content cuts off here.
 
-**Test sequence (top-level steps):**
-1. Build `boilerplate-backup:drill` from `docker/Dockerfile.backup`.
-2. Create secrets, an `--internal` network, and labelled volumes.
-3. Start a keyFile + TLS replica-set Mongo exactly as `docker-compose.production.yml` does (via `mongo-entrypoint.sh` and `mongo-init.js`).
-4. Seed 3 × 4 000-row collections, a 2 MB upload, and a mail spool file.
-5. Run `backup-job` three times (with one small mutation between runs 1 and 2) and assert restic deduplicates the unchanged run.
-6. Restore into a throwaway Mongo and compare counts/files.
-7. Stand up Gatus; verify the heartbeat flips green after a good run and red after a run with a wrong DB user.
-8. Verify the `* * * * *` scheduler produces runs and that an empty repository stays dormant.
-9. (Truncated) Damaged-repository failure and rclone append-only server tests.
+The header comment also lists a damaged-repository failure check and a second-machine rclone append-only server kit (backup accepted, `forget` refused, maintenance prunes).
 
 ## Relationships
-
-The dependency graph reports no neighbors. The script does reference the following files at runtime (read via `sed` or volume-mounted):
-
-- `docker-compose.production.yml` — extracts the pinned Mongo image digest.
-- `docker-compose.backup-server.yml` — extracts the pinned rclone image.
-- `docker/mongo-entrypoint.sh`, `docker/mongo-init.js`, `docker/mongo-rs-init.sh` — mounted into the Mongo container.
-- `docker/Dockerfile.backup` — the image this drill builds and exercises.
+This file has no graph neighbors; it is a standalone entry-point script, run directly via `npm run backup:drill` or the CI job.
 
 ## Notes
-
-- **No ports, no compose.** Everything runs on a single `--internal` Docker network; the script explicitly avoids `docker compose` and `docker run -p`.
-- **Image resolution is fragile by design.** The Mongo and rclone images are parsed out of the compose files with `sed` so the drill always tests the exact same pinned digest as production. If the compose format changes, extraction silently yields an empty string.
-- **`EXTRA` array** is a global side-channel used to inject extra env vars (e.g. `BACKUP_HEARTBEAT_TOKEN`) into `backup_image` / `drill` calls for specific sub-tests.
-- **`BACKUP_DRILL_KEEP`** (env var) prevents `cleanup` from tearing down resources, useful for debugging.
-- **`BACKUP_DRILL_IMAGE`** overrides the default `boilerplate-backup:drill` tag (handy when the image is pre-built).
-- The dedup assertion (`raw3 - raw2 < raw1/20`) encodes the ~5 % tolerance for restic chunk-boundary overhead on an unchanged database.
-- The script is truncated in this snapshot; the damaged-repo and rclone-second-machine steps are described in the header comment but their implementation is below the truncation point.
+- Requires a Docker daemon, `openssl`, `sed` and `xargs`. Run it from anywhere, since it `cd`s to the repo root.
+- Secret files are set to mode 0644 and the temp directories to 0755, so the non-root container user (1000) can read them.
+- Uses an uncompressed archive on purpose: unchanged data must deduplicate almost completely under restic.
+- Set `BACKUP_DRILL_KEEP` to keep resources for debugging. The cleanup output then prints the label and tmp path.
+- The Mongo and rclone image references are parsed from the compose files with `sed`, so changes to their `image:` line format can break the extraction.

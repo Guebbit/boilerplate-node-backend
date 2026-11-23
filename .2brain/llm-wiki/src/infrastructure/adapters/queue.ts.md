@@ -1,44 +1,43 @@
 ---
 source: src/infrastructure/adapters/queue.ts
-sha256: ee76907a9b1baffcc08c2fd3edeafe1d3f984f4d9c3f34118ba7effc0a77d0cf
-generated_at: 2026-11-14T17:54:56.849247+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1861d4d34ccf93116ab101b78254806d9eb17080bc11134bd010097392f0f989
+context_sha256: 333b0aa6e6252391ec01b754752d2474564924103fd994ad3dd4ab8de04305ea
+generated_at: 2026-11-22T02:41:38.666920+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/queue.ts
 
 ## Purpose
-
-RabbitMQ (AMQP 0-9-1) adapter that provides `publishToQueue`, consumer registration, and graceful shutdown for the process. Every public function no-ops when the broker is unconfigured, letting callers fall back to inline work. Reconnection is handled entirely by `amqplib`'s built-in recovery (v2.0.1+), not by the project's own `managed-connection` lifecycle; only the shared warn-once latch is borrowed from that module.
+RabbitMQ (AMQP 0-9-1) adapter. It owns the process's single broker connection and channel, and it degrades to no-ops when the broker isn't configured (`publishToQueue` returns `false`). Producers don't call it directly for jobs. They go through `job-dispatch.ts`, which holds the job in a durable fallback queue when the broker is down, or tells the caller to run it inline when no broker is configured. Reconnection is delegated to amqplib's own `recovery` option rather than `managed-connection`'s lifecycle.
 
 ## Key elements
-
-- **`getAmqpUrl()`** — Assembles the AMQP URL from `queueConfig()` env vars; returns `undefined` when no port is set (queue-off signal). Encodes user/pass to handle special characters.
-- **`isQueueEnabled()`** — Exported boolean guard callers check *before* building a job payload (e.g. `enqueueEmail` in `mailer.ts`).
-- **`setupChannel(model)`** — The `recovery.setup` callback. Creates a **ConfirmChannel**, wires channel-level `error`/`close` handlers (with a 1 s backoff reopen for channel-only closes, and a non-retried hard-stop on `PRECONDITION_FAILED` 406), then calls `replayConsumers`.
-- **`RECOVERY_OPTIONS` / `recoveryOptions()`** — Recovery config passed to `amqplib.connect`. Under test, `maxRetries: 0` so the event loop can exit; for job processes (see below) capped at `JOB_MAX_RETRIES = 3`.
-- **`boundQueueRetries()`** — Exported; sets a flag so the next dial uses a bounded retry count. Called by the job runner, which has no forced-exit deadline.
-- **`connectionGeneration`** — Bumped by `stopQueue`; a stale generation's connection is closed on arrival rather than kept.
-- **`consumerTags` / `inFlightHandlers`** — Track registered consumers and in-flight handler Promises so `stopQueue` can cancel and drain them before closing.
-- **`unavailabilityLog`** — Error-level, warn-once latch (shared with `managed-connection.ts`) reporting the outage exactly once, whether triggered by a failed publish or the `disconnect` event.
+- `getAmqpUrl` (private): builds the connection URL from `queueConfig()`. `NODE_RABBITMQ_URL` wins. Otherwise it assembles one from user, password, host and port, with user and password URL-encoded. Without a port it returns `undefined`, which means the queue is off.
+- `isQueueEnabled()`: exported. True when a URL is resolvable and `NODE_RABBITMQ_ENABLED` is set. Callers check it before building a payload (for example `enqueueEmail` sends inline instead).
+- `currentChannel`: module-level `ConfirmChannel`, set on every (re)connect and cleared when its own channel closes. `undefined` means callers take the slow lane. Nothing waits for it.
+- `recoveringConnection`, `connectionStarted`, `connectionGeneration`: connection handle, a guard so a burst of calls shares one dial, and a counter bumped by `stopQueue`. A connection that lands after a stop belongs to an old generation and is closed.
+- `unavailabilityLog`: warn-once latch from `managed-connection`. It is shared by mid-flight publish failures and the `disconnect` event, and it logs at `error` level.
+- `setupChannel(model)`: amqplib's recovery `setup`. It runs after every successful (re)connect and creates a confirm channel. It attaches `error` and `close` handlers, then calls `replayConsumers` to re-bind all known consumers.
+  - On a channel-only close, it reopens after `CHANNEL_REOPEN_DELAY_MS` (1000 ms, `.unref()`'d timer).
+  - On `PRECONDITION_FAILED` (406) it logs every time and does not retry.
+- `RECOVERY_OPTIONS` / `recoveryOptions()`: recovery config with `setup: setupChannel`. `maxRetries: 0` under test. Capped at `JOB_MAX_RETRIES` (3) once bounded.
+- `boundQueueRetries()`: exported. The job runner calls it so a one-shot process gives up on an unreachable broker instead of retrying forever.
+- `consumerTags`, `inFlightHandlers`: track registered consumers (for cancelling) and running handlers (so `stopQueue` can let them finish).
+- The code references `ensureConnecting`, `stopQueue`, `publishToQueue`, `replayConsumers` and `assertJobQueue`. Their implementations are beyond the visible portion of the file.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/config.ts`** — `queueConfig()` supplies all connection parameters (host, port, user, password, URL, enabled flag).
-- **`src/infrastructure/adapters/managed-connection.ts`** — Provides `unavailabilityLatch` and the `DependencyStatus` type; the queue adapter deliberately does *not* reuse its reconnect lifecycle.
-- **`src/infrastructure/adapters/logger.ts`** — All structured log output (errors for unavailability, `PRECONDITION_FAILED`, publish failures).
-- **`src/infrastructure/observability/metrics-queue.ts`** — `queueJobsDeadLetteredTotal` counter incremented when a job is dead-lettered.
-- **`src/infrastructure/runtime/config.ts`** — `isTestEnvironment()` gates `maxRetries: 0` in `RECOVERY_OPTIONS`.
-- **`src/domain-primitives/time.ts`** — `DAY_MS` constant used for queue TTL / retry-delay arguments.
-- **`src/infrastructure/adapters/mailer.ts`** — `enqueueEmail` checks `isQueueEnabled()` and falls back to sending inline when the queue is off.
-- **`src/infrastructure/http/middlewares/upload.ts`** — `quarantineUploadedImages` and `enqueueImageDigest` degrade to inline work when the queue is unavailable (the latency cost the error-level latch callouts).
-- **`scripts/ops/run-job.ts`** — Calls `boundQueueRetries()` before connecting, capping reconnect attempts for the finite job lifetime.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** — Invokes `stopQueue` during graceful shutdown to drain in-flight handlers and close the connection.
+- **`config.ts`**: `queueConfig()` supplies the RabbitMQ URL, host, port, credentials and enabled flag.
+- **`logger.ts`**: used for error logging on unavailability and `PRECONDITION_FAILED`.
+- **`managed-connection.ts`**: supplies `unavailabilityLatch` and the `DependencyStatus` type. Its own lifecycle is deliberately not used here.
+- **`metrics-queue.ts`**: imports `queueJobsDeadLetteredTotal`.
+- **`time.ts`**: imports `DAY_MS`.
+- **`job-dispatch.ts`**: the producer-side entry point that handles the broker-down and no-broker cases.
+- **`job-drain.ts`, `email.worker.ts`, `image.worker.ts`, `workers.ts`, `process-boot.ts`, `run-job.ts`, `reapply-erasures.ts`, `upload.ts`, `mailer.ts`**: dependency-graph neighbors that use the queue. The visible portion doesn't show the specifics. `run-job.ts` is presumably the caller of `boundQueueRetries`, given the "job runner" wording. The file's comments name `enqueueEmail`, `quarantineUploadedImages` and `enqueueImageDigest` as callers that degrade to inline work.
+- Also imports `isTestEnvironment` from `@infrastructure/runtime/config`, `settleWithin` from `@infrastructure/runtime/settle`, `WORKER_CHANNELS` from `@types`, and `getJson` from `@guebbit/js-toolkit`.
 
 ## Notes
-
-- The adapter uses a **ConfirmChannel**, not a plain channel, so `publishToQueue` can distinguish a broker-refused publish from ordinary write-buffer backpressure via the broker's own ack/nack callback.
-- Channel-level closes (e.g. `PRECONDITION_FAILED` during a queue-argument change) are *not* covered by amqplib's connection recovery; `setupChannel`'s `close` handler reopens the channel after a 1 s delay on the same connection.
-- `PRECONDITION_FAILED` (406) is treated as a **non-retryable configuration mismatch**: it logs on every occurrence (bypassing the once-only latch) and stops retrying until a redeploy redeclares the queue.
-- Under test, `maxRetries` is set to `0` because `.env` typically points at a Docker Compose hostname that resolves nowhere on the dev machine; without this the infinite retry timer would keep the test process alive.
-- The recovery `setup` promise is intentionally **not awaited** by the caller; with recovery enabled it settles only after the first connect succeeds, and callers must treat "not yet available" as the normal pre-connect state.
+- A dead queue is logged at `error`, not `warn`. Unlike the cache, callers fall back to running work inline, which changes request latency.
+- Channel closes and connection drops are handled separately. Recovery only sees connection drops, so `setupChannel` reopens the channel itself.
+- A confirm channel is used so a publish failure can be told apart from ordinary write-buffer backpressure.
+- `.unref()` on timers and `maxRetries: 0` in tests keep processes from hanging on an unreachable broker.
+- A `PRECONDITION_FAILED` close leaves queue work running inline until the queue is redeclared and the app restarted.

@@ -1,46 +1,38 @@
 ---
 source: src/modules/orders/tests/contract/export.contract.test.ts
-sha256: 6aeb06cc520534044e205be169967d132d42847fdb999793ae6ba6d270221de0
-generated_at: 2026-11-08T07:02:45.233714+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c9d63da0d9d056bb0338a8ad60d092cf69c9ea07d164d5e192ce2ce4c9f39527
+context_sha256: e75ba835fdd9fc58a3bd2dc1c18ea127e597e1699e848eac303861d31e83c172
+generated_at: 2026-11-22T06:25:24.898116+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/contract/export.contract.test.ts
 
 ## Purpose
-
-Contract test for the `GET /orders/export` HTTP endpoint. It verifies the wire-level behaviour a client depends on — status codes, response headers (content-type, content-disposition, cache-control), authentication gates, and the 422 error shape — without asserting on CSV content correctness (that belongs to the service suite). The route must resolve as a fixed path, not as an order-id parameter.
+HTTP-level contract test for `GET /orders/export`. It checks that the route is reached through the router (`/export` is not read as an order id), is protected by the `export:Order` permission and a fresh session, is never cached, and refuses an oversized result before any file bytes are sent. The CSV's content and the cap's arithmetic are left to the service suite.
 
 ## Key elements
-
-- **`seedOrderFor(user)`** – local helper that creates one product and one single-item order belonging to the given user, so the export has at least one data row.
-- **`describe('GET /orders/export')`** – six `it` blocks covering:
-  - Admin receives 200 with `text/csv`, `attachment; filename="orders-YYYY-MM-DD.csv"`, `private, no-store`, and a two-line body.
-  - First byte is U+FEFF (UTF-8 BOM) for Excel compatibility.
-  - A `manager` role also receives 200.
-  - A session older than `reauthWindowSeconds('sensitive')` is rejected with 401.
-  - With `NODE_ORDER_EXPORT_MAX_ROWS=1` and two orders, the endpoint returns 422 `application/problem+json` with `errors[0].code === 'ORDER_EXPORT_TOO_LARGE'` and no `content-disposition` header.
-  - An invalid `?status=` filter is rejected with 422 (delegated to the list handler's validation).
-- **`afterEach(() => jest.useRealTimers())`** – restores the system clock after the frozen-time test.
+- `seedOrderFor(user)`: local helper that creates one order for the given user, containing a single item for a newly created product, so the export has a line to carry.
+- `describe('GET /orders/export')` cases:
+  - **Admin success**: 200, `text/csv`, `attachment; filename=orders-YYYY-MM-DD.csv`, `Cache-Control: private, no-store`, and two lines of text (the header plus one order).
+  - **BOM**: the body starts with U+FEFF (the test's own description: so Excel reads accents as UTF-8). The test asserts `codePointAt(0)` equals `0xfe_ff`, i.e. U+FEFF.
+  - **Manager**: 200, since managers also hold the permission.
+  - **Stale session**: an admin whose session is older than `reauthWindowSeconds('sensitive')` gets 401.
+  - **Too large**: with `NODE_ORDER_EXPORT_MAX_ROWS=1` and two orders, the response is 422 `application/problem+json` with error code `ORDER_EXPORT_TOO_LARGE` and no `Content-Disposition` header.
+  - **Bad filter**: `?status=teleported` returns 422, the same response the list endpoint gives.
+- `afterEach(() => jest.useRealTimers())`: undoes the frozen clock from the stale-session test.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `tests/support/contract.ts` | Side-effect import (`@tests/contract`) – likely registers global contract-test helpers/expectations. |
-| `tests/support/setup-test-db.ts` | Calls `setupTestDb()` once at module scope to provision a clean DB per test. |
-| `tests/support/http.ts` | Provides `api`, `authenticateAs`, `authenticateAsRole`, `bearerForCookie`, `loginCompleting` for issuing requests and building auth. |
-| `tests/support/cookies.ts` | `setCookie` extracts the `__Host-session` JWT from a login response for the stale-session test. |
-| `tests/support/clock.ts` | `freezeDate` / `advanceDate` drive the reauth-window expiration. |
-| `tests/support/environment.ts` | `setEnvironment` sets `NODE_ORDER_EXPORT_MAX_ROWS` for the cap test. |
-| `src/kernel/config.ts` | `reauthWindowSeconds('sensitive')` determines how far to advance the clock in the 401 test. |
-| `src/modules/users/tests/factories.ts` | `createAdminUser`, `PLAIN_PASSWORD` for the stale-session scenario. |
-| `src/modules/products/tests/factories.ts` | `createProduct` seeds the order item. |
-| `src/modules/orders/tests/factories.ts` | `createOrder`, `toOrderItem` build the test order. |
+- `@tests/contract`: side-effect import that sets up the contract-test environment.
+- `tests/support/setup-test-db.ts`: `setupTestDb()` provides the database lifecycle.
+- `tests/support/environment.ts`: `setEnvironment` overrides `NODE_ORDER_EXPORT_MAX_ROWS` for the cap test.
+- `tests/support/http.ts`: `api()` (request client), `authenticateAs`, `authenticateAsRole`, `loginCompleting` and `bearerForCookie` produce authenticated requests.
+- `tests/support/cookies.ts`: `setCookie` extracts the `__Host-session` cookie from the login response.
+- `tests/support/clock.ts`: `freezeDate` and `advanceDate` simulate session ageing.
+- `src/kernel/config.ts`: `reauthWindowSeconds` gives the sensitive-session window the test steps past.
+- `src/modules/users/tests/factories.ts` (`createAdminUser`, `PLAIN_PASSWORD`), `src/modules/products/tests/factories.ts` (`createProduct`) and `src/modules/orders/tests/factories.ts` (`createOrder`, `toOrderItem`) seed data.
 
 ## Notes
-
-- The module doc explicitly defers CSV content and cap-arithmetic assertions to the service-level test suite; this file only checks the HTTP envelope.
-- The 401 test uses a *cookie-based* bearer (`bearerForCookie`) rather than `authenticateAs`, because it needs full control over the session's age.
-- The too-large test asserts the absence of `content-disposition` to confirm the cap fires *before* the file stream starts.
-- The bad-filter test (`?status=teleported`) relies on the list endpoint's own validation; no new 422 shape is expected beyond what the list contract already guarantees.
+- The stale-session test logs in with `remember: 'short'`, advances the clock past the window plus one second, then mints a bearer from the old cookie via `bearerForCookie`.
+- The BOM test calls `.buffer()` on the request so the response body is read as text and the leading character is preserved.
+- Passing the stale-session test depends on the frozen date, since the clock is reset only in `afterEach`.

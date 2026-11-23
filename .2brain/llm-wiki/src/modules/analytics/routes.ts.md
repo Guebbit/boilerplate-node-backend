@@ -1,29 +1,26 @@
 ---
 source: src/modules/analytics/routes.ts
-sha256: 75ba3172381707d4153b150d28af3b557f054650d8bc83a0177ba0cb45cf5d85
-generated_at: 2026-11-08T04:59:08.745933+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 75ba3172381707d4153b150d28af3b557f054650d8bc83a0177ba0cb45cf5d85
+context_sha256: 87aff848c28393c5ef9c9be2cf64f58465b0330c7317a8e840d1b6e9e701fc30
+generated_at: 2026-11-22T04:18:15.233533+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/analytics/routes.ts
 
 ## Purpose
-
-Defines the single public write route for the analytics relay (`POST /analytics/events`). It exists to keep the module's HTTP surface in one place: one endpoint, one middleware, one controller, mounted on a shared Express `Router` that the module entry point registers on the app.
+Defines the Express route table for the analytics relay. It exposes a single public write endpoint for browsing events, open to guests. Per the file's own doc comment, the route is bounded by the global burst brake in `src/app/security.ts`, it writes nothing itself, and without consent it does no work.
 
 ## Key elements
-
-- **`router`** (exported `Router`) — the Express sub-router for analytics. Exposed so `module.ts` can mount it on the app.
-- **`router.post('/events', getAuth, postAnalyticsEvent)`** — the sole route. Returns `204` regardless of whether the event was recorded. Accepts guests; `getAuth` is optional-pass (signed-in users get their id attached, guests proceed without one).
+- `router` (exported): an Express `Router` for the analytics relay.
+- `POST /events`: registered as `router.post('/events', getAuth, postAnalyticsEvent)`. It records one browsing event and returns 204 whether or not the event was recorded.
 
 ## Relationships
-
-- **`src/kernel/middlewares/authorizations.ts`** — imports `getAuth`, the shared auth middleware that optionally resolves a signed-in visitor's identity without blocking anonymous requests.
-- **`src/modules/analytics/controllers/post-analytics-event.ts`** — imports `postAnalyticsEvent`, the controller that handles the actual event ingestion (recording, consent checks, no-op path).
-- **`src/modules/analytics/module.ts`** — consumes the exported `router` to mount these routes under the module's path prefix on the Express app.
+- `src/kernel/middlewares/authorizations.ts`: supplies `getAuth`, the middleware that runs before the controller. It does not reject guests. It only lets a signed-in visitor's events carry their id.
+- `src/modules/analytics/controllers/post-analytics-event.ts`: supplies `postAnalyticsEvent`, the handler that serves `POST /events`.
+- `src/modules/analytics/module.ts`: a graph neighbor of this file. This file's content does not show how the two connect, but `router` is exported for module-level wiring.
 
 ## Notes
-
-- The route writes nothing at the route layer and performs no work without consent (per the module doc comment); the "burst brake" lives in `app/security.ts`, not here.
-- `getAuth` is non-blocking for guests — do not assume a user object is present downstream; the controller must handle the absent-auth case.
-- The `204` contract is uniform: callers cannot distinguish "recorded" from "dropped" via status code alone.
+- The route is public by design, because guests are the ones browsing. `getAuth` is optional identification, not an access gate.
+- The 204 response does not tell the client whether the event was recorded.
+- Rate limiting is not applied here. It comes from the global burst brake in `src/app/security.ts`.

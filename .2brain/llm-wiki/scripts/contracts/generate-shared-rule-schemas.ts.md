@@ -1,48 +1,45 @@
 ---
 source: scripts/contracts/generate-shared-rule-schemas.ts
-sha256: 46491c9823fc857b5e1fba7a6e6485092ae1104b8f0621f91f05ee6e203c7c67
-generated_at: 2026-11-14T17:26:13.087727+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8360003078ef9ee881f517f458b71d68d55dec8fbda2ea2fdb0dcadb83f112a4
+context_sha256: f9f8917e66790b93777e152ec99cbb308d15adaf47ee7b707e1ff1a53ac97cf3
+generated_at: 2026-11-22T01:57:28.268676+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/generate-shared-rule-schemas.ts
 
 ## Purpose
-
-One-shot regeneration script (run via `npm run regenerate`) that derives two artifact families from the shared-rules YAML files: JSON Schema exports (for the PHP twin, which has no Zod) and committed `as const` TypeScript data files (for union types, plain numbers, and module-level data blocks). Supports a `--check` mode that reports staleness without rewriting.
+A `tsx` script run by `npm run regenerate`. It derives two kinds of artifacts from the shared rules files: JSON Schema exports of each rules file's Zod schema (so the PHP twin, which has no Zod, can validate with any JSON Schema library), and `*.generated.ts` files holding `as const` TypeScript data so code imports the values instead of reading YAML. With `--check`, it reports stale files instead of rewriting them.
 
 ## Key elements
+- `SHARED_DIRECTORY`: `<repo>/shared`, where the JSON Schemas are committed.
+- `SCHEMA_EXPORTS`: list of `[folder, name, schema]` tuples. It holds every `SHARED_RULES` entry under `rules`, plus `authorization-roles` (`rolesDocumentSchema`) and `personas` (`personasSchema`, under `scenarios`).
+- `writeSchemas()`: converts each schema with Zod 4's `z.toJSONSchema` and writes `shared/<folder>/schemas/<name>.generated.schema.json` via `writeOrCheck`.
+- `GeneratedSource`: `{ source, schema, spec }`. It describes one YAML file to validate and the `GenerateSpec` that says what TypeScript to write.
+- `loadModuleSource(moduleName)`: dynamically imports `src/modules/<m>/rules.schema.ts` and reads its `rulesSchema` and `rulesGenerate` exports.
+- `camelCaseOf`: turns a kebab-case folder name into camelCase.
+- `ModuleBlock` / `MODULE_BLOCKS`: a table of data blocks that `module.yaml` may carry. The two rows are `rateLimits` (written into each module's folder, export `<camel>RateLimitData`) and `jobs` (written into each module's folder, export `<camel>JobData`). Adding a block means adding one row.
+- `collectBlockSources(block)`: for each module that has a `module.yaml` containing `block.key`, builds a source. It uses a loose object schema and a `verbatim` export of that field.
+- `STEP_UP_SOURCE`: reads `shared/authorization-keys.generated.yaml` and generates a kernel-side TypeScript file exporting `stepUpWindowData` (from the `stepUp` field).
+- `collectSources()`: assembles all sources in this order: registry entries that define `generate`, module `rules.yaml` sources, `STEP_UP_SOURCE`, then module blocks.
+- `writeGenerated(entry)`: parses the YAML, validates it with the entry's schema, renders it with `renderGenerated`, formats the result with the repo's formatter config, and calls `writeOrCheck`.
 
-- **`SCHEMA_EXPORTS`** — flat array of `[folder, name, zodSchema]` tuples covering every rules file whose schema must be exported as JSON. Includes entries outside the registry (personas, roles) due to layering constraints.
-- **`writeSchemas()`** — iterates `SCHEMA_EXPORTS`, serializes each Zod schema with `z.toJSONSchema`, and writes/`check`s the `.generated.schema.json` file under `shared/<folder>/schemas/`.
-- **`MODULE_BLOCKS`** — table describing the data blocks a module's `module.yaml` may carry (`rateLimits`, `jobs`), each mapped to a schema, output filename, export name, and docblock.
-- **`collectBlockSources(block)`** — discovers every module whose `module.yaml` contains the given block key and builds a `GeneratedSource` for it (validated with `z.looseObject`).
-- **`collectSources()`** — assembles the full list of TypeScript-generation sources: registry entries with a `generate` spec, each module's `rules.yaml` (via dynamic import of its `rules.schema.ts`), the step-up source, and all module blocks.
-- **`loadModuleSource(moduleName)`** — dynamic-imports `src/modules/<name>/rules.schema.ts` and returns the `GeneratedSource`.
-- **`writeGenerated(entry)`** — parses the YAML, validates against the entry's Zod schema, renders TS via `renderGenerated`, formats with repo config, and writes/`check`s the output file.
-- **`camelCaseOf(name)`** — kebab-case → camelCase for export naming.
-- **`STEP_UP_SOURCE`** — hardcoded `GeneratedSource` for the step-up windows in `shared/authorization-keys.generated.yaml`, written to `src/kernel/step-up.generated.ts`.
-- **Entry point** — calls `writeSchemas()` synchronously, then `collectSources().then(writeGenerated for each)`, with `failScript` as the error handler.
+The module's top level runs `writeSchemas()`, then writes all generated sources in parallel, and routes errors to `failScript`.
 
 ## Relationships
-
-- **`scripts/contracts/generated-file.ts`** — provides `writeOrCheck`, the unified write-or-check file I/O used for both schema and TS outputs.
-- **`scripts/contracts/shared-rules-render.ts`** — provides `renderGenerated`, which turns a validated document + `GenerateSpec` into the TypeScript source text.
-- **`scripts/modules-on-disk.ts`** — provides `REPO_ROOT`, `MODULES_ROOT`, and `modulesWith` for filesystem discovery of modules.
-- **`scripts/fail-script.ts`** — provides `failScript`, the terminal error handler on failure.
-- **`scripts/scaffold/format-text.ts`** — provides `formatWithRepoConfig` for repo-aware code formatting before writing.
-- **`src/infrastructure/config/shared-rules/registry.ts`** — source of `SHARED_RULES`, the canonical list of shared rules files (schema + optional generate spec).
-- **`src/infrastructure/config/shared-rules/generate-spec.ts`** — source of the `GenerateSpec` type that describes how a rules file maps to generated TS.
-- **`src/infrastructure/config/shared-rules/jobs.ts`** — provides `jobsBlockSchema` used to validate the `jobs:` block in module YAMLs.
-- **`src/infrastructure/config/shared-rules/rate-limits.ts`** — provides `rateLimitsBlockSchema` used to validate the `rateLimits:` block in module YAMLs.
-- **`src/infrastructure/config/shared-rules/step-up.ts`** — provides `stepUpDocumentSchema` for the step-up windows source.
-- **`src/kernel/permissions.ts`** — provides `rolesDocumentSchema` (the authorization-roles file's schema), listed here because the kernel loads it at boot.
-- **`scenarios/personas-schema.ts`** — provides `personasSchema`; listed here (not in the registry) because infrastructure must not import from `scenarios/`.
+- `src/infrastructure/config/shared-rules/registry.ts`: `SHARED_RULES` supplies the schemas and optional `generate` specs.
+- `generate-spec.ts`: provides the `GenerateSpec` type.
+- `jobs.ts`, `rate-limits.ts`, `step-up.ts`: provide `jobsBlockSchema`, `rateLimitsBlockSchema` and `stepUpDocumentSchema`.
+- `src/kernel/permissions.ts` (`rolesDocumentSchema`) and `scenarios/personas-schema.ts` (`personasSchema`): schemas that cannot live in the registry.
+- `scripts/modules-on-disk.ts`: supplies `MODULES_ROOT`, `REPO_ROOT` and `modulesWith` to discover modules.
+- `scripts/contracts/generated-file.ts`: `writeOrCheck` writes the file, or compares it in check mode.
+- `scripts/contracts/shared-rules-render.ts`: `renderGenerated` produces the TypeScript text.
+- `scripts/scaffold/format-text.ts`: `formatWithRepoConfig` formats the output.
+- `scripts/fail-script.ts`: `failScript` is the error handler.
 
 ## Notes
-
-- Module-block validation uses `z.looseObject({ [block.key]: block.schema })` — only the relevant key is checked; the rest of `module.yaml` is left to `module-descriptor.ts`.
-- The registry (`SHARED_RULES`) is the single source for `shared/rules/*.yaml`, but three schemas are deliberately **outside** the registry (personas, roles, step-up) to respect import-direction rules.
-- Module discovery is by filesystem scan (`modulesWith`), not by a central list — adding a module requires no edit to this file.
-- The script runs under `tsx` (shebang on line 1); no build step is involved.
-- `--check` mode is delegated entirely to `writeOrCheck`; this file has no flag-parsing logic of its own.
+- The demo personas schema lives in `scenarios/`, and the roles schema in the kernel, because infrastructure must not import them. That is why they are listed here instead of in the registry.
+- Step-up windows live in the permission keys document, not in `shared/rules/<name>.yaml`, so they are listed separately.
+- Module `module.yaml` block schemas are wrapped in `z.looseObject`, so the rest of the descriptor is left to `module-descriptor.ts`.
+- `writeSchemas()` runs synchronously before the async TypeScript generation.
+- Generated paths and the `npm run regenerate` hint are passed to `writeOrCheck` for stale-file reporting.

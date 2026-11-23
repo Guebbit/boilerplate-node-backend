@@ -1,33 +1,32 @@
 ---
 source: scripts/contracts/cookie-auth.ts
-sha256: 484653f9fde4735e301ac42a051948f1a8c60f8d80e091ef6fc95638cb9ad1bb
-generated_at: 2026-11-08T02:40:32.546043+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 96b64d47f3d75308f1d435c53c8e07f3df99e1ec8924b0bfb55c77d461373bf2
+context_sha256: 7ce3906802406626923728364add1b15308e75aa30262fc95f9a6ade0bb2b521
+generated_at: 2026-11-22T01:55:21.743170+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/contracts/cookie-auth.ts
 
 ## Purpose
-
-Post-bundle step that augments every OpenAPI operation using `bearerAuth` with a `cookieAuth` security alternative and a `403` response (for unsafe methods). It exists so the cookie-based auth contract and its origin-refusal semantics are derived mechanically from the existing `bearerAuth` declaration rather than hand-written per operation.
+A post-bundle step for the OpenAPI contract build that declares `cookieAuth` as a second authentication alternative on every operation that already accepts `bearerAuth`. It also adds a `403` response to unsafe-method operations. This mirrors runtime behavior: in `cookie` mode the `__Host-session` cookie authenticates the same routes a bearer does, and an unsafe request is refused with 403 unless its `Origin` is an allowed frontend origin (`src/kernel/middlewares/authorizations.ts#continueWithCookie`). The step derives the declaration from `bearerAuth` rather than having it written by hand on each operation.
 
 ## Key elements
-
-- **`withCookieAuth`** (exported `Step`) — Iterates all operations via `operationsOf`. For each operation whose `security` list names `bearerAuth`:
-  - Pushes `{ cookieAuth: [] }` onto the security alternatives if not already present.
-  - Adds a `403` response (`$ref: '#/components/responses/Forbidden'`) if the method is not safe and no `403` is already declared.
-- **`SAFE_METHODS`** (const `Set`) — `get`, `head`, `options`; these skip the `403` addition because a cookie on them requires no origin check.
-- **`takesBearer`** (type guard) — Checks whether a security-requirements array contains an alternative with a `bearerAuth` key.
+- `withCookieAuth` (exported `Step`): iterates `operationsOf(document_)` and mutates the document in place. For each operation:
+  - Skips it unless its `security` list names `bearerAuth` in at least one alternative.
+  - Pushes `{ cookieAuth: [] }` onto `security` if no alternative already has `cookieAuth`.
+  - For non-safe methods, sets `responses['403']` to `{ $ref: '#/components/responses/Forbidden' }` unless a `403` is already declared.
+- `SAFE_METHODS` (internal): `get`, `head`, `options`. A cookie on these needs no origin check, so they get no `403`.
+- `takesBearer` (internal): type guard that checks `security` is an array containing an alternative with a `bearerAuth` key.
 
 ## Relationships
-
-- **`scripts/contracts/openapi-document.ts`** — Source of the `operationsOf` iterator and the `Operation` / `Step` types used throughout this file.
-- **`scripts/contracts/openapi-bundle.ts`** — The bundle orchestrator that invokes `withCookieAuth` as one of its post-bundle steps (per the module doc comment: "Runs on the bundled document, like the other post-bundle steps in `./openapi-bundle`").
-- **`tests/unit/scripts/contracts/cookie-auth.test.ts`** — Unit tests covering the step's behavior.
+- Imports `operationsOf`, `Operation` and `Step` from `./openapi-document`. `Step` is the type of `withCookieAuth`, and `operationsOf` supplies each `{ method, operation }`.
+- Runs on the bundled document, like the other post-bundle steps in `./openapi-bundle`.
+- Covered by `tests/unit/scripts/contracts/cookie-auth.test.ts`.
 
 ## Notes
-
-- **Never overwrites an existing `403`.** If an operation already declares its own `403` response, the step leaves it untouched; the operation-specific response is considered more specific than the generic origin-refusal.
-- **Never overwrites an existing `cookieAuth`** entry in the security list.
-- The step mutates the document in place (pushes onto arrays, assigns `operation.responses`); it does not return a new document.
-- The `403` response is a `$ref` to a component that must already exist in the bundled document (`#/components/responses/Forbidden`); this step does not create it.
+- An operation's own `403` is never overwritten, since it is more specific than the origin refusal.
+- The step is idempotent for `cookieAuth`, because it checks for an existing entry before pushing.
+- The `403` references `#/components/responses/Forbidden`. This file does not define that component, so it must exist in the document.
+- Operations without `bearerAuth` (including public ones) are left untouched.
+- The file's header comment points to `scripts/contracts/fragments.ts` for further background on what a contract fragment contains.

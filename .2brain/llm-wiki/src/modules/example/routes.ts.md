@@ -1,46 +1,43 @@
 ---
 source: src/modules/example/routes.ts
-sha256: 04fabc72aa6232521cb5a45fcf365f420b95a6b3b5fd78f7fad418c4e08adc8f
-generated_at: 2026-11-08T05:52:27.716338+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0fe0948e4262c9056ab12ee15d2858b26ed6c95ca0808d0845087b9804f2779f
+context_sha256: 4e4e60415a7b9c91e54b50194366dfe87185f756e15a41fc012d87adc95c8b58
+generated_at: 2026-11-22T05:11:09.036401+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/routes.ts
 
 ## Purpose
-
-The route table for the example module. It declares every HTTP endpoint (GET, POST, PUT, PATCH, DELETE) for example resources, wires each to its controller, and orders authentication, authorization, caching, rate-limiting, and idempotency middlewares per route. Positional placement relative to `router.use(getAuth, isAuth)` is the sole mechanism that separates public routes from signed-in routes.
+The route table for the `example` module: an Express `Router` that wires HTTP endpoints to controllers and attaches, per route, the auth, permission, cache, rate-limit, idempotency and upload middleware each action needs. Public routes are declared above a single `router.use(getAuth, isAuth)`; everything below it requires a signed-in caller.
 
 ## Key elements
-
-- **`router`** (exported) — the single Express `Router` instance mounted by the module; all endpoints live on it.
-- **`GET /:id`** — public read; uses `getAuth` (no `isAuth`) so the service layer can return a draft to its owner or a published example to anyone. Applies `previewDraftLanguage` and `privateNoCache`.
-- **`router.use(getAuth, isAuth)`** — the single auth boundary. Every route declared *below* this line requires a signed-in session.
-- **`POST /search`** — must appear before `GET /:id` in the signed-in block so the literal word "search" is not captured as an `:id`.
-- **`POST /`** — creation; order is `createExampleLimiter → idempotencyKey → postExample` so a 429 is never replayed as a successful idempotent response.
-- **`PUT /:id` / `PATCH /:id`** — full replace vs. partial update, both requiring `update` permission.
-- **`POST /:id/publish|archive|unarchive`** — one route per lifecycle event; each requires `update`.
-- **`DELETE /:id`** — requires `delete` permission.
-- **`PUT /:id/cover`** — image upload; order is `uploadLimiter → upload.image() → putExampleCover` so a refused request never writes a file.
-- **`requirePermission(action, 'Example')`** — per-route authorization check (read / create / update / delete).
+- `router` (exported): the Express `Router` for the example endpoints.
+- `GET /:id`: the only open read. Uses `getAuth` without `isAuth`, so the caller is resolved if present and the service scopes the result (published is public, draft is owner-only). Uses `previewDraftLanguage` and `privateNoCache`, then `getExample`.
+- `router.use(getAuth, isAuth)`: the positional auth guard. It covers only routes declared after it.
+- `POST /search`: requires `read` on `Example`, then `previewDraftLanguage`, `noStore`, `getExamples`. It is declared before `/:id` so `search` is not read as an id.
+- `GET /`: requires `read` on `Example`, then `previewDraftLanguage`, `privateNoCache`, `getExamples`. It lists the caller's own examples, filtered by the query string.
+- `POST /`: requires `create`, then `createExampleLimiter`, `idempotencyKey`, `postExample`.
+- `PUT /:id` calls `replaceExample`. `PATCH /:id` calls `updateExample`. Both require `update`.
+- `POST /:id/publish`, `/archive` and `/unarchive`: require `update` and call `postExamplePublish`, `postExampleArchive` and `postExampleUnarchive`.
+- `DELETE /:id`: requires `delete`, then `deleteExample`.
+- `PUT /:id/cover`: requires `update`, then `uploadLimiter`, `upload.image()`, `putExampleCover`.
 
 ## Relationships
-
-- **`src/modules/example/module.ts`** — mounts `router` into the application; the only consumer of this file's export.
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth`, `isAuth`, and `requirePermission`, used on every route.
-- **`src/kernel/middlewares/locale-preview.ts`** — provides `previewDraftLanguage`, applied to the three read routes (`GET /:id`, `POST /search`, `GET /`).
-- **`src/infrastructure/http/middlewares/cache.ts`** — provides `noStore` (POST search) and `privateNoCache` (GET routes) to control browser/proxy caching.
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — provides `uploadLimiter` for the cover route and `createExampleLimiter` (re-exported from `rate-limits.ts`) for creation.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — provides `idempotencyKey`, applied only to `POST /`.
-- **`src/infrastructure/http/middlewares/upload.ts`** — provides `upload.image()`, applied only to `PUT /:id/cover`.
-- **`src/modules/example/rate-limits.ts`** — exports `createExampleLimiter`, a module-specific limiter for the create endpoint.
-- **Controllers** (`get-example`, `get-examples`, `post-example`, `post-example-event`, `update-example`, `delete-example`, `put-example-cover`) — each is the terminal handler for one or more routes; this file only sequences middleware around them.
+- **Controllers** (`controllers/get-example`, `get-examples`, `post-example`, `post-example-event`, `update-example`, `delete-example`, `put-example-cover`): the final handler on each route.
+- **`@kernel/middlewares/authorizations`**: supplies `getAuth`, `isAuth` and `requirePermission(action, 'Example')`.
+- **`@kernel/middlewares/locale-preview`**: supplies `previewDraftLanguage`, used on the three read routes (`GET /:id`, `POST /search`, `GET /`).
+- **`@infrastructure/http/middlewares/cache`**: supplies `noStore` and `privateNoCache`.
+- **`@infrastructure/http/middlewares/rate-limit`**: supplies `uploadLimiter` for the cover upload.
+- **`./rate-limits`**: supplies `createExampleLimiter` for creation.
+- **`@infrastructure/http/middlewares/idempotency`**: supplies `idempotencyKey` for creation.
+- **`@infrastructure/http/middlewares/upload`**: supplies the `upload` object; its `image()` handler runs on the cover upload.
 
 ## Notes
-
-- **Positional auth, not per-route flags.** A route is public *only* if it is declared above `router.use(getAuth, isAuth)`. Moving a route across that line silently changes its auth requirement.
-- **`getAuth` vs `isAuth` on the public route.** `GET /:id` deliberately uses `getAuth` alone (resolves identity if present, doesn't require it) so the service can branch on ownership. Do not "fix" this to `isAuth`.
-- **Route ordering is load-bearing.** `POST /search` must precede any `:id`-pattern POST or the word "search" will be captured as an id.
-- **Limiter-before-idempotency.** Placing `createExampleLimiter` before `idempotencyKey` ensures a 429 is not recorded in the idempotency ledger and replayed as a success on retry.
-- **Limiter-before-upload.** `uploadLimiter` runs before `upload.image()` so a rate-limited request never produces an orphaned file on disk.
-- **No `If-Match` on lifecycle POSTs.** The conditional write is enforced inside the controller by reading current status; two racing moves cannot both succeed.
+- Placement decides access. A route is public or signed-in depending on whether it sits above or below `router.use(getAuth, isAuth)`.
+- The guard uses `isAuth`, not `isAuthOrCredential`. The own-rows rules narrow by who is asking, and an API key resolves to no session to narrow by.
+- Middleware order is deliberate:
+  - On `POST /`, `createExampleLimiter` runs before `idempotencyKey`. A spent budget should not cost a database write, and a 429 placed behind the idempotency ledger would be replayed as the result.
+  - On the cover upload, `uploadLimiter` runs before `upload.image()`, so a refused request never writes a file.
+- The lifecycle endpoints (`publish`, `archive`, `unarchive`) take no `If-Match`. The write is conditional on the status read, so of two racing moves exactly one lands.
+- Caching: `POST /search` is never cached (`noStore`). The GET reads use `privateNoCache`, which lets only the browser keep the answer, since it varies by caller and `Accept-Language`.

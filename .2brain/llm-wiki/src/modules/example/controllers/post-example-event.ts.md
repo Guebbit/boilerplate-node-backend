@@ -1,38 +1,40 @@
 ---
 source: src/modules/example/controllers/post-example-event.ts
-sha256: aeef80e4e97b54a7ecc3f77b3ab71f974ffc9e871981dab5b4379375db151b53
-generated_at: 2026-11-14T19:56:59.284653+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b3dbcf0e916a81030757aa0eef0162377bd372763cf01359345e9641d8abd94c
+context_sha256: a3536314569273b4b022ad6da71047637e87b85d94537708498b0685f625c1d1
+generated_at: 2026-11-22T05:07:35.298739+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/controllers/post-example-event.ts
 
 ## Purpose
-
-Thin action controller that exposes the three lifecycle doors for the example resource — `POST /examples/:id/publish`, `/archive`, and `/unarchive`. Each handler validates the id, delegates to the corresponding service method, and formats the HTTP response. All business rules live in the service; this file only wires the HTTP edges.
+Thin HTTP controllers for the three example lifecycle "action doors": `POST /examples/:id/publish`, `/archive` and `/unarchive`. Each validates the id, calls the matching service function, and answers. The business rule itself lives in the service. Because the three differ only in the service function, one factory builds all of them.
 
 ## Key elements
-
-- **`EventDoor` (type)** — Signature of the service function behind one door: `(id, context) => Promise<…>`.
-- **`eventHandler` (internal factory)** — Accepts an operation name and an `EventDoor` function, returns a named Express handler. The operation name is carried into logs and metrics via `namedHandler` / `catchAs`.
-- **`postExamplePublish`** — Exported handler for publishing a draft; calls `exampleService.publishById`.
-- **`postExampleArchive`** — Exported handler for archiving a draft or published example; calls `exampleService.archiveById`.
-- **`postExampleUnarchive`** — Exported handler for returning an archived example to draft; calls `exampleService.unarchiveById`.
+- `EventDoor` (type, internal): signature of a service function, `(id, context: CallerContext)`, returning the same type as `exampleService.publishById`.
+- `eventHandler(operation, door)` (internal factory): wraps an Express handler with `namedHandler(operation, ...)` so logs and metrics carry the handler name. The handler:
+  1. Calls `requireId(request, response, { notFound: 'example.not-found' })` and stops if no id is returned.
+  2. Calls `door(id, callerContextOf(request))`.
+  3. If `refused(response, result)` is true, returns, since the response is already handled.
+  4. Otherwise calls `answerAsResource(response, result.data, `/examples/${id}`)`, then `successResponse(response, result.data, 200)`.
+  5. Maps any rejection through `.catch(catchAs(response, operation))`.
+- `postExamplePublish` (export): uses `exampleService.publishById`. Publishes a draft the caller may edit.
+- `postExampleArchive` (export): uses `exampleService.archiveById`. Archives a draft or published example the caller may edit.
+- `postExampleUnarchive` (export): uses `exampleService.unarchiveById`. Returns an archived example the caller may edit to draft.
 
 ## Relationships
-
-- **`src/modules/example/services/index.ts`** — Consumes `exampleService` and its three `*ById` methods; the only business-logic dependency.
-- **`src/modules/example/routes.ts`** — Imports the three exported handlers and registers them on their respective `POST` routes.
-- **`src/infrastructure/http/controller.ts`** — Provides `namedHandler`, `refused`, and `catchAs` used to wrap the handler and handle error/refusal paths.
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId`, which extracts and validates the `:id` param, responding with a 404 on failure.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` to build the `CallerContext` passed into the service.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` to finalize a 200 reply.
-- **`src/infrastructure/http/preconditions.ts`** — Provides `answerAsResource` to set the `Location` header on the response before the body is sent.
-- **`src/types/index.ts` / `src/types/auth-context.ts`** — Source of the `CallerContext` type imported from `@types`.
+- `src/infrastructure/http/controller.ts`: supplies `namedHandler`, `catchAs` and `refused`, which give the handler its naming, error mapping and refusal handling.
+- `src/infrastructure/http/ids.ts`: `requireId` extracts and validates the `:id` param on the request.
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the `CallerContext` passed to the service.
+- `src/infrastructure/http/response.ts`: `successResponse` sends the 200 reply.
+- `src/infrastructure/http/preconditions.ts`: `answerAsResource` is called on the response, with the result data and the `/examples/${id}` path, before the reply is sent.
+- `src/modules/example/services/index.ts`: `exampleService` provides `publishById`, `archiveById` and `unarchiveById`.
+- `src/types/index.ts` (and `src/types/auth-context.ts`): provides the `CallerContext` type.
+- `src/modules/example/routes.ts`: the route table that these exports are wired into for the three POST endpoints.
 
 ## Notes
-
-- **Factory, not three separate handlers.** All three doors share one `eventHandler` closure; they differ only in the `operation` string (for logging) and the `door` function. Adding a fourth door is a one-line export.
-- **`if (!id) return Promise.resolve()`** is not a no-op: `requireId` has already sent the 404 response, so this simply prevents the `.then`/`.catch` chain from running on a dead request.
-- **`answerAsResource` is called before `successResponse`.** It mutates the response (sets `Location`); the order matters.
-- **Delete this file** if the module never gains an action (lifecycle) door — it exists solely to host those three POST handlers.
+- The module doc says to delete this file if the module has no action doors.
+- Success responses are always status 200 and carry `result.data`.
+- The id check and the refusal check both short-circuit without throwing. Only service rejections reach `catchAs`.
+- To add a new lifecycle event, add a service function and one more `eventHandler(...)` export. The handler name string is what appears in logs.

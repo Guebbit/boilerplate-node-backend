@@ -1,29 +1,26 @@
 ---
 source: src/modules/sitemap/controllers/get-sitemap-pages.ts
-sha256: d084ed572ff900a463457bec1678d816b83fdb5c11cd8a00206f726202aa6b47
-generated_at: 2026-11-08T08:22:00.405496+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d084ed572ff900a463457bec1678d816b83fdb5c11cd8a00206f726202aa6b47
+context_sha256: 15ea135da7acf6996b990d4a2d9a6885e45f565acf1fb7d6ebfb8aa1d3a51c1b
+generated_at: 2026-11-22T07:48:23.435430+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/sitemap/controllers/get-sitemap-pages.ts
 
 ## Purpose
-
-Controller handler for `GET /sitemap/pages.xml`. It fetches the shop's static pages (one entry per language) from the sitemap service and sends them back as an XML sitemap. It exists to isolate the HTTP-level concerns (request/response, error formatting) from the business logic in the service layer.
+Express controller that serves the shop's static pages as a sitemap XML document, with each page listed once per language. Its doc comment describes it as `GET /sitemap/pages.xml`.
 
 ## Key elements
-
-- **`getSitemapPages(request, response)`** — The sole export. Calls `sitemapService.listPages()`, pipes the resulting entries through `sendXml` with a `SitemapStream` instance, and delegates any rejection to `catchAs(response, 'getSitemapPages')`.
+- `getSitemapPages(_request, response)` — the only export. It calls `sitemapService.listPages()`, then passes the resulting entries and a new `SitemapStream` to `sendXml` to write the response. Rejections are handled by `catchAs(response, 'getSitemapPages')`.
 
 ## Relationships
-
-- **`src/modules/sitemap/service.ts`** — Provides `sitemapService.listPages()`, the data source for the page entries.
-- **`src/modules/sitemap/controllers/send-xml.ts`** — Provides `sendXml(response, entries, stream)`, which serializes entries into XML and writes the response.
-- **`src/infrastructure/http/controller.ts`** — Provides `catchAs`, a shared error-catch wrapper that formats HTTP error responses with a labelled tag.
-- **`src/modules/sitemap/routes.ts`** — Consumes `getSitemapPages` and binds it to the `GET /sitemap/pages.xml` route.
+- `src/modules/sitemap/service.ts` — exports `sitemapService`, whose `listPages()` supplies the sitemap entries.
+- `src/modules/sitemap/controllers/send-xml.ts` — exports `sendXml`, which receives the response, the entries and the `SitemapStream`.
+- `src/infrastructure/http/controller.ts` — exports `catchAs`, which provides the error handler. It receives the response and the label `'getSitemapPages'`.
+- `src/modules/sitemap/routes.ts` — not imported by this file. The route registration is presumably there, but that is not visible in this file.
 
 ## Notes
-
-- The `request` parameter is intentionally unused (prefixed `_`); only `response` is needed.
-- A **new** `SitemapStream()` is instantiated per request and handed to `sendXml`; the stream is not managed or closed here.
-- Follows the project's controller convention: a single `.then/.catch` chain with `catchAs` as the error handler rather than a `try/catch` or Express async-wrapper.
+- The handler uses a promise chain with `.then`/`.catch` instead of `async`/`await`.
+- The request argument is unused, so the output does not depend on query parameters or headers.
+- Each call creates a new `SitemapStream`.

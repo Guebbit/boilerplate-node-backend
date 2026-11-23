@@ -1,31 +1,24 @@
 ---
 source: src/modules/locales/tests/unit/apps.fixture.ts
-sha256: cd387de8b7c27036fd2a000ba6646c0e9b2b699d114d8899f3d71699c3007136
-generated_at: 2026-11-08T06:28:58.062516+00:00
-model: ollama:qwen3.8:27b
+source_sha256: cd387de8b7c27036fd2a000ba6646c0e9b2b699d114d8899f3d71699c3007136
+context_sha256: 106bd34d72824f70cdc915015374fcc4fd64bbcc4d640f53a78cf90f721319b7
+generated_at: 2026-11-22T05:51:18.177679+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/tests/unit/apps.fixture.ts
 
 ## Purpose
-
-Test fixture that exposes the two demo app IDs (backend and frontend) used across the locales test suite. The IDs are obtained by calling the registry functions in `apps.ts` rather than being spelled out as string literals, so tests always operate on values the service actually accepts and cannot silently drift if the registry changes.
+A tiny test fixture that supplies the two app ids the locales test suite writes rows under: the demo backend and frontend apps. The values are read from the app registry instead of being hard-coded, so tests can't drift from what the service accepts.
 
 ## Key elements
-
-- **`BACKEND`** – `export const`; the demo backend app ID, sourced from `backendApp()`.
-- **`FRONTEND`** – `export const`; the demo frontend app ID, sourced from `frontendApp()`.
-
-No functions or classes are defined; the file is a pure re-export of two values.
+- `BACKEND` — the demo backend app id, computed once at import time via `backendApp()`.
+- `FRONTEND` — the demo frontend app id, computed once at import time via `frontendApp()`.
 
 ## Relationships
-
-- **`src/modules/locales/apps.ts`** – Provides the `backendApp` and `frontendApp` factory functions that this file calls at import time to obtain the IDs.
-- **`src/modules/locales/tests/unit/service.test.ts`** – Consumes `BACKEND` / `FRONTEND` as the app IDs under which test rows are written and queried.
-- **`src/modules/locales/tests/integration/repository.test.ts`** – Consumes the same IDs to seed and assert repository-level data.
-- **`src/modules/locales/tests/integration/update-audit.test.ts`** – Consumes the same IDs for update/audit flow tests.
+- Imports `backendApp` and `frontendApp` from `src/modules/locales/apps.ts`, which is the source of the ids.
+- Listed as related to `src/modules/locales/tests/unit/service.test.ts`, `src/modules/locales/tests/integration/repository.test.ts` and `src/modules/locales/tests/integration/update-audit.test.ts`, the suites that use these ids when writing rows.
 
 ## Notes
-
-- The file uses the `@module` doc annotation (no default export); all consumers must import the named constants.
-- Because the IDs are resolved at **import time** (top-level `const`), any test that mutates the registry *after* importing this file will still see the original values. If a test needs different IDs, it should call the `apps.ts` functions directly rather than importing this fixture.
+- The ids are evaluated when the module loads, not per test. Despite the "live" wording in the doc comments, they are fixed for the lifetime of the test process.
+- Despite living under `tests/unit/`, the fixture is shared with the integration tests.

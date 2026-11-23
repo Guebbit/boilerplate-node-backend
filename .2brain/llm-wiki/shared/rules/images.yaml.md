@@ -1,36 +1,36 @@
 ---
 source: shared/rules/images.yaml
-sha256: 987c2599d9738f06199c06ee572ccf7338a6585ca02ccf67c156a6831873d329
-generated_at: 2026-11-08T03:09:21.892019+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 987c2599d9738f06199c06ee572ccf7338a6585ca02ccf67c156a6831873d329
+context_sha256: 312fba1c1faf7ea317bb56cd4bba43364b3dcb493ebaf7a6cb8bbc54dc40ada4
+generated_at: 2026-11-22T02:26:00.409388+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/images.yaml
 
 ## Purpose
-
-Declarative source of truth for which raster image formats the upload pipeline accepts and how to detect them by magic bytes. It is **not** read at runtime; `npm run regenerate` compiles it into `src/infrastructure/adapters/images.generated.ts`. The file also tracks the thumbnail version string so that a quality-setting change can bump the cache-busting segment in immutable (`1y`) thumbnail URLs.
+Declares which raster image formats an upload may be, identified by their leading bytes (magic numbers) rather than the client-supplied `Content-Type`. SVG is deliberately excluded because browsers execute it as XML. It is the source of truth for upload image validation.
 
 ## Key elements
-
-- **`thumbnailVersion`** (`v1`) — opaque version tag embedded in thumbnail URLs; bump (don't edit in place) whenever thumbnail encoding settings change.
-- **`formats[]`** — array of format descriptors:
-  - `mime` — canonical MIME type.
-  - `aliases` (optional) — non-IANA or legacy `Content-Type` spellings clients actually send (e.g. `image/jpg`).
-  - `offset` / `bytes` — the magic-byte signature and its position in the stream.
-  - `alsoRequires` (optional) — additional byte signatures that must *also* match (WebP: `RIFF` at 0 + `WEBP` at 8) to disambiguate from other RIFF containers.
-  - `extension` — the storage extension assigned server-side; the client's filename is never used.
-  - `reencodable` — whether the digest job may re-encode the image.
-- **Defined formats:** PNG, JPEG (with `image/jpg` alias), WebP. All three are `reencodable: true`.
+- `images.thumbnailVersion` (`v1`): a version tag for thumbnails. It is bumped, not overwritten, when thumbnail quality settings change, because thumbnail URLs are `immutable, 1y`.
+- `images.formats`: the list of accepted formats. Each entry has these fields:
+  - `mime`: the canonical content type.
+  - `offset` / `bytes`: the byte sequence that must appear at that offset.
+  - `alsoRequires`: extra offset/bytes markers that must also match.
+  - `aliases`: other `Content-Type` spellings clients send.
+  - `extension`: the extension the file is stored under. It is never taken from the client's filename.
+  - `reencodable`: marks formats the digest job can re-encode.
+- Formats defined:
+  - PNG: 8-byte signature at offset 0. The trailing bytes catch transfers that mangled line endings.
+  - JPEG: `ff d8 ff` at offset 0, stored as `jpg`, with alias `image/jpg`.
+  - WebP: `WEBP` at offset 8, plus `RIFF` at offset 0 via `alsoRequires`.
+  - All three are `reencodable: true`.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — The `mime` / `aliases` values here are the `Content-Type` values the OpenAPI contract exposes for upload endpoints. Changing a MIME type or adding an alias in this file should be accompanied by a matching update to the schema so the two stay consistent.
+`shared/rules/defaults.yaml` is listed as a graph neighbor, but this file contains no reference to it, so no direct interaction is visible here.
 
 ## Notes
-
-- **SVG is intentionally excluded** — the file header calls out that SVG is XML that browsers execute, so it is not a permitted upload format.
-- **PNG magic bytes include the line-ending bytes** (`\r\n\x1a\n`) to catch uploads where line endings were mangled in transit.
-- **JPEG detection uses only 3 bytes** (`FF D8 FF`) because the byte following SOI varies by encoder.
-- **WebP requires two checks** (`alsoRequires`) because `WEBP` at offset 8 alone also appears in other RIFF sub-formats.
-- The generated file path (`src/infrastructure/adapters/images.generated.ts`) is the actual runtime artifact; edit *this* YAML and re-run `npm run regenerate` rather than hand-editing the generated TS.
+- Not read at boot. Per the file's header comment, `npm run regenerate` generates a TypeScript file from it, so edits take effect only after regenerating.
+- WebP needs both markers because `RIFF` alone or `WEBP` alone also matches other containers.
+- JPEG matches only the SOI marker plus one byte of the next marker, since the bytes that follow vary by encoder.
+- `image/jpg` is not an IANA type but is accepted as an alias because enough clients send it.

@@ -1,47 +1,38 @@
 ---
 source: src/modules/payments/domain/disputes.ts
-sha256: 1bea2e68184456fd46d733f14e3dcbe03f581f4eb9445e160666dda57c4bb656
-generated_at: 2026-11-08T07:19:44.417519+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 151acda24876fcb7253fc751206a81e4983e3c27fcc1b3950a01b529488129c3
+context_sha256: 3e53d858f0774255fdd7934309dfc2a5325976ff4380c3051c8db53f7861378f
+generated_at: 2026-11-22T06:43:45.548406+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/domain/disputes.ts
 
 ## Purpose
-
-Pure domain rules that determine what a shop may still do with a payment while a buyer-initiated dispute (inquiry or chargeback) stands. The file performs no I/O and produces no side effects; it only classifies dispute state and computes the monetary ceiling the bank has already taken. A key semantic distinction it enforces: a chargeback is **not** a refund — it lowers `charged`, never `refunded`, and never issues a credit note.
+Pure domain rules for payment disputes (a buyer's bank questioning a card payment). An `inquiry` takes no money; a `chargeback` takes it back immediately and opens an evidence window. The file decides what the shop may still do with a payment while a dispute stands. A chargeback is not a refund: it never raises `payment.refunded` and never issues a credit note.
 
 ## Key elements
-
-- **`DisputeFacts`** — read-only slice of a stored dispute the rules consume (`kind`, `status`, `amount`, `currency`).
-- **`DisputablePayment`** — minimal payment shape the rules accept (optional `disputes` array).
-- **`OPEN_DISPUTE_STATUSES`** — exported array (`needs_response`, `under_review`); the set of statuses where the shop or bank still has a move.
-- **`LOSS_DISPUTE_STATUSES`** (private) — set of terminal statuses where the bank kept the money (`lost`, `accepted`).
-- **`openDisputeFilter()`** — returns a Mongo `$elemMatch` filter; feeds the staff list's `disputed` query.
-- **`isOpenDispute(dispute)`** — true if a single dispute is in an open status.
-- **`hasOpenDispute(payment)`** — true if any dispute (any kind) on the payment is still open.
-- **`hasOpenChargeback(payment)`** — true only if an *open chargeback* exists; this is the gate that blocks further refunds. An open inquiry does **not** block refunds.
-- **`lostToChargebacks(payment, currency)`** — sums minor units taken by lost/accepted chargebacks via `addMoney`. A `won` chargeback contributes zero (funds reinstated).
-- **`lostChargebackCovers(payment, amount, currency)`** — whether the lost-chargeback total covers a given refund amount; used to report an open refund as "returned by the bank."
-- **`hasDecidedDispute(payment)`** — true when disputes exist **and** no open chargeback remains; signals that a refund previously refused as `disputed` is no longer pending.
+- `DisputeFacts` – the slice of a stored dispute the rules read (`kind`, `status`, `amount`, `currency`).
+- `DisputablePayment` – a payment as seen by these rules (optional `disputes` array).
+- `OPEN_DISPUTE_STATUSES` – `needs_response` and `under_review`.
+- `openDisputeFilter()` – Mongo filter (`$elemMatch` on `disputes.status` in the open statuses) behind the staff list's `disputed` filter.
+- `isOpenDispute(dispute)` – whether a dispute is in an open status.
+- `hasOpenDispute(payment)` – any dispute open, of any kind.
+- `hasOpenChargeback(payment)` – an open dispute of kind `chargeback`. Refunds are blocked while this holds; an open inquiry does not block them, and a full refund ends it.
+- `bankKeptMoney(dispute)` – a chargeback with status `lost` or `accepted`. Inquiries, and `won`/`closed` disputes, give nothing up.
+- `keptInOtherCurrency(dispute, currency)` – bank kept money, in a currency different from the payment's.
+- `anyDisputeKeptMoney(payment)` – any dispute kept money, in any currency.
+- `otherCurrencyKept(payment, currency)` – currency of the first kept dispute that is in another currency, or `undefined`.
+- `lostToChargebacks(payment, currency)` – `Money` total (minor units) of kept chargebacks in the payment's currency, via `addMoney` and `toMinorUnits`.
 
 ## Relationships
-
-- **`src/types/index.ts`** — source of the `DisputeKind` and `DisputeStatus` enums used throughout.
-- **`src/domain-primitives/money.ts`** — provides `addMoney`, `toMinorUnits`, and the `Money` type for all arithmetic in this file.
-- **`src/modules/payments/domain/index.ts`** — barrel that re-exports this module alongside `lifecycle.ts`.
-- **`src/modules/payments/domain/lifecycle.ts`** — sibling pure-rules file; dispute rules and lifecycle rules are consumed together by services.
-- **`src/modules/payments/repository.ts`** — consumes `openDisputeFilter()` to build the Mongo query behind the `disputed` list filter.
-- **`src/modules/payments/services/list.ts`** — calls `openDisputeFilter()` to apply the `disputed` filter in staff-facing payment listings.
-- **`src/modules/payments/services/refunds.ts`** / **`refund-settlement.ts`** — call `hasOpenChargeback`, `lostToChargebacks`, and `lostChargebackCovers` to gate or annotate refund eligibility and reporting.
-- **`src/modules/payments/services/disputes.ts`** — applies these rules when processing dispute state transitions.
-- **`src/modules/payments/services/view.ts`** — reads dispute state for display purposes.
-- **`src/modules/payments/tests/unit/refund-rules.test.ts`** — exercises the interplay between refund rules and the dispute constraints defined here.
+- Imports `addMoney`, `toMinorUnits` and the `Money` type from `src/domain-primitives/money.ts`, and `DisputeKind` and `DisputeStatus` from `src/types/index.ts`.
+- Sits in the payments domain alongside `src/modules/payments/domain/dispute-end.ts` and `src/modules/payments/domain/lifecycle.ts`.
+- The service files in the neighbor list (`src/modules/payments/services/disputes.ts`, `src/modules/payments/services/list.ts`, `src/modules/payments/services/refund-settlement.ts`, `src/modules/payments/services/refunds.ts`, `src/modules/payments/services/view.ts`) and `src/modules/payments/repository.ts` are graph neighbors of this file. The visible code does not show how each uses it, but the doc comments point to the staff list filter and refund limits as the intended consumers.
+- Covered by neighbor tests such as `src/modules/payments/tests/unit/dispute-end.test.ts` and `src/modules/payments/tests/unit/refund-rules.test.ts`.
 
 ## Notes
-
-- **Inquiry ≠ chargeback for refund gating.** Only an open *chargeback* blocks new refunds. An open inquiry leaves refunds fully allowed, and a full refund ends the inquiry.
-- **`hasDecidedDispute` is not the same as "has any dispute."** It requires that no open chargeback remains; it is the predicate that clears a refund's `disputed` refusal state.
-- **`lostToChargebacks` only counts terminal losses.** A `won` or `accepted`-then-reversed chargeback naturally contributes zero because it is absent from `LOSS_DISPUTE_STATUSES`; no special handling needed.
-- **All functions are pure.** No Date, no random, no I/O. Safe to call in any order and to unit-test in isolation.
-- **`openDisputeFilter` returns a plain `Record<string, unknown>`**, not a typed Mongoose filter, so callers must cast or use it directly in a `.find()` call.
+- Disputes in a different currency than the payment are never subtracted in `lostToChargebacks`. Staff must check them in the provider's dashboard, which is what `keptInOtherCurrency` and `otherCurrencyKept` flag.
+- A `won` chargeback takes nothing, so a late win restores refund room automatically.
+- All functions treat a missing `disputes` field as an empty list.
+- `openDisputeFilter` operates on stored fields and reuses `OPEN_DISPUTE_STATUSES`, so the two stay consistent.

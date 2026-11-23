@@ -1,30 +1,38 @@
 ---
 source: src/modules/products/tests/unit/schema-contract.test.ts
-sha256: 3e59406cae154dbefb22cd8853793d2fad92a314ec1a15d629d753bdbf5acc06
-generated_at: 2026-11-08T07:54:33.653608+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 92e368f4094c432a17b37e304fec5127e842f3324eb5478bf4a0fc15b444c1b1
+context_sha256: 4416ef54b2041ca56c6f6cab00e41d74b8ba1adce8e3bf7a832e404e68b5dee5
+generated_at: 2026-11-22T07:19:48.717299+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/unit/schema-contract.test.ts
 
 ## Purpose
-
-Contract tests that pin the product schema's field requirements, defaults, indexes, and the `available` derivation logic in `applyProductTransform`. They exist to guarantee that the minimal create path, stock accounting, visibility scope, and SKU uniqueness all behave as the rest of the system (cart, catalogue, ledger replay) expects without having to re-derive those assumptions at runtime.
+Unit tests that pin down the product schema's contract: which fields are required, what each default means when a field is never set, which indexes exist, and what the serialization transform adds to the output. The defaults carry business meaning (for example, a new product is published unless told otherwise).
 
 ## Key elements
-
-- **`serialize(onHand, reserved)`** — local helper that calls `applyProductTransform` on a synthetic document and returns the computed `available` value; used by every transform test.
-- **`describe('productSchema — what a product must carry')`** — asserts required paths (`price`, `title`), non-negative min on stock counters, and the concrete default for every optional field (`onHand: 0`, `reserved: 0`, `active: true`, `requiresShipping: true`, `description: undefined`, `categories: []`, `tags: []`, `imageUrl: undefined`, `deletedAt: undefined`).
-- **`describe('productSchema — indexes')`** — asserts the exact set of three named indexes and that `products_sku` is sparse + unique.
-- **`describe('applyProductTransform — the derived availability')`** — asserts `available = max(0, onHand − reserved)`, that missing or non-number counters are treated as zero (not NaN, not coerced).
+- `serialized()`: helper that runs `applyProductTransform({ _id: 'x' })` to get one bare serialized product.
+- **`productSchema — what a product must carry`**:
+  - Only `price` and `title` are required.
+  - `active` defaults to `true`.
+  - `requiresShipping` defaults to `true`. The comment says this matches `openapi.yaml`.
+  - `categories` and `tags` default to `[]`.
+  - `description`, `imageUrl` and `deletedAt` have no default (`undefined`). Soft deletion is the absence of `deletedAt`.
+  - `timestamps` is enabled.
+- **`productSchema — indexes`**:
+  - Exactly three named indexes: `products_active_deletedAt` (`active+1, deletedAt+1`), `products_createdAt` (`createdAt-1`) and `products_sku` (`sku+1`).
+  - `products_sku` must be `sparse` and `unique`, so products without a `sku` don't collide.
+- **`applyProductTransform — the serialized product`**: the output contains a string `currency` and an `actions` object with `update`, `delete`, `restore` and `hardDelete` all `false`.
 
 ## Relationships
-
-- **`src/modules/products/model.ts`** — source of `productSchema` (Mongoose schema) and `applyProductTransform`; this file is the sole consumer under test.
-- **`tests/support/schema.ts`** — provides the introspection utilities (`defaultOf`, `indexSpecs`, `indexOptionSpecs`, `optionsOf`, `pathOptions`, `requiredPaths`) that let the tests assert on schema metadata without executing MongoDB.
+- `src/modules/products/model.ts`: provides `productSchema` and `applyProductTransform`, the two things under test.
+- `tests/support/schema.ts`: imported through the `@tests/schema` alias. Its helpers `defaultOf`, `optionsOf`, `requiredPaths`, `indexSpecs` and `indexOptionSpecs` read the schema's defaults, options, required paths and indexes.
+- `src/infrastructure/persistence/serialize.ts`: not imported here. The tests reach serialization only through `applyProductTransform`.
 
 ## Notes
-
-- The tests deliberately assert *absence* as a meaningful default (`description`, `imageUrl`, `deletedAt` must be `undefined`, not `''` or a date). Flipping any of these to a concrete value changes wire behavior and consumer branching.
-- The SKU index is **sparse**; the test encodes that an unfiltered unique index would collide on the implicit `null` entries. Any schema change that adds a default to `sku` will break this test.
-- `serialize` passes raw `unknown` values (including strings and `undefined`) into `applyProductTransform`; the transform is expected to reject non-numeric inputs rather than coerce them. This is a deliberate contract, not a Mongoose-level guarantee.
+- The index and default assertions compare against fixed strings and values, so any schema change to these must update the tests deliberately.
+- Comments in the file explain the reasoning behind the defaults:
+  - `categories` and `tags` feed the facet endpoint, so an absent array would need a separate code path in every consumer.
+  - A description that is not set should be omitted from the output, never `''`.
+  - The sparse `sku` index follows the same reasoning as `orders_transferReference` in `orders`.

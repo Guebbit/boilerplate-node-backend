@@ -1,33 +1,29 @@
 ---
 source: src/modules/account/session/idle.ts
-sha256: 2a1fbae6a5f9fdb3ba1db126bb435368295375f91f38ec9e4a27bf58041b1e6a
-generated_at: 2026-11-08T04:28:19.707619+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 21464e7f17e1a627a56a71d9029a6637a27c460f77964309b0c0dd9e54ac6d80
+context_sha256: 6819aa9ce960e530bcceadaf7c7909ad5a41874d631d2140049c76862f1b62f4
+generated_at: 2026-11-22T03:46:50.282428+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/session/idle.ts
 
 ## Purpose
-
-Backend enforcement of the staff-only session idle timeout and lifetime cap. A session whose holder (tenant or platform role) has not made a real request within the configured window is considered idled out; a session that outlives its absolute lifetime is expired. Shopper sessions are never subject to either check. Enforced server-side because a client timer is treated as advisory only.
+Backend enforcement of two staff-only session limits: an idle timeout (no real request for too long) and an absolute lifetime cap since sign-in. Shoppers (callers with no tenant or platform role) are never limited. It lives server-side because a client timer is only a courtesy. The file holds pure time and role checks, not session storage or request handling.
 
 ## Key elements
-
-- **`isStaff(roles)`** *(internal)* — returns `true` if `roles.tenant` or `roles.platform` is non-null.
-- **`idleLimitMilliseconds(roles)`** *(exported)* — the idle window in ms for the given caller, or `0` when the cap doesn't apply (non-staff or timeout disabled).
-- **`hasIdledOut(lastActive, roles, now?)`** *(exported)* — `true` when the elapsed time since `lastActive` exceeds the idle limit.
-- **`staffCapEndsAt(startedAt, roles)`** *(exported)* — the absolute `Date` at which a staff session must end (sign-in time + lifetime cap), or `undefined` when the cap doesn't apply.
-- **`hasOutlivedStaffCap(startedAt, roles, now?)`** *(exported)* — `true` when `now` is past `staffCapEndsAt`.
+- `isStaff` (private): true when `roles.tenant` or `roles.platform` is non-null.
+- `idleLimitMilliseconds(roles)`: the idle limit in ms, from `getStaffIdleTimeSeconds() * 1000` for staff. It returns `0` for non-staff or when the timeout is off.
+- `hasIdledOut(lastActive, roles, now = new Date())`: true only if a limit applies and `now - lastActive` exceeds it.
+- `staffCapEndsAt(startedAt, roles)`: `startedAt` plus `getStaffLifetimeSeconds()` for staff. It returns `undefined` for non-staff or when the cap is off.
+- `hasOutlivedStaffCap(startedAt, roles, now = new Date())`: true if a cap end exists and `now` is strictly after it.
 
 ## Relationships
-
-- **`./config`** — imports `getStaffIdleTimeSeconds` and `getStaffLifetimeSeconds` to obtain the configured thresholds.
-- **`@types` → `src/types/auth-context.ts` / `src/types/index.ts`** — imports the `AuthContext` type solely for the `roles` shape used in every public function signature.
-- The exported predicates (`hasIdledOut`, `hasOutlivedStaffCap`) are the check points consumed by the other session files in this directory (`listing.ts`, `account-view.ts`, `cookie-strategy.ts`, `family-liveness.ts`) when deciding whether to terminate or deny a request.
+- `./config`: supplies `getStaffIdleTimeSeconds` and `getStaffLifetimeSeconds`, the configured limits. A value that yields `0` disables the limit.
+- `@types` (`src/types/auth-context.ts`, re-exported via `src/types/index.ts`): `AuthContext['roles']` is the type of the `roles` parameter.
+- `account-view.ts`, `cookie-strategy.ts`, `family-liveness.ts` and `listing.ts` are graph neighbors, but this file does not import them. The visible code does not show how they call these helpers.
 
 ## Notes
-
-- "Staff" is defined by the presence of **either** a tenant or a platform role; a pure shopper (`tenant: null, platform: null`) gets `0` back from `idleLimitMilliseconds` and `undefined` from `staffCapEndsAt`, short-circuiting both checks.
-- `staffCapEndsAt` is intentionally stateless and reads the cap on every call, so a shopper promoted to a staff role mid-session is capped starting from the next request (the session family's `startedAt` does not reset on promotion).
-- All time comparisons use `Date.getTime()` (ms precision); the config values arrive in **seconds** and are multiplied by 1000 inside this module.
-- The `now` parameter defaults to `new Date()`, making the functions deterministic in tests when a timestamp is supplied.
+- The cap is computed from `startedAt`, the sign-in time of the session family, which a refresh keeps. It is evaluated on every request, so a customer promoted to staff mid-session is capped from their next request.
+- Both checks use strict `>`, so a session exactly at the limit has not yet expired.
+- A limit of `0` means "not applicable" and cannot be told apart from "off" in the return values.

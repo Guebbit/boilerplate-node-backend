@@ -1,36 +1,47 @@
 ---
 source: src/modules/account/tests/unit/family-liveness.test.ts
-sha256: 86fe83f3898a938ba5214a352f85cf35c212df3d12abcac6a6833ff7896eaa19
-generated_at: 2026-11-08T04:47:12.459836+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ccc7b6339900be700591dd42923c05b037ef3ec84aef281ba820dd67f3033e4d
+context_sha256: 6351cdef963681f3a371b8873fe298921bc76e87cdc2b3bfe8fc1364e986c42e
+generated_at: 2026-11-22T04:05:40.038226+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/family-liveness.test.ts
 
 ## Purpose
-
-Unit tests for `resolveInLiveFamily` (from `../../session/family-liveness.ts`), verifying the decision logic that determines whether a session family is revoked, idle-ended, expired, or allowed through, and whether a "stamp" (`touchFamily`) is written. The store is fully mocked; the tests exercise only the in-memory branching.
+Unit tests for `resolveInLiveFamily` (`src/modules/account/session/family-liveness.ts`). They check that a family with no live row is revoked, that a staff family is ended when idle past its limit or past its lifetime cap, and that live requests are stamped as activity unless they are passive. The session store is replaced with mocks, so what the real repository queries select is left to the integration suite.
 
 ## Key elements
+- **`jest.mock('@modules/account/repository')`**: keeps the real module but replaces `sessionRepository.familyActivity`, `touchFamily` and `removeFamily` with `jest.fn()`.
+- **`store`**: the mocked repository methods, typed through `asStub`.
+- **`SHOPPER` / `STAFF`**: caller fixtures. `SHOPPER` has no tenant or platform role. `STAFF` has the tenant role `editor`.
+- **`ago(seconds)`**: returns a `Date` that many seconds in the past.
+- **`resolve(caller, passive)`**: calls `resolveInLiveFamily('u1', 'f1', 'jwt', loader, { passive })`.
+- **`clockOf`**: pulls `ok.sessionClock` out of a resolve result.
+- **`beforeEach`**: resets all mocks, sets `NODE_SESSION_IDLE_TIME_STAFF=1800`, and makes `touchFamily` resolve `true` and `removeFamily` resolve `1`.
 
-- **`resolveInLiveFamily`** (imported from `@modules/account/session/family-liveness`) — the function under test; takes caller id, family id, token, a caller-fetch callback, and a `{ passive }` option.
-- **`store`** — a stub of `sessionRepository` with `familyActivity`, `touchFamily`, and `removeFamily` as `jest.fn()`s.
-- **`SHOPPER` / `STAFF`** — two caller fixtures distinguishing tenant vs. platform roles (staff has `roles.tenant = 'editor'`; shopper has it `null`).
-- **`ago(seconds)`** — helper returning a `Date` offset from now, used to fabricate `startedAt` / `lastActiveAt` / `stampedAt` values.
-- **`resolve(caller, passive?)`** — thin wrapper that calls `resolveInLiveFamily('u1','f1','jwt', …, { passive })` with a fixed caller-fetch stub.
-- **Test cases** — cover: missing live row → `{ miss: 'revoked' }`; staff idle past limit → `{ miss: 'idle' }`; staff past lifetime cap → `{ miss: 'expired' }`; within cap → `{ ok }`; shopper immune to age/idle; stamp written when absent or >60 s old; stamp skipped when <60 s; passive requests judged but never stamped; resolution succeeds even if `touchFamily` rejects.
+Cases covered:
+- No live row gives `{ miss: 'revoked' }`.
+- A staff family idle past 1800s gives `{ miss: 'idle' }` and is removed with `removeFamily('u1','f1')`.
+- A staff family started more than 86,400s ago gives `{ miss: 'expired' }` even when busy, and is removed.
+- A staff family inside the cap is accepted. Setting `NODE_SESSION_LIFETIME_STAFF=0` turns the cap off.
+- A shopper's family is never ended for age or idleness, and `removeFamily` is not called.
+- `touchFamily` runs when there is no `stampedAt` or when it is over a minute old. It does not run when stamped within the minute.
+- A passive request is judged but never stamped.
+- A `touchFamily` rejection does not stop the request from being answered.
+- Session clock returned to the caller:
+  - When this request writes the stamp, `lastActiveAt` is about now and `startedAt` is preserved.
+  - When the saved stamp is still fresh, it is kept.
+  - A passive request keeps the saved stamp, even a stale one.
 
 ## Relationships
-
-- **`src/modules/account/session/family-liveness.ts`** — the module under test; `resolveInLiveFamily` is imported directly.
-- **`src/modules/account/repository.ts`** — `sessionRepository` is mocked via `jest.mock`, exposing `familyActivity`, `touchFamily`, `removeFamily` as spies.
-- **`tests/support/stub.ts`** — `asStub` is used to type-cast the mocked repository and the caller-fetch callback.
-- **`tests/support/environment.ts`** — `setEnvironment` sets `NODE_SESSION_IDLE_TIME_STAFF` (and optionally `NODE_SESSION_LIFETIME_STAFF`) to control the thresholds under test.
+- Tests `resolveInLiveFamily` from `src/modules/account/session/family-liveness.ts`.
+- Mocks `sessionRepository` in `src/modules/account/repository.ts`, spreading the real module and overriding only three methods.
+- Uses `asStub` from `tests/support/stub.ts` and `setEnvironment` from `tests/support/environment.ts`.
+- The module header says the store's real queries are covered by the integration suite. The neighboring integration tests (account revocation causes, session epoch and session modes, plus the API-key and user session-epoch tests) are related through the graph. This file does not import them.
 
 ## Notes
-
-- The mock replaces only three methods on `sessionRepository`; all other repository exports pass through via `...actual`.
-- `stampedAt` is the field that gates stamping: if absent or older than 60 s, `touchFamily` fires; if present and within 60 s, it does not.
-- A passive request still passes through the idle/expiry checks but never triggers a stamp — the test asserts `touchFamily` is *not* called, not merely that the result is `{ ok }`.
-- The lifetime-cap test sets `NODE_SESSION_LIFETIME_STAFF` to `'0'` (disabled) to confirm the cap can be turned off.
-- Shopper callers are deliberately immune to both idle timeout and lifetime cap; the tests assert `removeFamily` is never invoked for them regardless of age.
+- `jest.mock` is declared between the helper imports and the imports of the code under test.
+- The "ok" assertions use `toMatchObject({ ok: caller })`, because the result also carries the `sessionClock`.
+- The 60-second stamp throttle, the 1800s idle limit and the 86,400s lifetime cap are inferred from test inputs. The thresholds themselves live in `family-liveness.ts` and the environment.
+- The lifetime cap is only exercised through `NODE_SESSION_LIFETIME_STAFF`: the default applies in the first case, and `'0'` disables it.

@@ -1,32 +1,34 @@
 ---
 source: docker/observability/gatus.dev.config.yaml
-sha256: 05b09f66051702d25551f71fec286a936b7219ebdc29c971491f0f7b97013a17
-generated_at: 2026-11-08T02:21:44.731155+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 543710350ff5bb9017775384c7760380cfa4fba42ebbd836dcedd0cc5c4ebc3e
+context_sha256: c0bad8e2dd9411f921491314870c4f2f8c952658b70db58361c27e8bceae31c7
+generated_at: 2026-11-22T01:31:57.896702+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # docker/observability/gatus.dev.config.yaml
 
 ## Purpose
-
-Local Gatus configuration that stands in as the off-host heartbeat service for the Alertmanager alert-routing chain described in `docs/tools/prometheus.md#alert-routing`. It lets the full ping → detect → email path be drilled on one machine, with Mailpit as the mail sink instead of a production SMTP relay.
+Gatus configuration for the local Docker stack. It stands in for the off-host heartbeat service that production runs on another machine (`docs/operate/health-checks.md`), so the full alerting chain can be drilled locally. It differs from production only in where it mails (mailpit) and how fast. The production `/livez` and TLS checks are omitted because there is nothing to watch for them here.
 
 ## Key elements
-
-- **`storage.type: memory`** — all state is in-process; nothing persists across restarts.
-- **`alerting.email`** — SMTP to `mailpit:1025`, sender `gatus@example.test`, recipient `ops@example.test`. `client.insecure: true` skips certificate verification because Mailpit offers STARTTLS without a trusted cert.
-- **`alerting.email.default-alert`** — `failure-threshold: 1` (one missed beat triggers email), `send-on-resolved: true` (recovery notification also sent).
-- **`external-endpoints[0]` → `alertmanager-heartbeat`** — heartbeat endpoint Alertmanager's Watchdog pings every minute (dev default of `ALERT_HEARTBEAT_URL`). No ping within `interval: 3m` marks it unhealthy and fires the email alert. Authenticated via `token: 'dev-heartbeat-token'`.
-- **`endpoints[0]` → `alertmanager-healthy`** — plain HTTP GET to `http://alertmanager:9093/-/healthy` every 30 s, expecting `200`. Exists partly because Gatus refuses to start with zero plain endpoints, and partly as an immediate second signal (its alert email arrives right away vs. the ~3 min heartbeat email).
+- `storage: memory`: results are kept in memory only.
+- `alerting.email`: sends from `gatus@example.test` to `ops@example.test` through the `mailpit` host on port 1025. TLS verification is skipped (`client.insecure: true`) so a STARTTLS offer never blocks delivery.
+- `default-alert`: enabled, `failure-threshold: 1`, `send-on-resolved: true`.
+- `external-endpoints` → `alertmanager-heartbeat` (group `dev`):
+  - Authenticated with the token `dev-heartbeat-token`.
+  - `heartbeat.interval: 3m`: if no ping arrives within 3 minutes, it is marked unhealthy and the email alert fires.
+- `endpoints` → `alertmanager-healthy` (group `dev`):
+  - Polls `http://alertmanager:9093/-/healthy` every 30s.
+  - Expects `[STATUS] == 200`.
+  - Has an email alert.
 
 ## Relationships
-
-- **`docker/observability/alertmanager.config.template.yaml`** — Alertmanager's Watchdog component sends the periodic ping that this file's `alertmanager-heartbeat` endpoint consumes. The token in this file must match the `ALERT_HEARTBEAT_TOKEN` the template sets.
-- **`docs/tools/gatus.md`** — documents the *production* Gatus deployment (separate host, TLS, `/livez` checks). This file is the local variant; that doc is the canonical reference for the full feature set.
-- **`docs/tools/prometheus.md`** — the `#alert-routing` section points here as the local heartbeat receiver in the alerting chain.
+- Alertmanager's `Watchdog` alert pings the heartbeat endpoint every minute. The file says this is the dev default of `ALERT_HEARTBEAT_URL`, which is how the `docker/observability/alertmanager.config.template.yaml` side is wired to this file. The token here must match what that URL uses.
+- `alertmanager-healthy` polls the `alertmanager` container directly, so it depends on that service's name and port 9093.
+- `docker/observability/prometheus.infra-rules.yaml` is a neighbor in the graph. This file does not reference it directly. Gatus sits downstream of the Prometheus → Alertmanager → Watchdog chain that the heartbeat checks.
 
 ## Notes
-
-- The production example's `/livez` and TLS endpoints are intentionally omitted — there is nothing to watch for in a single-machine dev stack.
-- Drill procedure: `docker stop alertmanager` → within ~3 min Mailpit (http://localhost:8025) receives the heartbeat-missing email. The `alertmanager-healthy` plain-endpoint email arrives within ~30 s, giving a second, faster signal.
-- The heartbeat token is a hardcoded dev secret (`dev-heartbeat-token`), not sourced from an env var or secret manager.
+- Drill: stop `alertmanager`. The `alertmanager-healthy` mail arrives almost immediately, and the heartbeat mail follows within about 3 minutes. Mails appear in mailpit at `http://localhost:8025`.
+- `alertmanager-healthy` exists mainly because Gatus refuses to start without at least one plain endpoint. It also serves as a useful second signal in the drill.
+- The token and addresses are dev-only placeholders (`example.test`).

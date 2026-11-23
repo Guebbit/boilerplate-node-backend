@@ -1,41 +1,46 @@
 ---
 source: src/modules/locales/tests/integration/repository.test.ts
-sha256: b93baa4cf97f9b9d7a64a4bff7163a679cd10c6b649523028840d5561c91b8d3
-generated_at: 2026-11-14T20:24:14.834410+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a7bd66dc058d0bfc4f6ac250363e3d8bbfed892802d2b40bbd4fd28c1b4866b6
+context_sha256: 9870db181cd83382859fc2e7fd6ea6ec8cf5bec068e454113ed14f7fcaad00de
+generated_at: 2026-11-22T05:50:39.076724+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/tests/integration/repository.test.ts
 
 ## Purpose
-
-Integration tests for the locales repository **write paths** against a real MongoDB instance. The file exists because the properties under test—transactional atomicity between a row write and its revision bump, cascade deletion across collections, and an import's side-effect on rows it was not given—cannot be meaningfully faked in memory. Despite the "integration" label, the repo's convention treats these as unit tests: no HTTP, no auth, no network beyond the local Mongo.
+Integration tests for the locales module's write paths, run against a real Mongo database (via `setupTestDb`). They cover properties an in-memory fake would satisfy trivially: the revision counter moving with each write, cascades across collections, and an import's effect on rows it wasn't given. No HTTP or auth is involved.
 
 ## Key elements
-
-- **`givenLanguage(tag, entries?, overrides?)`** — Creates a locale via `localeRepository.create` and seeds any number of frontend-app entries. The standard setup for every test case.
-- **`givenEntry(locale, app, key, value)`** — One-row insert through the repository (bypassing the service layer so the app is exactly what the test specifies).
-- **`valuesOf(tag)`** — Reads all frontend entries for a tag and returns them as a `Map<key, value>` for assertion.
-- **`revisionOf(tag)`** — Reads the current `revision` counter from the locale document (returns `-1` if the locale is absent).
-- **`failNextBump()`** — Spies on `localeModel.findOneAndUpdate` to throw on the next call, simulating a database error mid-transaction.
-- **`describe('an entry write and its bump are one transaction')`** — Three tests verifying that a failed revision bump rolls back the row create, value save, or entry removal.
-- **`describe('the revision counter')`** — Eight tests asserting the counter moves exactly once per write (add, edit, remove, import) and does **not** move on idempotent edits, no-op imports, reads, or writes to other languages.
-- **`describe('importEntries')`** — Six tests covering created/updated/removed counts, `replace` vs. merge semantics, empty-body replace (full wipe), cross-language isolation, and transactional rollback when the deletion step fails mid-import.
-- **`describe('deleting a language')`** — Verifies `localeService.removeLanguage` cascades to entries and translations, returns accurate counts, and (in the truncated remainder) likely covers edge cases like deleting an inactive or nonexistent language.
+- **`setupTestDb()`**: called at module top level to provision the test database.
+- **`FALLBACK`**: constant `'en'`, the deployment's fallback locale in the test environment.
+- **`givenLanguage(tag, entries?, overrides?)`**: creates a locale via `makeLocale` and optionally seeds frontend entries via `makeLocaleEntry`.
+- **`givenEntry(locale, app, key, value)`**: inserts one entry directly through the repository, bypassing the service so the app is exactly what the test specifies.
+- **`valuesOf(tag)`**: returns a `Map` of key to value for a language's frontend entries.
+- **`revisionOf(tag)`**: reads the stored revision, or `-1` if the language isn't found.
+- **`failNextBump()`**: spies on `localeModel.findOneAndUpdate` to throw once, simulating a failed counter bump.
+- **Test groups**:
+  - *An entry write and its bump are one transaction*: when the bump fails, `createEntry`, `saveEntryValue` and `removeEntry` each leave the data unchanged (no new row, old value kept, row kept).
+  - *The revision counter*: each write path (add, edit, remove, import) is asserted separately. An import bumps once for the whole batch. Repeated identical edits or imports, reads (`readMessages`, `searchEntries`), and writes to other languages don't move it.
+  - *`importEntries`*:
+    - Counts created, updated and removed rows.
+    - `replace: true` deletes keys the body didn't name; `replace: false` keeps them.
+    - An empty replace empties the language.
+    - Only the given language is touched.
+    - The upsert plus removal roll back together if `localeEntryModel.deleteMany` throws.
+  - *Deleting a language*: uses `localeService.removeLanguage`. It checks that an active language and its entries are deleted and that the result is `{ removedEntries, removedTranslations }`. The visible content ends partway through this group.
 
 ## Relationships
-
-- **`src/modules/locales/repository.ts`** — The system under test. `localeRepository`, `localeEntryRepository`, and `translationRepository` are the only repositories exercised.
-- **`src/modules/locales/model.ts`** — `localeModel` and `localeEntryModel` are spied on (`findOneAndUpdate`, `deleteMany`) to inject controlled failures and assert transaction rollback.
-- **`src/modules/locales/factories.ts`** — `makeLocale` and `makeLocaleEntry` produce deterministic fixture objects passed to repository creates.
-- **`src/modules/locales/services/index.ts`** — `localeService` is used for `removeLanguage`, `readMessages`, and `searchEntries` (to confirm reads don't mutate the counter and that deletion cascades correctly).
-- **`src/modules/locales/tests/unit/apps.fixture.ts`** — Supplies the `FRONTEND` (and `BACKEND`) app constants shared with the unit-test suite so both layers agree on the discriminator value.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module top-level to provision and reset a real Mongo instance before the suite runs.
+- `src/modules/locales/repository.ts`: the subject under test (`localeRepository`, `localeEntryRepository`, `translationRepository`).
+- `src/modules/locales/factories.ts`: `makeLocale` and `makeLocaleEntry` build the fixture data.
+- `src/modules/locales/model.ts`: `localeModel` and `localeEntryModel` are spied on to inject failures. `LocaleDocument` is imported as a type.
+- `src/modules/locales/services/index.ts`: `localeService` is used for reads (`readMessages`, `searchEntries`) and for `removeLanguage`, so the service-level behaviour is checked alongside the repository.
+- `src/modules/locales/tests/unit/apps.fixture.ts`: supplies the `BACKEND` and `FRONTEND` app identifiers.
+- `tests/support/setup-test-db.ts` (imported as `@tests/setup-test-db`): provides the Mongo lifecycle.
 
 ## Notes
-
-- The file is truncated in the source shown here; the "deleting a language" block likely contains additional cases (inactive language, already-deleted language, translation cascade) beyond the single visible test.
-- `FALLBACK = 'en'` is defined with a comment referencing `.env-example` but is not referenced by any visible test—likely used in the truncated remainder or as documentation of the environment contract.
-- Tests use `Array.prototype.toSorted()` (ES2023), implying the project targets Node ≥ 20 / a modern TS lib.
-- The `translationRepository` import is present in the visible content but not yet exercised by any test shown; it is presumably used in the truncated deletion tests to assert translation rows are removed alongside entries.
-- Conventions: each write path's revision bump is asserted in isolation (not via a shared helper) so a regression in one path fails loudly without masking the others. Failure-injection is always done via `jest.spyOn` + `mockImplementationOnce`, cleaned up in `afterEach` with `restoreAllMocks()`.
+- Failure injection uses `jest.spyOn(...).mockImplementationOnce`. The transaction describe block restores mocks in `afterEach`; the `importEntries` rollback test spies on `deleteMany` but has no local restore, and the file's visible part shows no global restore for it.
+- Each revision-counter write path is asserted separately on purpose, because a path that forgot to bump would go unnoticed elsewhere.
+- Freshly created languages start at revision 0, so the first write is expected to produce revision 1.
+- The `replace: true` and `replace: false` tests are deliberately a pair, since either alone would pass against an implementation that ignores the flag.
+- An empty replace import wipes a language. The comments say this is why the route is guarded by an admin token and an audit record instead of a confirmation step.

@@ -1,36 +1,34 @@
 ---
 source: src/infrastructure/http/middlewares/origin.ts
-sha256: 7eecb1c4f6b5d0e321c0789d229d268770b4aa384cdf78af37565095aea7a347
-generated_at: 2026-11-08T03:31:46.952389+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 28d800fee72b98858bf0d5164eb5c024b7d70812053b24dec0952d2233192411
+context_sha256: e34101f96418233802ea3a9b8436187a7854c1fb97fd6180f5713ef3c1176af2
+generated_at: 2026-11-22T02:51:11.691076+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/http/middlewares/origin.ts
 
 ## Purpose
-
-CSRF guard for cookie-authenticated endpoints (refresh, logout, SSE stream). It rejects any request whose `Origin` header names a value outside the allowed frontend origins, complementing CORS by preventing the action itself rather than merely hiding the response from the attacker's page.
+An Express middleware that guards endpoints a cookie alone authenticates (refresh, logout, the SSE stream) against CSRF. If a request carries an `Origin` header that is not on the frontend's allowlist, it is refused with 403 and an audit record is written. Requests with no `Origin` (curl, health checks, same-origin navigations) pass through, matching the CORS middleware's behavior.
 
 ## Key elements
-
-- **`requireAllowedOrigin(request, response, next)`** — The sole export. Reads the `Origin` header; if absent or allowed, calls `next()`. Otherwise records a `SECURITY_FORBIDDEN` audit event and returns a 403 via `rejectResponse`.
-- **Origin allowlist check** — Delegated to `isAllowedOrigin` from `../origins`; this file does not hold the list itself.
-- **Audit trail** — On rejection, calls `recordAudit` with `callerContextOf(request)`, the origin (capped at 200 chars), route path, and method. Actor is recorded as `'anonymous'` since the request is by definition untrusted.
+- `requireAllowedOrigin(request, response, next)`: the only export.
+  - Reads `Origin` with `request.get('Origin')`.
+  - Calls `next()` if the header is absent or `isAllowedOrigin(origin)` is true.
+  - Otherwise it calls `recordAudit` with `coreAuditActions.SECURITY_FORBIDDEN`, actor `'anonymous'`, outcome `'failure'`. The metadata holds `reason: 'foreign_origin'`, the origin truncated to 200 chars, the route path and the method.
+  - It then answers via `rejectResponse(response, 403, [t('generic.error-forbidden')])`.
 
 ## Relationships
-
-- **`src/infrastructure/http/origins.ts`** — Provides `isAllowedOrigin`, the actual allowlist predicate.
-- **`src/infrastructure/http/response.ts`** — Provides `rejectResponse` used to emit the 403.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf` for the audit record.
-- **`src/infrastructure/i18n/index.ts` / `context.ts`** — Provides `t` to translate the generic "forbidden" error message.
-- **`src/infrastructure/observability/audit.ts`** — Provides `recordAudit` and `coreAuditActions.SECURITY_FORBIDDEN`.
-- **`src/kernel/middlewares/authorizations.ts`** — Registers / composes this middleware onto the relevant routes.
-- **`src/modules/account/routes.ts`** — Endpoints (refresh, logout) that this middleware guards.
-- **`src/modules/notifications/routes.ts`** — SSE stream endpoint that this middleware guards.
-- **`tests/unit/infrastructure/http/middlewares/origin.test.ts`** — Unit tests covering allow, deny, and no-origin cases.
+- `../origins` (`src/infrastructure/http/origins.ts`): supplies `isAllowedOrigin`, the allowlist check.
+- `src/infrastructure/http/response.ts`: `rejectResponse` builds the 403 reply.
+- `src/infrastructure/http/request.ts`: `callerContextOf(request)` supplies the context passed to `recordAudit`.
+- `src/infrastructure/i18n/index.ts`: `t` translates the message used in the 403 reply.
+- `src/infrastructure/observability/audit.ts`: provides `recordAudit` and `coreAuditActions`.
+- `tests/unit/infrastructure/http/middlewares/origin.test.ts`: unit tests for this middleware.
+- `src/modules/account/routes.ts`, `src/modules/notifications/routes.ts` and `src/modules/observability/routes.ts` are neighbors in the dependency graph. They presumably mount this middleware on the cookie-authenticated routes, but that isn't visible in this file.
 
 ## Notes
-
-- A missing `Origin` header is treated as legitimate (curl, health checks, same-origin navigation) and passes through — same convention as the CORS middleware.
-- The `Origin` header value in the audit metadata is truncated to 200 characters because the attacker controls that header.
-- This middleware is intentionally narrow: it only applies to cookie-only-auth endpoints. Endpoints that also use bearer tokens do not need this check.
+- The `Origin` value is attacker-controlled, so it is truncated to 200 characters before being logged.
+- The audit entry cites ASVS 5.0 V16.3.2.
+- This check complements CORS rather than replacing it. CORS stops a foreign page from reading the response, and this middleware stops the request from acting at all.
+- A missing `Origin` is allowed by design, so the check only protects against browser-initiated cross-origin requests.

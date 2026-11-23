@@ -1,30 +1,28 @@
 ---
 source: src/infrastructure/config/shared-rules/load.ts
-sha256: 3a4cad642ec427d2ebc54b062da95d78c459179cfb593dc6bb68a2292b19f5c2
-generated_at: 2026-11-14T17:57:53.157183+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5aca030749e24568f59ce78f6ef07bfa85935711c51e334857373bc77797abf8
+context_sha256: 5e642a6852983464dcd4f81a861e307bf5ec4cd8e4dc7401c39fbc30445db590
+generated_at: 2026-11-22T02:45:33.366099+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/config/shared-rules/load.ts
 
 ## Purpose
-
-Boot-time loader for YAML rule files stored in the repo-root `shared/` directory. It reads a named file, parses it with `yaml`, and validates it against a caller-supplied Zod schema. Validation failure throws immediately so a broken rules file crashes the process at startup rather than surfacing as a per-request error. Both backend services consume the same files through this single entry point.
+Loads a rule table shared by both backends from `shared/<folder>/<name>.yaml`, parses it, and validates it against a Zod schema once at boot. A malformed or non-conforming file throws at startup rather than failing a request.
 
 ## Key elements
-
-- **`SHARED_RULES_DIRECTORY`** (exported const) — Resolved path to `shared/rules/`, computed from `__dirname` traversed four levels up. Exposed so other modules can reference the directory without re-deriving it.
-- **`SharedRulesFolder`** (exported type) — Union `'rules' | 'scenarios'` constraining which subfolder under `shared/` a file may be read from.
-- **`loadSharedRules<T>(name, schema, folder?)`** (exported function) — Core loader. Resolves `shared/<folder>/<name>.yaml`, parses it, runs `schema.safeParse`, and either returns the typed data or throws an `Error` whose message includes the file path and `z.prettifyError` output. Defaults `folder` to `'rules'`.
+- `SHARED_RULES_DIRECTORY` (exported): absolute path to the repo-root `shared/rules/` directory.
+- `SharedRulesFolder` (exported type): `'rules' | 'scenarios'`, the folders under `shared/` that hold schema-checked YAML.
+- `loadSharedRules<T>(name, schema, folder = 'rules')` (exported): reads `shared/<folder>/<name>.yaml` synchronously, parses it with `yaml`, and runs `schema.safeParse`. It returns the typed data, with the type coming from `z.infer` on the schema. On a schema mismatch it throws an `Error` prefixed `[shared-rules]` that names the file and includes `z.prettifyError` output. YAML syntax errors are thrown by `yaml`'s `parse`, which names the line.
+- `SHARED_DIRECTORY` (private): the `shared/` root, built from `__dirname` four levels up.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/logger.ts`** — The logger reads its redaction lists through this module (stated in the file's own doc comment). This creates a dependency where logger → load.ts, and is the reason this file uses relative imports and `__dirname` rather than path aliases: the logger sits on Jest's `globalSetup` import chain, which runs outside alias resolution.
-- **`scenarios/personas-schema.ts`** — Supplies a Zod schema that callers pass into `loadSharedRules` with `folder: 'scenarios'`, enabling schema-checked loading of persona/scenario YAML files.
+- The logger (`src/infrastructure/adapters/logger.ts`) reads its redaction lists through this loader. That is why the file uses relative imports only. The logger sits on jest's `globalSetup` import chain, which runs outside path-alias resolution.
+- The other neighbors (`scenarios/personas-schema.ts`, `src/infrastructure/http/frontend-link.ts`, `src/infrastructure/runtime/otel-sdk.ts`, `src/infrastructure/security/breached-passwords/index.ts`, `src/infrastructure/security/password-hash.ts`) are linked through the dependency graph. The file itself shows no direct interaction with them. The `'scenarios'` folder option fits schema-checked data such as personas.
 
 ## Notes
-
-- **`__dirname`, not `import.meta.url`** — Deliberate choice (same rationale as `i8n/catalog.ts`'s `LOCALES_DIRECTORY`). Avoids the `file://` URL parsing that breaks under Jest's `globalSetup` environment.
-- **Relative imports only** — The module must stay free of path-alias imports for the same `globalSetup` reason. Adding an alias import here will silently break the logger's redaction loading under tests.
-- **Literal-union data is not loaded here** — If a rules file's shape is a closed literal union, it is expected to be generated into a committed `as const` file (see `generate-spec.ts`) rather than loaded at runtime through this function.
-- **`yaml.parse` throws on syntax errors** — A malformed YAML file produces a syntax error (with line number) before Zod validation is ever reached; the error message will not carry the `[shared-rules]` prefix.
+- Use relative imports only in this file. Path aliases break the jest `globalSetup` chain.
+- `__dirname` is used instead of `import.meta.url`, for the same reason as `LOCALES_DIRECTORY` in `src/infrastructure/i18n/catalog.ts`.
+- Data that types a literal union is not loaded at runtime. It is generated into a committed `as const` file (see `generate-spec.ts`).
+- Loading is synchronous (`readFileSync`), which suits boot-time use. A missing file throws the underlying `fs` error rather than the schema error.

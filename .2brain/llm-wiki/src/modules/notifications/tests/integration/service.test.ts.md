@@ -1,45 +1,46 @@
 ---
 source: src/modules/notifications/tests/integration/service.test.ts
-sha256: 525ba754ca63476044d2db6a55ff7ecaa6c0cbcec5ab8f326f39f7d485f1dbee
-generated_at: 2026-11-08T06:35:10.571233+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:57:39.157918+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/tests/integration/service.test.ts
 
 ## Purpose
-
-Integration test suite for the notifications service (`notificationsService`). Validates ownership isolation, newest-first ordering, per-user inbox cap enforcement, real-time stream push on create/delete/dismiss, and audience-scoped bulk dismissal — all against a real database rather than mocks.
+Integration tests for `notificationsService`, run against a real test database. They check the rules that make a user's notification inbox safe to rely on: it belongs only to its owner (another user's id yields a 404, never a delete), it is bounded by a per-user cap, changes are pushed to the owner's open streams, and the inbox is removed along with the account.
 
 ## Key elements
-
-- **`jest.mock` on `stream.publishToUser`** – Records calls to the live-push function without replacing it, using a `requireActual` wrapper (workaround for a swc/CJS issue with `jest.spyOn`).
-- **`setupTestDb()`** – Boots a real (test) database for every test run.
-- **`inboxOf(userId)`** – Helper that calls `notificationsService.list` and returns the ordered array of notification IDs.
-- **`aged(userId, minutesAgo)`** – Creates a notification via the factory with a backdated `createdAt` so ordering tests don't depend on insertion speed.
-- **`rowsOf(userId)`** – Reads notification documents directly from `notificationModel` (bypasses the service) to inspect raw audience fields.
-- **`describe('notificationsList')`** – Ownership (404 semantics via empty list), ordering, empty-inbox response.
-- **`describe('notificationsCreate')`** – Bulk insert, empty-array no-op, stream push payload shape, AsyncAPI schema conformance (`NotificationCreatedPayloadSchema.safeParse`), cap trim logic (newest kept, oldest evicted, per-user isolation, `notifications.deleted` push with affected IDs).
-- **`describe('notificationDelete')`** – Owner delete + stream push, 404 for foreign-row and non-existent ID, no side-effect on the owner's inbox.
-- **`describe('notificationsDismissAll')`** – Bulk clear, idempotent on empty inbox, `notifications.deleted` push with `all: true`.
-- **`describe('notificationsDismissAll with an audience')`** – Audience-scoped deletion (`'staff'` vs `'own'`), cross-user isolation.
-- **`CAP`** – Read from `NODE_NOTIFICATIONS_MAX_PER_USER` env (default 100); tests use it to construct cap-boundary fixtures.
+- **`jest.mock` of `services/stream`**: keeps the real module but wraps `publishToUser` in `jest.fn(actual.publishToUser)`, so calls are recorded and the real function still runs. A comment explains that `jest.spyOn` can't redefine the non-configurable property a CommonJS namespace import exposes under the swc transform used by the mutation runs.
+- **`setupTestDb()` and `beforeEach`**: set up the test DB, and clear the `publishToUser` mock before each test.
+- **`inboxOf(userId)`**: helper returning the ids from `notificationsService.list`, newest first.
+- **`aged(userId, minutesAgo)`**: helper that creates a notification with a back-dated `createdAt`, so ordering doesn't depend on insert speed.
+- **`rowsOf(userId)`**: helper that reads every row id for a user straight from `notificationModel`, whatever its audience.
+- **`describe('notificationsList')`**: covers owner-only visibility, newest-first ordering, and an empty `{ items: [] }` result rather than an error.
+- **`describe('notificationsCreate')`**:
+  - Writes one row per entry, and does nothing without failing for an empty list.
+  - Pushes `notifications.created` to the owner's streams with the full notification.
+  - Parametrized check that the pushed payload passes `NotificationCreatedPayloadSchema` (the AsyncAPI contract).
+  - No `notifications.deleted` push when the inbox is within the cap.
+  - Nested **per-user cap** block:
+    - `CAP` is read from `NODE_NOTIFICATIONS_MAX_PER_USER` and defaults to 100.
+    - Keeps the newest N and deletes the oldest past the cap.
+    - Publishes `notifications.deleted` with `{ all: false, ids }` for the trimmed rows.
+    - Trims each owner separately.
+- **`describe('notificationDelete')`**: `remove` deletes the owner's row and publishes `notifications.deleted`. For another user's row or a nonexistent id it returns `{ success: false, status: 404 }` with the message "This notification was not found."; for another user's row it also leaves the row in place and publishes nothing.
+- **`describe('notificationsDismissAll')`**: empties only the caller's inbox, succeeds on an already-empty inbox, and publishes `{ all: true, ids: [] }`.
+- **`describe('notificationsDismissAll with an audience')`**: `dismissAll(userId, 'staff' | 'own')` deletes only the rows of that audience. Staff rows are created with a `staff: { tenantId, sets }` field. The visible content ends partway through this block.
 
 ## Relationships
-
-- **`src/modules/notifications/services/index.ts`** – The system under test; every assertion targets `notificationsService` methods.
-- **`src/modules/notifications/services/stream.ts`** – Mocked at module level; tests assert on `publishToUser` call arguments to verify real-time push behavior.
-- **`src/modules/notifications/tests/factories.ts`** – Provides `createNotification` and `makeRow` used to seed data and build `NewNotification` payloads.
-- **`src/modules/users/tests/factories.ts`** – Provides `createUser` to create distinct owner/intruder accounts.
-- **`src/modules/notifications/model.ts`** – `notificationModel` queried directly in `rowsOf` to inspect raw audience fields the service hides.
-- **`src/modules/notifications/repository.ts`** – `notificationRepository.count()` used to assert empty-DB state; `NewNotification` type parameterizes the `it.each` block.
-- **`src/types/index.ts`** – `NotificationCreatedPayloadSchema` used to validate that the pushed payload satisfies the AsyncAPI contract.
-- **`tests/support/setup-test-db.ts`** – Initializes the shared test database.
-- **`src/infrastructure/runtime/database.ts`** – `withTransaction` imported (exercised indirectly through the service's write path).
+- `src/modules/notifications/services/index.ts`: supplies `notificationsService` (`list`, `create`, `remove`, `dismissAll`), the unit under test.
+- `src/modules/notifications/services/stream.ts`: its `publishToUser` is wrapped and asserted on for every push.
+- `src/modules/notifications/repository.ts`: `notificationRepository.count()` is used to assert that nothing is written, and the `NewNotification` type is used for the parametrized rows.
+- `src/modules/notifications/model.ts`: `notificationModel` is queried directly in `rowsOf`.
+- `src/modules/notifications/tests/factories.ts`: `createNotification` seeds rows.
+- `src/modules/users/tests/factories.ts`: `createUser` creates owners and other users.
+- `tests/support/setup-test-db.ts`: `setupTestDb` provides the database lifecycle.
+- `src/types/index.ts`: `NotificationCreatedPayloadSchema` validates the pushed payload.
+- `src/infrastructure/runtime/database.ts`: `withTransaction` is imported; no use of it appears in the visible portion.
 
 ## Notes
-
-- The `jest.mock` wrapper exists because `jest.spyOn` cannot redefine the non-configurable property exposed by a CommonJS namespace import under the SWC transform used by mutation testing. Do not "simplify" it back to `spyOn`.
-- Cap tests read the limit from `process.env.NODE_NOTIFICATIONS_MAX_PER_USER` rather than hard-coding 100, so they track whatever the runtime environment actually enforces.
-- `aged()` backdates `createdAt` by minutes (not milliseconds) to keep ID ordering deterministic without relying on insert timing.
-- The file is truncated in the source snapshot; the audience-scoped `dismissAll` block likely continues with additional cases (e.g., the cross-user check that is cut off).
+- `makeRow` is called throughout but is not defined or imported in the visible portion of the file.
+- The cap tests build up to the cap by seeding `CAP` aged rows and then creating more through the service. They depend on the environment variable matching the service's configured limit.

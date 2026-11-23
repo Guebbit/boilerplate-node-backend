@@ -1,44 +1,46 @@
 ---
 source: src/modules/invoicing/tests/integration/download.test.ts
-sha256: e19b8b3709dc7879ca3ae191e6f47a5ec93f9bf6550529ec66968d9d07b6911a
-generated_at: 2026-11-14T20:15:03.477061+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 9e7d05e3d0f2310b1a2f7d087969260f108e5809fe57b2d120e468910e6e21be
+context_sha256: 2b152736fedf00ef5721797b9020789ee0a3d1063f96093f971519203926d2b6
+generated_at: 2026-11-22T05:38:23.737741+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/tests/integration/download.test.ts
 
 ## Purpose
-
-Integration tests for `GET /orders/{id}/invoice` and `GET /orders/{id}/credit-notes` over real HTTP. Verifies status-code contracts (404 unissued, 200 issued, 503 busy), ownership scoping (stranger gets 404, admin gets 200), PDF rendering details (plaintext address, stored seller name), the stored-copy cache, the `actions.invoice` flag on the order, and audit logging for admin downloads.
+Integration test suite for the invoice download endpoint `GET /orders/{id}/invoice` (and, per the header, `/credit-notes`), exercised over real HTTP. It covers the 404 for an order not yet invoiced, the 200 PDF once paid, ownership scoping, admin access and auditing, render-queue overload, stored-copy caching, and the `actions.invoice` flag on `GET /orders/{id}`.
 
 ## Key elements
-
-- **`authenticateAnotherUser`** — Creates a second customer with a distinct address (the default `authenticateAs('user')` mints the same address every time, which collides). Returns `{ user, bearer }`.
-- **`waitUntilInvoiced(orderId, bearer)`** — Polls the invoice endpoint via `eventually` until it returns 200. Exists because the invoicing pipeline is triggered by a fire-and-forget `ORDER_STATUS_CHANGED` listener.
-- **`jest.mock('@infrastructure/adapters/pdf')`** — Stubs `renderHtmlToPdf` (no Chromium in CI). Tests inspect captured HTML args or just assert status/headers.
-- **`afterEach(emptyFileSandbox)`** — Sweeps the file sandbox so a stored PDF from one test doesn't leak into the next.
-- **`describe` blocks** — Cover: basic 404/200, billing-address encryption, seller-name retention, cross-user scoping, admin audit logging, 503 + `Retry-After`, stored-copy (render-once) behavior, `actions.invoice` flag, and credit-notes listing/scoping.
+- `authenticateAnotherUser` — creates a second customer (`stranger@example.com`, verified) and logs in via `/account/login`. Needed because `authenticateAs('user')` always mints the same default address.
+- `jest.mock('@infrastructure/adapters/pdf')` — stubs `renderHtmlToPdf` to resolve `Buffer.from('pdf')`, since there is no Chromium in the test environment. Tests inspect `mock.calls` to read the rendered HTML.
+- `setupTestDb()` and `afterEach(emptyFileSandbox)` — DB setup, and cleanup of PDFs stored on first render.
+- `waitUntilInvoiced(orderId, bearer)` — polls the invoice endpoint via `eventually` until it returns 200. This waits out the fire-and-forget `ORDER_STATUS_CHANGED` listener that freezes the invoice.
+- `describe('GET /orders/{id}/invoice')` — cases:
+  - 404 `ORDER_INVOICE_NOT_ISSUED` for a never-paid order.
+  - 200 with `content-type: application/pdf` and `cache-control: private, no-store` once paid.
+  - The buyer address renders in plaintext while the stored invoice row's `billingAddress.fullName` is not plaintext (it is stored encrypted).
+  - The seller shown is the one the invoice was issued with ("Guebbit Demo Shop Srl"), not a later `NODE_LEGAL_NAME` change.
+  - The HTML contains the order number and an inline base64 SVG logo, has no external `src`/`href` URLs, and has no credit-note banner (`class="notice"`).
+  - A non-owner customer gets 404 (absence, not refusal).
+  - An admin gets 200.
+  - An admin download logs an `admin.invoice.viewed` audit entry, and the owner's own download does not.
+- `describe('… when the render queue is full')` — with retention 0, `renderHtmlToPdf` rejects once with `ServiceBusyError`. Expects 503 `SERVICE_UNAVAILABLE` and a `Retry-After` header of at least 1.
+- `describe('… the stored copy')` — after the invoice exists, two downloads return equal bodies and `renderHtmlToPdf` is not called again.
+- `describe('GET /orders/{id} — the actions.invoice flag')` — expects false before payment and true once paid. This part is only partly visible.
 
 ## Relationships
-
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory DB before all tests.
-- **`tests/support/environment.ts`** — `setEnvironment` / `withEnvironmentOverrides` toggle `NODE_INVOICE_PDF_RETENTION_DAYS` and `NODE_LEGAL_NAME` per-test.
-- **`tests/support/http.ts`** — `api`, `authenticateAs`, `authenticateAsRole` provide the HTTP client and auth helpers.
-- **`tests/support/eventually.ts`** — `eventually` backs the `waitUntilInvoiced` polling loop.
-- **`tests/support/file-sandbox.ts`** — `emptyFileSandbox` cleans stored PDFs between tests.
-- **`src/modules/orders/friends/payments.ts`** — `markPaid` is called to trigger the invoicing pipeline.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder`, `toOrderItem` seed order fixtures.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` seeds the line-item product.
-- **`src/modules/users/tests/factories.ts`** — `createUser`, `PLAIN_PASSWORD` for auth setup.
-- **`src/infrastructure/adapters/pdf.ts`** — `renderHtmlToPdf` is mocked; tests assert on its captured HTML or injected rejections.
-- **`src/infrastructure/adapters/logger.ts`** — `auditLogger` is spied on to verify that admin cross-user downloads produce an audit entry while the owner's own download does not.
-- **`src/infrastructure/runtime/busy.ts`** — `ServiceBusyError` is thrown by the mocked renderer to exercise the 503 path.
-- **`src/modules/invoicing/repository.ts`** — Used to read back the stored invoice row and assert the billing address is encrypted at rest.
-- **`src/modules/invoicing/services/issue-credit-note.ts`** — `issueCreditNote` is used in the credit-notes test block to seed a refund.
+- `@tests/*` helpers (`setup-test-db`, `environment`, `http`, `eventually`, `file-sandbox`) provide the DB lifecycle, env overrides (`setEnvironment`, `withEnvironmentOverrides`), the HTTP client and auth helpers (`api`, `authenticateAs`, `authenticateAsRole`), polling, and sandbox cleanup.
+- Factories (`products`, `orders`, `users` tests) create products, orders (`createOrder`, `toOrderItem`) and users (`createUser`, `PLAIN_PASSWORD`).
+- `orders/friends/payments` — `markPaid` triggers the status change that leads to invoicing.
+- `invoicing/repository` — the stored invoice row is read directly to check the billing address is not stored in plaintext.
+- `infrastructure/adapters/pdf` — mocked, and its calls are inspected.
+- `infrastructure/adapters/logger` — the audit logger is spied on to verify admin-view auditing.
+- `infrastructure/runtime/busy` — `ServiceBusyError` simulates a full render queue.
+- `invoicing/services/issue-credit-note` — imported (`issueCreditNote`), but its use is not visible in the shown portion.
+- `orders/services/status` — not referenced in the visible portion.
 
 ## Notes
-
-- The "stored copy" test depends on the **default** retention (> 0) so the first render persists a file; the "busy" and "seller changed" tests explicitly set `NODE_INVOICE_PDF_RETENTION_DAYS=0` to force re-render on every download and bypass the cache.
-- `waitUntilInvoiced` itself performs a download, which (at default retention) also **stores** the PDF. The stored-copy test calls `mockClear()` after the poll, so the "first" and "second" downloads it asserts on are post-storage.
-- The audit test asserts the **owner's** own download produces **no** audit entry—only admin cross-user downloads are logged.
-- The "seller changed" test verifies the invoice captures the seller name **at issue time**, not a live read of the current shop config.
+- Tests that must hit the renderer on every download set `NODE_INVOICE_PDF_RETENTION_DAYS` to `'0'`, so a stored copy cannot answer instead.
+- Invoicing is asynchronous, so tests must call `waitUntilInvoiced` after `markPaid`. Because polling downloads the invoice, it also renders and stores it. Tests that count renders call `mockClear()` afterwards.
+- `authenticateAs('admin')` is used for the admin cases, and a separate second customer for the stranger case.

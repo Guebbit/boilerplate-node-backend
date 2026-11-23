@@ -1,36 +1,36 @@
 ---
 source: src/modules/cart/controllers/post-cart-items.ts
-sha256: 3e5067991cc4dbc26e062e5ce713fba7ad8fe8814b3a06795f22f9b9cbb1eedb
-generated_at: 2026-11-08T05:12:02.702072+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3e5067991cc4dbc26e062e5ce713fba7ad8fe8814b3a06795f22f9b9cbb1eedb
+context_sha256: 942e814761bd6ed473adef161d4e68172a24d5e8968b273858507fad0a4ab15a
+generated_at: 2026-11-22T04:30:58.483427+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/controllers/post-cart-items.ts
 
 ## Purpose
-
-Thin HTTP adapter for `POST /cart/items` ("Add to cart"). Validates the request body, delegates to `cartService.addItem`, and serialises the result. It contains no business logic — eligibility rules live in the service layer so they stay consistent with `PATCH` and wishlist move-to-cart.
+Controller for `POST /cart/items` ("add to cart"). It is a thin HTTP adapter over `cartService.addItem`: it validates the body, calls the service, and turns the result into an HTTP response. If the product has no line in the cart, one is created. If it already has a line, that line's quantity grows by the amount sent. Either way the response is 200 with the whole cart.
 
 ## Key elements
-
-- **`postCartItems`** (exported function) — The sole export. Signature is `(Request<unknown, unknown, AddCartItemRequest>, Response) => void`. Flow:
-  1. Extracts `userId` from `request.authContext.id`.
-  2. Validates `request.body` against the `AddCartItemBody` Zod schema via `parseBody`; short-circuits with 422 on failure.
-  3. Calls `cartService.addItem(userId, productId, quantity, callerContextOf(request))`.
-  4. On success responds **200** with the full `CartResponse`; on domain refusal uses `refused`; on unexpected error delegates to `catchAs('addCartItem')`.
+- `postCartItems(request, response)`: the Express handler, and the file's only export.
+  - It reads `userId` from `request.authContext!.id`, so it assumes auth middleware has already run.
+  - It validates the body with `parseBody(AddCartItemBody, ...)` and returns early if validation fails.
+  - It calls `cartService.addItem(userId, productId, quantity, callerContextOf(request))`.
+  - If `refused(response, result)` reports a refusal, it returns without sending a success response.
+  - Otherwise it sends `successResponse<CartResponse>(response, result.data, 200)`.
+  - Any rejection goes to `catchAs(response, 'addCartItem')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Supplies `parseBody`, `refused`, and `catchAs` (the three helper functions used for validation, domain-refusal, and error serialisation).
-- **`src/infrastructure/http/request.ts`** — Supplies `callerContextOf`, which derives a request-scoped context object passed into the service call.
-- **`src/infrastructure/http/response.ts`** — Supplies `successResponse` for the 200 JSON envelope.
-- **`src/modules/cart/services/index.ts`** — Supplies the `cartService` instance whose `addItem` method performs the actual add/update-of-line logic.
-- **`src/modules/cart/routes.ts`** — Upstream caller; wires `postCartItems` to the `POST /cart/items` route (the controller's entry point).
-- **`src/types/index.ts`** — Provides the `CartResponse` and `AddCartItemRequest` types used in the generic signatures.
+- `src/infrastructure/http/controller.ts` supplies `parseBody`, `refused` and `catchAs`. These handle body validation, service refusals and error mapping.
+- `src/infrastructure/http/request.ts` supplies `callerContextOf`, which builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts` supplies `successResponse`, which builds the 200 response.
+- `src/modules/cart/services/index.ts` exports `cartService`. Its `addItem` method does the work and decides eligibility.
+- `src/types/index.ts` supplies the `CartResponse` and `AddCartItemRequest` types, which type the response and the request body.
+- `src/modules/cart/routes.ts` is the neighbor that wires this handler to the route. The handler file does not import it.
 
 ## Notes
-
-- Returns **200**, not 201: a cart line has no independent URL (it is addressed through its parent cart), so the 200 + whole-cart body is the convention here.
-- `parseBody` already rejects a `productId` that doesn't belong to this backend (422) before the service is ever called; the controller trusts that gate.
-- The `request.authContext!` non-null assertion assumes the auth middleware has already populated it; this controller does not handle the unauthenticated case.
-- Adding an existing product *increments* its line quantity (pressing the button twice yields two). Setting an explicit quantity is the job of `PATCH /cart/items/{productId}`, not this endpoint.
+- It always returns 200 with the full cart, never 201 or a line resource. A line is written through its parent cart and has no URL of its own.
+- Repeated calls accumulate. Pressing the button twice adds the quantity twice. `PATCH /cart/items/{productId}` is the endpoint that sets a quantity.
+- Eligibility (whether a product can be in a cart at all) is deliberately not checked here. The service owns that rule so that the PATCH endpoint and the wishlist's move-to-cart share it.
+- `parseBody` has already refused a `productId` that is not this backend's id (422) by the time the handler destructures the body.
+- The body schema `AddCartItemBody` is imported from `@api/schemas.zod`.

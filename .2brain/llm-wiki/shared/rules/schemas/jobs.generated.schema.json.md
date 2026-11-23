@@ -1,31 +1,28 @@
 ---
 source: shared/rules/schemas/jobs.generated.schema.json
-sha256: 0c47f4aa4c3adc93b3d3915d5eee01224985ba910e44dfee657ea8891e8dcd89
-generated_at: 2026-11-08T03:10:54.910758+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0c47f4aa4c3adc93b3d3915d5eee01224985ba910e44dfee657ea8891e8dcd89
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:27:46.736663+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/rules/schemas/jobs.generated.schema.json
 
 ## Purpose
-
-JSON Schema (draft 2020-12) that validates a top-level configuration object containing named, scheduled jobs. It enforces a strict, closed shape so that any tool or service consuming the job list can rely on a uniform structure without runtime type-checking.
+A generated JSON Schema (draft 2020-12) describing a document of scheduled jobs. It validates a top-level `jobs` map where each entry declares a job's name, cron-style schedule, and a human-readable summary.
 
 ## Key elements
-
-- **Top-level object** – requires a single `jobs` key; rejects any other properties.
-- **`jobs` map** – keyed by arbitrary strings; each value is a job definition object with `additionalProperties: false`.
-- **`name` (required)** – must match `^(reap|sweep):[a-z0-9]+(-[a-z0-9]+)*$`. Only the `reap:` and `sweep:` prefixes are permitted; the remainder is kebab-case alphanumeric.
-- **`schedule` (required)** – a 5-field cron expression (`^[\d*/,-]+(\s+[\d*/,-]+){4}$`), supporting digits, `*`, `/`, `,`, and `-` in each field. No seconds field.
-- **`summary` (required)** – non-empty human-readable description (`minLength: 1`).
+- **Root object**: requires a single `jobs` property; no other top-level properties are allowed (`additionalProperties: false`).
+- **`jobs`**: an object whose keys are arbitrary strings and whose values are job definitions.
+- **Job definition** (all three fields required, no extra fields allowed):
+  - `name`: string matching `^(reap|sweep):[a-z0-9]+(-[a-z0-9]+)*$`, i.e. a `reap:` or `sweep:` prefix followed by a lowercase kebab-case slug (e.g. `sweep:stale-sessions`).
+  - `schedule`: string matching `^[\d*/,-]+(\s+[\d*/,-]+){4}$`, i.e. five whitespace-separated fields made up only of digits, `*`, `/`, `,`, and `-` (cron-like).
+  - `summary`: non-empty string (`minLength: 1`).
 
 ## Relationships
-
-No graph neighbors are documented for this file. It is a leaf schema consumed by whatever process reads the jobs configuration.
+None. The graph shows no neighbors, so no consumers or generators are identified from this file alone.
 
 ## Notes
-
-- The `propertyNames` constraint on `jobs` (`"type": "string"`) is effectively a no-op since JSON object keys are always strings; it exists to satisfy schema-lint rules rather than to add real validation.
-- `additionalProperties: false` appears at **three** levels (root, each job, and implicitly via the closed `properties` list), making this a fully closed schema—any unknown key at any level is a validation failure.
-- The name pattern hard-codes the allowed job categories (`reap`, `sweep`). Adding a new category requires editing the regex here first.
-- The schedule regex accepts only 5 space-separated fields (minute, hour, day-of-month, month, day-of-week). A 6-field cron (with seconds) will **not** validate.
+- The `.generated` suffix indicates it is produced by tooling. Edit the source rather than this file; the source is not identified here.
+- The schedule pattern checks only the character set and field count. It does not check value ranges, so `99 99 99 99 99` would pass. Named values such as `MON` or `@daily` are rejected.
+- The `jobs` map keys are not tied to `name`. The schema does not require them to match.

@@ -1,45 +1,42 @@
 ---
 source: src/modules/products/services/read.ts
-sha256: 41575abfef7cd8399cf518776b0afb9236889c6e4644c0ed5a5e1b94b0fd969b
-generated_at: 2026-11-14T21:28:26.688535+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2eba64be1c4a3caf364571d6b3f28fc6792da810ce10fa9461aac9a3bf1da8c7
+context_sha256: a6e3e67d0a4a1619618ef6f0d1b0f2b52bf601441c885dffa9b491513430435c
+generated_at: 2026-11-22T07:13:31.720364+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/services/read.ts
 
 ## Purpose
-
-Read-side service for single-product lookups. It resolves a stored product to the caller's locale, layers on permission-gated visibility (stock counters, full translation set), and attaches caller-specific actions. It is the shared presentation pipeline used by both the read route (`GET /products/:id`) and the write routes, so a write response is always the product's own read.
+Single-product reads for the products module. It builds the caller's read scope, fetches one product, and returns it in the wire shape resolved to the request's language. For callers allowed to read translations, it also attaches every language, drafts included.
 
 ## Key elements
-
-- **`callerScope`** — Builds the row-level filter for a caller via `accessibleFilterFor(caller, 'Product')`. Returns `{}` for unrestricted callers.
-- **`getById`** — Fetches one product by ID (scoped), resolves it to the request locale. Returns `undefined` for a falsy ID, `null` for a missing document. No stock/translation gating — callers here have no `CallerContext`.
-- **`getByIdForCaller`** — The full `GET /products/:id` handler: fetches, presents with standing, resolves locale, applies translations (if permitted), redacts stock (if not permitted), and attaches actions.
-- **`presentForCaller`** — Presents an already-fetched `ProductDocument` as a caller sees it (locale + gated fields + actions with the caller's own keys). Used by write routes so the response body equals the product's own read.
-- **`presentWithStanding`** *(private)* — Internal pipeline: `resolveToLocale` → `withTranslations` → `redactStock` → `withActions`.
-- **`withTranslations`** *(private)* — Appends the full `translations` array (all languages, drafts included) when the caller holds `read:Translation`; no-op otherwise.
-- **`resolveToLocale`** *(private)* — Runs `applyTranslations('product', …)` over a single presented document.
+- `callerScope(caller?)`: returns the filter for which products a caller may read, via `accessibleFilterFor(caller, 'Product')`. It takes `request.caller`, not the session, so sessions and API keys behave the same. The filter is `{}` for an unrestricted caller and the published catalogue for everyone else.
+- `getById(id, scope?)`: looks the product up with `productRepository.findByIdScoped` and returns it resolved to the request locale. It returns `undefined` for a falsy id (no DB call) and `null` when nothing matches.
+- `getByIdForCaller(id, scope, context)`: the `GET /products/:id` path. It does the same lookup, then presents the product for `context.caller` using the read standing from `standingOnRead(callerScope, caller)`.
+- `presentForCaller(product, caller?)`: presents an already-stored document the way `GET /products/:id` would. Write routes use it so a write's response matches the product's own read. Its actions are based on `standingOn(caller)`, the caller's own keys.
+- Private helpers:
+  - `resolveToLocale`: runs `presentProduct`, then `applyTranslations('product', …)`.
+  - `presentWithStanding`: resolves to locale, then `withTranslations`, then `withActions`.
+  - `withTranslations`: adds `translations` only when `canSeeTranslations(caller)` is true.
 
 ## Relationships
-
-- **`@kernel/translation`** — `applyTranslations` performs the locale-resolution overlay on the presented product.
-- **`@kernel/access/query`** — `accessibleFilterFor` derives the row-scope predicate from the caller's keys.
-- **`@infrastructure/persistence/versioning`** — `carryVersion` preserves the optimistic-locking version when the translations field is attached.
-- **`../presenter`** — `presentProduct` shapes the raw document into the wire form (computed `available`, `_id`→`id`, ISO dates) before locale resolution.
-- **`../repository`** — `productRepository` provides the scoped document fetch.
-- **`./stock-view`** — `canSeeStock` / `redactStock` gate and strip stock counters per caller.
-- **`./translation-view`** — `canSeeTranslations` decides whether the full translation set is exposed.
-- **`./lookups`** — `translationsWithFallback` loads the multi-language translation rows.
-- **`./actions`** — `standingOn`, `standingOnRead`, `withActions` compute and attach the caller's allowed action keys.
-- **`../domain/actions`** — Source of the `ProductStanding` type used by the action pipeline.
-- **`../model`** — Source of the `ProductDocument` type (the stored shape).
-- **`@types`** — `Product`, `CallerContext`, `Caller` type imports.
+- **`src/modules/products/presenter.ts`** (`presentProduct`): converts the document to the wire shape before translation resolution.
+- **`src/kernel/translation.ts`** (`applyTranslations`): resolves the product to the request's language.
+- **`src/kernel/access/query.ts`** (`accessibleFilterFor`): supplies the read scope used by `callerScope`.
+- **`src/modules/products/repository.ts`** (`productRepository`): provides the scoped fetch, `findByIdScoped`, used by every read.
+- **`src/modules/products/services/lookups.ts`** (`translationsWithFallback`): supplies the full set of translations.
+- **`src/modules/products/services/translation-view.ts`** (`canSeeTranslations`): decides whether the caller sees translations (`read:Translation`).
+- **`src/modules/products/services/actions.ts`** (`standingOn`, `standingOnRead`, `withActions`) and **`src/modules/products/domain/actions.ts`** (`ProductStanding` type): compute and attach the per-caller `actions` flags.
+- **`src/infrastructure/persistence/versioning.ts`** (`carryVersion`): carries the version over from the resolved product onto the copy that has `translations`.
+- **`src/types/index.ts`** (`Product`, `Caller`, `CallerContext`, imported via `@types`) and **`src/modules/products/model.ts`** (`ProductDocument`): types only.
+- The graph also lists `src/modules/products/services/index.ts`, `src/modules/products/services/search.ts` and `src/types/auth-context.ts` as neighbors. Nothing in this file imports from them directly.
 
 ## Notes
-
-- **Presenter runs before locale resolution.** `applyTranslations` is a plain-object overlay; running it after `presentProduct` would clobber computed fields (`available`, `id`, ISO dates). This is the reverse order used by `orders`/`users` because those have no locale step.
-- **Top-level `title`/`description` are always in the request language**, even when `translations` is also present. A staff member browsing in Italian never sees the fallback language in the primary fields.
-- **Views are not reported from here.** The response cache hides most reads; the browser reports them via `modules/analytics`.
-- **`getByIdForCaller` wraps rather than extends `getById`.** Most internal callers (unit tests, other services) have no `CallerContext` and call `getById` directly.
-- **Write-route responses use `presentForCaller`** so the body equals the product's own read (AIP-133/134/164); actions carry the caller's own keys so a write is never served from the shared read cache.
+- Order matters. `presentProduct` must run before translation resolution, because resolution is a plain-object overlay and would drop what the presenter computes (`available`, `_id` → `id`, ISO date strings). The orders and users modules' `getById` returns the Mongoose document itself instead.
+- Top-level `title` and `description` always carry the request's resolved language, even when `translations` is present.
+- `getByIdForCaller` wraps `getById`'s logic rather than folding into it, because most callers (unit tests, other services) have no `CallerContext`.
+- This file does not report product views, since the response cache hides most reads. The browser reports them (`modules/analytics`).
+- `presentForCaller` uses the caller's own keys for `actions`, because a write is never served from the shared cache. `getByIdForCaller` uses the read standing, which suits a cacheable read.
+- `presentForCaller` with an `undefined` caller sees no translations.

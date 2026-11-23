@@ -1,40 +1,37 @@
 ---
 source: src/app/routes.ts
-sha256: 4a9ea1fbc5dbd990e469059b5ef7b7df93a4865823aedf635e65193deb28920a
-generated_at: 2026-11-14T17:49:17.009935+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1c1d625213ff93770d837539b9b7053e29b0864d53485be730ad7f7b69877e23
+context_sha256: c5c6db321ce5e44f39b5444b4dc00e5f5a979d8013382bdff02b1737fb8b4018
+generated_at: 2026-11-22T02:31:10.972570+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/app/routes.ts
 
 ## Purpose
-
-Central route-mounting install for the Express app. It walks `enabledModules` to attach each module's router at its self-declared `basePath`, mounts the two app-level routers (`system-routes`, `config-routes`), and registers the 404 catch-all — all without referencing any specific domain name.
+Mounts all HTTP routes on the Express app. Modules mount themselves: each declares a `basePath` and router in its manifest, and this file walks `enabledModules` without knowing any domain names. Only two routers are imported explicitly (the root ping and `GET /config`), since they belong to no module.
 
 ## Key elements
-
-- **`installRoutes(app: Express): void`** — the sole export. Configures, in order:
-  - A `Cache-Control: no-store` default header (overridable per-route via `setCache` / `privateNoCache`).
-  - `methodNotAllowed(OPERATION_ROUTES, servedModuleNames, true)` — a pre-router 405 for literal contract paths (no `{param}`), so they don't fall into a parametric handler.
-  - Module routers: iterates `enabledModules[].mounts[]`, calling `app.use(basePath, routes)`. Modules with no `mounts` are silently skipped.
-  - `systemRoutes` and `configRoutes` mounted at `'/'`.
-  - `methodNotAllowed(OPERATION_ROUTES, servedModuleNames)` — post-router 405 for any remaining contract path.
-  - Inline 404 handler calling `rejectResponse(response, 404)`.
+- `installRoutes(app: Express): void` – the only export. It registers, in order:
+  1. A middleware setting `Cache-Control: no-store` on every response by default.
+  2. `methodNotAllowed(OPERATION_ROUTES, servedModuleNames, true)`, which returns 405 + `Allow` for contract paths that a more specific template shadows.
+  3. Each enabled module's `mounts` (`basePath` + `routes`).
+  4. `systemRoutes` and `configRoutes` at `/`.
+  5. A second `methodNotAllowed(OPERATION_ROUTES, servedModuleNames)`, which returns 405 + `Allow` for a known contract path asked with another method.
+  6. A 404 catch-all calling `rejectResponse(response, 404)`.
 
 ## Relationships
-
-- **`src/app.ts`** — calls `installRoutes` during app setup (upstream caller).
-- **`src/modules.ts`** — provides `enabledModules` (each carrying `mounts: { basePath, routes }[]`) and `servedModuleNames` (list passed to `methodNotAllowed`).
-- **`src/app/system-routes.ts`** — imports its `router` export; mounted at `'/'`.
-- **`src/app/config-routes.ts`** — imports its `router` export; mounted at `'/'`.
-- **`src/infrastructure/http/middlewares/method-not-allowed.ts`** — imported as `methodNotAllowed`; used twice (pre- and post-router).
-- **`src/infrastructure/http/response.ts`** — imported as `rejectResponse`; used by the 404 handler.
-- **`tests/integration/scenarios/demo-routes.test.ts`** — integration-test suite that exercises the mounted routes end-to-end.
-- **`package.json`** — declares `express` and workspace packages that supply the type imports.
+- `src/modules.ts` – supplies `enabledModules` (iterated for `mounts`) and `servedModuleNames` (the modules this build treats as known paths).
+- `src/app/system-routes.ts` and `src/app/config-routes.ts` – each exports a `router` that is mounted at `/`.
+- `src/infrastructure/http/middlewares/method-not-allowed.ts` – provides `methodNotAllowed`, used twice.
+- `src/infrastructure/http/response.ts` – provides `rejectResponse`, used for the 404.
+- `@api/operation-routes` – provides `OPERATION_ROUTES`, the contract route table passed to `methodNotAllowed`.
+- `src/app.ts` – the app setup, which presumably calls `installRoutes`. The call itself is not visible in this file.
+- `tests/integration/scenarios/demo-routes.test.ts` – an integration test related to this file in the graph.
+- `package.json` – a graph neighbor. No direct interaction is visible in this file.
 
 ## Notes
-
-- The 404 is deliberately registered *inside* `installRoutes` (not in a separate security/error install) because it must be the **last** route; splitting it out would allow a later `app.use` to shadow it.
-- The `no-store` header is set here (not in `installSecurity`) because `installStatic` runs between the two and would otherwise strip the long-lived `Cache-Control` it sets on assets.
-- A module whose manifest has no `mounts` array is skipped, not treated as an error — e.g. an `access` module that only owns data and exposes no URLs of its own.
-- `methodNotAllowed` is called twice: the first pass (with `literalOnly = true`) catches exact-match contract paths before parametric routes can intercept them; the second pass catches anything remaining after all routers have been tried.
+- **Order matters.** The 404 catch-all must be registered last, so it lives here rather than in error handling. Otherwise a later mount could end up behind it and never be reached.
+- **`no-store` is the default.** It is set here rather than in `installSecurity` because `installStatic` runs between the two, and setting it earlier would strip the long cache from static images. It uses the bare header rather than the `noStore` middleware. That middleware marks the response, and `setCache` refuses a route carrying the mark. Routes that cache (`setCache`, `privateNoCache`) overwrite the header.
+- **The first `methodNotAllowed` runs before the routers.** Without it, a request to a path like `/products/facets` with an undeclared method would reach the templated handler and return 404, where the contract matches the more specific path first.
+- **Modules without mounts are skipped.** For example, `access` has no URL of its own. A mount carries `basePath` and `routes` together, because a router without a mount point serves nothing.

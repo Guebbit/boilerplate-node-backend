@@ -1,37 +1,39 @@
 ---
 source: src/infrastructure/observability/tracer.ts
-sha256: 4d044713319d3ee3760ab2e0e055b11c2442f37dd23cd9125a38238e37fe1aa4
-generated_at: 2026-11-14T18:12:31.232563+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7f1a6b134c8803e4a8a4ac38991579093d80a3668ec55eda5ac655d98f35fa58
+context_sha256: 8bea2c037fb0d069e65c97a906a2c164352c3412a319cdc07ec5f295a06eb158
+generated_at: 2026-11-22T03:01:05.527531+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/observability/tracer.ts
 
 ## Purpose
-
-Thin wrapper around the OpenTelemetry API that provides a single service-scoped tracer and ergonomic helpers for creating, annotating, and finalising custom spans. It exists so that callers never need to touch `@opentelemetry/api` directly, and so that span lifecycle (open → annotate → end) is handled uniformly, including the privacy-sensitive error-annotation logic.
+A thin wrapper around the OpenTelemetry API (`@opentelemetry/api`) for creating custom spans. It gives the rest of the codebase a service-scoped tracer, a helper that runs async work inside a span, and a helper that annotates the active span with an error. It imports only the API package, not the SDK. Without a registered SDK every call is a no-op, so tests run without booting OpenTelemetry.
 
 ## Key elements
-
-- **`TRACER_NAME`** — Constant `'boilerplate-node-backend'`; identifies the instrumentation source on every span for easy filtering.
-- **`getTracer()`** — Lazily returns `trace.getTracer(TRACER_NAME)`. Called at use-time (not import-time) so that a no-op provider is never captured before `startTracing()` runs.
-- **`withSpan<T>(spanName, callback)`** — Runs an async callback inside a child span via `startActiveSpan`. Wraps the call in `Promise.resolve().then()` so synchronous throws still hit the failure branch. Sets `SpanStatusCode.OK` or `ERROR`, calls `span.end()`, and re-throws on failure.
-- **`markSpanFailed(span, error)`** — (internal) Sets `error.type`, status message, and an exception event. In non-relaxed environments the message is limited to `error.name` and the exception event is reduced to `{ name }` to avoid leaking request data or stack traces into the trace backend.
-- **`recordErrorOnActiveSpan(error)`** — Annotates the *currently active* span with failure info without ending it. Intended for error handlers that manage the span's lifecycle themselves.
+- `getTracer()`: returns `trace.getTracer('boilerplate-node-backend')`. It is called lazily rather than cached in a module constant. That way it never grabs a no-op tracer at import time, before `startTracing()` registers the real provider.
+- `withSpan(spanName, callback)`: runs an async callback inside `tracer.startActiveSpan`.
+  - The span is current for the duration of the callback, so nested instrumentation attaches as children.
+  - On success it sets status `OK` and ends the span.
+  - On failure it calls `markSpanFailed`, ends the span, and re-throws the original error. It never swallows errors.
+  - The callback runs inside a promise chain, so a synchronous throw still takes the failure path and the span still ends.
+  - It uses `.then(onFulfilled, onRejected)` so the span cannot be ended twice.
+  - The callback receives the `span` and can set its own attributes.
+- `recordErrorOnActiveSpan(error)`: marks the active span (`trace.getActiveSpan()`) as failed without throwing. It does nothing when there is no active span. It deliberately does not call `span.end()`, because the span belongs to whoever opened it, usually the auto-instrumentation's request span.
+- `markSpanFailed` (private): sets the `error.type` attribute, sets `ERROR` status with a message, and records an exception event for `Error` instances.
 
 ## Relationships
-
-- **`src/infrastructure/runtime/config.ts`** — Imports `isRelaxedEnvironment()` to decide how much error detail to write onto spans.
-- **`src/app/error-handling.ts`** — Consumer of `recordErrorOnActiveSpan`; calls it to annotate the request span inside global error handlers without truncating the span.
-- **`src/infrastructure/http/errors.ts`** — Error instances thrown from HTTP layers are caught by `withSpan` / `recordErrorOnActiveSpan` and recorded via `markSpanFailed`.
-- **`src/modules/observability/controllers/get-observability-metrics.ts`** — Reads span-derived metrics (error rates, durations) that this module produces.
-- **`tests/unit/infrastructure/observability/tracer.test.ts`** — Unit tests for this file.
+- `@infrastructure/runtime/config`: `isRelaxedEnvironment()` decides how much error detail is recorded.
+- `@guebbit/js-toolkit`: `extractErrorMessage` builds the status message in relaxed environments.
+- `tests/unit/infrastructure/observability/tracer.test.ts`: the unit tests for this file.
+- `src/modules/observability/controllers/get-observability-metrics.ts` and its unit test: neighbors in the dependency graph. The file shows no direct interaction with them.
+- `src/app/error-handling.ts`, `src/infrastructure/adapters/logger.ts`, `src/infrastructure/adapters/mailer.ts` and `src/infrastructure/http/errors.ts`: neighbors in the graph. No direct interaction is visible in this file.
 
 ## Notes
-
-- **No SDK required at import time.** `@opentelemetry/api` is the interface-only package; every call is a safe no-op when no SDK is registered, which is what lets tests run without booting OpenTelemetry.
-- **`withSpan` never swallows errors.** It re-throws after annotating the span; callers keep their own error handling unchanged.
-- **`recordErrorOnActiveSpan` deliberately does not call `span.end()`.** The span belongs to whoever opened it (typically an auto-instrumentation request span); ending it here would truncate it.
-- **Two-callback `.then(onFulfilled, onRejected)` is used instead of `.then().catch()`** to keep success and failure paths mutually exclusive, preventing a double `span.end()`.
-- **Span ending is mandatory for export.** A span that is never ended is never exported — the single most common way to silently lose telemetry.
-- **Privacy split by environment.** In production/staging, only `error.name` is written as the status message and the exception event is reduced to `{ name }`. The companion scrubber (`span-scrub.ts`) applies the same rule to spans recorded by third-party libraries.
+- **Error redaction.**
+  - In relaxed environments (development and test), the status message is the full error message, and `recordException` receives the full `Error`.
+  - Elsewhere, only the error `name` is used for the status message and the exception event. The reason is that messages can carry request data, such as the email in a duplicate-key error, and trace backends retain it.
+  - `recordException(error)` would also write `exception.stacktrace`, which exposes absolute paths and dependency internals, so only `{ name }` is recorded.
+- **Non-`Error` throws.** `error.type` falls back to `typeof error`. Exception events are recorded only for `Error` instances.
+- A span that is never ended is never exported. This is why `withSpan` ends it on both paths.

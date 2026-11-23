@@ -1,39 +1,38 @@
 ---
 source: src/modules/account/tests/integration/reset-terms.test.ts
-sha256: c8eccdcee94aa36dbf728b331952fcf00f190e9b2eb4e4c279e1fd7786e9fd15
-generated_at: 2026-11-14T19:08:13.228233+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c8eccdcee94aa36dbf728b331952fcf00f190e9b2eb4e4c279e1fd7786e9fd15
+context_sha256: 300296a56da4b3c8450a6fdc505da5d533dfe7534cf9566b115b3ec9fc004f01
+generated_at: 2026-11-22T03:59:41.345257+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/reset-terms.test.ts
 
 ## Purpose
-
-Integration tests for the Terms-of-service record stamped during the password-reset confirm path. An account created by staff holds no Terms record, so the holder's first `completePasswordReset` call is where one is created. The file exercises both the service method and the HTTP route, verifying validation, version stamping, and idempotency when a record already exists.
+Integration tests for how the password-reset confirm path handles the Terms record. An account created by staff has no Terms record, so its holder's first password set is where the record is made. The file covers both the service (`accountService.completePasswordReset`) and the route (`POST /account/password/reset/confirm`).
 
 ## Key elements
-
-- **`fieldsOf(errors)`** – Extracts the `details.field` value from a 422 error array so assertions can name the offending field directly.
-- **`confirm(link, termsAccepted?)`** – Thin wrapper around `accountService.completePasswordReset` that supplies the replacement password and `testCallerContext`, returning the raw service result.
-- **`describe('completePasswordReset, an account with no Terms record')`** – Service-level tests: 422 when `termsAccepted` is missing (link remains reusable), version stamped from `NODE_TERMS_VERSION` in the same write as the password, and dead-link errors that never surface the terms field.
-- **`describe('completePasswordReset, an account that already accepted')`** – Confirms an existing `termsAcceptedAt`/`termsVersion` pair is left untouched on a subsequent reset.
-- **`describe('POST /account/password/reset/confirm, …')`** – Route-level tests via `api()`: the `termsAccepted: true` body field is required (204 on success, 422 without), and `termsAccepted: false` is explicitly rejected.
+- `fieldsOf(errors)`: maps a 422 error list to each error's `details.field`.
+- `confirm(link, termsAccepted?)`: calls `accountService.completePasswordReset` with `REPLACEMENT_PASSWORD` as both password and confirmation, using `testCallerContext`.
+- **Service, account with no record**:
+  - Without the tick, it returns a 422 naming `termsAccepted`. The same link still works afterwards, and a retry with `true` returns 200.
+  - With the tick, it stamps `termsAcceptedAt` (a `Date`) and `termsVersion`. The version comes from `NODE_TERMS_VERSION`, overridden to `'2026-11'` in the test.
+  - A dead link gives only the "Invalid or expired token, please try again." error, never a `termsAccepted` one.
+- **Service, account that already accepted**: the `termsAccepted` argument is ignored and the earlier `termsAcceptedAt` is left unchanged.
+- **Route**:
+  - Without `termsAccepted`, it returns 422 naming `termsAccepted`. With `termsAccepted: true`, it returns 204.
+  - `termsAccepted: false` returns 422.
 
 ## Relationships
-
-- **`src/modules/account/services/index.ts`** — Imports `accountService` to call `completePasswordReset` at the service level.
-- **`src/modules/account/tests/factories.ts`** — Imports `plantToken` to seed a password-reset token for a given user and link.
-- **`src/modules/users/tests/factories.ts`** — Provides `createUser`, `REPLACEMENT_PASSWORD`, and `userRepository` (used to assert stored `termsAcceptedAt`/`termsVersion`).
-- **`src/modules/users/repository.ts`** — Transitive dependency via `userRepository` from the users factories; queried directly in assertions.
-- **`tests/support/http.ts`** — `api()` gives a Supertest-style client for the two route-level tests.
-- **`tests/support/response.ts`** — `asReject` / `asSuccess` unwrap the service result into typed success or error shapes.
-- **`tests/support/callers.ts`** — `testCallerContext` supplies the caller identity required by the service call.
-- **`tests/support/environment.ts`** — `withEnvironmentOverrides` temporarily sets `NODE_TERMS_VERSION` so the stamped version is deterministic.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises the in-memory test database before any suite runs.
+- `setupTestDb()` from `tests/support/setup-test-db.ts` is called at the top level to set up the test database.
+- `accountService` from `src/modules/account/services/index.ts` is the unit under test for the service cases.
+- `plantToken(userId, 'password', link)` from `src/modules/account/tests/factories.ts` seeds a reset token for a given link string.
+- `createUser`, `REPLACEMENT_PASSWORD` and `userRepository` come from `src/modules/users/tests/factories.ts`. `userRepository` is the repository exposed by that factories file, which builds on `src/modules/users/repository.ts`. The tests use it to read back the stored user.
+- `tests/support/callers.ts` provides `testCallerContext`.
+- `tests/support/http.ts` provides `api()`, used for the route tests.
+- `tests/support/response.ts` provides `asReject` and `asSuccess`, which narrow service results to failure or success.
+- `tests/support/environment.ts` provides `withEnvironmentOverrides`, used to pin `NODE_TERMS_VERSION`.
 
 ## Notes
-
-- The service-level `confirm` helper expects a **200** status on success, while the route-level test expects **204** — the two layers return different status codes for the same logical success.
-- `termsAccepted` must be the boolean literal `true`; passing `false` (or omitting it) yields a 422. The test explicitly asserts this to lock down the "literally true" contract.
-- Token validation is checked before terms validation: an invalid/expired link produces the standard dead-link error and never leaks the `termsAccepted` field name.
-- The version stamped is whatever `NODE_TERMS_VERSION` is set to at call time; the test uses `withEnvironmentOverrides` to pin it to `'2026-11'` for a deterministic assertion.
+- The service returns `status` 200 on success, while the route answers 204.
+- Every test uses a distinct email and token string, so cases don't collide.

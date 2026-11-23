@@ -1,36 +1,42 @@
 ---
 source: src/modules/delivery/services/reship.ts
-sha256: c4eae7b6d96dd014603ec80691d78a1ef069aec2d9d2597a68b20d96e67b8e61
-generated_at: 2026-11-14T19:50:11.373812+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T04:58:30.216053+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/reship.ts
 
 ## Purpose
-
-Implements the replacement-after-return flow: when delivered goods are returned under legal guarantee, this file reopens the **same** fulfillment orders to ship replacement units. No new order, invoice, or revenue is created. It tops up the stock hold, parks any shelf-uncoverable quantity on a new owed fulfillment order, and reverts the parent order to `processing` so the replacement ships through the normal pipeline. All mutations run inside the caller's transaction.
+Implements the replacement-after-a-return flow: goods already delivered are sent again under the legal guarantee. Returned units are reopened on the same fulfillment orders they originally shipped from (no new order, invoice or revenue). The stock hold is topped up, any shortfall is owed on a fulfillment order on hold, and the order returns to `processing` so the replacement ships through the normal shipping path. It runs inside the caller's transaction (a return's receipt).
 
 ## Key elements
-
-- **`reopenForReplacement`** (exported) — Main entry point. Reads the order, calls `planReopening` to decide per-fulfillment-order allocations, tops up stock, reopens lines, creates an owed fulfillment order if the shelf can't cover everything, reports progress, and reopens the order for fulfillment. Throws `409 DELIVERY_NOT_REOPENABLE` on any conflict.
-- **`reopenLines`** (module-private) — Iterates over planned reopenings, computes final lines via `withLoss`, and claims each fulfillment order with its new lines and status. Uses the order's `revision` for optimistic concurrency; refuses if the claim fails.
+- `reopenForReplacement(orderId, lines, session, actor)` — the exported entry point. All or nothing: any refusal aborts the caller's transaction. Steps:
+  1. Reads the order (`orderService.readOrder`) and the order's fulfillment orders (`fulfillmentOrderRepository.findByOrderId`).
+  2. Calls `planReopening` to decide which units reopen on which fulfillment orders.
+  3. Calls `orderService.topUpStock` and keeps the lines with `owed > 0`.
+  4. Calls `reopenLines`, passing `shareOwed(...)` to split the owed units across the origin orders.
+  5. If anything is owed, creates an owed fulfillment order with `createOwedFulfillmentOrder`, using `promiseFor(owed, new Date())`. Titles are looked up from the existing lines.
+  6. Calls `reportProgress`.
+  7. Calls `orderService.reopenForFulfillment(orderId, session, actor)`.
+- `reopenLines` (internal) — for each reopening, finds the origin fulfillment order. It computes new lines with `withLoss`, then claims the order through `fulfillmentOrderRepository.claim` using the order's `revision` (optimistic concurrency). The new status comes from `statusOfLines`, which keeps the order on hold if it already was.
 
 ## Relationships
-
-- **`src/modules/delivery/domain/index.ts`** — Imports `planReopening`, `shareOwed`, `statusOfLines`, `withLoss` and the types `ProductQuantity`, `Reopening`. The domain decides *how* to split units and allocate owed portions across orders.
-- **`src/modules/delivery/repository.ts`** — Loads the order's fulfillment orders and persists (claims) the reopened lines under optimistic concurrency.
-- **`src/modules/delivery/model.ts`** — Uses `FulfillmentOrderDocument` as the shape of loaded orders.
-- **`src/modules/delivery/services/owed.ts`** — Calls `createOwedFulfillmentOrder` to park uncovered quantity on a dedicated hold order, and `promiseFor` to derive a promise date.
-- **`src/modules/delivery/services/progress.ts`** — Calls `reportProgress` to signal the order is active again.
-- **`src/modules/delivery/services/act.ts`** — Uses `refuse` to raise the standard `409` refusal.
-- **`src/modules/orders/index.ts`** — Reads the order, tops up the stock hold, and reopens the order for fulfillment (moving it back to `processing`).
-- **`src/types/index.ts`** — Imports `FulfillmentOrderKind` and `FulfillmentOrderStatus` enums.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** — Exercises the domain planning logic this service depends on.
+- `../domain` — supplies the pure logic: `planReopening`, `shareOwed`, `statusOfLines`, `withLoss`, and the types `ProductQuantity` and `Reopening`.
+- `../repository` and `../model` — `fulfillmentOrderRepository` (`findByOrderId`, `claim`) and the `FulfillmentOrderDocument` type.
+- `./act` — `refuse` throws the 409 refusals (`ActRefusal`).
+- `./progress` — `reportProgress` refreshes order progress after units reopen.
+- `./owed` — `createOwedFulfillmentOrder` and `promiseFor` handle the part the shelf cannot cover.
+- `@modules/orders` — `orderService` provides `readOrder`, `topUpStock` and `reopenForFulfillment`.
+- `@types` — `FulfillmentOrderKind` and `FulfillmentOrderStatus` enums.
 
 ## Notes
-
-- **Transaction boundary:** The function accepts a `ClientSession` and performs no commit. Every refusal rolls back the caller's receipt transaction. The caller owns refreshing the catalogue stock cache.
-- **Optimistic concurrency:** `reopenLines` passes `origin.revision` into the repository claim; a concurrent mutation (e.g., a parallel return) causes a `409` refusal rather than a silent overwrite.
-- **Same-order guarantee:** Replacement units are attached to the *existing* fulfillment orders by id. No new order document is created for the shipped portion—only for the owed portion (via `createOwedFulfillmentOrder`).
-- **Status gating:** `orderService.reopenForFulfillment` is expected to move a `delivered` or `shipped` order back to `processing`; any other state results in a refusal.
+- Every failure is a 409 `DELIVERY_NOT_REOPENABLE` (`delivery.not-reopenable`). The triggers are:
+  - a missing order;
+  - `planReopening` returning nothing, i.e. the order shipped fewer units than come back;
+  - a lost `claim` (revision conflict);
+  - `reopenForFulfillment` returning falsy, i.e. the order is not in a state it can ship from.
+- Per the inline comment, a `delivered` or `shipped` order steps back to `processing`; any other state cannot be sent to.
+- The caller must refresh the availability entry itself; this function does not.
+- `reopenLines` silently skips a reopening whose origin fulfillment order is not found in the list.
+- The owed order is created with `orders[0]?.orderId ?? order._id` as its order id.
+- The file's module doc points to `docs/modules/delivery.md#replacement-after-a-return` for background.

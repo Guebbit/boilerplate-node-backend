@@ -1,33 +1,29 @@
 ---
 source: src/modules/products/services/actions.ts
-sha256: 65b0140b70fc152addce38e7318777e9ef6b5efebc8b206c705bc12f62a228a1
-generated_at: 2026-11-14T21:26:50.545227+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 65b0140b70fc152addce38e7318777e9ef6b5efebc8b206c705bc12f62a228a1
+context_sha256: 5dc62a67e3d13d5448a1709171eedff72796b75f551a53c7a154c8430ba33501
+generated_at: 2026-11-22T07:12:22.569570+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/services/actions.ts
 
 ## Purpose
-
-Computes the `actions` block on a product for the current caller and stamps it onto the wire object, so clients receive ready-made permission flags instead of re-deriving the rules. The rules themselves live in `domain/actions.ts`; this file reads the caller's keys and produces the concrete standing.
+Stamps an `actions` field onto a product for the caller reading it, so clients don't re-derive permission rules. The rules themselves live in `src/modules/products/domain/actions.ts`. This file reads the caller's permission keys and applies the result to the product.
 
 ## Key elements
-
-- **`standingOn(caller?)`** — Returns a `ProductStanding` (`update`, `delete`) derived from the caller's held abilities via `holds`. Returns `NO_PRODUCT_STANDING` when `caller` is undefined.
-- **`standingOnRead(scopeOf, caller?)`** — Guarded wrapper around `standingOn` for read paths. If the caller falls inside the anonymous read scope (i.e. their response would be served from the shared guest cache), it returns `NO_PRODUCT_STANDING` so no personalized flag leaks to other guests.
-- **`withActions<T extends Product>(product, standing)`** — Returns a new product object with `actions` computed by `productActions(product, standing)` and the row version re-carried via `carryVersion` (preserves the `ETag` on the copy).
+- **`standingOn(caller?)`**: Returns a `ProductStanding` from the caller's keys. `update` requires holding both `update` on `Product` and `update` on `Translation`. `delete` requires `delete` on `Product`. An undefined (anonymous) caller gets `NO_PRODUCT_STANDING`. The doc says write responses use this, and it is never cached.
+- **`standingOnRead(scopeOf, caller?)`**: Standing for a READ. If `hasAnonymousReadScope(scopeOf, caller)` is true, it returns `NO_PRODUCT_STANDING`. Otherwise it delegates to `standingOn`. `scopeOf` is the module's `callerScope`.
+- **`withActions(product, standing)`**: Returns a copy of the product with `actions: productActions(product, standing)`. It is generic over `T extends Product`. The standing is meant to be computed once per request.
 
 ## Relationships
-
-- **`src/modules/products/domain/actions.ts`** — Source of the `ProductStanding` type, `NO_PRODUCT_STANDING` sentinel, and the `productActions` rule function that actually computes flags.
-- **`src/kernel/ability.ts`** — Provides `holds`, the key-checking primitive used by `standingOn`.
-- **`src/kernel/access/query.ts`** — Provides `hasAnonymousReadScope`, used by `standingOnRead` to detect the cache-sharing condition.
-- **`src/infrastructure/persistence/versioning.ts`** — Provides `carryVersion`, ensuring the stamped copy retains the row version for `ETag` comparison.
-- **`src/types/index.ts`** — Barrel re-export of `Caller` and `Product` types consumed here.
-- **`src/modules/products/services/read.ts`** / **`search.ts`** — Downstream consumers that call `standingOnRead` and `withActions` to attach actions to read/search responses.
+- `src/modules/products/domain/actions.ts`: supplies `productActions`, `NO_PRODUCT_STANDING` and the `ProductStanding` type. This file only gathers the standing and applies the rules.
+- `src/kernel/ability.ts` (`holds`): checks whether the caller holds a given action on a subject.
+- `src/kernel/access/query.ts` (`hasAnonymousReadScope`): detects callers who share the anonymous read scope.
+- `src/infrastructure/persistence/versioning.ts` (`carryVersion`): copies the row's version onto the new product object.
+- `src/types/index.ts` (`Caller`, `Product`): the caller and product types are imported from `@types`. `src/types/auth-context.ts` is also a graph neighbor.
+- `src/modules/products/services/read.ts` and `src/modules/products/services/search.ts` are graph neighbors, so they presumably use these helpers. That usage is not visible in this file.
 
 ## Notes
-
-- `standingOnRead` exists specifically because the anonymous read scope is backed by a shared cache; stamping a personalized standing onto a cached response would serve it to unrelated guests. Only callers *outside* that scope get a real standing on reads.
-- `withActions` creates a new object (`{ ...product, actions }`) rather than mutating; the version must be re-carried because the copy would otherwise lose it.
-- The standing is computed once per request and passed in, not re-derived inside `withActions` — callers are expected to ask `standingOn`/`standingOnRead` a single time.
+- Anonymous-scope readers get no standing on reads. They are served from a cache shared by all guests, and a per-user flag would leak to strangers. Only callers outside that scope are answered fresh and get a real standing.
+- `withActions` has to use `carryVersion` because the row's version sits beside the wire object (used for the `ETag`). A plain spread would lose it.

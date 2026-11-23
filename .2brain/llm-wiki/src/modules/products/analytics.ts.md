@@ -1,30 +1,26 @@
 ---
 source: src/modules/products/analytics.ts
-sha256: 156a28ed8aa6cb6008f4c00f9dfa53c45a5cd01e5a34e638f8c97c0b1fe67692
-generated_at: 2026-11-08T07:41:23.496296+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:06:49.044492+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/analytics.ts
 
 ## Purpose
-
-Declares the analytics event names for the products module and registers them into the app-wide analytics type system. These are top-of-funnel discovery events (search, product view) whose ratio to `CART_ITEM_ADDED` serves as a catalogue-health signal. They are emitted client-side via `POST /analytics/events` because server-side response caching hides most product reads.
+Declares the analytics event names for the products module (product search and product view) and registers them into the analytics port's app-wide event-name type. These are top-of-funnel discovery events, whose ratio to `CART_ITEM_ADDED` indicates how well the catalogue is working. The browser sends them through `POST /analytics/events`, because the response cache hides most reads from the server.
 
 ## Key elements
-
-- **`productsAnalyticsEvents`** – `as const` object exporting two event-name keys:
+- `productsAnalyticsEvents`: a `const` object, keyed by intent, mapping to the event-name strings:
   - `PRODUCTS_SEARCHED` → `'products_searched'`
   - `PRODUCT_VIEWED` → `'product_viewed'`
-- **Module augmentation of `@infrastructure/observability/analytics`** – extends the `AnalyticsEventMap` interface with a `products` key typed to the values above, so the analytics port's event union includes these names across the app.
+- `declare module '@infrastructure/observability/analytics'`: a module augmentation that adds a `products` entry to `AnalyticsEventMap`. Its type is the union of the values of `productsAnalyticsEvents`.
 
 ## Relationships
-
-- **`src/modules/products/browser-events.ts`** – the browser-side emitter that references `productsAnalyticsEvents` when dispatching discovery events to the analytics endpoint.
-- **`tests/unit/infrastructure/observability/analytics.test.ts`** – exercises the analytics port contract, including the event-name map this file contributes to.
+- Augments `AnalyticsEventMap` from `@infrastructure/observability/analytics`, so these names are accepted by the analytics port. The test at `tests/unit/infrastructure/observability/analytics.test.ts` sits in that area.
+- `src/modules/products/browser-events.ts` is a graph neighbor. Per the header comment, the browser is the sender of these events.
 
 ## Notes
-
-- This file is **type-and-constant only**; it imports nothing and has no runtime side effects beyond the `const` export.
-- Naming follows the convention documented in `docs/tools/analytics.md#naming` (snake_case, past-participle for actions).
-- The module augmentation is the integration point: any code consuming the analytics port will see these names in its event union without an explicit import of this file.
+- `as const` keeps the values as literal types, so the derived union is exactly `'products_searched' | 'product_viewed'`.
+- The module has no runtime logic. The `declare module` block affects types only.
+- Events come from the browser rather than the server because the response cache hides most reads.
+- The header comment says this follows the same pattern as `./audit.ts` (augmenting the port for audit actions) and points to `docs/understand/analytics.md` for details.

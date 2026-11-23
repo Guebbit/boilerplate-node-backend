@@ -1,49 +1,45 @@
 ---
 source: src/modules/addresses/tests/integration/checkout.test.ts
-sha256: 43ddb540a1d6c4763346b133cb0c9862bc3938a308b50c8f44a1917a04c2ff77
-generated_at: 2026-11-08T04:57:39.710969+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d0e7eedafa8ae6e3d89b0952e0189075542a8a382fea0b7d78f8b225e799264d
+context_sha256: a31085702872ddf52b7e431729198f6d81cf105e8bd7cb314b3494613c6d2731
+generated_at: 2026-11-22T04:16:35.964089+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/tests/integration/checkout.test.ts
 
 ## Purpose
-
-Integration tests for address resolution during checkout: which address (default, named, or none) gets frozen as the shipping and/or billing snapshot on an order. Covers the full decision matrix — standard vs. pickup shipping, physical vs. digital baskets, stale/foreign IDs, and empty address books — verifying both the happy-path snapshot content and that refused checkouts leave no side effects.
+Integration tests for how the address book interacts with checkout. They cover how `cartService.orderConfirm` resolves the shipping and billing addresses, and what the resulting order snapshots. The file is kept apart from the rest of the address-book suite because it needs a cart and an order. Removing the shop module means deleting this file along with it.
 
 ## Key elements
-
-- **`cartWith(userId)`** — Shared setup helper: creates one in-stock product and adds it to the user's cart.
-- **`describe('checkout and the address')`** — Tests the *shipping* address path:
-  - Default address resolved when no `addressId` is passed.
-  - Named address overrides the default.
-  - Stale (non-existent) `addressId` → 404 `CART_ADDRESS_NOT_FOUND`, inventory and cart untouched.
-  - Another user's valid `addressId` → same 404 (ownership, not just existence).
-  - Pickup shipping → no `shippingAddress`, but billing still resolved.
-  - Empty address book → 422 `CART_BILLING_ADDRESS_REQUIRED` before any inventory hold.
-- **`describe('checkout and the billing address')`** — Tests the *billing* address path:
-  - Billing defaults to shipping address ("same as shipping").
-  - Named `billingAddressId` decouples billing from shipping.
-  - Digital-only basket: no `shippingAddress`, billing required.
-  - Passing `addressId` on a digital-only basket → 409 `CART_ADDRESS_NOT_APPLICABLE` (not silently ignored).
-  - Foreign `billingAddressId` → 404, no order created.
-  - Billing address is **not** constrained by ship-to-country restrictions (e.g. JP allowed for billing).
+- `setupTestDb()`: called at module level to set up the test database.
+- `cartWith(userId)`: local helper that creates an in-stock product and adds one unit to the user's cart. It returns the product.
+- `describe('checkout and the address')`: tests for shipping-address resolution:
+  - With no id given, the default address is snapshotted.
+  - A named entry takes precedence over the default.
+  - A stale id, or another user's real entry id, is refused with 404 `CART_ADDRESS_NOT_FOUND`. Stock counters (`onHand` 10, `reserved` 0), the cart and the order count are left unchanged.
+  - A `pickup` order has no shipping address but is billed to the default.
+  - An empty address book is refused with 422 `CART_BILLING_ADDRESS_REQUIRED`.
+- `describe('checkout and the billing address')`:
+  - By default, billing is the same as shipping.
+  - A named `billingAddressId` is used independently of shipping.
+  - A digital-only basket (`requiresShipping: false`) freezes only a billing address. It uses the default or the named entry, and returns 422 if no address exists.
+  - Passing a shipping `addressId` on a digital-only basket returns 409 `CART_ADDRESS_NOT_APPLICABLE`.
+  - Another user's entry as billing is refused with 404, the same as for shipping.
+  - A case asserting the billing address is not held to the ship-to countries uses a `JP` address. The rest of that case is not shown.
 
 ## Relationships
-
-- **`src/modules/addresses/service.ts`** — `addressService.create` / `.list` set up and read the user's address book under test.
-- **`src/modules/cart/index.ts`** — Exports `cartService`, the primary SUT (`orderConfirm`, `setShippingMethod`, `addItemById`, `getForBadge`).
-- **`src/modules/cart/services/index.ts`** — Upstream implementation of the cart service invoked by the tests.
-- **`./fixtures`** — `HOME` and `OFFICE` address fixtures used throughout.
-- **`src/modules/users/tests/factories.ts`** — `createUser` builds test users (owner/stranger pairs for cross-user tests).
-- **`src/modules/products/tests/factories.ts`** — `createProduct` (physical and `requiresShipping: false` digital), `readProduct` to assert inventory is untouched after a refused checkout.
-- **`src/modules/orders/tests/factories.ts`** — `countOrders` asserts zero orders were persisted after a failure.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb` initialises the database for the suite.
-- **`tests/support/callers.ts`** — `testCallerContext` provides the authenticated caller identity passed to `orderConfirm`.
+- `src/modules/addresses/service.ts`: provides `addressService` (`create`, `list`), used to seed and look up address entries.
+- `src/modules/addresses/tests/integration/fixtures.ts`: supplies the `HOME` ("Via Roma 1", Ada Lovelace) and `OFFICE` ("Via Milano 2") address fixtures.
+- `src/modules/cart/index.ts` / `src/modules/cart/services/index.ts`: `cartService` supplies `addItemById`, `setShippingMethod`, `orderConfirm` and `getForBadge`. This is the code under test.
+- `src/modules/products/tests/factories.ts`: `createProduct` and `countersOf` for building products and reading stock counters.
+- `src/modules/orders/tests/factories.ts`: `countOrders`, used to assert that no order was created on refusal.
+- `src/modules/users/tests/factories.ts`: `createUser`.
+- `tests/support/callers.ts`: `testCallerContext`, passed to `orderConfirm`.
+- `tests/support/setup-test-db.ts`: `setupTestDb`.
 
 ## Notes
-
-- **Deliberate isolation from the address-book suite**: the file header explains it is kept separate because it depends on cart and order infrastructure; removing the shop module should remove this file with it.
-- **Ownership vs. existence**: the foreign-ID test exists to pin the *ownership* invariant, not merely "id doesn't exist." A comment notes that collapsing the resolver's split return type (found-but-not-yours vs. not-found) would silently downgrade a foreign ID to "no address."
-- **Side-effect assertions are repeated**: every failure test checks inventory (`onHand`/`reserved`), cart contents, and `countOrders === 0` to prove the address check runs *before* any inventory hold.
-- **Digital-only 409 is a distinct code** (`CART_ADDRESS_NOT_APPLICABLE`) from the 404 (not found) and 422 (required) paths — tests guard against conflating them.
+- Address checks run before any stock is held, so refused checkouts leave the product counters and the cart untouched.
+- A stranger's real address id and an invented id produce the same 404 result. The test comment says the intent is to prove ownership, not just existence, and that the resolver's split return type exists for this case. The comment says collapsing it would let a foreign id silently downgrade to "no address".
+- `orderConfirm`'s third argument is optional. It takes `{ addressId?, billingAddressId? }`, and `undefined` or omitting it means "use the default".
+- Tests that need a second user pass explicit `email` and `username` values to `createUser`.

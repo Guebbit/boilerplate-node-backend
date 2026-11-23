@@ -1,44 +1,47 @@
 ---
 source: src/modules/payments/tests/integration/refund-provider-status.test.ts
-sha256: b06c7902670e4c348b7321350e5341678faff53e08f2621663964624a8ed49cc
-generated_at: 2026-11-14T21:16:08.218447+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b06c7902670e4c348b7321350e5341678faff53e08f2621663964624a8ed49cc
+context_sha256: 0ad3a9b72abde16697c9cd66f45e884a28f0bce6e926b148e8c14d1228867110
+generated_at: 2026-11-22T07:00:19.913417+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/refund-provider-status.test.ts
 
 ## Purpose
-
-Integration test verifying the lifecycle of a refund that the provider **accepts but has not yet settled**: the API returns 201 with the record in `pending` status and emits no domain event; the periodic sweep re-reads (never re-sends) the refund and settles it once the provider reports success; and a webhook naming the refund also settles it, with redelivery being a no-op. Runs against real Mongo with the fake payment provider's `pending` lever.
+Integration test (real Mongo, fake payment provider) for refunds whose provider-side status is `pending`. It checks that a refund the provider accepts but hasn't settled stays open and publishes no event. It also checks that the retry sweep re-reads it instead of re-sending it, and that a webhook naming the refund settles it.
 
 ## Key elements
-
-- **`pendingRefund()`** (local helper) — Creates a user, product (50.00 × 2), order, pays by card (100.00), flips the fake provider to hold refunds `pending`, then issues a 30.00 refund. Returns the order, payment, refund IDs, and the provider's refund ref.
-- **`refundedEvents()`** (local helper) — Counts `payment.refunded` documents in the outbox collection.
-- **`describe › answers 201 with the open record, and announces nothing`** — Asserts the HTTP 201 shape, `status: 'pending'`, `providerRefundRef` populated, `settledAt` undefined, and zero outbox events after settling nudges.
-- **`describe › is re-read by the sweep, never sent again, and settles once the provider says so`** — Spies on `fakePaymentProvider.refund` / `.retrieveRefund`; verifies the sweep calls `retrieveRefund` (not `refund`), returns 0 while still pending, then 1 after `setFakeRefundOutcome` flips to `succeeded`; asserts the outbox gets exactly one event.
-- **`describe › is settled by a webhook naming the refund, and a redelivery changes nothing`** — Delivers the same webhook event twice via `deliver()`, asserts the refund settles and only one outbox event is produced.
+- `setupTestDb()`: sets up the real test database. `beforeEach` registers `paymentsModule` via `registerCheckoutModules`. `afterEach` calls `resetDomainEvents()` and `jest.restoreAllMocks()`.
+- `pendingRefund()`: test helper that:
+  - creates a user, a product (price 50.00) and an order of 2 items, and pays by card (100.00);
+  - calls `setFakeRefundPending(providerRef, true)`;
+  - refunds 30.00 as admin via `refundOrderPayment`;
+  - returns `orderId`, `providerRef`, `answer`, `payment`, `refundId` and `refundRef` (from `refundRefOfRecord`).
+- `refundedEvents()`: counts `payment.refunded` (`PAYMENT_REFUNDED`) rows in `outboxEventModel`.
+- Test 1: the refund answers `{ success: true, status: 201 }`. The record has `status: 'pending'` and `providerRefundRef`, no `settledAt`, and zero `payment.refunded` outbox rows.
+- Test 2: runs with `NODE_PAYMENT_REFUND_RETRY_MINUTES=0`.
+  - `paymentService.retryOpenRefunds()` returns 0 while the refund is still pending, and the test asserts `retrieveRefund` was called with `refundRef`.
+  - After `setFakeRefundOutcome(refundRef, { status: 'succeeded' })`, it returns 1.
+  - `fakePaymentProvider.refund` is never called, the refund is `succeeded`, and one event is emitted.
+- Test 3: after the outcome is set to succeeded, `deliver` sends the same webhook (`evt_1`) twice. The refund ends `succeeded` with exactly one `payment.refunded` event.
 
 ## Relationships
-
-- **`scenarios/support/doubles/payments/fake.ts`** — Provides `fakePaymentProvider`, `refundRefOfRecord`, `setFakeRefundPending`, `setFakeRefundOutcome`. The entire test's control over provider state flows through this fake.
-- **`src/modules/payments/tests/factories.ts`** — `payByCard` and `refundOrderPayment` drive the payment and refund flows under test.
-- **`src/modules/payments/tests/deliver.ts`** — `deliver` injects provider webhook events into the system.
-- **`src/modules/payments/services/index.ts`** — Source of `paymentService`; the test calls `paymentService.retryOpenRefunds()` as the sweep entry point in test 2.
-- **`src/modules/payments/repository.ts`** — Source of `paymentRepository`; the test reads payment and refund state via `findByOrderId` after each action.
-- **`src/modules/payments/events.ts`** — `PAYMENT_REFUNDED` is the event name counted in the outbox assertions.
-- **`src/modules/payments/module.ts`** — Registered via `registerCheckoutModules` in `beforeEach` so the service is resolvable.
-- **`src/kernel/outbox.ts`** — `outboxEventModel` (counting) and `settleOutboxNudges` (flushing pending outbox writes before asserting).
-- **`src/kernel/events.ts`** — `resetDomainEvents` in `afterEach` prevents cross-test leakage.
-- **`src/modules/users/tests/factories.ts`**, **`src/modules/products/tests/factories.ts`**, **`src/modules/orders/tests/factories.ts`** — Create the user, product, and order that the payment is anchored to.
-- **`tests/support/callers.ts`** — `asAdmin` / `callerContextAs` supply the auth context for the refund API call.
-- **`tests/support/checkout-modules.ts`** — `registerCheckoutModules` wires the payments module into the test DI container.
-- **`tests/support/environment.ts`** — `withEnvironmentOverrides` sets `NODE_PAYMENT_REFUND_RETRY_MINUTES=0` so the sweep runs immediately in test 2.
+- `scenarios/support/doubles/payments/fake.ts`: provides `fakePaymentProvider` and the levers `setFakeRefundPending`, `setFakeRefundOutcome` and `refundRefOfRecord`.
+- `src/modules/payments/services/index.ts`: exports `paymentService`, whose sweep method is exercised by the tests.
+- `src/modules/payments/repository.ts`: exports `paymentRepository`, used to read back the payment and its refunds.
+- `src/modules/payments/tests/deliver.ts`: `deliver` simulates the provider webhook.
+- `src/modules/payments/tests/factories.ts`: `payByCard` and `refundOrderPayment`.
+- `src/kernel/outbox.ts`: `outboxEventModel` and `settleOutboxNudges` for checking and flushing emitted events.
+- `src/kernel/events.ts`: `resetDomainEvents` for cleanup.
+- `src/modules/payments/events.ts`: `PAYMENT_REFUNDED`.
+- `src/modules/payments/module.ts`: `paymentsModule`, registered for the test.
+- `src/modules/users/tests/factories.ts`, `src/modules/products/tests/factories.ts` and `src/modules/orders/tests/factories.ts`: build the fixture user, product and order.
+- `tests/support/callers.ts`: `asAdmin` and `callerContextAs`.
+- `tests/support/checkout-modules.ts`: `registerCheckoutModules`.
+- `tests/support/environment.ts`: `withEnvironmentOverrides`.
 
 ## Notes
-
-- Real MongoDB is required (`setupTestDb()`); this is not a pure unit test.
-- `settleOutboxNudges()` must be awaited **before** asserting on outbox counts, otherwise events written asynchronously by the service will be invisible.
-- The sweep test relies on `NODE_PAYMENT_REFUND_RETRY_MINUTES: '0'` to make `retryOpenRefunds()` treat the refund as immediately eligible; without this override the sweep would skip it.
-- The test asserts that the sweep calls `retrieveRefund` (a read) and explicitly **not** `refund` (a re-send) — this is the core contract being guarded: idempotent re-check, not re-initiation.
-- `pendingRefund` throws if the provider produced no refund record (`refundRefOfRecord` returns falsy), which will surface as a test failure rather than a silent skip.
+- Event assertions call `settleOutboxNudges()` first so the outbox has been processed before counting rows.
+- `jest.spyOn(fakePaymentProvider, ...)` is used to observe provider calls. `restoreAllMocks` in `afterEach` undoes the spies.
+- Setting the retry interval to `'0'` makes the open refund eligible for the sweep immediately.

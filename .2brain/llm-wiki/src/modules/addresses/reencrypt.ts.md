@@ -1,31 +1,31 @@
 ---
 source: src/modules/addresses/reencrypt.ts
-sha256: 674e8e5db1038e75466d4651be497424fb0e70d292cedd4b8f7fb698455fc14a
-generated_at: 2026-11-08T04:56:02.236573+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 674e8e5db1038e75466d4651be497424fb0e70d292cedd4b8f7fb698455fc14a
+context_sha256: f4e064d797401b8ee9900e4966a20b6ccbc96257af3f7d4389bce30fcbb4d702
+generated_at: 2026-11-22T04:15:00.938521+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/reencrypt.ts
 
 ## Purpose
-
-Thin adapter that feeds address-book documents into the generic PII key-rotation pipeline. It knows *which* fields are encrypted on an address entry and *how* to bind them, then hands the work off to the repository. Exists so the ops `reencrypt` script (see `@infrastructure/security/reencrypt`) has an address-domain entry point without the infrastructure layer needing to know address schema details.
+Moves every address-book entry's encrypted PII fields onto the newest `NODE_PII_ENCRYPTION_KEY`. It is the address-module side of the `reencrypt` ops script, supplying the module-specific knowledge of which fields are encrypted and how each is bound, while the generic re-encryption logic lives in `@infrastructure/security/reencrypt`.
 
 ## Key elements
-
-- **`fieldsOf(book)`** *(private)* — Flattens an `AddressBookDocument` into `EncryptedField[]`. For each entry and each name in `ADDRESS_PII_FIELDS`, emits `{ path, stored, binding, label }`, skipping fields that are `undefined`.
-- **`reencryptAddressBooks(dryRun?)`** *(export)* — Public entry point. Delegates to `addressBookRepository.reencrypt({ ring, fieldsOf }, dryRun)`. `dryRun` (default `false`) limits the call to a count-only pass.
+- `fieldsOf(book)` (internal): for an `AddressBookDocument`, walks `book.items` and each field in `ADDRESS_PII_FIELDS`. Fields that are `undefined` are skipped. Each present field becomes an `EncryptedField` with:
+  - `path`: `items.<index>.<field>`, the location to write it back to
+  - `stored`: the current stored value
+  - `binding`: `piiBinding(addressAad(field, entry._id!))`
+  - `label`: `addressbooks.items.<field>`
+- `reencryptAddressBooks(dryRun = false)` (exported): calls `addressBookRepository.reencrypt({ ring: getPiiEncryptionKeyRing(), fieldsOf }, dryRun)`. With `dryRun`, it counts what a real run would move and writes nothing.
 
 ## Relationships
-
-- **`src/infrastructure/security/pii-encryption.ts`** — Provides `getPiiEncryptionKeyRing()` (the current key ring) and `piiBinding()` (per-field AAD binding) consumed by both `fieldsOf` and the exported function.
-- **`src/infrastructure/security/reencrypt.ts`** — Supplies the `EncryptedField` type that `fieldsOf` produces.
-- **`src/modules/addresses/model.ts`** — Supplies the `AddressBookDocument` type that parameterises `fieldsOf`.
-- **`src/modules/addresses/pii.ts`** — Supplies `ADDRESS_PII_FIELDS` (the list of encrypted field names) and `addressAad(field, id)` (builds the AAD string for the binding).
-- **`src/modules/addresses/repository.ts`** — `addressBookRepository.reencrypt` is the actual read-rewrite-write executor that this file drives.
+- `src/infrastructure/security/reencrypt.ts`: provides the `EncryptedField` type that `fieldsOf` returns.
+- `src/infrastructure/security/pii-encryption.ts`: provides `getPiiEncryptionKeyRing()` (the key ring) and `piiBinding()` (wraps the AAD into a binding).
+- `src/modules/addresses/pii.ts`: provides `ADDRESS_PII_FIELDS` (the encrypted field names) and `addressAad(field, id)` (the per-entry AAD).
+- `src/modules/addresses/repository.ts`: provides `addressBookRepository`, to which the ring and `fieldsOf` are passed along with `dryRun`.
+- `src/modules/addresses/model.ts`: provides the `AddressBookDocument` type.
 
 ## Notes
-
-- `entry._id!` is non-null-asserted inside the `addressAad` call; the code assumes every stored entry carries an `_id`. If a malformed document slips through, this throws at binding-construction time rather than at encryption time.
-- The `path` string (`items.<index>.<field>`) is the *write-back* path the repository uses to splice re-encrypted values back into the document — keep it in sync with the shape in `model.ts`.
-- `service.ts` appears in the graph as a neighbor but is **not** imported here; it likely calls `reencryptAddressBooks` indirectly through the ops script, not directly.
+- Each field's binding is derived from the field name and the entry's `_id`, so the `_id` is part of what the ciphertext is bound to. `fieldsOf` uses a non-null assertion (`entry._id!`) and assumes every item has an `_id`.
+- This file only describes the fields. Reading, decrypting, re-encrypting and writing are delegated to the repository.

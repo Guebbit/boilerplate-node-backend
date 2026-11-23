@@ -1,37 +1,31 @@
 ---
 source: src/modules/account/tests/integration/password-hashing.test.ts
-sha256: 22ffa8584cde048d25966f2372b2e7cbf5720eaa02452e1bbe0b69a48fd181e5
-generated_at: 2026-11-14T19:06:50.402614+00:00
-model: ollama:qwen3.8:27b
+source_sha256: bfef25eb6e4b371ba4078c6b74e91478fbacf9c9a7f71af5c6089161851b4020
+context_sha256: a28684f915ed178a5930f1183ec52e0aa911f8be8f2cd34afb61bdb4befb57bc
+generated_at: 2026-11-22T03:58:13.234936+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/password-hashing.test.ts
 
 ## Purpose
-
-Integration tests that pin down three password-hashing guarantees in the account login/change flows: an unknown address still triggers a real argon2id verification (decoy, timing-attack mitigation), passwords longer than 72 bytes are compared in full (no silent truncation), and a long all-lowercase passphrase is a valid password (length is the sole shape constraint).
+Integration tests covering where the password hash meets the account flows. It checks three behaviors: an unknown email still costs one argon2id verification (a decoy hash), a long password is compared in full rather than truncated, and a password with no mix of character classes is accepted (length is the whole policy).
 
 ## Key elements
-
-- **Module-level `jest.mock` of `@infrastructure/security/password-hash`** — spreads the real module and swaps only `verifyPassword` for a `jest.fn` that delegates to the real implementation. This makes the call observable without altering behavior.
-- **`setupTestDb()`** — one-time database setup before all tests.
-- **`describe('login with an unknown address')`** — calls `accountService.login` with a nonexistent email; asserts `verifyPassword` was called exactly once with an argon2id parameter string matching `m=19456,t=2,p=1`.
-- **`describe('a long password')`** — creates a user whose password shares a 72-byte prefix with a second candidate; asserts the prefix-matching candidate fails while the real one succeeds.
-- **`describe('the password shape')`** — uses `PLAIN_PASSWORD` → `PASSPHRASE_PASSWORD` (a long lowercase string) through `passwordChangeWithCurrent`, then logs in with the new passphrase; both must succeed.
+- **`jest.mock('@infrastructure/security/password-hash', ...)`**: keeps the real module but replaces `verifyPassword` with a `jest.fn` that passes through to the actual implementation. It is a replacement, not a `jest.spyOn`, because spyOn cannot redefine a namespace import's getter under the mutation run's swc transform.
+- **`setupTestDb()`**: sets up the test database for the file.
+- **`login with an unknown address`**: calls `accountService.login` with `nobody@example.com`. It expects `success: false`, exactly one `verifyPassword` call, and a second argument (the hash) matching `$argon2id$v=19$m=19456,t=2,p=1$`.
+- **`a long password`**: creates a user whose password is a 72-byte prefix (`'L0ng-pass!'.repeat(8)`) plus a "real" ending. Login with the real password succeeds. Login with the same first 72 bytes and a different ending fails.
+- **`the password shape`**: creates a user with `PLAIN_PASSWORD`, then calls `accountService.passwordChangeWithCurrent` to change it to `PASSPHRASE_PASSWORD` (long, all-lowercase). It expects the change and a following login to both succeed.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/account/services/index.ts` | Source of `accountService`, the system under test for both the login and password-change flows. |
-| `src/infrastructure/security/password-hash.ts` | Mocked at module level; `verifyPassword` is the only member replaced (pass-through wrapper for observation). |
-| `tests/support/ports.ts` | Provides `observePort`, the call-recording utility used to assert on `verifyPassword` invocations. |
-| `tests/support/callers.ts` | Provides `testCallerContext`, the caller argument required by the password-change flow. |
-| `src/modules/users/tests/factories.ts` | Provides `createUser` for provisioning test users and the `PLAIN_PASSWORD` / `PASSPHRASE_PASSWORD` fixtures. |
-| `tests/support/setup-test-db.ts` | Provides `setupTestDb` to initialise the ephemeral database the service talks to. |
+- `@infrastructure/security/password-hash` (`src/infrastructure/security/password-hash.ts`): the module under test. Its `verifyPassword` is wrapped by the mock and the rest is used as is.
+- `@modules/account/services` (`src/modules/account/services/index.ts`): provides `accountService`, whose `login` and `passwordChangeWithCurrent` are exercised.
+- `@modules/users/tests/factories` (`src/modules/users/tests/factories.ts`): provides `createUser`, `PLAIN_PASSWORD` and `PASSPHRASE_PASSWORD`.
+- `@tests/ports` (`tests/support/ports.ts`): provides `observePort`, which gives access to the mocked `verifyPassword`'s calls. The file's mock comment points to this module for the swc limitation.
+- `@tests/callers` (`tests/support/callers.ts`): provides `testCallerContext`, passed to `passwordChangeWithCurrent`.
+- `@tests/setup-test-db` (`tests/support/setup-test-db.ts`): provides `setupTestDb`.
 
 ## Notes
-
-- The mock deliberately uses `jest.requireActual` + spread rather than `jest.spyOn`. A comment in the source and `tests/support/ports.ts` explain that under the mutation-testing SWC transform, `jest.spyOn` cannot redefine a namespace-import getter, so a full module factory mock is required.
-- The argon2id regex in the unknown-address test asserts the *exact* cost parameters (`m=19456,t=2,p=1`). If those parameters change in `password-hash.ts`, this test breaks — it is an intentional coupling to the security policy.
-- The 72-byte prefix test is a regression guard for the classic bcrypt truncation bug; it would pass under argon2id by construction but documents the intent explicitly.
+- The unknown-address test asserts on the hash argument (`mock.calls[0][1]`) to verify the decoy is a real argon2id hash with the stated parameters. It does not time anything.
+- The long-password test's wording ("first 72 bytes") suggests a guard against bcrypt-style truncation.

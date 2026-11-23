@@ -1,29 +1,29 @@
 ---
 source: src/modules/inventory/jobs.ts
-sha256: 40ccf31cbb9d368953a797822808b960dece11a9afd038c4bf3714557cc834ea
-generated_at: 2026-11-14T20:03:30.984457+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 50fe6a856801b13d4408fec9a33587b11204a5ac1bbcb54a3790a2e75797de65
+context_sha256: 77f89f4c0fca084e73ef06977f15cec80c7ea0597a2bb09588737e9a7d9446c7
+generated_at: 2026-11-22T05:19:09.044048+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/jobs.ts
 
 ## Purpose
-
-Declares the single scheduled job owned by the `inventory` module — the stale-hold (reservation) sweep — as a `JobDeclaration` array consumed by the kernel's job scheduler.
+Declares the scheduled jobs owned by the `inventory` module. Currently this is a single job: the stale-hold drain, which sweeps reservations. The file only declares the job. The work itself lives in the sweep service.
 
 ## Key elements
-
-- **`inventoryJobs: readonly JobDeclaration[]`** — the sole export. Contains one entry that wires the `sweepReservations` job data (from the generated `jobs.generated` module) to a concrete `run` callback calling `runReservationSweep()`.
-- **`lease.ttlMs: 10 * MINUTE_MS`** — the job's lease is set to 10 minutes, deliberately longer than the 5-minute scheduler tick and longer than a worst-case drain of 10,000 holds, to prevent two concurrent drains from racing over the same claims.
+- `inventoryJobs`: a `readonly JobDeclaration[]` with one entry.
+  - It spreads `inventoryJobData.sweepReservations`, imported from `./jobs.generated`, so the job's base fields come from generated data. This page does not say which fields those are.
+  - `run` calls `runReservationSweep()`.
+  - `lease: { ttlMs: 10 * MINUTE_MS }` sets a 10-minute lease.
 
 ## Relationships
-
-- **`src/kernel/registry.ts`** — supplies the `JobDeclaration` type that shapes each entry in `inventoryJobs`.
-- **`src/domain-primitives/time.ts`** — provides the `MINUTE_MS` constant used to compute the lease TTL.
-- **`src/modules/inventory/services/sweep.ts`** — provides `runReservationSweep`, the actual work executed when the job fires.
-- **`src/modules/inventory/module.ts`** — the module entry point that registers `inventoryJobs` with the kernel (this file is the job-declaration source it imports).
+- `src/kernel/registry.ts`: provides the `JobDeclaration` type (type-only import) that each entry must satisfy.
+- `src/modules/inventory/services/sweep.ts`: provides `runReservationSweep`, which the job's `run` calls.
+- `src/domain-primitives/time.ts`: provides `MINUTE_MS`, used to compute the lease TTL.
+- `src/modules/inventory/module.ts`: a graph neighbor, but this file doesn't import it. The module presumably consumes `inventoryJobs`, though that isn't visible here.
 
 ## Notes
-
-- Job metadata (name, schedule cadence, etc.) is *not* written here; it comes from `inventoryJobData.sweepReservations` in the generated file. Only the `run` handler and lease TTL are specified in this file.
-- The lease is intentionally **not** aligned to the tick interval — it is sized to the operation's worst-case duration to avoid mid-drain preemption or overlap.
+- The lease stops two drains from running at once. A drain can outlast the five-minute tick, and concurrent drains would fight over the same claims.
+- The 10-minute TTL is meant to be longer than a drain of 10,000 holds takes.
+- The five-minute schedule is not set in this file. It presumably comes from the generated data.

@@ -1,33 +1,49 @@
 ---
 source: src/modules/delivery/tests/unit/emails.test.ts
-sha256: 313bbc95506fcefe3c65c59ca6cd04b69696c5314dda4b732269872f577580ae
-generated_at: 2026-11-08T05:45:25.819469+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c53aa360bf85592ce863f923e357308df5979f412a824521666c3643015e6106
+context_sha256: 648976fb4f5e9073ff90aac37b50ce8d3d79ecc9523b3ee88b7b03c80b33b872
+generated_at: 2026-11-22T05:03:50.404798+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/tests/unit/emails.test.ts
 
 ## Purpose
-
-Unit tests for the four customer-facing shipment email builders. Each test block asserts that the builder produces a correctly named template, fully-interpolated copy in both supported locales, the right conditional fields (tracking code, remaining-items note, withdrawal deadline, owed items), and that no unrendered template keys leak into any output slot.
+Unit tests for the four delivery email builders in `@modules/delivery/emails`. The tests focus on the fields a customer acts on: the tracking code, how many items are still to come, and the withdrawal deadline. They check that none of these render empty, as a raw translation key, or with an unresolved `{{` placeholder.
 
 ## Key elements
-
-- **Fixtures** — `NAME`, `CODE`, `LINES`, `completing`: shared input shapes used across all four blocks so tests stay focused on output contract rather than setup.
-- **`describe('shipmentShippedEmail')`** — Verifies template ID, tracking-code presence/absence, three distinct `variant` wordings (default / `added` / `corrected`), line formatting (`"2 × Analytical Engine"`), the `more` field appearing only when `remainingUnits > 0`, greeting, locale propagation, and copy-slot resolution.
-- **`describe('shipmentDeliveredEmail')`** — Verifies template ID, line list, greeting, `withdraw` deadline rendering (UTC date only, no time, correct locale), and that `withdraw` is `undefined` on non-final deliveries.
-- **`describe('fulfillmentDelayedEmail')`** — Verifies three reason-based wordings (`moved` with new date, `moved` without date, `due`), "shop calendar" date rendering (UTC→shop-local shift), the fixed cancellation closing line in both locales, and absence of an `answer` field.
-- **`describe('shipmentLostEmail')`** — Verifies template ID, distinct copy for `reason: 'lost'` vs `'damaged'`, line list, `owedIntro`/`owedLines` present only when `owed` is non-empty, and that `message` is always a string (empty by default).
-- **Copy-slot guard** — Repeated across all blocks: every string slot is asserted non-empty and not matching `/^delivery\./`, catching unresolvable i18n keys.
+- **Fixtures**: `NAME` ("Ada Lovelace"), `CODE` ("TRK-99887766"), `LINES` (two order lines) and `completing`, a shipment with a tracking code and `remainingUnits: 0`.
+- **`shipmentShippedEmail` tests**
+  - Template name is `delivery.shipment-shipped`.
+  - `data.tracking` contains the code and no `{{`.
+  - The `variant` values `'corrected'` and `'added'` each get a distinct subject and body in `en` and `it`, and their tracking text matches the default.
+  - `tracking` is undefined when there is no `trackingCode`.
+  - `lines` is formatted as `"2 × Analytical Engine"`.
+  - `more` appears only when `remainingUnits > 0`.
+  - The greeting contains the name.
+  - Every copy slot is non-empty and not a `delivery.*` key.
+  - `locale` is passed through and `it` has a different subject from `en`.
+- **`shipmentDeliveredEmail` tests**
+  - Template is `delivery.shipment-delivered`, with the lines and greeting rendered.
+  - `data.withdraw` appears only when `withdrawUntil` is given, i.e. on the last delivery.
+    - English reads "the end of November 14, 2026".
+    - Italian reads "fino a tutto il 14 novembre 2026".
+  - The date is UTC and date-only. 00:00:00.001 UTC on Nov 15 prints as Nov 15, with no time and no extra grace day.
+- **`fulfillmentDelayedEmail` tests**
+  - Dates are printed on the shop's calendar. A Rome-midnight instant stored as 23:00Z prints as the next day.
+  - `closing` carries the same "cancel any time before it ships" text for all three wordings, in `en` and `it`. There is no `answer` property.
+  - The three wordings are `moved` with `expectedAt`, `moved` without it, and `due`. Each has its own body and subject.
+  - Every copy slot resolves.
+- **`shipmentLostEmail` tests**
+  - Template is `delivery.shipment-lost`, with different subject and body for `lost` and `damaged` in both languages.
+  - The lines and greeting are rendered.
+  - `owedIntro` and `owedLines` appear only when `owed` is non-empty. `owedIntro` is `''` otherwise.
+  - `data.message` is always a string: `''` when staff wrote none, otherwise the staff text.
 
 ## Relationships
-
-- **`src/modules/delivery/emails.ts`** — Sole import target. The test file exercises the four exported builders (`shipmentShippedEmail`, `shipmentDeliveredEmail`, `fulfillmentDelayedEmail`, `shipmentLostEmail`) and their return shape (`template`, `subject`, `data.*`). No other module is touched.
+Imports `shipmentShippedEmail`, `shipmentDeliveredEmail`, `fulfillmentDelayedEmail` and `shipmentLostEmail` from `src/modules/delivery/emails.ts` through the `@modules/delivery/emails` alias. The tests call them directly and inspect the returned `template`, `subject` and `data`. They use no mocks.
 
 ## Notes
-
-- **Conditional-field conventions are inconsistent by design**: `withdraw`, `more`, and `tracking` are `undefined` when absent, but `owedIntro` is the empty string `''` and `message` is always a string. Tests pin both behaviors; changing one without the other will break assertions.
-- **Date rendering is "shop calendar"**: `fulfillmentDelayedEmail` tests pass UTC timestamps that correspond to a *later* local date (e.g., `23:00Z` = next day in Rome) and assert the shifted date. The builders must use the shop's timezone, not UTC, for date-only display.
-- **`withdraw` prints date-only** — a test explicitly asserts no `\d:\d\d` time component and no silent grace-day addition, even when the frozen instant is just past UTC midnight.
-- **Variant triples**: `shipmentShippedEmail` and `fulfillmentDelayedEmail` each produce three distinct subject+body pairs. Tests use `Set.size === 3` to catch accidental deduplication.
-- **No network, no DB, no clock mocking** — all assertions are pure output-shape checks; the only "time" values are fixed `Date` literals passed as input.
+- The test names show that the builders take `(locale, name, options)` and support `en` and `it`.
+- The `'corrected'`/`'added'` test asserts `fixed.data.tracking` equals `first.data.tracking` twice. The duplicate assertion is redundant.
+- `describe`, `it` and `expect` are used without imports, so they come from global test setup.

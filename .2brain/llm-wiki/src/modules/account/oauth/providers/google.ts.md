@@ -1,34 +1,36 @@
 ---
 source: src/modules/account/oauth/providers/google.ts
-sha256: d3ff5ffbfe53f3d350ece1b9bff1a36ca5fb2c7cea9f56eb8157b868e75bc207
-generated_at: 2026-11-08T04:12:56.851059+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d23aae68ee37058cf32d6c1274ea59b7789176588b3389d543063666ff859abe
+context_sha256: 571b70e85d64e62af6240103c49efee908a9f3908f4a13bb703df1849dc5a25a
+generated_at: 2026-11-22T03:32:27.235373+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/oauth/providers/google.ts
 
 ## Purpose
-
-Concrete `OAuthProvider` implementation for Google's OAuth 2.0 / OIDC flow, built on `openid-client`. It hard-codes Google's endpoints (no runtime discovery), enforces the `iss` callback parameter via RFC 9207, and extracts the user's identity directly from the verified ID token's claims—eliminating a separate `userinfo` round trip.
+Implements the Google provider behind the OAuth port. It builds Google's authorization URL and, on callback, exchanges the code for tokens and reads the user's identity from the ID token's claims. There is no separate `userinfo` request.
 
 ## Key elements
-
-- **`googleOAuthProvider`** (exported) — The single public export; an `OAuthProvider` object with `name: 'google'`, `authorizeUrl`, and `exchangeCode` conforming to the `./port` contract.
-- **`SERVER`** — Hard-coded `client.ServerMetadata` (issuer, authorization/token endpoints) that is passed to `openid-client` helpers on every call. Not fetched from a discovery URL.
-- **`identityOf(claims)`** (private) — Validates that the ID token's claims carry a non-empty `sub` and an `email`, then maps them into the `OAuthIdentity` shape. Throws descriptive errors if either is missing.
-- **`PROVIDER_NAME`** — The string `'google'`; used as the registry key and stored on `OAuthAccount.provider`.
+- `googleOAuthProvider` (exported): an `OAuthProvider` with `name: 'google'`.
+  - `authorizeUrl(state, redirectUri, codeChallenge)`: builds the authorization URL with scope `openid email profile`.
+  - `exchangeCode(callbackUrl, expected)`: redeems the code and maps the ID token claims to an `OAuthIdentity`.
+- `SERVER`: Google's endpoints (issuer, authorization endpoint, token endpoint) hard-coded as `client.ServerMetadata` instead of discovered. It sets `authorization_response_iss_parameter_supported: true`.
+- `identityOf(claims)`: converts verified claims into an `OAuthIdentity`.
+  - `providerId` is `sub`.
+  - `emailVerified` is true for `true` or `'true'`.
+  - `name` and `imageUrl` are optional.
+  - It throws `Error` if there is no `id_token`, and `TypeError` if `sub` or `email` is missing.
+- `PROVIDER_NAME` (`'google'`): the registry key, which is also what ends up in `OAuthAccount.provider`.
 
 ## Relationships
-
-- **`./port`** — Imports the `OAuthProvider` and `OAuthIdentity` types that this file implements/returns.
-- **`./client`** — Imports `authorizationUrlFor`, `configurationFor`, and `redeemCode`; all `openid-client` interactions are delegated to these helpers so this file stays free of `openid-client` runtime calls (only its `type *` import).
-- **`./index`** — Presumed re-export barrel that surfaces `googleOAuthProvider` to the rest of the account module.
-- **`tests/unit/oauth-google.test.ts`** — Unit tests exercising this provider's `authorizeUrl` and `exchangeCode` paths.
+- `src/modules/account/oauth/providers/client.ts`: supplies `configurationFor`, `authorizationUrlFor` and `redeemCode`. These do the actual `openid-client` work. This file only supplies Google's metadata, scope and claim mapping.
+- `src/modules/account/oauth/providers/port.ts`: defines the `OAuthProvider` and `OAuthIdentity` types that this file implements and returns.
+- `src/modules/account/oauth/providers/index.ts`: a sibling in the providers module. It is a graph neighbor, but this file does not import it.
+- `src/modules/account/tests/unit/oauth-google.test.ts`: the unit test for this provider.
 
 ## Notes
-
-- **Signature is intentionally unchecked.** The comment cites OpenID Connect Core §3.1.3.7 step 6: because the ID token arrives over TLS directly from Google's token endpoint, the same trust boundary that protects the auth code and access token suffices. Do not "fix" this by adding manual signature verification without understanding the rationale.
-- **`issuer` must be exactly `https://accounts.google.com`.** `openid-client` will reject the legacy bare-domain form Google's docs mention. Do not change the string.
-- **`authorization_response_iss_parameter_supported: true`** is load-bearing: it makes the library require and compare the `iss` query parameter on the callback (RFC 9207). Removing it silently downgrades the anti-forgery guarantee.
-- **`email_verified` is coerced** from `boolean | 'true'` to a plain `boolean` via the `=== true || === 'true'` check—Google's token occasionally returns the string form.
-- The scopes are fixed to `openid email profile`; adding `contact` or `openid profile` without `email` would break `identityOf`.
+- The ID token's signature is deliberately not verified. The token comes directly from Google's token endpoint over TLS, which OIDC Core 3.1.3.7 step 6 accepts in place of a signature check. The library does check issuer, audience, expiry and issue time.
+- The issuer must equal `https://accounts.google.com` exactly. The legacy bare `accounts.google.com` form is rejected.
+- Because `authorization_response_iss_parameter_supported` is true, the library requires an `iss` parameter on the callback and compares it to the issuer (RFC 9207).
+- `identityOf` requires a non-empty `sub`. Without one, every account would share a single identity row.

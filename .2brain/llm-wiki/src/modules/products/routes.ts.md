@@ -1,49 +1,44 @@
 ---
 source: src/modules/products/routes.ts
-sha256: 2715404344220b181818b77b315d43038da6a62afbee764e2a178b2e3a5ee7be
-generated_at: 2026-11-14T21:26:36.295958+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 88f162cce02741f82c946fea5555db9cba9e39e0c43cb83fc0bdf7f7b2387b84
+context_sha256: f55e44d317bfc4164e1a98d90b66c4abbd053863d274c8b7f896bba434b7e809
+generated_at: 2026-11-22T07:12:11.191674+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/routes.ts
 
 ## Purpose
-
-Express router that maps every product-catalogue HTTP endpoint to its controller and surrounding middleware. It exists as the single place where route ordering (static segments before `/:id`), per-route authorization, cache tagging, idempotency, and upload handling are declared, so the controllers stay pure business logic.
+Express router for the product catalogue: public reads (storefront, anonymous-friendly, cached in Redis where safe) and permission-gated admin writes. Route order is deliberate so static segments (`/search`, `/facets`) are not swallowed by `/:id`.
 
 ## Key elements
-
-- **`router`** — the exported `express.Router()`. All routes are attached to it; consumers mount it under `/products`.
-- **`cacheScopeKey(request)`** — predicate that returns `true` only when the caller sees exactly what a guest sees (no extra stock or translation scope). Used to decide whether a request may share the anonymous Redis cache entry.
-- **`cacheProductsSearch`** — pre-built `searchCache` middleware (from `@infrastructure/http/middlewares/cache`) parameterised with the query params that affect a search result. Shared by both `GET /` and `POST /search`.
-- **Route definitions** (order matters):
-  - `POST /search` — search with body params; declared before `/:id`.
-  - `GET /` — paginated product list (public).
-  - `POST /` — create product (admin); chains `uploadLimiter → isAuthOrCredential → requirePermission × 2 → invalidateCache → upload.image() → idempotencyKey → createProduct`.
-  - `GET /facets` — filter chips; unconditionally cached for all callers.
-  - `GET /:id` — single product (public); `browserRevalidate: true` forces a 304 check on stock changes.
-  - `PUT /:id` / `PATCH /:id` — full-replace / merge update (admin); both require `update:Product` **and** `update:Translation`.
-  - `DELETE /:id` — soft delete (admin).
-  - `POST /:id/restore` — undo soft delete (admin).
-  - `DELETE /:id/hard` — hard delete via path flag; `routeFlag('hardDelete')` sets the query param the controller reads.
+- `router` — the exported Express `Router`. `router.use(getAuth)` runs on every route with no identity guard; each write adds its own `isAuthOrCredential`, so a PIM or supplier feed credential may hold write rights.
+- `cacheScopeKey(request)` — cache scope predicate. True only when the caller reads exactly what a guest reads (`hasAnonymousReadScope(productService.callerScope, …)` and `!canSeeTranslations`). Callers who see more bypass Redis.
+- `cacheProductsSearch` — shared `searchCache('products', …)` middleware for both search entry points, using the key parameters and values exported from `get-products`. It uses `browserRevalidate: true`.
+- Routes:
+  - `POST /search` and `GET /` → `previewDraftLanguage`, `cacheProductsSearch`, `getProducts`.
+  - `POST /` → create. Chain: `uploadLimiter`, `isAuthOrCredential`, `create:Product` and `update:Translation` permissions, `invalidateCache(['products'])`, the `upload` middleware's `image()` handler, `idempotencyKey`, `createProduct`.
+  - `GET /facets` → `setCache(HOUR_SECONDS, …)` with `languageNeutral: true` and `scopeKey: () => true`, then `getCatalogFacets`.
+  - `GET /:id` → `previewDraftLanguage`, `setCache(HOUR_SECONDS, …)` with `browserRevalidate`, then `getProductItem`.
+  - `PUT /:id` → `replaceProduct`. `PATCH /:id` → `updateProduct`. Both need `update:Product` and `update:Translation`, and both use `uploadLimiter` and the `upload` middleware's `image()` handler.
+  - `DELETE /:id` → `deleteProducts` (soft delete unless `?hardDelete=true`).
+  - `POST /:id/restore` → `restoreProducts`.
+  - `DELETE /:id/hard` → `routeFlag('hardDelete')`, then `deleteProducts`.
 
 ## Relationships
-
-- **`@kernel/middlewares/authorizations`** — `getAuth` applied globally; `isAuthOrCredential` + `requirePermission` on every write route.
-- **`@kernel/middlewares/locale-preview`** — `previewDraftLanguage` runs before `setCache`/`searchCache` on all read routes so a draft-locale response is never stored under a live key.
-- **`@infrastructure/http/middlewares/cache`** — `searchCache` and `setCache` gate reads; `invalidateCache(['products'])` runs before every mutating controller.
-- **`@infrastructure/http/middlewares/rate-limit`** — `uploadLimiter` throttles all upload-bearing writes.
-- **`@infrastructure/http/middlewares/idempotency`** — `idempotencyKey` fingerprints the (multer-parsed) body on `POST /` to prevent duplicate products on retry.
-- **`@infrastructure/http/middlewares/route-flag`** — `routeFlag('hardDelete')` on the `DELETE /:id/hard` path injects the flag into the query.
-- **`@kernel/access/query`** — `hasAnonymousReadScope` is the scope-half of `cacheScopeKey`.
-- **`@domain-primitives/time`** — `HOUR_SECONDS` used as the Redis TTL for `setCache` on `/facets` and `/:id`.
-- **Controllers** (`get-products`, `post-product`, `delete-products`, `post-product-restore`, `get-product`, `get-catalog-facets`) — terminal handlers each route dispatches to.
+- **Controllers** (`controllers/get-products`, `get-product`, `get-catalog-facets`, `post-product`, `delete-products`, `post-product-restore`): the terminal handlers for each route. `get-products` also supplies the search cache key parameters, values and ordering.
+- **`@kernel/middlewares/authorizations`**: supplies `getAuth`, `isAuthOrCredential` and `requirePermission`.
+- **`@kernel/middlewares/locale-preview`**: `previewDraftLanguage` on the catalogue reads.
+- **`@kernel/access/query`**: `hasAnonymousReadScope`, used by `cacheScopeKey`.
+- **`@infrastructure/http/middlewares/cache`**: `searchCache`, `setCache` and `invalidateCache`.
+- **`rate-limit`, `upload`, `idempotency`, `route-flag`** (same middlewares folder): `uploadLimiter`, the `upload` middleware, `idempotencyKey` and `routeFlag`.
+- **`@domain-primitives/time`**: `HOUR_SECONDS`, the cache TTL.
 
 ## Notes
-
-- **Route order is intentional.** Static segments (`/search`, `/facets`) must precede `/:id`; reordering them will silently break those paths.
-- **Two-key write rule.** Create, PUT, and PATCH all require *both* `Product` and `Translation` permissions. This is deliberate: a key that can only reword translations must not be able to reprice, and vice versa.
-- **`idempotencyKey` sits *after* `upload.image()`.** Multipart fields don't exist until multer has parsed the stream, so the idempotency ledger must see the final body.
-- **`cacheScopeKey` is a *bypass* gate, not a requirement.** A `true` return means "safe to share the guest entry"; `false` means "skip Redis entirely" so an admin's wider answer is never stored under the shared key.
-- **`/facets` uses `() => true` instead of `cacheScopeKey`.** `productService.facets()` scopes to active rows unconditionally for every caller, so there is no wider answer to protect.
-- **`browserRevalidate` on `GET /:id`.** The server still serves from Redis, but browsers must revalidate (304) because the page displays stock-availability that no server-side cache clear can reach.
+- `previewDraftLanguage` must run before `setCache`/`searchCache`. The cache key is built from `request.locale`, so otherwise a draft answer could be stored under a live key.
+- Create and update require both `Product` and `Translation` permissions, so a translation-only edit cannot change the product itself.
+- `idempotencyKey` comes after the upload middleware so it fingerprints the parsed multipart body. It is applied only to `POST /`, which matters because a product with no SKU has no other dedup key.
+- `/facets` bypasses `cacheScopeKey` on purpose. The facets service always scopes to active rows, so all callers share one answer.
+- `invalidateCache(['products'])` is registered on every write route, so any write clears the `products` cache tag.
+- `browserRevalidate` makes browsers check with the server first (304 if unchanged). Staff edits clear Redis but cannot reach copies already in a browser.
+- `PUT`/`PATCH` have no `idempotencyKey`.

@@ -1,40 +1,39 @@
 ---
 source: src/modules/addresses/routes.ts
-sha256: 5c7e2c36c70ef361a23e20e69c7fb4f953f254af0a513375906f8a865cac0084
-generated_at: 2026-11-14T19:19:36.775510+00:00
-model: ollama:qwen3.8:27b
+source_sha256: bdadbf24a8f2dc280423085552e1a0071fff36754570d0e3ea0194c63e37b3c7
+context_sha256: 7db14cddcd1bb7ba77edb76e15403c895b17179bf80184ac2f4164bdba41a45c
+generated_at: 2026-11-22T04:15:37.636554+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/routes.ts
 
 ## Purpose
-
-Defines the Express router for the address-book endpoints, mounted at `/account` alongside the account module's own router (see `./module.ts`). It wires the six controller functions to their HTTP verbs and paths, applying auth, cache, and idempotency middleware in the correct order for each route.
+Defines the Express router for the address book. It is mounted at `/account`, alongside the `account` module's own router. It maps each address endpoint to its controller and applies the shared middleware.
 
 ## Key elements
-
-- **`router`** (exported) — The `express.Router` instance. Applied globally: `getAuth` (resolves the session context, idempotent), then `noStore` (forbids caching on all responses). Each route additionally guards with `isAuth`.
-- **Route table**
-  - `GET /addresses` → `getAddresses` — list the caller's book.
-  - `POST /addresses` → `idempotencyKey` → `postAddress` — add an entry; the idempotency key replays a retry instead of creating a duplicate and consuming a slot in the book's capacity cap.
-  - `GET /addresses/:addressId` → `getAddress` — fetch a single entry.
-  - `PUT /addresses/:addressId` → `replaceAddress` — full-replace the entry.
-  - `PATCH /addresses/:addressId` → `updateAddress` — partial merge of supplied fields.
-  - `PUT /addresses/:addressId/default` → `putAddressDefault` — set the book-level default pointer (modeled as its own action, not a field on the address).
-  - `DELETE /addresses/:addressId` → `deleteAddress` — remove an entry.
+- `router`: the exported Express `Router`.
+- `router.use(getAuth)`: resolves the session for every route. Each route then declares whether it needs auth through `isAuth`.
+- `router.use(noStore)`: marks all responses non-cacheable, matching the `account` router.
+- Routes (all use `isAuth`):
+  - `GET /addresses` → `getAddresses`: the caller's address book.
+  - `POST /addresses` → `idempotencyKey`, then `postAddress`: adds an entry.
+  - `GET /addresses/:addressId` → `getAddress`: one entry of the caller's own book.
+  - `PUT /addresses/:addressId` → `replaceAddress`: replaces the entry.
+  - `PATCH /addresses/:addressId` → `updateAddress`: merges the fields sent.
+  - `PUT /addresses/:addressId/default` → `putAddressDefault`: makes the entry the book's default.
+  - `DELETE /addresses/:addressId` → `deleteAddress`: removes an entry.
 
 ## Relationships
-
-- **`src/modules/addresses/module.ts`** — imports and mounts `router` under the `/account` prefix.
-- **`src/kernel/middlewares/authorizations.ts`** — provides `getAuth` (session resolution, safe to apply repeatedly) and `isAuth` (per-route guard that rejects unauthenticated requests).
-- **`src/infrastructure/http/middlewares/cache.ts`** — provides `noStore`, applied globally to prevent any caching of identity-adjacent responses.
-- **`src/infrastructure/http/middlewares/idempotency.ts`** — provides `idempotencyKey`, applied only on the `POST` route to deduplicate retries.
-- **`src/modules/addresses/controllers/*.ts`** — each controller file exports the single handler referenced by its route. `update-address.ts` exports both `replaceAddress` (PUT) and `updateAddress` (PATCH).
-- **`src/modules/addresses/tests/unit/routes.test.ts`** — unit-tests for the route wiring and middleware ordering.
+- `src/kernel/middlewares/authorizations.ts`: supplies `getAuth` (router-wide) and `isAuth` (per route).
+- `src/infrastructure/http/middlewares/cache.ts`: supplies `noStore`.
+- `src/infrastructure/http/middlewares/idempotency.ts`: supplies `idempotencyKey`, used on `POST` only.
+- `src/modules/addresses/controllers/get-addresses.ts`, `get-address.ts`, `post-address.ts`, `update-address.ts` (exports `replaceAddress` and `updateAddress`), `delete-address.ts` and `put-address-default.ts`: provide the route handlers.
+- `src/modules/addresses/module.ts`: the module that mounts this router; the file header points to it for the split with the `account` router.
+- `src/modules/addresses/tests/unit/routes.test.ts`: the unit tests for this router.
 
 ## Notes
-
-- `replaceAddress` (PUT) and `updateAddress` (PATCH) live in the same controller file (`update-address.ts`) but are semantically distinct: full-replace vs. partial merge.
-- The default-address route (`PUT …/default`) is deliberately a separate endpoint rather than a `PATCH` field, because the default pointer belongs to the book, not to an individual address.
-- `idempotencyKey` is intentionally placed **after** `isAuth` so that an unauthenticated retry is rejected before an idempotency slot is consumed.
-- The file's doc-block explains that `getAuth` is applied here *in addition to* the kernel-level middleware; it short-circuits when a context is already resolved, so the cost is negligible.
+- `getAuth` returns early if the request already has a resolved auth context. Mounting it here as well as in the `account` router therefore costs nothing beyond the first run.
+- `idempotencyKey` is placed after `isAuth` on `POST`. A retry after a lost response replays the original result instead of writing a duplicate and using up a slot of the book's cap.
+- The default address is an action of its own (`PUT .../default`) and not a field on an address, because the pointer belongs to the book as a whole.
+- Route order matters little here: `/addresses/:addressId/default` has a different path depth from `/addresses/:addressId`, so the two do not collide.

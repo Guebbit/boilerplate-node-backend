@@ -1,44 +1,54 @@
 ---
 source: src/infrastructure/adapters/mailer.ts
-sha256: c3e92b17885a8ff313844ea6a1787d80d0c5d587b7090e783bfbd03bbe3433ed
-generated_at: 2026-11-08T03:21:43.365991+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8be7068c084141c7287bc1e078d336a0aec1e2797cc89fc384ae842a8933a51f
+context_sha256: f9283777763fc8d90b020034735c625e312fbeff1836232d95ddab2b0e0501c5
+generated_at: 2026-11-22T02:40:18.332405+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/mailer.ts
 
 ## Purpose
-
-The email adapter: renders EJS templates into HTML, assembles a nodemailer envelope, and dispatches it through a named transport — either synchronously or by publishing a job to the message queue. It is the single public surface every module uses to send templated email, and it centralises sender identity, attachment resolution, and transport selection so callers never touch nodemailer or EJS directly.
+The email adapter. It renders EJS templates into HTML bodies and delivers them through the transport named by `NODE_MAIL_TRANSPORT`. It can send synchronously or through the queue. It is the public surface of the mail pipeline for the rest of the app.
 
 ## Key elements
-
-- **`sendTemplatedEmail(request, templateName, data)`** – Public. Renders the template, resolves attachments, resolves the transport, and sends. Wrapped in an OTel span (`email.send`) with `messaging.system` and `email.template` attributes. Never discards spooled attachments (retry-safe).
-- **`EmailContent`** (interface) – The shape a module's `emails.ts` builds and a controller hands to `enqueueEmail`: `{ template, subject, data }`.
-- **`sendInline(request, templateName, data)`** – Private. Calls `sendTemplatedEmail`, then discards every spooled attachment in a `.finally()` block. Used on the non-queued path where no retry chain exists.
-- **`resolveAttachments(attachments)`** – Private. Maps each `{ filename, key }` spool reference to `{ filename, content: Buffer }` via `resolveSpooled` + `readFile`. Unresolvable keys are logged and skipped.
-- **`renderMessage(envelope, attachments, templateName, data)`** – Private. Renders EJS (with `root: process.cwd()`) and returns a fully-formed `SendMailOptions` object with named fields only (never spreads the raw job request).
-- **Re-exports** – `registerTemplateDirectories`, `templateFile`, `registeredTemplateNames` are re-exported from `template-registry` so this file remains the sole import target for template concerns.
+- **`sendTemplatedEmail(request, templateName, data)`**: sends one email synchronously inside an `email.send` OTel span.
+  - The span carries `messaging.system` and `email.template` attributes. The recipient is deliberately left out.
+  - It resolves the transport inside the promise chain, so an unknown transport name becomes a rejection instead of a sync throw.
+  - It calls `transport.send({ request, templateName, data, render })`, where `render` lazily builds the message.
+  - It logs `messageId` when the transport returns info.
+  - It does not catch errors, so rejections reach `withSpan` and the caller (or the queue worker's nack path).
+  - It never discards spooled attachments, because it may be one attempt in a retry chain.
+- **`renderMessage` (internal)**: builds the nodemailer `SendMailOptions`.
+  - The HTML comes from `ejs.renderFile(templateFile(name), { ...data }, { root: process.cwd() })`, rendered alongside the resolved attachments.
+  - The message is built from named fields only, never by spreading the request, so a forged job cannot inject `cc`, `bcc`, `headers` and similar fields.
+  - `from` is always `mailConfig().NODE_SMTP_SENDER`.
+  - `replyTo` defaults to `supportEmail()`.
+  - `messageId`, `inReplyTo` and `references` are set only when provided. `references` repeats `inReplyTo`.
+  - A producer-supplied `html` overrides the rendered template.
+- **`resolveAttachments` (internal)**: turns `{ filename, key }` spool references into `{ filename, content: Buffer }`.
+  - Keys that fail to resolve are logged and skipped.
+  - It uses Buffers because transports run with `disableFileAccess`, and streams would leak a file per retried attempt.
+- **`EmailContent` (interface)**: a finished email, made of `template` (module-prefixed name, no extension), `subject` and `data` (both already translated).
+- **`sendInline` (internal)**: calls `sendTemplatedEmail`, then discards spooled attachments once the send settles, whether it succeeded or failed. This is the inline path of `enqueueEmail`. The visible content stops partway through this function.
+- **Re-exports** from `template-registry`: `registerTemplateDirectories`, `templateFile`, `registeredTemplateNames`.
 
 ## Relationships
-
-- **`mail-transports.ts`** – `resolveMailTransport()` returns the transport object whose `.send()` actually delivers the message; this adapter delegates all SMTP/provider logic there.
-- **`mail-spool.ts`** – `resolveSpooled` maps a key to a file path for reading; `discardSpooled` deletes the file after a confirmed send.
-- **`queue.ts`** – `enqueueEmail` (the controller-facing entry point) publishes an `EmailJobPayload` to `EMAIL_QUEUE` via `publishToQueue` when the broker is reachable.
-- **`config.ts`** – `mailConfig()` supplies the sender address and transport name; `supportEmail()` provides the default `Reply-To`.
-- **`logger.ts`** – Warn on unresolvable attachment keys; info on successful send with `messageId`.
-- **`tracer.ts`** – `withSpan` wraps the entire send operation for observability.
-- **`template-registry.ts`** – Source of the re-exported template-path and registration helpers.
-- **`email.worker.ts`** – Queue consumer that calls `sendTemplatedEmail` and owns the retry/discard lifecycle for spooled attachments (`discardJobAttachments`).
-- **`src/modules/account/emails.ts` / `services/mail.ts` / `services/reap-inactive.ts`** – Producers that build `EmailContent` and call `enqueueEmail` to trigger account-related mail.
-- **`src/app.ts`** – Application bootstrap; registers template directories and wires the adapter into the request lifecycle.
+- **`src/infrastructure/adapters/config.ts`**: supplies `mailConfig()` (sender, transport name) and `supportEmail()`.
+- **`src/infrastructure/adapters/mail-transports.ts`**: `resolveMailTransport` picks the transport that does the actual sending.
+- **`src/infrastructure/adapters/mail-spool.ts`**: `resolveSpooled` and `discardSpooled` handle attachment files.
+- **`src/infrastructure/adapters/template-registry.ts`**: maps a template name to a file path. It is kept as a leaf module with no `ejs` or `nodemailer` imports, and the mailer re-exports it so other callers import everything from this one file.
+- **`src/infrastructure/adapters/logger.ts`**: used for the send and skipped-attachment logs.
+- **`src/infrastructure/observability/tracer.ts`**: `withSpan` wraps the send.
+- **`src/infrastructure/adapters/queue.ts`**: provides `EMAIL_QUEUE` and `EMAIL_URGENT_QUEUE`. The queue names live in the adapter so that producer and consumer agree and `infrastructure` does not import application code.
+- **`src/infrastructure/adapters/job-dispatch.ts`**: `dispatchJob` is imported here, and `enqueueEmail` is described as the queued path.
+- **`src/infrastructure/adapters/email.worker.ts`**: drains the queue. Its `discardJobAttachments` is named as the place that cleans up attachments for queued jobs.
+- **Module callers** (`src/modules/account/emails.ts`, `src/modules/account/services/mail.ts`, `src/modules/account/services/reap-inactive.ts`) and the account contract tests are graph neighbors. `emails.ts` builds `EmailContent` values for controllers to pass to `enqueueEmail`.
+- **`src/app/boot-rendering.ts`**: a graph neighbor. The visible content does not show how it interacts with this file.
 
 ## Notes
-
-- **Security:** The envelope is built from explicitly named fields. The job's own `from` is never read; a forged payload cannot inject `cc`, `bcc`, `envelope`, or arbitrary headers.
-- **Attachments are Buffers, not paths or streams.** Transports run with `disableFileAccess`; a stream would leak an open file descriptor per retry.
-- **Attachment lifecycle is split by call site:** `sendTemplatedEmail` must *not* discard spooled files (a queued retry may still need them). `sendInline` and the worker's terminal path are the two places that call `discardSpooled`.
-- **No locale resolution at render time.** The `data` object is the complete, pre-translated render context; the worker may run in a different process long after the originating request ended.
-- **EJS `root: process.cwd()`** is required so that a template's root-relative `include` (leading `/`) resolves correctly regardless of how deeply nested the template file is under `src/modules/`.
-- **No `.catch()`** on the send promise chain — rejections propagate so `withSpan` can mark the span errored and the queue worker's nack path can react.
-- **Stryker mutation-testing guards** are present around the warn-log and the info-log; do not remove them without coordinating with the mutation-testing config.
+- Prefer `enqueueEmail` on request paths so a slow SMTP server cannot stretch an HTTP response. `sendTemplatedEmail` blocks until the transport accepts the message.
+- Templates use root-relative includes (`/shared/templates/layouts/...`), which resolve against `process.cwd()`.
+- Templates receive only `data`, with no locale lookup. Producers translate every string before the request ends.
+- The `template` name is shared with the demo outbox and the paired frontend's e2e specs, so it must not include an extension.
+- The OTel import uses the `/incubating` subpath, because the older `SEMATTRS_*` aliases are deprecated.

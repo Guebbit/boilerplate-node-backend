@@ -1,40 +1,36 @@
 ---
 source: src/modules/analytics/tests/integration/relay.test.ts
-sha256: 034b4fde357d0a65b822efabf47542eb092f584cf52dfb10fae106f48f9a2218
-generated_at: 2026-11-08T04:59:42.673754+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 034b4fde357d0a65b822efabf47542eb092f584cf52dfb10fae106f48f9a2218
+context_sha256: 31b583b8cabe6c390594d8be4516d5e20e724652e2faf5ec6e87bbde4b5b5d54
+generated_at: 2026-11-22T04:18:44.603293+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/analytics/tests/integration/relay.test.ts
 
 ## Purpose
-
-Integration test for the `POST /analytics/events` relay endpoint. Verifies the relay's core contract: the response is always `204` for well-formed events (consented or not), but the analytics provider's `capture` is only invoked when the visitor has consented. Also exercises the validation gate (closed event set, no extra fields, field-format checks) which returns `422` regardless of consent.
+Integration test for the `POST /analytics/events` relay endpoint. It checks the relay's core guarantee: nothing is forwarded to the analytics provider before the visitor consents, and the response is `204` either way. Tests go through the real app, with the resolved provider's `capture` method spied on.
 
 ## Key elements
-
-- **`beforeEach`** — Pins the environment to `NODE_ANALYTICS_PROVIDER: 'none'` and `NODE_ANALYTICS_REQUIRE_CONSENT: 'true'`, resets the provider singleton, and installs a jest spy on the resolved provider's `capture` method (stored in module-level `capture`).
-- **`afterEach`** — Restores all mocks and resets the provider singleton.
-- **`PRODUCT_ID` / `VIEW`** — Constants for a valid 24-hex-char product id and a minimal `product_viewed` payload.
-- **Test cases** (seven):
-  - 204 + no capture without consent.
-  - 204 + one capture with consent; asserts `product_id` is mapped into `properties`.
-  - 204 + capture for `products_searched`; asserts `text`, `page`, `result_count` mapping.
-  - 422 for an event name outside the closed set.
-  - 422 for an unknown extra field (`email`).
-  - 422 (parameterised) for a malformed product id and an empty search term.
+- **`setupTestDb()`**: registers the test database lifecycle for the suite.
+- **`beforeEach` / `afterEach`**: set `NODE_ANALYTICS_PROVIDER=none` and `NODE_ANALYTICS_REQUIRE_CONSENT=true`, reset the provider, and spy on `resolveAnalyticsProvider().capture`. Afterwards they restore mocks and reset the provider again.
+- **`capture`**: the `jest.SpyInstance` that every test asserts against.
+- **`PRODUCT_ID` / `VIEW`**: a valid 24-hex-character product id and a `product_viewed` payload, reused across tests.
+- **Test cases** in `describe('POST /analytics/events')`:
+  - Without consent: returns `204` and `capture` is not called.
+  - With the `Analytics-Consent: true` header, a `product_viewed` event is captured once with `properties: { product_id }`.
+  - A `products_searched` event is captured with `text`, `page` and `result_count` (mapped from `resultCount`).
+  - An event name outside the allowed set (`order_created`) returns `422` with no capture, even with consent.
+  - An unknown extra field (`email`) returns `422`.
+  - An `it.each` table covers a malformed product id and an empty search term. Both return `422` and nothing is captured.
 
 ## Relationships
-
-- **`src/infrastructure/observability/analytics/index.ts`** — Provides `resetAnalyticsProvider` and `resolveAnalyticsProvider`; the test spies on the `capture` method of the resolved provider instance.
-- **`tests/support/environment.ts`** — `setEnvironment` is used to pin env vars before each case.
-- **`tests/support/http.ts`** — `api()` returns a supertest-style client bound to the real app; all requests go through it.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` is called at module level to prepare the test database before any test runs.
+- `@infrastructure/observability/analytics` (`src/infrastructure/observability/analytics/index.ts`): supplies `resolveAnalyticsProvider` (whose `capture` is spied on) and `resetAnalyticsProvider` (clears the cached provider between tests).
+- `tests/support/environment.ts`: `setEnvironment` sets the analytics env vars.
+- `tests/support/http.ts`: `api()` provides the HTTP client for the requests.
+- `tests/support/setup-test-db.ts`: `setupTestDb` prepares the test database.
 
 ## Notes
-
-- The test drives the **real app** (not a unit-level mock of the route handler). The only seam is the spy on the provider's `capture`.
-- Consent is signalled via the `Analytics-Consent: true` header, not a cookie or body field.
-- The `NODE_ANALYTICS_PROVIDER: 'none'` setting means no real external call ever occurs; the spy proves the relay *would* have called `capture` without the consent guard.
-- Event names are a **closed set**; adding a new event name requires updating both the backend allow-list and these tests.
-- Field-name mapping is tested implicitly (e.g. `resultCount` → `result_count`); the test asserts the provider-facing shape, not the wire shape.
+- The provider is set to `'none'` and then spied on, so the tests observe whether `capture` is called without any real provider receiving events.
+- Consent is signalled per request by the `Analytics-Consent: true` header.
+- Validation failures return `422` and happen regardless of consent.

@@ -1,41 +1,40 @@
 ---
 source: src/modules/delivery/services/deliver.ts
-sha256: fdf318aff498d34f00567a4d3e210e2fc2104ce32a0d95477f69767308b97eb2
-generated_at: 2026-11-14T19:45:32.242608+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6f1b9cbdcd44f34c2ab21b8161768269dbcc23df8d6ab176fd13025e8c6d9017
+context_sha256: 4ea312ccf8bdba9c7eca443868559b1cf0c9095952735202faeb2aba080ab494
+generated_at: 2026-11-22T04:53:57.563077+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/deliver.ts
 
 ## Purpose
-
-Records a shipment's arrival — the delivery door. In a single transaction it stamps the shipment as delivered (or restores one previously marked lost), recomputes the order's delivery progress, and, when this was the last undelivered shipment with nothing left to ship, settles the order to `delivered` and starts the withdrawal clock from that arrival instant.
+Implements the "delivery door": staff recording that a shipment arrived. In one transaction it stamps the shipment as delivered, recomputes the order's summary and, if this was the last undelivered shipment with nothing left to ship, moves the order to `delivered` and starts its withdrawal clock from that arrival (CRD Art. 9(2)(b)(i)). It also accepts a `lost` shipment that turns up, provided every unit on it is still open.
 
 ## Key elements
-
-- **`Delivered`** (interface) — the value returned by the inner act: the updated `ShipmentDocument`, the `OrderDocument`, and a `wasLost` flag indicating the shipment had been previously reported lost.
-- **`deliverAct`** (internal, not exported) — the transactional core. Finds the shipment and its order in the session, guards that the order status can still accept arrivals (`canRecordArrival`), stamps or restores the shipment with a single shared timestamp, then calls `reportProgress` → `settleOrder` → `announceDelivered`.
-- **`deliverShipment`** (exported) — the public entry point. Wraps `deliverAct` in `runAct` (transaction), records the audit entry post-commit, optionally refreshes the shelf (stock holds) when a lost shipment was restored, and builds the HTTP success response via `viewShipmentOf` + `generateSuccess`.
+- `deliverShipment(shipmentId, authContext, context)` — the exported entry point. Runs `deliverAct` via `runAct`, then on success records an audit entry and returns the shipment view. Returns `ResponseSuccess<Shipment>` or a `ResponseReject`.
+- `deliverAct` (internal) — the transactional body:
+  - Loads the shipment and its order, refusing with `delivery.shipment-not-found` or `delivery.order-not-found` if either is missing.
+  - Refuses with 409 `DELIVERY_NOT_DELIVERABLE` unless `canRecordArrival(order.status)` allows it.
+  - Takes a single `at` timestamp, used for both the shipment stamp and the withdrawal deadline.
+  - Calls `restoreLostShipment` if the shipment was `lost`, otherwise marks the shipment delivered through the repository. A falsy result also gives the 409 refusal.
+  - Then calls `reportProgress`, `settleOrder` (using `summary.lastDeliveredAt ?? at`) and `announceDelivered`.
+- `Delivered` (internal interface) — result of the act: `shipment`, `order`, and `wasLost`.
 
 ## Relationships
-
-- **`src/modules/delivery/services/act.ts`** — provides `runAct` (transaction wrapper), `refuse`, and `refuseMissing` used for error responses.
-- **`src/modules/delivery/services/found.ts`** — provides `restoreLostShipment` (re-stamp a lost shipment) and `viewShipmentOf` (build the response payload).
-- **`src/modules/delivery/services/progress.ts`** — provides `reportProgress` (recompute delivery summary) and `settleOrder` (transition order to delivered / start withdrawal clock).
-- **`src/modules/delivery/services/announce.ts`** — provides `announceDelivered` (post-delivery side-effect notifications).
-- **`src/modules/delivery/repository.ts`** — `shipmentRepository.findInSession` and `.markDelivered` for persistence within the transaction.
-- **`src/modules/delivery/model.ts`** — `ShipmentDocument` type.
-- **`src/modules/delivery/audit.ts`** — `deliveryAuditActions` enum for the audit action identifier.
-- **`src/modules/orders/index.ts`** — barrel providing `canRecordArrival`, `orderService.readOrder`, `orderService.refreshShelf`, and the `OrderDocument` type.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` and the `ResponseSuccess`/`ResponseReject` types.
-- **`src/infrastructure/observability/audit.ts`** — `recordAudit` for the post-commit audit entry.
-- **`src/modules/delivery/services/index.ts`** — services barrel that re-exports `deliverShipment`.
-- **`src/modules/delivery/tests/unit/lost.test.ts`** — unit tests exercising the lost-shipment restore path.
+- `./act` — supplies `runAct` (transaction and refusal handling), `refuse` and `refuseMissing`.
+- `./found` — `restoreLostShipment` handles the lost-shipment path; `viewShipmentOf` builds the response view.
+- `./progress` — `reportProgress` recomputes the order summary; `settleOrder` finalizes the order using the last-delivery time.
+- `./announce` — `announceDelivered` is called within the transaction after the order is settled.
+- `../repository` — `shipmentRepository` loads the shipment inside the session and marks it delivered.
+- `../model` — `ShipmentDocument` type.
+- `../audit` — supplies `deliveryAuditActions` for the audit entry's action.
+- `@modules/orders` — `orderService` reads the order and refreshes the shelf, `canRecordArrival` is the lifecycle guard, and `OrderDocument` is the order type.
+- `@infrastructure/http/response` — `generateSuccess`, `ResponseSuccess`, `ResponseReject`.
+- `@infrastructure/observability/audit` — `recordAudit`.
 
 ## Notes
-
-- **Shared timestamp:** `deliverAct` captures a single `at = new Date()` and passes it to both the shipment stamp and (via `settleOrder`) the withdrawal deadline. The two must never disagree about when the goods arrived.
-- **`settleOrder` timestamp source:** it receives `progress.summary.lastDeliveredAt ?? at` — the progress report's own recorded last-delivered time takes precedence over the act's local `at`.
-- **Lost-shipment restore is a side-path with an extra step:** after the transaction commits, `deliverShipment` calls `orderService.refreshShelf(...)` for the restored shipment's product IDs because the stock hold moved. The normal (non-lost) path skips this.
-- **Audit is post-commit:** `recordAudit` runs in the `.then` callback after `runAct` resolves, i.e. after the transaction has committed. It is not inside the transaction.
-- **`wasLost` flag in the response metadata:** the audit entry and the returned view both surface whether this was a lost-shipment restore, distinct from a first-time delivery.
+- Audit and shelf refresh happen after the transaction commits, not inside it. The audit entry targets the order (`targetType: 'order'`) and adds `wasLost: true` to its metadata only for restored shipments.
+- The shelf refresh runs only for restored lost shipments. The code comment says a restore moved the stock hold, so the availability entry follows the commit.
+- `canRecordArrival` rejects `delivered` and `canceled` orders.
+- `authContext` is used only for the response's `actions`. `context` is used for the audit entry and for the caller id passed to `settleOrder` and `announceDelivered`.

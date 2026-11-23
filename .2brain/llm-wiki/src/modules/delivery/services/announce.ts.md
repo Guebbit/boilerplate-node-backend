@@ -1,43 +1,41 @@
 ---
 source: src/modules/delivery/services/announce.ts
-sha256: b45aee53a45d851595d3ac87e67bcda79af7999512475c64482e107c59c56b11
-generated_at: 2026-11-14T19:44:06.738869+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2c4f65bfa4a04525b786875a5f9bfaa50e0df4b772950d028fba82da9c0d9a00
+context_sha256: d674fe8d754805cef6d65ae7c16959c6d00f8f8416fa5265bd55991ddf886f59
+generated_at: 2026-11-22T04:52:58.395087+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/announce.ts
 
 ## Purpose
-
-Writes delivery events to the transactional outbox **and** appends the matching order-timeline row inside the same Mongoose session, so the narrative history commits atomically with the state change it describes. All outbox events are keyed on the order ID to preserve per-order ordering.
+Writes delivery's domain events to the outbox and the matching order-timeline rows, inside the calling act's transaction (`ClientSession`). History therefore commits atomically with the fact it describes. Timeline rows carry only ids and codes, never the hold note, which is reaped on its own retention clock.
 
 ## Key elements
-
-- **`shipmentPayload`** (private) – Builds the shared `{ orderId, shipmentId, fulfillmentOrderId, lines }` body for all `shipment.*` events.
-- **`announceShipped`** – Appends a `shipment_shipped` timeline row, then enqueues `SHIPMENT_SHIPPED`. Accepts an optional `actor` and `remainingUnits` (omitted for digital).
-- **`announceDelivered`** – Appends a `shipment_delivered` timeline row, then enqueues `SHIPMENT_DELIVERED`.
-- **`LossNotice`** (interface) – Buyer-facing data for a loss: `userId`, staff `message`, `owed` lines, `expectedAt`, `orderNumber`.
-- **`announceLost`** – Appends a `shipment_lost` timeline row (reason code only), then enqueues `SHIPMENT_LOST` carrying the full `LossNotice` fields for mail/inbox.
-- **`noticeTheBuyer`** (private) – Conditionally enqueues `FULFILLMENT_ORDER_HOLD_NOTICED` when the hold reason warrants a buyer notice (via `holdNeedsBuyerNotice`).
-- **`announceHeld`** – Appends a `fulfillment_held` timeline row, enqueues `FULFILLMENT_ORDER_HELD`, then calls `noticeTheBuyer`.
-- **`announceReleased`** – Appends a `fulfillment_released` timeline row, enqueues `FULFILLMENT_ORDER_RELEASED`.
-- **`announceCanceled`** – Enqueues `FULFILLMENT_ORDER_CANCELED` only (no timeline row; the order's own `canceled` row covers it).
-- **`recordRemainderCanceled`** – Appends a `remainder_canceled` timeline row for a remainder canceled *after* a partial shipment; intentionally separate from `announceCanceled`.
-- **`announceDelayed`** – Enqueues `FULFILLMENT_ORDER_DELAYED` and appends a `delay_notice_sent` timeline row (truncated in source).
+- `shipmentPayload` (private): shared payload for `shipment.*` events (orderId, shipmentId, fulfillmentOrderId, lines with productId/quantity).
+- `announceShipped(shipment, session, actor?, remainingUnits?)`: timeline `shipment_shipped` (includes number and optional `trackingCode`), then outbox `SHIPMENT_SHIPPED`. `remainingUnits` is added to the payload only when defined.
+- `announceDelivered(shipment, session, actor?)`: timeline `shipment_delivered`, then outbox `SHIPMENT_DELIVERED`.
+- `LossNotice` (interface): what the buyer is told about a loss (`userId?`, `message?`, `owed` lines, `expectedAt?`, `orderNumber`).
+- `announceLost(shipment, notice, session, actor?)`: timeline `shipment_lost` (reason code only, defaulting to `'lost'`), then outbox `SHIPMENT_LOST`. The event payload additionally carries the buyer-facing message, owed lines, and ISO `expectedAt`.
+- `noticeTheBuyer` (private): enqueues `FULFILLMENT_ORDER_HOLD_NOTICED` only if the hold has a reason and `holdNeedsBuyerNotice` says so. The notice kind is `'check_address'` or `'delayed'`, derived from `holdNoticeOf`.
+- `announceHeld(fulfillmentOrder, order, session, actor?)`: timeline `fulfillment_held` (reason defaults to `'other'`), outbox `FULFILLMENT_ORDER_HELD`, then `noticeTheBuyer`.
+- `announceReleased(fulfillmentOrder, session, actor?)`: timeline `fulfillment_released`, then outbox `FULFILLMENT_ORDER_RELEASED`.
+- `announceCanceled(fulfillmentOrder, session)`: outbox `FULFILLMENT_ORDER_CANCELED` only, with no timeline row.
+- `recordRemainderCanceled(fulfillmentOrder, session, actor?)`: timeline `remainder_canceled` only.
+- `announceDelayed(delayed, session)`: writes `FULFILLMENT_ORDER_DELAYED` and the timeline's `delay_notice_sent` (reason and expected date). Its body is cut off in the source I was given, so details beyond that are not documented here.
 
 ## Relationships
-
-- **`src/kernel/outbox.ts`** – Calls `enqueueOutboxEvent` for every event write; passes the `ClientSession` so the outbox row joins the act's transaction.
-- **`src/modules/delivery/domain/index.ts` / `hold-notice.ts`** – Imports `holdNeedsBuyerNotice` and `holdNoticeOf` to decide *whether* and *what* buyer notice accompanies a hold.
-- **`src/modules/delivery/model.ts`** – Uses `FulfillmentOrderDocument` and `ShipmentDocument` types for parameters and payload extraction.
-- **`src/modules/delivery/events.ts`** – Imports all event-name constants (`SHIPMENT_SHIPPED`, `SHIPMENT_LOST`, `FULFILLMENT_ORDER_HELD`, etc.) and the `FulfillmentOrderDelayed` / `ShipmentLostOwedLine` types.
-- **Caller services** (`ship.ts`, `deliver.ts`, `lost.ts`, `holds.ts`, `cancel-remainder.ts`, `fulfill.ts`, `found.ts`, `notice.ts`, `split.ts`) – Each imports the relevant `announce*` / `recordRemainderCanceled` function and invokes it within its own act's transaction.
-- **`src/modules/delivery/tests/unit/fulfillment.test.ts`** – Exercises the announcement path as part of fulfillment tests.
+- `src/kernel/outbox.ts`: `enqueueOutboxEvent(type, payload, key, session)` is the sole outbox writer. Every event is keyed on the order id so a given order's events stay in order.
+- `src/modules/delivery/domain/hold-notice.ts` and `src/modules/delivery/domain/index.ts`: `holdNeedsBuyerNotice` and `holdNoticeOf` (imported from `../domain`) decide whether and what kind of hold notice is sent.
+- `src/modules/delivery/events.ts`: supplies the event-name constants and the `FulfillmentOrderDelayed` and `ShipmentLostOwedLine` types.
+- `src/modules/delivery/model.ts`: supplies the `ShipmentDocument` and `FulfillmentOrderDocument` types.
+- Sibling services (`ship`, `deliver`, `lost`, `holds`, `found`, `fulfill`, `split`, `cancel-remainder`, `notice`) are neighbors in the dependency graph. I cannot confirm from the shown content which of them call which `announce*` function.
+- `src/modules/delivery/tests/unit/fulfillment.test.ts` is also a graph neighbor; its interaction is not visible in the shown content.
 
 ## Notes
-
-- **Timeline vs. outbox content asymmetry (by design):** Timeline rows carry only IDs, codes, and timestamps. Free-text staff notes and buyer-facing messages live on the domain document (with its own retention clock) or in the outbox event payload (for mail/inbox delivery). The webhook path omits those messages.
-- **`announceCanceled` deliberately skips the timeline row.** A whole-order cancellation already writes an order-level `canceled` row; adding a fulfillment-level row would be redundant. Use `recordRemainderCanceled` instead when a *remainder* is canceled post-shipment.
-- **Ordering guarantee:** Every `enqueueOutboxEvent` call passes `String(shipment.orderId)` (or `fulfillmentOrder.orderId`) as the partition key, ensuring events for a single order are consumed in write order.
-- **`actor` is optional everywhere.** It is `undefined` when the system (e.g., stock arrival) performs the action rather than a staff member.
-- **`remainingUnits` on `announceShipped`** is conditionally spread into the payload—absent for digital fulfillments where no further shipments are expected.
+- Every function takes the act's `session` and must be called inside that transaction.
+- Ordering is timeline row first, then the outbox event. For `announceHeld`, the buyer notice follows both.
+- `announceCanceled` deliberately has no timeline row. `recordRemainderCanceled` is separate because `announceCanceled` also runs when a canceled order takes its fulfillment orders with it, and the order's own `canceled` row already covers that case.
+- The loss event carries the buyer-facing sentence for the mail and inbox row, but the webhook leaves it out. The timeline row never carries it, nor staff's note.
+- The hold note stays on the fulfillment order, which has its own retention clock. Timeline rows and the `held` event carry only the reason code. The `hold_noticed` event does include `holdMessage` when present, so it reaches the mail and inbox row.
+- Timeline rows are written through `orderService.appendTimeline` from `@modules/orders`, which `OrderDocument` (supplying `orderNumber` and `userId` for hold notices) also comes from. `shopDayOf` from `@modules/shop` is imported, but its use is not visible in the shown portion.

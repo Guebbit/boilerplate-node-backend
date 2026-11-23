@@ -1,34 +1,38 @@
 ---
 source: src/modules/cart/services/reorder.ts
-sha256: dac7bdec3323b270be821e4dcc8fbd02d00c7b474c9955c366f6bb311db528e3
-generated_at: 2026-11-14T19:32:17.801639+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d631d0ff2d8bb77df8d210e3b07246c5c1cc4aa086fd1ecccb4bd2569bb952a0
+context_sha256: 8915c91984b229b00892fac01c4ce7025b8e7241641a550665d3285a541942ec
+generated_at: 2026-11-22T04:36:52.185923+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/services/reorder.ts
 
 ## Purpose
-
-Reorders a past order by copying its line items into the caller's current cart. It lives in the cart module (not orders) because it **writes** to the cart and only **reads** the order — keeping the dependency direction `cart → orders` and avoiding a circular `orders → cart` import.
+Implements "reorder": copying the lines of a past order back into the caller's cart. It lives in the cart module (not orders) because the cart is what gets written while the order is only read, which keeps the declared `cart → orders` dependency direction and avoids an orders → cart cycle.
 
 ## Key elements
-
-- **`reorderIntoCart(authContext, orderId, context)`** — the sole export. Validates the order belongs to the caller (`ownerScope` + not soft-deleted), maps order items to product/quantity pairs, runs them through `mergeLines`, then returns either a `MergeResult` (success with per-line reasons) or a 409 reject. Emits audit + analytics events on success.
+- `reorderIntoCart(authContext, orderId, context)` — the sole export. Returns `Promise<ResponseSuccess<MergeResult> | ResponseReject>`.
+  - Fetches the order via `orderService.getById(orderId, orderService.ownLiveScope(userId))`. A missing order gives a 404 (`cart.reorder.order-not-found`).
+  - Maps the order's items to `{ productId, quantity }` and passes them to `mergeLines`.
+  - If no line landed (every line is `removed` or `cart_full`):
+    - If any line was `cart_full`, it returns `lineLimitReached()`.
+    - Otherwise it returns a 409 with `ERROR_CODES.REORDER_UNAVAILABLE`.
+  - On success it returns 200 with `{ cart, lines }`, where `cart` is built by `toCartView`.
+  - Any thrown error goes through `rejectDatabaseEnvelope('cart', error)`.
+  - On a successful result only, it calls `recordAudit` (`USER_CART_REORDERED`, with `order_id` in metadata) and `emitAnalyticsEvent` (`CART_REORDERED`).
 
 ## Relationships
-
-- **`src/modules/orders/index.ts`** — provides `orderService`, used to read the source order via `getById` with `ownLiveScope`. The only cross-module read.
-- **`src/modules/cart/services/merge.ts`** — `mergeLines` performs the actual per-line insert/cap/remove logic; this file delegates all cart-mutation semantics to it.
-- **`src/modules/cart/services/items.ts`** — `cartGetForBadge` fetches the updated cart for the success payload; `lineLimitReached` provides the structured 409 when every line hit the cart-full condition.
-- **`src/modules/cart/analytics.ts`** / **`src/modules/cart/audit.ts`** — supply the `CART_REORDERED` event and `USER_CART_REORDERED` action constants.
-- **`src/infrastructure/observability/analytics/index.ts`** (`emitAnalyticsEvent`, `buildAnalyticsBase`) and **`src/infrastructure/observability/audit.ts`** (`recordAudit`) — fire on success only.
-- **`src/infrastructure/i18n/index.ts`** (`t`) — localised error messages.
-- **`src/infrastructure/http/response.ts`** (`generateSuccess`, `generateReject`, response types) / **`src/infrastructure/http/errors.ts`** (`rejectDatabaseEnvelope`) — response envelope helpers and the database-error fallback.
-- **`src/types/auth-context.ts`** — `AuthContext` and `CallerContext` types threaded through the call.
+- `@modules/orders` (`orderService`): reads the order. `getById` and `ownLiveScope` are the only calls used.
+- `./merge`: `mergeLines` applies the per-line rules, so reorder and merge cannot disagree. `MergeResult` is the response payload type.
+- `./items`: `lineLimitReached()` supplies the cart-full rejection.
+- `./view`: `toCartView` shapes the written cart for the response.
+- `../audit` and `../analytics`: provide `cartAuditActions` and `cartAnalyticsEvents`. They are recorded through `infrastructure/observability/audit` and `.../analytics`.
+- `infrastructure/http/response` and `infrastructure/http/errors`: build the success and reject envelopes and map database errors.
+- `infrastructure/i18n`: `t()` supplies the translated messages.
+- `@api/error-codes`: supplies `REORDER_UNAVAILABLE`.
 
 ## Notes
-
-- **Scoping is deliberate:** the order lookup uses `orderService.ownLiveScope(userId)` (owner + `deletedAt: null`), *not* `callerScope`. `callerScope` is a role-based read boundary that would let an admin refill their cart from another user's order.
-- **409 vs 200 distinction:** a mix of `removed` + `cart_full` lines is still a 409 (`CART_LINE_LIMIT_REACHED`). All-`removed` is a 409 (`REORDER_UNAVAILABLE`). Any line that successfully added (even if others were capped/removed) is a 200 — the `MergeResult.lines` array carries the per-line explanation.
-- **`ERROR_CODES`** is imported from `@api/error-codes`, not redefined locally.
-- Audit/analytics fire *after* the `.catch` swallows DB errors into a reject envelope, so failures produce no observability events — only successful reorders are recorded.
+- Scoping uses `ownLiveScope`, not `callerScope`. `callerScope` is role-based, so an admin could read any order. Reorder must only read the caller's own orders, and `ownLiveScope` also excludes soft-deleted ones (`deletedAt: null`).
+- Per-line outcomes (`removed`, `capped`, `cart_full`) are reported in `lines` and are not failures, unlike `upsertCartItem` in `./items`. Only an order with nothing addable at all returns 409. A partly addable order returns 200.
+- Audit and analytics are emitted only when the result is a success, and they run after the error mapping. Rejections are not recorded here.

@@ -1,50 +1,48 @@
 ---
 source: src/modules/delivery/services/ship.ts
-sha256: 530faf96145f4b53e0fd3f69fcf5c9b8aa962b803f022be28eb375ecb55aacc4
-generated_at: 2026-11-14T19:50:43.653288+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 628ae3bf4414de43c6425f072b0bb377529b53b9f81e0cab91298c54d1bbad66
+context_sha256: b0b2673461512890d48cac21c171f058047164f4dae085e29a9b2ae0cc2e4eb5
+generated_at: 2026-11-22T04:59:05.655607+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/ship.ts
 
 ## Purpose
-
-Implements the staff-facing "ship" action: cutting a shipment (some or all) from a fulfillment order. It orchestrates a single-transaction write (fulfillment lines, new shipment, stock decrement, order status) and then runs post-commit side effects (shelf-cache refresh, audit row, buyer notification). It is the public entry point that controllers call to record that goods left the shelf.
+Implements the staff "ship" act: cutting a shipment from a fulfillment order. All state changes (fulfillment order lines, shipment, stock leaving the shelf, order summary and, when nothing remains, order status, plus the shipped event) commit in one transaction. The audit row and shelf refresh happen after commit. A `paid` order can ship, because the act performs the `paid → processing` move itself; nothing ships from `on_hold`.
 
 ## Key elements
-
-- **`ShipInput`** (exported interface) — the request body: optional `lines` (per-product quantities; absent = ship everything remaining) and optional `trackingCode`.
-- **`Shipped`** (internal interface) — the tuple the transaction leaves for post-commit steps: `shipment`, `order`, `remainingUnits`.
-- **`gateOrder`** (private) — validates order status. `canceled`/`pending` → 409 `DELIVERY_NOT_SHIPPABLE`; `paid` without `start` permission → 403; other non-processing → 409 `ORDER_NOT_PROCESSING`.
-- **`gateFulfillmentOrder`** (private) — ensures the fulfillment order is `physical` and shippable, then validates requested lines against available stock via `checkShipLines`. Returns the resolved line list or throws a 422 refusal.
-- **`shipAct`** (private) — the transactional core. Reads snapshot, runs both gates, calls `cutShipment`, performs the `paid → processing` transition (`startFulfillment`), reports progress, settles the order, and announces the shipment. Returns a `Shipped`.
-- **`afterShipped`** (private) — post-commit: refreshes the shelf stock cache via `orderService.refreshShelf`, then records an audit row.
-- **`shipFulfillmentOrder`** (exported function) — public API. Decides `mayStart` before opening the transaction (so retries are idempotent in verdict), runs the act via `runAct`, handles refusals (including `auditUnearnedStart`), and on success chains `afterShipped` → `generateSuccess(viewShipment(...), 201)`.
+- `ShipInput` — staff input: optional `lines` (`ProductQuantity[]`; absent means everything remaining) and optional `trackingCode`.
+- `shipFulfillmentOrder(fulfillmentOrderId, input, authContext, context)` — the exported entry point. It computes `mayStart` before the transaction opens, runs `shipAct` via `runAct`, and returns either the refusal or a 201 `ResponseSuccess<Shipment>` built with `viewShipment`.
+- `shipAct` (internal) — the transactional body:
+  1. Reads the fulfillment order and its order.
+  2. Applies the order and fulfillment-order gates.
+  3. Cuts the shipment.
+  4. Starts fulfillment.
+  5. Reports progress.
+  6. Settles the order.
+  7. Announces the shipment.
+- `gateOrder` (internal) — refuses with 409 `DELIVERY_NOT_SHIPPABLE` for `canceled` or `pending` orders. It then applies `refuseUnearnedStart` (403 for a `paid` order when the caller lacks start permission) and refuses with 409 `ORDER_NOT_PROCESSING` if the order is not open for shipment.
+- `gateFulfillmentOrder` (internal) — refuses with 409 if the kind is not `physical` or the order is not shippable. It refuses with 422 `DELIVERY_LINES_INVALID` if `checkShipLines` fails; otherwise it returns the validated lines.
+- `afterShipped` (internal) — refreshes the shelf's availability entry for the shipped product ids, then writes the `ADMIN_ORDER_SHIPPED` audit row.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/delivery/services/act.ts` | Provides `runAct` (transaction runner), `readWithOrder` (snapshot read), `refuse` (structured refusal). |
-| `src/modules/delivery/services/cut.ts` | `cutShipment` performs the actual line/stock/shipment mutation inside the session. |
-| `src/modules/delivery/services/progress.ts` | `startFulfillment` (paid→processing), `reportProgress` (recomputes order progress), `settleOrder` (finalises order status when nothing remains). |
-| `src/modules/delivery/services/announce.ts` | `announceShipped` queues the buyer-visible notification inside the transaction. |
-| `src/modules/delivery/services/actions.ts` | `viewShipment` shapes the shipment + order documents into the response payload. |
-| `src/modules/delivery/services/ship-gate.ts` | `mayStartFulfillment`, `isOpenForShipment`, `refuseUnearnedStart`, `auditUnearnedStart` — permission and status gating logic. |
-| `src/modules/delivery/services/index.ts` | Barrel that re-exports `shipFulfillmentOrder` as the module's public API. |
-| `src/modules/delivery/domain/index.ts` | Barrel re-exporting `checkShipLines`, `isShippable`, `ProductQuantity` from the domain layer. |
-| `src/modules/delivery/domain/fulfillment.ts` | Implementation of `checkShipLines` (line validation) and `isShippable` (order-level shippability check). |
-| `src/modules/delivery/model.ts` | `FulfillmentOrderDocument`, `ShipmentDocument` — Mongoose document types used throughout. |
-| `src/modules/delivery/audit.ts` | `deliveryAuditActions.ADMIN_ORDER_SHIPPED` — the audit action constant. |
-| `src/infrastructure/observability/audit.ts` | `recordAudit` — writes the audit row post-commit. |
-| `src/infrastructure/http/response.ts` | `generateSuccess`, `ResponseSuccess`, `ResponseReject` — response envelope helpers. |
-| `src/modules/orders/index.ts` | `orderService.refreshShelf` — invalidates/refreshes per-product stock cache. |
-| `src/modules/orders/model.ts` | `OrderDocument` type used in the `Shipped` return. |
+- `./act` — supplies `runAct` (transaction and refusal wrapper), `readWithOrder` and `refuse`.
+- `./cut` — `cutShipment` creates the shipment, called with `takeStock: true`, `forced: false`, `delivered: false`.
+- `./progress` — `startFulfillment`, `reportProgress` and `settleOrder` handle the order-side moves.
+- `./announce` — `announceShipped` announces the shipment, passing the remaining units.
+- `./ship-gate` — the permission and state helpers `mayStartFulfillment`, `refuseUnearnedStart`, `isOpenForShipment` and `auditUnearnedStart`.
+- `./actions` — `viewShipment` shapes the response.
+- `../domain` — `isShippable`, `checkShipLines` and the `ProductQuantity` type.
+- `../model` — `FulfillmentOrderDocument` and `ShipmentDocument` types.
+- `../audit` — `deliveryAuditActions`.
+- `@modules/orders` (`src/modules/orders/index.ts`) — the `orderService` used for the shelf refresh, and the `OrderDocument` type.
+- `@infrastructure/http/response` — `generateSuccess` and the `ResponseSuccess`/`ResponseReject` types.
+- `@infrastructure/observability/audit` — `recordAudit`.
 
 ## Notes
-
-- **`paid` orders ship from this endpoint.** The `paid → processing` transition is performed *inside* the transaction by `startFulfillment`; the caller therefore needs both `start:Shipment` and `update:Shipment` capabilities. `on_hold` orders are never shippable.
-- **`mayStart` is resolved before the transaction opens.** A retried transaction must not produce a different gate verdict, so the permission check is deliberately hoisted out of `shipAct`.
-- **Post-commit work is outside the transaction.** `afterShipped` (shelf refresh + audit) runs after `runAct` resolves. If it fails, the shipment is already durable.
-- **`announceShipped` is called inside the transaction**, but per the module doc the actual buyer mail is driven by the `shipment.shipped` event, not by a synchronous send here.
-- **Refusal on unearned start** (`auditUnearnedStart`) is recorded in the *refusal* path of `shipFulfillmentOrder`, not inside the act, so no transaction is opened for a permission denial.
+- The caller needs both `update:Shipment` and `start:Shipment` to ship from a `paid` order.
+- `mayStart` is computed once, outside the transaction, so a retried transaction cannot change the verdict.
+- Refusals are decided before any write, using the same snapshot the writes land in.
+- When a refusal is returned, `auditUnearnedStart` is called with the reject and the fulfillment order id.
+- The buyer's mail rides the shipped event, not this file directly.

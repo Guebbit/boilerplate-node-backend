@@ -1,34 +1,31 @@
 ---
 source: src/modules/cart/presenter.ts
-sha256: a93be0021fe3bdf2dbc39421b74471c4ab4c36375401d857c259fa77ec4adc49
-generated_at: 2026-11-08T05:15:22.273556+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a93be0021fe3bdf2dbc39421b74471c4ab4c36375401d857c259fa77ec4adc49
+context_sha256: 97648249717380f7d822c95b151c666cf5475b3c52b9486982b31d4864e04f66
+generated_at: 2026-11-22T04:34:10.642572+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/presenter.ts
 
 ## Purpose
-
-Pure mapping layer that takes already-computed cart facts (lines, totals, shipping) and shapes them into the `CartResponse` the OpenAPI contract requires. It exists so that the "what goes on the wire" logic — including derived flags like `canIncrease` and `checkoutable` — lives in one testable, side-effect-free function rather than being scattered across services.
+Builds the `CartResponse` declared by the API contract (`openapi.yaml`) from a cart's already-computed facts. It is the single place where the wire shape is decided, including client-facing flags (`canIncrease`, `checkoutable`) that clients would otherwise have to derive themselves.
 
 ## Key elements
-
-- **`CartView`** — Type alias for `CartResponse`; documents that this module speaks the contract's vocabulary.
-- **`JudgedCartLine`** — A cart line annotated with its `LineAvailability` verdict; the unit the presenter iterates over.
-- **`CartFacts`** — The input contract: pre-computed lines, counts, monetary totals (as decimal strings), shipping block, and the shop's per-line ceiling (`lineMax`).
-- **`presentCart(facts: CartFacts): CartView`** — The sole exported function. Maps each line to `{ productId, quantity, availability, canIncrease }` (where `canIncrease = quantity < lineMax`), assembles the `summary` block, passes `shipping` through, and computes `checkoutable` as "at least one line exists **and** every line passes `isBuyable`."
+- `CartView`: type alias for `CartResponse`.
+- `JudgedCartLine`: a stored line (`productId`, `quantity`) plus its `LineAvailability`, as judged by the shared availability rule.
+- `CartFacts`: input to the presenter. It holds the judged `lines`, precomputed totals (`count`, `quantity`, `itemsTotal`, `shippingCost`, `totalPrice`, `currency`), the `shipping` info, and `lineMax`, the per-line ceiling from `cartLineMax()`.
+- `presentCart(facts)`: pure function returning a `CartView` with four parts:
+  - `items`: each line with `productId`, `quantity`, `availability` and `canIncrease` (`quantity < lineMax`).
+  - `summary`: `itemsCount`, `totalQuantity`, `itemsTotal`, `shippingCost`, `totalPrice` and `currency`.
+  - `shipping`: passed through unchanged.
+  - `checkoutable`: true only if there is at least one line and every line's availability passes `isBuyable`.
 
 ## Relationships
-
-- **`src/modules/cart/domain/index.ts`** (→ `availability.ts`) — Provides the `isBuyable` predicate used for the `checkoutable` flag.
-- **`src/modules/cart/services/view.ts`** — The caller: reads lines, ledger, and shipping options, runs the domain rules, then hands the assembled `CartFacts` to `presentCart`.
-- **`src/modules/cart/services/items.ts`** — Produces the line/quantity/gross-total figures that appear in `CartFacts` (see `sumLineItems` referenced in JSDoc).
-- **`src/types/index.ts`** — Source of the `CartResponse`, `CartShipping`, and `LineAvailability` types imported here.
-- **`src/modules/cart/index.ts`** — Public barrel; re-exports this module's surface for consumers outside the cart feature.
+- Imports `isBuyable` from `./domain` (`src/modules/cart/domain/index.ts`; the cart domain module, whose `availability.ts` holds the availability rule) to compute `checkoutable`.
+- Imports `CartResponse`, `CartShipping` and `LineAvailability` types from `@types` (`src/types/index.ts`).
+- Per its module doc, `src/modules/cart/services/view.ts` reads the lines, ledger and shipping options and supplies the facts that `presentCart` turns into the response.
 
 ## Notes
-
-- All monetary values are **decimal strings**, not numbers — do not perform arithmetic here; the services already did that.
-- `canIncrease` is intentionally derived at presentation time (from `lineMax`) so the wire carries a ready-to-use boolean instead of expecting the client to re-derive it.
-- `checkoutable` is **false** when the cart is empty *or* any single line is not buyable — it is an all-or-nothing gate, not a partial indicator.
-- The function is pure and returns a fresh object each call; there is no mutation or caching.
+- The presenter does no arithmetic on money: totals arrive as decimal strings that the services have already computed.
+- An empty cart is never `checkoutable`.

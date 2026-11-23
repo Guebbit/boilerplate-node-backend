@@ -1,28 +1,23 @@
 ---
 source: src/modules/shop-tasks/domain/index.ts
-sha256: f641cb5bd0df4a12c63b2a051f2bee0dc684d394dc6ac0703ea16e3f364fd3fe
-generated_at: 2026-11-08T08:14:17.828276+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ce67a1ee97fa09d0aacaa565be593a7ab6feae902ac8b5b11ca43d7fc1282582
+context_sha256: dae541df6f9b74b25005392a0763d1673604a647328dc976db87a27dcd31c674
+generated_at: 2026-11-22T07:40:51.969041+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/domain/index.ts
 
 ## Purpose
-
-Barrel (re-export) file for the **domain layer** of the shop-tasks module. It exists to give consumers a single import path (`…/domain`) for all domain-level pure-data types without needing to know the individual filenames inside the layer.
+Barrel file for the shop-tasks domain layer. It defines the public surface of the folder, which models what each shop situation opens as pure data. Its module doc states the layer is lint-guaranteed to be free of Express, Mongoose and every tier. The module doc also references a domain-layer document, section `_1-the-folder`, for background.
 
 ## Key elements
-
-- **`export * from './openings'`** — Re-exports the entire public surface of `openings.ts`. This is the only statement in the file.
-- **Module doc comment** — Declares the layer contract: pure data describing "what each shop situation opens," with a lint guarantee that no Express, Mongoose, or other tier-specific imports may appear here.
+- `export * from './openings'`: re-exports everything from the sibling `./openings` module. This is the file's only code.
 
 ## Relationships
-
-- **`src/modules/shop-tasks/domain/openings.ts`** — The sole re-exported source. All types/values that consumers pull from this barrel actually live in `openings.ts`.
-- **`src/modules/shop-tasks/index.ts`** — The module's public entry point; it imports from (or re-exports) this domain index to expose domain types at the module boundary.
+- `./openings` (`src/modules/shop-tasks/domain/openings.ts`): the sole source of the re-exported symbols.
+- `src/modules/shop-tasks/index.ts`: a neighbor in the dependency graph. It is the module-level entry point and is related to this barrel through the graph.
 
 ## Notes
-
-- This file contains **no logic** — it is purely a re-export. Any behavior or type definitions belong in `openings.ts`.
-- The doc comment references `docs/theory/domain-layer.md` as the authoritative description of what the domain layer is allowed to contain. If a lint rule about framework-free imports is missing, check that doc.
-- Because everything is `export *`, name collisions between `openings.ts` and any future sibling in this directory would surface as a TypeScript ambiguity error at the consumer, not here.
+- Because of the wildcard re-export, new exports added to `./openings` become part of this domain barrel automatically.
+- The "no Express, Mongoose or tier imports" rule is enforced by lint, according to the module doc. Anything exported here is expected to respect that.

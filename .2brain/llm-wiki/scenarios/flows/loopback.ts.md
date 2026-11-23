@@ -1,29 +1,27 @@
 ---
 source: scenarios/flows/loopback.ts
-sha256: a23ad7f80f776f97c0021b3256cb213e3fc498165bf86c459d087180c6b9f80e
-generated_at: 2026-11-08T02:29:29.087707+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T01:43:24.354804+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/flows/loopback.ts
 
 ## Purpose
-
-Provides a single helper that binds an Express app to an **ephemeral loopback port**, hands the resolved `baseUrl` to a caller-supplied async function, and tears the server down afterwards. It exists so the demo profile and `scenarios/apply.ts` can exercise the app over real HTTP at moments when no production server is listening, without publishing a port to any other interface.
+Provides a throwaway HTTP listener for driving the Express app over real HTTP without publishing a port. It is used when the app is not otherwise listening: the demo profile drives its flows before `src/app.ts` binds `NODE_PORT`, and `scenarios/apply.ts` has no server at all. Because `app.listen()` creates a fresh `http.Server` on each call, it never collides with the real server.
 
 ## Key elements
-
-- **`withLoopbackServer<T>(app, drive): Promise<T>`** (sole export) — Calls `app.listen(0, '127.0.0.1')`, resolves the OS-assigned port, passes `http://127.0.0.1:<port>` to `drive`, then closes the server. The close runs on both the success and error paths of `drive`, and the resolved/rejected value of `drive` is forwarded to the caller.
+- `withLoopbackServer<T>(app, drive)`: the only export.
+  - Calls `app.listen(0, '127.0.0.1', ...)`. Port `0` asks the OS for a free port, and `127.0.0.1` keeps the server off other interfaces.
+  - Reads the assigned port from `server.address()` and builds `baseUrl` as `http://127.0.0.1:<port>`.
+  - Runs `drive(baseUrl)`, then closes the server and returns whatever `drive` resolved to.
+  - If `drive` rejects, it still closes the server, then rethrows the original error.
+  - If the server emits an `error` event before it is listening, the returned promise rejects.
 
 ## Relationships
-
-- **`scenarios/index.ts`** — Sibling module in the same `scenarios/` package; the graph links them as related, indicating `scenarios/index.ts` imports or re-exports the loopback helper (or its sibling flow files) for the scenario runner.
-- **`package.json`** — Source of the `express` type dependency used here (type-only import) and the `node:net` `AddressInfo` type.
+- `scenarios/index.ts` is a graph neighbor of this file. The file itself names only the demo profile flow and `scenarios/apply.ts` as callers (neither is a graph neighbor), so any use from `scenarios/index.ts` is not visible here.
+- `package.json` is a neighbor, but the file has no visible interaction with it. It imports only types: `Express` from `express` and `AddressInfo` from `node:net`.
 
 ## Notes
-
-- **Port `0` + `127.0.0.1`** guarantee no port collisions and no external visibility. The server lives only as long as one `drive` call.
-- `app.listen()` allocates a **fresh** `http.Server` per invocation, so this never interferes with the long-lived server that `src/app.ts` later binds to `NODE_PORT`.
-- The server is closed **before** the result (or error) is propagated back to the caller, guaranteeing no lingering socket.
-- `server.address()` is cast to `AddressInfo` because the `string` overload only applies to UNIX sockets, which `listen(0, host)` never produces.
-- In the demo profile this server answers **unauthenticated** `/__test/*` routes; it is intentionally a throwaway, not a test double.
+- The server serves unauthenticated `/__test/*` routes in the demo profile. This is why it binds only to loopback and lives only for the length of one seed.
+- The `address()` result is cast to `AddressInfo`. This is safe because `listen(0, host)` never produces a UNIX socket.
+- Cleanup is awaited on both the success and failure paths, so `close()` finishes before the result or error propagates.

@@ -1,30 +1,29 @@
 ---
 source: src/modules/orders/tests/unit/export.test.ts
-sha256: 81cb469a3094814bbafa4b0f9814ce9939f25196d1c29d54982e176099af911f
-generated_at: 2026-11-08T07:12:04.170788+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 81cb469a3094814bbafa4b0f9814ce9939f25196d1c29d54982e176099af911f
+context_sha256: 4e893c7176e263909b84a77e13d86d3fce731923dc56142b838458954a46f5f8
+generated_at: 2026-11-22T06:35:51.801241+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/export.test.ts
 
 ## Purpose
-
-Unit tests for `toOrderCsvRow`, verifying that an order serializes to exactly the declared CSV columns, that dates normalize to UTC ISO text regardless of input type (`Date` vs. string), and that an unpaid order's missing fields emit empty strings rather than `"undefined"`.
+Unit tests for `toOrderCsvRow`, which turns one order into one CSV row. They check that every declared column is filled in a fixed order, that dates come out as UTC ISO text whether the source value is a `Date` or a string, and that an unpaid order's missing payment fields become empty cells.
 
 ## Key elements
-
-- **`order`** (fixture) — a fully paid, delivered order with two lines / three units; exercises the happy-path branch of `toOrderCsvRow`.
-- **`describe('toOrderCsvRow')`** — the sole test suite in this file.
-  - *"fills exactly the columns…"* — asserts the returned object's keys match `ORDER_CSV_COLUMNS` in both membership **and** order, then compares every cell value.
-  - *"leaves the cells of an unpaid order…"* — spreads the fixture with `paymentStatus: 'unpaid'`, `paymentMethod: undefined`, `paidAt: undefined` and asserts those cells are `''`.
+- `order` — fixture of type `OrderCsvSource`: a delivered, paid, fulfilled, never-returned order with 2 lines, 3 units, total `'59.90'` EUR, paid by card. `createdAt` is a `Date` and `paidAt` is an ISO string, so both input forms are covered.
+- Test "fills exactly the columns the file declares":
+  - `Object.keys(row)` must equal `ORDER_CSV_COLUMNS`.
+  - `ORDER_CSV_COLUMNS` is pinned to its literal order: `createdAt`, `orderNumber`, `status`, `paymentStatus`, `fulfillmentStatus`, `returnStatus`, `email`, `lines`, `units`, `total`, `currency`, `paymentMethod`, `paidAt`.
+  - The full row must equal the expected object. `totalItems` maps to `lines`, `totalQuantity` to `units`, `totalPrice` to `total`. `createdAt` is serialized as `'2026-05-01T09:30:00.000Z'`.
+- Test "leaves the cells of an unpaid order with no method empty": with `paymentStatus: 'unpaid'` and `paymentMethod` and `paidAt` both `undefined`, the row's `paymentMethod` and `paidAt` are `''`, not `"undefined"`.
 
 ## Relationships
-
-- **`src/modules/orders/domain/index.ts`** — barrel re-export; this file imports `ORDER_CSV_COLUMNS`, `toOrderCsvRow`, and the `OrderCsvSource` type through it (`import { … } from '../../domain'`).
-- **`src/modules/orders/domain/export.ts`** — the actual implementation of `toOrderCsvRow` and the definition of `ORDER_CSV_COLUMNS`; the function under test.
+- Imports `ORDER_CSV_COLUMNS`, `toOrderCsvRow` and the type `OrderCsvSource` from `../../domain`, which resolves to `src/modules/orders/domain/index.ts`, the domain barrel.
+- `src/modules/orders/domain/export.ts` is a graph neighbor and presumably where these exports are implemented, though the test does not import it directly.
+- Tests only this domain export surface. It does not touch a store, a CSV writer or the network.
 
 ## Notes
-
-- `toEqual` does **not** compare key order, so the test pins column order with a separate `expect(ORDER_CSV_COLUMNS).toEqual([...])` assertion. If the column array is reordered in `export.ts`, this test will fail even if the row object still maps correctly.
-- The fixture deliberately mixes input types: `createdAt` is a `Date` instance while `paidAt` is already an ISO string, covering both the store and wire paths mentioned in the module docblock.
-- Empty cells are asserted as `''` (empty string), not `undefined` or omitted — this is the contract a downstream CSV writer relies on.
+- The separate `Object.keys`/`ORDER_CSV_COLUMNS` assertion exists because `toEqual` ignores key order. The comment in the test says column order is pinned there.
+- `describe`, `it` and `expect` are used without being imported, so they come from global test-runner configuration.

@@ -1,32 +1,25 @@
 ---
 source: src/modules/stats/index.ts
-sha256: 58824bd0274ecc92eca6fb69144d9dd7ed73d640615f0eecb5adfc3977fa66b1
-generated_at: 2026-11-08T08:24:34.099783+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 9825628ebc5ccc931c6dba652dfe57eda0581a8bb034664debb56b460a19286f
+context_sha256: a3064acfcd3a99eaf9d5633e94633c5cf1b8fcc32f9933d11dec44582d4d6c82
+generated_at: 2026-11-22T07:51:09.626760+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stats/index.ts
 
 ## Purpose
-
-Public barrel (re-export) file for the stats module. It is the single entry point that sibling modules are allowed to import from, per the strategic DDD rule in `docs/theory/strategic-ddd.md` §5. No other module currently depends on it; it exists because the convention requires every module to publish a barrel.
+Public barrel for the Stats module. It is the only surface that sibling modules may import from. Per its own doc comment, nothing depends on this module today. The barrel exists because every module publishes one.
 
 ## Key elements
+- `export * from './services'`: re-exports everything the services layer exposes.
+- `export * from './domain'`: re-exports everything the domain layer exposes.
 
-- `export * from './services'` — re-exports the public API of `src/modules/stats/services/index.ts`.
-- `export * from './domain'` — re-exports the public API of `src/modules/stats/domain/index.ts`.
-
-No functions, classes, or logic are defined here; the file is purely re-exports.
+The file defines no logic of its own.
 
 ## Relationships
-
-- **src/modules/stats/services/index.ts** — Re-exported via `export *`. This is the upstream source of the services API surface.
-- **src/modules/stats/domain/index.ts** — Re-exported via `export *`. This is the upstream source of the domain model surface.
-
-Both neighbors are re-exported in the order services → domain. No other files import from this barrel today.
+- `src/modules/stats/services/index.ts`: its exports are re-exported unchanged.
+- `src/modules/stats/domain/index.ts`: its exports are re-exported unchanged.
 
 ## Notes
-
-- Importing from internal paths (e.g. `../stats/services` directly) bypasses the barrel and violates the stated rule. Consumers should always go through this file.
-- Because it uses `export *`, name collisions between `services` and `domain` would surface here rather than at the call site.
-- The file carries no runtime code; bundlers may tree-shake it away if nothing imports it.
+- Both re-exports are wildcards, so the public API is whatever those two sub-barrels export. A name exported by both would conflict.

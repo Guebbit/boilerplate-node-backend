@@ -1,36 +1,33 @@
 ---
 source: scripts/mutation/pull-report.ts
-sha256: f9a235f273ad9d7126fd5c201fbbc6db88d3ba37e58db729da10eea19473c0cb
-generated_at: 2026-11-14T17:37:51.098015+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:09:52.129930+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/mutation/pull-report.ts
 
 ## Purpose
-
-CLI entry point for `npm run mutation:pull`. It fetches the newest mutation-sweep report artifact from GitHub Actions, writes `mutation.json` and `index.html` to the same local directory a local run would use, and then re-derives `mutation-baseline.json` from that report so the local baseline and CI baseline cannot diverge.
+Implements `npm run mutation:pull`: downloads the newest GitHub mutation-sweep report artifact from `main`, writes its merged mutation report (`mutation.json`) and HTML page (`index.html`) where a local run would put them, then folds the mutation baseline from that report (as the sweep's merge job does). The report is the single source, so the baseline and report can't disagree. It requires the GitHub CLI to be logged in (`gh auth login`).
 
 ## Key elements
-
-- **`listArtifacts()`** — Calls `gh api` to list up to 100 artifacts named `REPORT_ARTIFACT` on the current repository.
-- **`download(runId, directory)`** — Calls `gh run download` to unzip one artifact into a target directory.
-- **`install(artifact)`** — Downloads the chosen artifact into a `mkdtemp` scratch dir, copies `PULLED_FILES` (`mutation.json`, `index.html`) into `REPORT_DIRECTORY`, then removes the scratch dir.
-- **`foldBaseline()`** — Spawns `npx tsx scripts/mutation/check-baseline.ts --merge --merge-dir=…` and returns its exit code (1 signals a below-baseline regression).
-- **`missingMessage(reason, artifacts)`** — Produces a specific, actionable error string for each `MissingReason` variant (none uploaded, none from main, all expired).
-- **Top-level flow** — `listArtifacts → newestReport → install → foldBaseline`; sets `process.exitCode` to 1 on any failure.
+- `run` — `promisify(execFile)`; arguments go as a list, never through a shell.
+- `REPORT_DIRECTORY` — `dirname(REPORT_PATH)`, the destination for pulled files.
+- `PULLED_FILES` — the report and page files taken from the artifact (the artifact's summary file is ignored).
+- `listArtifacts()` — runs `gh api repos/{owner}/{repo}/actions/artifacts?name=…&per_page=100` and returns the `artifacts` array.
+- `download(runId, directory)` — `gh run download <id> --name <artifact> --dir <dir>`.
+- `install(artifact)` — downloads into a temp dir, creates `REPORT_DIRECTORY`, copies the two files, always removes the temp dir, and logs the run id and creation date.
+- `foldBaseline()` — runs the baseline check script via `npx tsx` with `--merge` and `--merge-dir=<REPORT_DIRECTORY>` and inherited stdio. It returns the exit code, or 2 if the status is null (killed by a signal).
+- `missingMessage(reason, artifacts)` — builds an actionable error for each `MissingReason`: `none-uploaded`, `none-from-main`, or expired artifacts (it reports the newest creation date).
+- Top-level promise chain (runs on import/execution): list, pick, install, fold, then print a review hint.
 
 ## Relationships
-
-- **`scripts/mutation/baseline.ts`** — Imports `REPORT_PATH` to derive `REPORT_DIRECTORY` (the destination for pulled files).
-- **`scripts/mutation/github-artifacts.ts`** — Imports the `GitHubArtifact` / `MissingReason` types, the `REPORT_ARTIFACT` constant, and the `newestReport` selector.
-- **`github/workflows/mutation.yml`** — The CI workflow whose merge job uploads the artifact this script downloads; the "pull" counterpart to that sweep.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — Covers the CI wave logic that ultimately produces the artifact consumed here; this script is the local consumer of that output.
+- `./baseline` — supplies `REPORT_PATH`, which determines the local output directory.
+- `./github-artifacts` — supplies `REPORT_ARTIFACT` (artifact name), `newestReport` (selects the artifact or returns `{ missing: reason }`), and the `GitHubArtifact` and `MissingReason` types.
+- `tests/unit/scripts/mutation/ci/waves.test.ts` — listed as a graph neighbor. The file itself shows no direct interaction.
 
 ## Notes
-
-- Requires an authenticated `gh` CLI (`gh auth login`). No token is passed programmatically.
-- `summary.md` present in the artifact is deliberately **not** pulled; it is only rendered on the GitHub run page.
-- Baseline folding uses `--merge` (not `--update`) so that files the sweep could not measure retain their previously recorded score.
-- Exit-code contract: `0` = success, `1` = no artifact / GitHub unreachable / below-baseline regression (propagated from `foldBaseline`).
-- `per_page=100` is the GitHub API page-size maximum; the list is assumed to contain at most a few months of monthly sweeps.
+- The process exit code is `foldBaseline()`'s: 1 means the sweep measured a file below its baseline. It is 1 on any listing, download or copy error, and also when no usable artifact exists.
+- `--merge` (not `--update`) means a file the sweep couldn't measure keeps its recorded score, and scores are never lowered.
+- The script does not commit anything. It prints a hint to review the baseline's diff with `git diff` and then commit it.
+- The script has no exports and runs its main flow at module load, so it is meant to be executed, not imported.
+- Only the first 100 artifacts are listed (no pagination).

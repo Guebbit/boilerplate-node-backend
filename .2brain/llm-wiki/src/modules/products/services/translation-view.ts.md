@@ -1,30 +1,25 @@
 ---
 source: src/modules/products/services/translation-view.ts
-sha256: 0f4d66764aa962d48d463e85ac739c53b11e1e575e28c9edc93c4d06aee7bd92
-generated_at: 2026-11-08T07:49:09.089246+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 37da838e5816cfc07333273e7ce75f0666b6b0772314d5ca46354e54721bc896
+context_sha256: bbc40100d9610f9414a22c07d0f1e29ce97cf9eeff03383b09500093a42e45f5
+generated_at: 2026-11-22T07:14:33.870998+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/services/translation-view.ts
 
 ## Purpose
-
-Read-gate for a product's `translations` field. Editor tabs need every locale's copy (including drafts), which exceeds the resolved `title`/`description` a shopper sees, so this module exposes a single capability check that restricts access to callers holding the `read:Translation` grant.
+Decides who may see every language of a product. The editor's tabs need each locale's copy, drafts included, which is more than the resolved `title`/`description` a shopper reads. So the full `translations` view is limited to callers holding `read:Translation`.
 
 ## Key elements
-
-- **`canSeeTranslations(caller?: Caller): boolean`** — The sole export. Returns `true` only when a caller is present **and** `holds(caller, 'read', 'Translation')` passes. Explicitly never checks write keys (e.g. `update:Product`); read and write are separate grants.
+- `canSeeTranslations(caller?: Caller): boolean`: the only export. It returns a boolean that is positive only when `caller` is defined and `holds(caller, 'read', 'Translation')` passes. An anonymous (`undefined`) caller never passes the check.
 
 ## Relationships
-
-- **`src/kernel/ability.ts`** — Provides the `holds` function used as the single authorization primitive.
-- **`src/types/index.ts`** — Barrel import (`@types`) that supplies the `Caller` type.
-- **`src/types/auth-context.ts`** — Upstream definition of `Caller`, re-exported through the barrel above.
-- **`src/modules/products/routes.ts`** — Consumer in the same feature module; the product routes are the expected callers of this gate before exposing `translations` in a response.
-- **`src/modules/products/services/read.ts`** — Sibling read-service that performs the actual data fetch; this file only decides *whether* that fetch's `translations` slice may be included.
+- **`@kernel/ability` (`src/kernel/ability.ts`)**: supplies `holds`, which performs the permission check.
+- **`@types` (`src/types/index.ts`, `src/types/auth-context.ts`)**: supplies the `Caller` type, imported as a type only. The file does not import `auth-context.ts` directly.
+- **`src/modules/products/routes.ts` and `src/modules/products/services/read.ts`**: neighbors in the dependency graph. This file does not import them, and nothing in it shows how they call it.
 
 ## Notes
-
-- The JSDoc calls out that the field-level shape mirrors `./stock-view`; if you add a new gated field, keep the two view modules in lock-step.
-- `caller` is intentionally typed as `Caller | undefined` to model anonymous requests; the function short-circuits to `false` without touching `holds`.
-- The ability key is the composite string `'read', 'Translation'` (two args to `holds`), not a single `'read:Translation'` token — pass them separately.
+- It checks the read rule `read:Translation` and never a write key such as `update:Product`, because reading and writing are separate grants.
+- The check is a pure predicate with no side effects.
+- The `@param` doc describes the argument as the request's caller, or `undefined` for an anonymous request.

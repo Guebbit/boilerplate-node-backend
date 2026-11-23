@@ -1,42 +1,41 @@
 ---
 source: src/modules/payments/services/retention.ts
-sha256: 19aa7da7c4e73632fe258d087350256d8691da8c01339b007e439b29b29c8095
-generated_at: 2026-11-08T07:29:12.993673+00:00
-model: ollama:qwen3.8:27b
+source_sha256: adc8fd9da0a9c1bd0487581882c642dab558dceb38cab0f969f1fd0e7b4a4dae
+context_sha256: 03d831d6f9d977722fa2d218b5c8adf7bc5fb2aa63e224861bfeb2c4c5bc433a
+generated_at: 2026-11-22T06:53:02.897011+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/retention.ts
 
 ## Purpose
-
-Handles the post-movement lifecycle of payment records: detaching a user's ID during account erasure, producing an account's own payment data for export, and sweeping (deleting) abandoned payment attempts that never succeeded. It does not create, charge, or settle payments — it manages what happens to the row after the money event.
+Handles a payment's lifecycle after the money has moved. It covers three things: detaching an erased account from its payments, producing an account's own payment data for export, and sweeping away abandoned payment attempts.
 
 ## Key elements
-
-- **`detachUserId(userId, session)`** — Unsets `userId` on every payment belonging to the given account, joined to the caller's hard-delete transaction via a Mongoose `ClientSession`. Logs the detach count.
-- **`findOwnPayments(userId)`** — Reads all payments for an account via `readAll` (unpaginated by design; an export is a one-time full result). Returns `Lean<PaymentDocument>[]`.
-- **`toExportPayment(payment)`** *(private)* — Maps a `Lean<PaymentDocument>` to the public `ExportPayment` shape. Deliberately omits `userId`, formats amounts with `padDecimal`, serializes dates to ISO strings, and conditionally includes optional fields (`cardLast4`, `returnId`, `settledAt`, `createdAt`, `updatedAt`).
-- **`findOwnPaymentsForExport(userId)`** — Convenience wrapper: `findOwnPayments` → `toExportPayment` mapping. Returns `ExportPayment[]`.
-- **`reapAbandonedPayments()`** — Deletes payment attempts that never reached `succeeded` and are older than `abandonedPaymentRetentionDays()` (default 30 days). Bank-transfer rows use a longer `TRANSFER_PAYMENT_RETENTION_DAYS` cutoff so late transfers can still be matched. Returns the deletion count; logs when > 0.
+- **`detachUserId(userId, session)`**: the `personalData.erase` hook. Calls `paymentRepository.detachUserId` inside the caller's `ClientSession`, which unsets `userId` on the account's payments. The payment rows are not deleted. It logs an info message when at least one payment was detached.
+- **`findOwnPayments(userId)`**: returns every payment the account made, unpaginated. It uses `readAll` to page through `paymentRepository.findAll(paymentRepository.ownerScope(userId), …)` in pages of `MAX_CONFIGURED_PAGE_SIZE`.
+- **`toExportPayment`** (private): maps a lean payment document to an `ExportPayment`.
+  - It omits `userId`.
+  - It formats amounts with `padDecimal`.
+  - It maps refunds to `Refund` objects.
+  - It converts dates to ISO strings.
+  - Optional fields (`returnId`, `settledAt`, `cardLast4`, `createdAt`, `updatedAt`) are included only when present.
+- **`findOwnPaymentsForExport(userId)`**: `findOwnPayments` followed by `toExportPayment`, for the account data export.
+- **`reapAbandonedPayments()`**: the sweep for `reap:payments`. It computes two cutoffs and calls `paymentRepository.deleteAbandonedBefore(cutoff, transferCutoff)`. It logs when anything was deleted and returns the number of rows deleted.
 
 ## Relationships
-
-- **`../repository`** — All reads/deletes go through `paymentRepository` (`detachUserId`, `findAll`, `ownerScope`, `deleteAbandonedBefore`). This file contains no raw Mongo calls.
-- **`../config`** — Supplies the two retention day-counts used by `reapAbandonedPayments`.
-- **`../model`** — Provides the `PaymentDocument` type that shapes the internal read.
-- **`@types`** — Provides the public `ExportPayment` and `Refund` shapes that the export mapping produces.
-- **`@domain-primitives/money`** — `padDecimal` formats amount/amountRefunded/refund amounts.
-- **`@domain-primitives/time`** — `DAY_MS` converts retention day-counts into a millisecond cutoff.
-- **`@infrastructure/adapters/logger`** — Structured info logs on detach and reap.
-- **`@infrastructure/persistence/search`** — `readAll` + `MAX_CONFIGURED_PAGE_SIZE` power the unpaginated export read.
-- **`@infrastructure/persistence/create-repository`** — Source of the `Lean<T>` type alias used in signatures.
-- **`../services/index.ts`** — Barrel that re-exports this module's public API.
-- **`src/modules/payments/jobs.ts`** — Expected caller of `reapAbandonedPayments` as a scheduled sweep.
+- **`../repository`**: `paymentRepository` supplies `detachUserId`, `findAll`, `ownerScope` and `deleteAbandonedBefore`. All database access goes through it.
+- **`../model`**: provides the `PaymentDocument` type.
+- **`@infrastructure/persistence/create-repository`**: provides the `Lean` type.
+- **`@infrastructure/persistence/search`**: provides `readAll` and `MAX_CONFIGURED_PAGE_SIZE` for the export read.
+- **`../config`**: provides `abandonedPaymentRetentionDays()` and `TRANSFER_PAYMENT_RETENTION_DAYS` for the reaper's cutoffs.
+- **`@domain-primitives/money`**: `padDecimal` formats amounts by currency.
+- **`@domain-primitives/time`**: `DAY_MS` converts retention days to milliseconds.
+- **`@infrastructure/adapters/logger`**: used for the detach and delete log lines.
+- **`@types`**: provides the `ExportPayment` and `Refund` shapes.
 
 ## Notes
-
-- `toExportPayment` builds a **real plain object**, not a type-level `Omit` on the Mongoose document, so `userId` is absent at runtime rather than merely hidden by a type.
-- The `readAll` call in `findOwnPayments` is intentionally unpaginated; do not add a page-size limit without understanding the export contract.
-- Stryker mutation-testing `disable`/`restore` comments wrap the logger calls — keep them if you touch those lines.
-- Settled/succeeded payments are **never** candidates for `reapAbandonedPayments`; the repository method enforces the status filter.
-- Transfer payments are kept longer than card payments by design (late bank transfers can still be matched); the two cutoffs are computed separately.
+- `userId` is left out of exports because the query already scopes results to the caller. `applyPaymentTransform` does not omit it, so returning the raw document would still serialize `userId`. That is why `toExportPayment` builds a plain object.
+- The reaper targets only payments that never reached `succeeded` and have not been touched within the retention window. Settled payments are never candidates. Bank-transfer attempts are kept longer, so a late transfer can still be matched.
+- The retention window comes from `NODE_PAYMENT_ABANDONED_RETENTION_DAYS`, read through `abandonedPaymentRetentionDays()`. The transfer window is the fixed constant `TRANSFER_PAYMENT_RETENTION_DAYS`.
+- The `// Stryker disable` comments around the logging exclude those lines from mutation testing.

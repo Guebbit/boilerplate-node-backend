@@ -1,27 +1,32 @@
 ---
 source: src/modules/example/controllers/get-examples.ts
-sha256: fa91c9545cd8355a37a37e627cb691011ad88437736717b81e50a76f2d02ab71
-generated_at: 2026-11-08T05:48:40.962498+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5ac7778dda1309429497e7fca75128d07cad4a166a11a768dfa0f5779ce57734
+context_sha256: ee85ccdf6c16a6f6d3b1c04dbec238f8d9ea8fccad728b31f73ff0f8233004e1
+generated_at: 2026-11-22T05:07:20.006094+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/controllers/get-examples.ts
 
 ## Purpose
-Thin wiring controller for the Example module's search surface. It defines a single search controller that serves both `GET /examples` and `POST /examples/search`, decoding the incoming request into a validated query and delegating the actual lookup to `exampleService.search`.
+Controller for the example module's search endpoint. It serves both `GET /examples` (query-string form) and `POST /examples/search` (JSON body form) as one search, and does so by configuring the shared search-controller factory rather than hand-writing request handling.
 
 ## Key elements
-- **`searchExamplesQuerySchema`** – Extends the generated `SearchExamplesBody` schema, overriding `page` and `pageSize` with `pageSchema`/`pageSizeSchema` so they are coerced from query-string text into numbers.
-- **`getExamples`** (exported) – The result of `createSearchController(…)`. Bound to entity `"examples"`; its `runSearch` callback calls `exampleService.search(parsed, callerContextOf(request))`. Handles both the GET and POST endpoints.
+- `searchExamplesQuerySchema` (module-private): the generated `SearchExamplesBody` schema extended so `page` and `pageSize` use `pageSchema` / `pageSizeSchema`. This coerces them from strings, since the GET form carries them as query text.
+- `getExamples` (exported): the controller, built with `createSearchController`. It is configured with:
+  - `entity: 'examples'`
+  - `schema: searchExamplesQuerySchema`
+  - `runSearch`: calls `exampleService.search(parsed, callerContextOf(request))`
 
 ## Relationships
-- **`@infrastructure/surfaces/create-search-controller`** – Provides the `createSearchController` factory that shapes the HTTP handler (parsing, error envelope, response formatting).
-- **`@infrastructure/http/request`** – Source of `callerContextOf`, used to pass caller identity/permissions into the service call.
-- **`@infrastructure/http/schemas`** – Supplies `pageSchema` and `pageSizeSchema` for query-parameter coercion.
-- **`../services/index`** – Source of `exampleService`; the controller delegates all business logic here.
-- **`src/modules/example/routes.ts`** – Consumes the `getExamples` export to register the endpoints on the router.
+- `src/infrastructure/surfaces/create-search-controller.ts`: provides the `createSearchController` factory that `getExamples` is built from. It receives the entity name, the schema, and the `runSearch` callback.
+- `src/infrastructure/http/schemas.ts`: supplies `pageSchema` and `pageSizeSchema` for the query-form coercion.
+- `src/infrastructure/http/request.ts`: supplies `callerContextOf`, which derives the caller context from the request and passes it to the service.
+- `src/modules/example/services/index.ts`: supplies `exampleService`, whose `search` method does the actual work.
+- `src/modules/example/routes.ts`: the routes file is a graph neighbor of this controller. This file does not show how it is wired there.
 
 ## Notes
-- One controller covers **two** HTTP methods (`GET /examples` and `POST /examples/search`). The distinction is purely in how the client sends the body (query string vs. JSON body); the schema handles both.
-- The `page`/`pageSize` coercion exists specifically because the GET form delivers them as raw query text; without the extended schema they would arrive as strings and fail downstream numeric assumptions.
-- No business logic lives here — validation, auth context extraction, and response shaping are the only responsibilities, per the module's controller convention.
+- The controller is deliberately thin: it only decodes the request, calls the service, and shapes the answer. The factory and the service hold the logic.
+- The generated `SearchExamplesBody` schema is imported from `@api/schemas.zod`.
+- Per the doc comment, the search returns the caller's own examples, or everyone's when called with `display:Example`.
+- The same `getExamples` handler serves both the GET and POST forms. Only the schema's `page` / `pageSize` coercion accounts for the difference between them.

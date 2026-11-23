@@ -1,25 +1,26 @@
 ---
 source: src/modules/account/services/reencrypt.ts
-sha256: 7e891e661e33ad5f367f7a91ab2cf7cc3e15b3ca5c15dd6dc1480c524f23d9ce
-generated_at: 2026-11-14T18:50:36.973875+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7e891e661e33ad5f367f7a91ab2cf7cc3e15b3ca5c15dd6dc1480c524f23d9ce
+context_sha256: 251948911e2e22706b38585b6a7ec9a5c5bfb5d32e62094b9a5da45525c6e8f1
+generated_at: 2026-11-22T03:41:10.337846+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/services/reencrypt.ts
 
 ## Purpose
-Provides the account-module entry point for re-encrypting all enrolled TOTP device secrets onto the newest key in the TOTP encryption key ring. It exists so the ops script (`@infrastructure/security/reencrypt`) can invoke a single, dry-run-capable call that delegates the actual document walk to the users service while the account module supplies the ring and binding rule.
+Provides the account module's entry point for re-encrypting every enrolled TOTP device secret onto the newest `NODE_TOTP_ENCRYPTION_KEY`. The secrets live on the `users` document, so the walk itself is done by the users module. This file supplies the key ring and the binding rule. It is run by the ops script `reencrypt` (see `@infrastructure/security/reencrypt`).
 
 ## Key elements
-- **`reencryptTotpSecrets(dryRun?)`** — the sole export. Calls `accountUserService.reencryptTwoFactorSecrets` with the TOTP key ring and the `totpBinding` binding rule. The `dryRun` parameter (defaults to `false`) controls whether the operation only counts what a real run would move and writes nothing.
+- `reencryptTotpSecrets(dryRun = false)`: the only export. It delegates to `accountUserService.reencryptTwoFactorSecrets({ ring, bindingOf }, dryRun)`. With `dryRun` set, it counts what a real run would move and writes nothing.
 
 ## Relationships
-- **`src/modules/users/friends/account.ts`** — provides `accountUserService`, whose `reencryptTwoFactorSecrets` method performs the actual `users`-document walk and key rotation.
-- **`src/modules/account/session/config.ts`** — provides `getTotpEncryptionKeyRing()`, the ordered list of TOTP encryption keys.
-- **`src/modules/account/two-factor/totp.ts`** — provides `totpBinding`, the binding rule that identifies which field on the user document holds the TOTP secret.
-- **`src/modules/account/services/index.ts`** — barrel file that re-exports this module for consumers of the account services surface.
+- `src/modules/users/friends/account.ts`: provides `accountUserService`. Its `reencryptTwoFactorSecrets` method does the actual iteration over `users`.
+- `src/modules/account/session/config.ts`: provides `getTotpEncryptionKeyRing()`, the key ring passed as `ring`.
+- `src/modules/account/two-factor/totp.ts`: provides `totpBinding`, passed as `bindingOf`.
+- `src/modules/account/services/index.ts` and `src/modules/account/module.ts`: listed as graph neighbors. The file content shows no direct interaction with either.
 
 ## Notes
-- The TOTP secrets live on the **`users`** document, not an account-specific collection; the walk is therefore owned by `accountUserService`, not by any account-local repo.
-- This module is deliberately thin: it composes the ring + binding from the account domain and hands them to the users service. All encryption/decryption logic resides in the users module.
-- Intended to be called by an ops script, not from request-handling code. The `dryRun` flag exists specifically for safe preview in that context.
+- This module owns the ring and the binding rule, while the users module owns the traversal.
+- The key ring is read when the function is called, because `getTotpEncryptionKeyRing()` is invoked inside it.
+- The function returns whatever `reencryptTwoFactorSecrets` returns. The shape of that result isn't visible in this file.

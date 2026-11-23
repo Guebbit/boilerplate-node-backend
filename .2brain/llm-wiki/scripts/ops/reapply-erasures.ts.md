@@ -1,43 +1,43 @@
 ---
 source: scripts/ops/reapply-erasures.ts
-sha256: e3de953dd27f9e4fde78fcca6282193224564acb395b33775dfabeb51b6a3474
-generated_at: 2026-11-08T02:55:27.950373+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f2b48e58e5a9846b4337c7a17e463023e14a38a128cc5372a534fbd33af13956
+context_sha256: 20c2b69fc2e17139661946d0aa94ccaf35fc9caef5538a22c214fc5148d99ccc
+generated_at: 2026-11-22T02:11:33.862990+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/ops/reapply-erasures.ts
 
 ## Purpose
-
-Operational script that replays the erasure ledger after a database restore. Restoring an older snapshot resurrects accounts that were erased after that snapshot; this script re-erases them using the ledger (which outlives the oldest backup). It is run manually by an operator—never on a schedule—with the app and cron stopped.
+A manual operations script, run as `npm run ops:reapply-erasures -- --since <time>`, that erases again the accounts named in the erasure ledger after a restore of an older snapshot. A restore brings back accounts erased after the snapshot was taken. The ledger (`erasureledgers`) outlives the oldest backup, so it still knows them. It is run by a person, never on a schedule. It must run on the restored database with the app, worker, worker-heavy and cron stopped, before the stack starts. The ledger in that database must be the live one or the newest snapshot's, not the restored copy.
 
 ## Key elements
+- `requiredSince()`: reads `--since` via `flagValue` and returns a `Date`. It throws a usage error if the flag is missing or unparseable, because guessing a date would replay the wrong window.
+- `drainAuditSink(report)`: waits 1 second before resolving with the report. This lets the fire-and-forget restoration-log row reach Mongo before the connection closes. The synchronous audit log line is the authoritative record either way.
+- `replay(since)`: registers `enabledModules`, calls `startJob()`, boots i18n from the modules' `locales` directories, then calls `reapplyErasures({ since, by, snapshot })` and `drainAuditSink`.
+- `main()`: validates `--since`, runs `replay`, and logs the headline counts (`countsOf`) and the full report by outcome. It sets `process.exitCode = 1` if `report.failed` is non-empty.
+- Entry point: `runScript(undefined, main, () => Promise.all([stopDatabase(), stopQueue()]))`. There is no job name.
 
-- **`requiredSince()`** — Parses and validates the mandatory `--since <ISO time>` flag; throws a usage error if missing or unparseable (no guessing a window).
-- **`drainAuditSink(report)`** — Waits 1 s via `setTimeout` so the fire-and-forget audit-sink write can reach Mongo before the connection closes. Resolves the same report.
-- **`replay(since)`** — Orchestrates the run: registers modules (so every module's erase hook fires), starts the DB job, boots i18n, calls `reapplyErasures`, settles outbox nudges, then drains the audit sink.
-- **`main()`** — Top-level: validates the guard, invokes `replay`, logs structured counts via `logger`, and sets `process.exitCode = 1` if any erasure failed.
-- **Entry point** — `runScript(undefined, main, cleanup)` with no job name (manual invocation). Cleanup stops the database and queue.
+Flags:
+- `--since <ISO time>` (required): the snapshot's time. Ledger rows from then on are replayed.
+- `--snapshot <id>`: the restic snapshot restored, for the restoration log.
+- `--by <name>`: who restored, for the restoration log. Defaults to the OS user.
 
 ## Relationships
-
-- **`scripts/cli.ts`** — `flagValue` reads the `--since`, `--snapshot`, and `--by` CLI flags.
-- **`scripts/run-script.ts`** — `runScript` wraps the entry point with lifecycle management and the provided cleanup callback.
-- **`src/modules/account/services/erasure-ledger.ts`** — Core logic: `reapplyErasures` performs the replay, `countsOf` formats the summary, `ReapplyReport` is the result type.
-- **`src/kernel/registry.ts`** — `registerModules` is called so the full erasure cascade (all module hooks) executes, matching the scheduled purge path.
-- **`src/modules.ts`** — Supplies `enabledModules` (for registration) and `enabledModuleDirectories('locales')` (for i18n boot).
-- **`src/kernel/outbox.ts`** — `settleOutboxNudges` finalises outbox side-effects after the replay.
-- **`src/infrastructure/runtime/database.ts`** — `startJob` opens the DB; `stopDatabase` is called in cleanup.
-- **`src/infrastructure/adapters/queue.ts`** — `stopQueue` is called in cleanup.
-- **`src/infrastructure/runtime/mongoose-boot.ts`** — Side-effect import; must load before any Mongoose schema is built.
-- **`src/infrastructure/i18n/boot.ts`** — `bootI18n` loads locale files for the enabled modules.
-- **`src/infrastructure/adapters/logger.ts`** — `logger` writes the structured result lines.
-- **`src/infrastructure/config/dotenv.ts`** — Side-effect import to load environment variables first.
+- `scripts/run-script.ts`: `runScript` wraps `main` and runs the cleanup callback. It never rejects, and failures are reported through the exit code.
+- `scripts/cli.ts`: supplies `flagValue` for `since`, `by` and `snapshot`.
+- `src/modules/account/services/erasure-ledger.ts`: supplies `reapplyErasures`, `countsOf` and the `ReapplyReport` type. This is where the actual replay logic lives.
+- `src/kernel/registry.ts` and `src/modules.ts`: `registerModules(enabledModules)` registers the modules so each module's erase hook runs, as in the scheduled purge. `enabledModuleDirectories('locales')` supplies the i18n directories.
+- `src/infrastructure/runtime/database.ts`: `startJob` connects, and `stopDatabase` closes the connection at the end.
+- `src/infrastructure/adapters/queue.ts`: `stopQueue` is called at shutdown.
+- `src/infrastructure/i18n` (`index.ts`, `boot.ts`): `bootI18n` is imported from `@infrastructure/i18n`, the i18n index module.
+- `src/infrastructure/adapters/logger.ts`: logs the results.
+- `src/infrastructure/config/dotenv.ts` and `src/infrastructure/runtime/mongoose-boot.ts`: side-effect imports that load env config and set Mongoose defaults.
 
 ## Notes
-
-- **Import order is significant**: `dotenv` and `mongoose-boot` are side-effect imports that must precede any model/schema loading.
-- **Run constraints** (from the header doc): app and cron must be **stopped**; the ledger in the target database must be the live one or the newest snapshot's, **not** the restored copy. See `docs/tools/backups.md#erasures-after-a-restore`.
-- **Idempotent / safe to repeat**: already-erased accounts are skipped; partial failures are retried by re-running.
-- **`drainAuditSink` is a timing hack**: the audit sink is fire-and-forget by contract and returns nothing to await, so a 1 s `setTimeout` is the only way to give it a chance before the connection drops. The synchronous audit-log line is the authoritative record regardless.
-- **No scheduled job name** is passed to `runScript`—this distinguishes it from periodic scripts and signals it is a one-off operator action.
+- Import order matters. `mongoose-boot` must load before any model because Mongoose defaults are read at schema build.
+- The script is safe to repeat. An account already erased is skipped, and a failed one is retried by running again.
+- The exception is the final sweep. After the outbox settles, it deletes held jobs that name an erased account's address. This is needed because step 4 re-sends restored outbox rows, which can hold a new job for an erased address. The sweep needs the addresses of accounts erased in this run. If it throws, the account is listed under `failed` and the exit code is non-zero. The fix is to restore again and rerun, since the restored accounts bring their addresses back.
+- Every account id is logged under "Accounts by outcome" because the audit log lost the rows written after the snapshot.
+- The script exits non-zero when any account could not be erased.
+- The file's header comment points to a backups doc for the restore procedure.

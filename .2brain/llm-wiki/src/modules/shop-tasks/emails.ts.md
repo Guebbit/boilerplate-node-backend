@@ -1,36 +1,28 @@
 ---
 source: src/modules/shop-tasks/emails.ts
-sha256: 22a57ef8da7c7e591c736efc6b14ef2af7a2e0de284734586cad0b6d59164514
-generated_at: 2026-11-08T08:14:43.571420+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T07:41:13.697189+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/emails.ts
 
 ## Purpose
-
-Builds the content of the daily staff-digest email: one line per summary that appeared or grew, each carrying a localized label and a link to the corresponding frontend page. The file is a pure content-builder — it produces an `EmailContent` object but never sends anything.
+Builds the staff digest email for the shop-tasks module: one line per summary that appeared or grew, each with a count and a link to the page that lists it, localized to the recipient's language. It carries counts and links only, with no names or addresses.
 
 ## Key elements
-
-- **`DigestItem`** (interface) — a single row in the digest: a `SummaryCode` and its `count`.
-- **`staffDigestEmail(locale, items)`** (exported function) — returns an `EmailContent` with:
-  - `template: 'shop-tasks.staff-digest'`
-  - `subject` / `pageMetaTitle` / `title` translated via the i18n translator for the recipient's locale.
-  - `data.lines` — an array of `{ text, link }` objects, one per item. `text` is the translated label with the count interpolated; `link` is a frontend URL built from the summary's route template and parameters.
+- `DigestItem` – interface for one digest line: a `code` (`SummaryCode`) and a `count`.
+- `staffDigestEmail(locale, items)` – returns an `EmailContent` using the template `shop-tasks.staff-digest`. `items` is documented as never empty.
+  - Subject, meta title and title come from the translator for `locale`.
+  - `data.lines` has one entry per item, each with `text` (localized, with the count passed as `n`) and `link` (a frontend URL).
 
 ## Relationships
-
-- **`src/infrastructure/adapters/mailer.ts`** — supplies the `EmailContent` type that `staffDigestEmail` returns.
-- **`src/infrastructure/i18n/index.ts`** (and its `context.ts`) — provides `translator`, used to resolve every human-readable string in the email.
-- **`src/infrastructure/http/frontend-link.ts`** — provides `frontendLink`, which assembles the per-item page URL from a route template, locale, and parameters.
-- **`src/modules/shop-tasks/staff-routing.ts`** — provides `summaryLinkOf(code)` (route template + parameters) and the `SummaryCode` type used by `DigestItem`.
-- **`src/modules/shop-tasks/services/digest.ts`** — the likely caller that gathers `DigestItem[]` data and passes it to `staffDigestEmail`.
-- **`src/modules/shop-tasks/index.ts`** — module barrel; re-exports this file's public surface.
-- **`tests/unit/infrastructure/adapters/mailer-templates.test.ts`** — validates the `shop-tasks.staff-digest` template contract that this file's `EmailContent` must satisfy.
+- `src/modules/shop-tasks/staff-routing.ts` – supplies `SummaryCode` and `summaryLinkOf(code)`, which returns the link `template` and `parameters` for each line.
+- `src/infrastructure/i18n/index.ts` – `translator(locale)` provides all the translated strings.
+- `src/infrastructure/http/frontend-link.ts` – `frontendLink(template, locale, parameters)` builds each line's link.
+- `src/infrastructure/adapters/mailer.ts` – defines the `EmailContent` type returned here. The `shop-tasks.staff-digest` template is rendered by the mailer, and `tests/unit/infrastructure/adapters/mailer-templates.test.ts` exercises the mailer templates.
+- `src/modules/shop-tasks/services/digest.ts` – the digest service in the same module; the graph links it to this file.
+- `src/modules/shop-tasks/index.ts` – the module's index, linked to this file in the graph.
 
 ## Notes
-
-- The `code` field of `DigestItem` is not just an identifier; it doubles as an i18n dictionary path. The mapping `shop-tasks.staff.<n>` → `shop-tasks.staff-mail.digest.<n>` is done inline via a `replace` call — adding a new summary requires adding a matching key under both namespaces.
-- `items` is documented as "never empty" (no empty-state handling in the email body).
-- Privacy: the email intentionally contains only counts and links — no staff names or addresses.
+- Line text is looked up by rewriting the summary code: `.staff.` becomes `.staff-mail.digest.`. For example, the code `shop-tasks.staff.<n>` maps to the dictionary path `shop-tasks.staff-mail.digest.<n>`. Every summary code therefore needs a matching `staff-mail.digest` dictionary entry.
+- The file's header comment points to a "the staff digest" section of the shop-tasks module documentation for detailed behavior.

@@ -1,33 +1,30 @@
 ---
 source: scenarios/shop.scenario.ts
-sha256: 2988d958f6b7b809118790efe36fc50b28add1f65d67907f2cb5cfbd23b64344
-generated_at: 2026-11-08T02:32:13.295728+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 96dbd6f3ee297798caab61b982f23563513036a3b5498ea21a7b778ccacb918b
+context_sha256: b375af9f7bcefd4edf01cc9188f9981bc500b49945e9f452c325f8c46f4a0ba1
+generated_at: 2026-11-22T01:46:00.999953+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/shop.scenario.ts
 
 ## Purpose
-
-Defines the `shop` scenario object — its seed sequence, drive function, and pinned subject rows — that `scenarios/index.ts` registers under the name `shop`. It is auto-discovered by `npm run regenerate` (via `scenarios/scenarios.generated.ts`); the regeneration strip deletes this file rather than editing the registry.
+Defines the `shop` scenario: the starting rows (access model plus every `shopModules` fixture), the driver that plays the order-book history on top, and the pinned subject rows that tests check against module guarantees. It is discovered by `npm run regenerate`, so removing a scenario means deleting this file rather than editing the registry that lists it.
 
 ## Key elements
-
-- **`seedShop`** (internal) — Seeds the access model first (via `seedAccessModel`), then all `shopModules` fixtures in the minimum sequential waves their `after` graph allows (via `runInWaves` / `asWaveEntries`). Returns a flat array of `SeedOutcome[]`.
-- **`SHOP_SUBJECTS`** (internal) — A `Readonly<Record<string, string>>` mapping each product guarantee key (e.g. `'product.softDeleted'`, `'product.inStock'`) to a concrete seed row ID from `SEED_PRODUCT_IDS`. Serves as the pinned-side of a two-way equality check in `tests/integration/scenarios/shop.test.ts`.
-- **`scenario`** (export) — The single export: `{ seed: seedShop, drive: driveShopHistory, subjects: SHOP_SUBJECTS }`. This is the shape `scenarios/index.ts` consumes.
+- `seedShop` (private): runs `seedAccessModel()`, then `runInWaves(asWaveEntries(shopModules))`, and flattens the per-wave results into one `SeedOutcome[]`. Seeding is sequential: the access model first, then the module fixtures in the fewest waves their `after` graph allows.
+- `SHOP_SUBJECTS` (private): a `Record<string, string>` that maps guarantee keys to row ids from `SEED_PRODUCT_IDS`. The keys are `product.softDeleted`, `inactive`, `offSale`, `outOfStock`, `barebones`, `inStock`, `rich`, `digital`, `lowStock`, `noWithdrawal` and `heavy`. Only `products` pins a row here.
+- `scenario` (export): the object `scenarios/index.ts` registers as `shop`. It has the fields `seed: seedShop`, `drive: driveShopHistory` and `subjects: SHOP_SUBJECTS`.
 
 ## Relationships
-
-- **`scenarios/accounts.ts`** — Provides `seedAccessModel`, which must run before any shop module so that a shop exists for membership resolution.
-- **`scenarios/product-ids.ts`** — Provides `SEED_PRODUCT_IDS`, the row-ID constants that populate `SHOP_SUBJECTS`.
-- **`scenarios/shop-modules.ts`** — Provides `shopModules` (the fixture rows to seed) and `asWaveEntries` (shapes them for the wave runner).
-- **`scenarios/waves.ts`** — Provides `runInWaves`, which executes the shop-module entries respecting their `after` dependency graph.
-- **`scenarios/flows/shop-history.ts`** — Provides `driveShopHistory`, the order-book flow that drives the seeded shop after seeding.
-- **`scenarios/seed.ts`** — Provides the `SeedOutcome` type used in `seedShop`'s return signature.
+- `./accounts`: supplies `seedAccessModel`, which runs before everything else, because nothing can resolve a caller until a shop exists for them to be a member of.
+- `./shop-modules`: supplies `shopModules` (the fixtures) and `asWaveEntries` (adapts them for the wave runner).
+- `./waves`: supplies `runInWaves`, which orders and executes the module seeding.
+- `./product-ids`: supplies `SEED_PRODUCT_IDS`, the source of the pinned subject ids.
+- `./flows/shop-history`: supplies `driveShopHistory`, used as the `drive` step.
+- `./seed` (imported as `@scenarios/seed`): supplies the `SeedOutcome` type.
 
 ## Notes
-
-- A freshly seeded shop has an **empty catalogue shelf** (every product at `onHand: 0`); stock only arrives once `driveShopHistory` runs.
-- Only `product.*` guarantees pin a row ID here. Other guarantee types name rows that flows produce at runtime, so those IDs do not exist at seed time and are intentionally absent from `SHOP_SUBJECTS`.
-- The two-way test in `tests/integration/scenarios/shop.test.ts` means a guarantee declared in a module's `AppModule.scenario` but missing from `SHOP_SUBJECTS` (or vice-versa) will fail the suite.
+- A shop that has been seeded but not driven has an empty catalogue shelf: no product carries stock, and each product takes delivery from the flow run.
+- Guarantees other than the product ones name rows that the flows produce. Those ids only exist after a process has run the flows, so they are not pinned here.
+- The subjects are meant to match, in both directions, the guarantees that modules declare themselves. A guarantee that is declared but not pinned is a failure, and so is a subject left here after its module is deleted.

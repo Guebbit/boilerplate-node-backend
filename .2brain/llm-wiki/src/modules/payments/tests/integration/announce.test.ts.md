@@ -1,45 +1,46 @@
 ---
 source: src/modules/payments/tests/integration/announce.test.ts
-sha256: f90de07447b399471532314b0521ff9edf2b6dd75809320ca691815ac415046a
-generated_at: 2026-11-08T07:31:21.195807+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7301314f0d73d6744882d03465d2963634df1bbaab63fa1b6affd7287dce1457
+context_sha256: 09e24c4f512dcf93046f709a61dbde3806aa49a343f0ef667601e3137347cbc7
+generated_at: 2026-11-22T06:55:37.661476+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/announce.test.ts
 
 ## Purpose
-
-Integration tests for the payment announcement path: verifying that `payment.succeeded` and `payment.failed` domain events are published via the transactional outbox, atomically with the payment state change. Confirms idempotency (no double-publish on re-confirm), rollback when a downstream commit fails, and that declined payments are written and announced as a single unit. Runs against a real MongoDB instance.
+Integration tests (real Mongo) verifying that `payment.succeeded` and `payment.failed` are announced through the transactional outbox. The event row is written in the same transaction as the settlement or decline, so it exists exactly when the state change committed.
 
 ## Key elements
-
-- **`placedOrder()`** — helper that creates a user, a product (10 on hand), and a real placed order through `orderService.create`.
-- **`payFor(orderId, user)`** — helper that creates a payment intent and confirms it with a fake Visa card via `paymentService`.
-- **`awaitingConfirmation()`** — helper that sets up an order with an unconfirmed intent, i.e. the state `recordDecline` expects to find.
-- **`describe('a settlement that completes')`** — asserts exactly one outbox row for `PAYMENT_SUCCEEDED`, that a subscriber received it with the correct `eventId`, and that a second confirm of the same payment does not produce a second row.
-- **`describe('a settlement that dies after charging')`** — mocks `inventoryService.commitForOrder` to reject, asserting the payment stays `requires_confirmation` and no outbox row exists; also covers the cancel-during-confirm race where the refund path (not the payment) owns the announcement.
-- **`describe('a declined payment')`** — calls `recordDecline` directly; asserts the `PAYMENT_FAILED` outbox row is written and delivered once; verifies rollback when `outboxEventModel.create` rejects; verifies that if the payment already moved to `succeeded`, `recordDecline` returns `null` and nothing is published.
-- **`heard` / `failures` arrays** — module-level capture arrays populated by `onDomainEvent` subscribers to assert subscriber delivery in order.
+- **`setupTestDb()`**: sets up the real test database.
+- **`heard`**: array collecting every `payment.succeeded` a subscriber receives, as `{ orderId, eventId }`. It is reset in `beforeEach`, which also calls `registerCheckoutModules([paymentsModule])` and subscribes via `onDomainEvent`.
+- **`afterEach`**: calls `resetDomainEvents()` and `jest.restoreAllMocks()`.
+- **`placedOrder()`**: creates a user and a product (`onHand: 10`), then places a real order of quantity 2 through `orderService` as admin.
+- **`payFor(orderId, user)`**: runs `createIntent`, then `confirmPayment` with `pm_card_visa`.
+- **`awaitingConfirmation()`**: places an order and creates a card intent without confirming it, returning the order id. This is the state a decline lands on.
+- **Test groups:**
+  - *A settlement that completes*:
+    - Exactly one `published` outbox row is created, and the subscriber's `eventId` matches the row `_id`.
+    - Confirming the same payment again adds no second row.
+  - *A settlement that dies after charging*:
+    - If `inventoryService` is made to reject when committing stock for the order, no row is written and nothing is heard. The payment stays `requires_confirmation`.
+    - If the order is canceled during `fakePaymentProvider.confirm`, no `payment.succeeded` is announced. The comment says the refund path owns that case.
+  - *A declined payment*:
+    - `recordDecline` writes the `declined` status and one `payment.failed` outbox row, which is delivered once.
+    - If `outboxEventModel.create` is mocked to reject, the decline rolls back and the status stays `requires_confirmation`.
+    - If the payment was already `succeeded` (it lost the race), `recordDecline` resolves to no value and writes no row.
 
 ## Relationships
-
-- **`src/modules/payments/services/announce.ts`** — `recordDecline` is the system under test for the decline path.
-- **`src/modules/payments/services/index.ts`** — `paymentService.createIntent` / `confirmPayment` drive the happy-path and re-confirm scenarios.
-- **`src/modules/payments/events.ts`** — provides `PAYMENT_SUCCEEDED` and `PAYMENT_FAILED` event-name constants used in outbox queries and subscriptions.
-- **`src/modules/payments/repository.ts`** — `paymentRepository.findByOrderId` / `updateStatusIfIn` used to inspect and manipulate payment status directly.
-- **`src/kernel/outbox.ts`** — `outboxEventModel` (queried/spied for assertions), `settleOutboxNudges` (flushes pending writes), `relayOutbox` (drives delivery).
-- **`src/kernel/events.ts`** — `onDomainEvent` / `resetDomainEvents` manage the in-process subscriber registry.
-- **`scenarios/support/doubles/payments/fake.ts`** — `fakePaymentProvider` stands in for Stripe; spied on to interleave a cancel call inside `confirm`.
-- **`src/modules/inventory/services/index.ts`** — `inventoryService.commitForOrder` is the downstream step whose failure triggers the rollback scenario.
-- **`src/modules/orders/index.ts`** — `orderService.create` (setup) and `orderService.cancelOnRequestById` (cancel-during-confirm race).
-- **`src/modules/payments/module.ts`** — registered in `beforeEach` via `registerCheckoutModules` so the module's event wiring is active.
-- **`src/modules/users/tests/factories.ts` / `src/modules/products/tests/factories.ts`** — `createUser` / `createProduct` seed real documents.
-- **`tests/support/callers.ts`** — `asCustomer`, `testCallerContext`, `callerContextAs` provide authorization context for service calls.
+- **`@kernel/outbox`**: provides `outboxEventModel` (queried and spied on), `settleOutboxNudges` and `relayOutbox` (flush and deliver rows).
+- **`@kernel/events`**: `onDomainEvent` and `resetDomainEvents` for subscribing and cleanup.
+- **`payments/events`**: `PAYMENT_SUCCEEDED` and `PAYMENT_FAILED` names.
+- **`payments/services`** (`paymentService`) and **`payments/services/announce`** (`recordDecline`): the code under test.
+- **`payments/repository`**: `findByOrderId` and `updateStatusIfIn` are used to inspect and force payment state.
+- **`payments/module`** is registered through `registerCheckoutModules` from `@tests/checkout-modules`.
+- **`orders`** (`orderService`, including `cancelOnRequestById`) and **`inventory`** (`inventoryService`, spied on) supply the real order and stock flow.
+- **`fakePaymentProvider`** (`scenarios/support/doubles/payments/fake.ts`): its `confirm` is spied on to cancel the order mid-confirmation.
+- **Test helpers**: `createUser`, `createProduct`, and the caller helpers `asCustomer`, `testCallerContext` and `callerContextAs` from `tests/support/callers.ts`.
 
 ## Notes
-
-- **Real Mongo, not in-memory.** The module docblock and `setupTestDb()` make this explicit; tests exercise actual transactions, so outbox atomicity is genuinely verified.
-- **Two-step outbox assertion.** After a service call you must call `settleOutboxNudges()` before querying `outboxEventModel`; use `relayOutbox()` only when you also need the relay (delivery) step exercised.
-- **Idempotency is a first-class concern.** The re-confirm test calls `confirmPayment` a second time with the *same* payment `_id` and asserts the outbox count stays at 1.
-- **Decline race is a lost-update guard.** `recordDecline` uses `updateStatusIfIn` (CAS-style); if the row is already `succeeded`, it returns `null` and writes no outbox row. The test pre-sets status to `succeeded` to exercise this.
-- **`jest.restoreAllMocks()` in `afterEach`** is the only spy cleanup; individual tests use `mockRejectedValueOnce` / `mockImplementationOnce` so they self-exhaust, but the restore is a safety net.
+- Failure paths are simulated with `jest.spyOn(...).mockRejectedValueOnce` or `mockImplementationOnce`, so they affect only the next call.
+- Tests call `settleOutboxNudges()` and, where delivery matters, `relayOutbox()` before asserting.

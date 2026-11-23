@@ -1,40 +1,33 @@
 ---
 source: src/modules/invoicing/tests/unit/credit-shares.test.ts
-sha256: f132c4c9e24134b6935e167fe7f4a4a9fca82f8efa0a445e232e367b6a7740b4
-generated_at: 2026-11-08T06:18:41.763556+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 71ef0286d59f6b903e4b331939baf0bb3e3aa98b3aa0166e05a820c84f2c450d
+context_sha256: cf1c5046886b928ad2eefb6d18d97adb4245daac533e1330c27687e9dbff952b
+generated_at: 2026-11-22T05:39:56.579768+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/tests/unit/credit-shares.test.ts
 
 ## Purpose
-
-Unit tests for the pure-arithmetic `creditShares` function: spreading a refunded amount across an invoice's VAT rates in proportion to what each rate collected. By testing the function in isolation (no database, no real tax service), these tests pin the distribution math; companion integration tests cover the function through the full refund flow.
+Unit tests for `creditShares`, the domain function that spreads a refunded amount across an invoice's VAT rates and returns credit-note lines. It uses pure in-memory data, with no database and no tax function, so it pins the arithmetic only. The module doc says other test files cover that the figures add up and the real refund flow.
 
 ## Key elements
-
-- **`describe('creditShares')`** — Core distribution tests:
-  - Proportional split by gross weight (e.g. 23.20 → 11.00 @ 10% + 12.20 @ 22%).
-  - Output lines never carry a tax rate the invoice didn't charge.
-  - A rate whose share rounds to 0 is omitted entirely.
-  - The leftover "odd cent" is allocated to the heaviest (highest) tax rate.
-
-- **`describe('creditShares — a refund for specific goods')`** — Targeted-refund tests using a mixed invoice (book @ 10%, lamp @ 22%, split delivery):
-  - A returned product is credited only at its own rate.
-  - Full-invoice refund (goods + delivery) splits back across all rates at the original weights.
-  - A deduction smaller than the returned goods (e.g. 55.00 of a 61.00 lamp) stays at that product's rate.
-  - If the returned `productId` isn't on the invoice, the function falls back to spreading across every rate.
-
-- **Fixture objects** — Inline `CreditableInvoice` literals (`invoice`, `mixed`) with `currency`, `lines`, `shippingByRate`, and `taxSummary` fields; no shared factory.
+- **`invoice` fixture**: a `CreditableInvoice` with 110.00 gross at 10% and 122.00 gross at 22% (232.00 total), and no `lines` or `shippingByRate`.
+- **`describe('creditShares')`**: whole-invoice refunds, with no goods specified.
+  - Proportional split by each rate's collected gross: 23.20 gives `11.00` at 10% and `12.20` at 22%.
+  - Every line's `taxRate` is one the invoice charged.
+  - A rate whose share rounds to zero is omitted: 0.01 gives a single line.
+  - The odd cent goes to the heaviest rate: 10.00 over weights 18.25 / 44.05 gives `2.92` / `7.08`.
+- **`describe('creditShares — a refund for specific goods')`**: uses a `mixed` invoice with a book (BOOK, 10%, 2 × 11.00), a lamp (LAMP, 22%, 1 × 61.00) and delivery split 2.20 / 10.00 across the two rates. The fourth argument is `{ lines: [{ productId, quantity }], shipping }`.
+  - Returning one book gives a single line at 10%.
+  - Refunding all goods plus 12.20 shipping weights each rate by goods plus shipping (24.20 and 71.00).
+  - A refund smaller than its goods (a deduction) is spread only over the returned goods' rates.
+  - If no returned `productId` is on the invoice, it falls back to all rates.
 
 ## Relationships
-
-- **`src/modules/invoicing/domain/credit-shares.ts`** — Source of the `creditShares` function and the `CreditableInvoice` type under test.
-- **`src/modules/invoicing/domain/index.ts`** — Barrel re-export; the test imports via `../../domain`, resolving through this index.
+- Imports `creditShares` and the `CreditableInvoice` type from `../../domain`, the domain barrel `src/modules/invoicing/domain/index.ts`. The implementation is in `src/modules/invoicing/domain/credit-shares.ts`.
 
 ## Notes
-
-- All monetary values are **strings** (e.g. `'12.20'`), not numbers — tests assert string equality.
-- The odd-cent convention is explicit: always goes to the **highest** tax rate, not the first or largest-weight one.
-- The header comment cross-references `credit-breakdown.test.ts` (total reconciliation) and `issue-credit-note.test.ts` (integration through the real refund path); neither is imported here.
-- Product IDs in the "specific goods" suite are arbitrary hex strings; one test intentionally uses an ID not present on the invoice to exercise the fallback path.
+- Amounts are decimal strings (`'11.00'`), and output lines always have `title`, `quantity: 1`, `unitPrice` and `taxRate`.
+- The test titled "never invents a rate" uses `0.07`, an amount that does not divide evenly, to check rounding.
+- Rate weights for goods refunds are built from line gross (unit price × quantity) plus the shipping allocated to that rate.

@@ -1,31 +1,27 @@
 ---
 source: src/modules/inventory/controllers/post-reservations-sweep.ts
-sha256: 492deb41f709a0f61c8fad8ebd00e28f0a0bf13156065982970c30282fe43e21
-generated_at: 2026-11-08T05:58:16.772866+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 492deb41f709a0f61c8fad8ebd00e28f0a0bf13156065982970c30282fe43e21
+context_sha256: c34342a13404c0e70142bbd3095ae9bbe84fe9d2bda83042af9e611d38d1f032
+generated_at: 2026-11-22T05:17:57.564853+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/controllers/post-reservations-sweep.ts
 
 ## Purpose
-
-HTTP handler for `POST /inventory/reservations/sweep`. It triggers a one-shot reservation-expiry sweep on demand, intended for an operator or a platform scheduler that prefers calling an endpoint over relying on the cron-based job (`npm run job sweep:reservations`). The sweep itself is delegated to `inventoryService.runReservationSweep`; this file only wires the request, response, and error handling.
+Express controller for `POST /inventory/reservations/sweep`, an on-demand way to trigger the reservation expiry sweep. The recurring schedule is `npm run job sweep:reservations` (via `docker/crontab`), which never goes through this route. The endpoint exists for operators or platform schedulers that prefer HTTP.
 
 ## Key elements
-
-- **`postReservationsSweep`** (exported) – Express handler that calls `inventoryService.runReservationSweep(callerContextOf(request))`, then returns `{ expired: <number> }` as a `ReservationSweepResponse` with status 200. Errors are funneled through `catchAs`.
+- `postReservationsSweep(request, response)`: the only export. It calls `inventoryService.runReservationSweep(callerContextOf(request))`. On success it responds with status 200 and `{ expired }`, typed as `ReservationSweepResponse`. Errors go to `catchAs(response, 'postReservationsSweep')`.
 
 ## Relationships
-
-- **`src/modules/inventory/services/index.ts`** – Source of `inventoryService`, whose `runReservationSweep` method performs the actual expiry work.
-- **`src/infrastructure/http/request.ts`** – Provides `callerContextOf` to derive the operator/scheduler identity passed into the sweep for audit purposes.
-- **`src/infrastructure/http/response.ts`** – Provides `successResponse` to shape the JSON envelope.
-- **`src/infrastructure/http/controller.ts`** – Provides `catchAs` for uniform error-to-HTTP mapping.
-- **`src/types/index.ts`** – Defines `ReservationSweepResponse` (carries the `expired` count).
-- **`src/modules/inventory/routes.ts`** – Registers this handler at the `POST /inventory/reservations/sweep` path.
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `successResponse` sends the 200 payload.
+- `src/infrastructure/http/controller.ts`: `catchAs` handles failures from the promise chain.
+- `src/modules/inventory/services/index.ts`: supplies `inventoryService`, which does the sweep.
+- `src/types/index.ts`: supplies the `ReservationSweepResponse` type.
+- `src/modules/inventory/routes.ts`: the route file for the inventory module. It presumably wires this handler to the path, but the wiring is not visible in this file.
 
 ## Notes
-
-- This route is **not** the recurring schedule. The production cron (`docker/crontab` → `npm run job sweep:reservations`) never hits this endpoint; it exists as an alternative entry point for on-demand or external-scheduler use.
-- Auditing is intentionally **once per run**, not per expired order. Individual order cancellations carry their own audit records, so the sweep-level audit line is the single source of "why did this batch disappear?" for support queries.
-- The handler is a thin wrapper: no validation, no pagination, no filters. The sweep logic and its parameters live entirely in the service layer.
+- Per the module doc, the sweep is audited once per run, not per order. The orders' own cancel path covers the per-order records. This gives a record for customers asking why an order vanished.
+- The controller itself writes no audit. The doc comment describes the auditing, but the code here only passes the caller context to the service.

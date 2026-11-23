@@ -1,32 +1,35 @@
 ---
 source: src/modules/audit-logs/tests/unit/schema-contract.test.ts
-sha256: 8ff32c885676a4c13d896c9119072316a7ef8155addbba4a056a846b074a992e
-generated_at: 2026-11-14T19:26:32.194804+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6ac753cb85c09eca73e90a5418aef24cde54e62a76984fb844dabaa323e05aae
+context_sha256: 7058b803c7a0d1f2cc4cacaa0d8fe8bc0253d34843057268d03d27b70487667f
+generated_at: 2026-11-22T04:28:57.802151+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/audit-logs/tests/unit/schema-contract.test.ts
 
 ## Purpose
-
-Contract tests for `auditLogSchema` that lock down the compliance-critical guarantees: which fields are mandatory, which values are closed enums, the two schema options that make audit writes fail-fast rather than buffer, and the exact index set including the sole TTL-based deletion path in the codebase. The file exists so that a casual refactor of the model cannot silently drop a required field, open an enum, enable buffering, or misconfigure the retention index.
+Unit test that pins the contract of `auditLogSchema` (the audit-log Mongoose schema). It treats the schema as a compliance artifact: required fields, closed enums, timestamp/buffering options, and indexes including the TTL retention index. It checks the schema definition only, with no database involved.
 
 ## Key elements
-
-- **`RETENTION_SECONDS`** — computed at module load from `currentEnvironment().NODE_AUDIT_RETENTION_DAYS` (fallback 180) so the TTL assertion always tracks the live config.
-- **`describe('… what an entry must carry')`** — asserts the seven required paths, the closed enums on `actorRole`, `outcome`, `level`; verifies `anonymous` is a valid role; confirms `actorRoleName` is present, optional, and un-enumerated.
-- **`describe('… the credential behind an entry')`** — asserts `actorCredentialId` is a schema path but not required.
-- **`describe('… options')`** — asserts `timestamps: false` + required `timestamp`, and `bufferCommands: false`.
-- **`describe('… indexes and retention')`** — asserts the exact five-index set, that only `timestamp_1` carries `expireAfterSeconds`, and that it is single-field ascending (the shape Mongo requires for TTL).
+- `RETENTION_SECONDS` — computed from `currentEnvironment().NODE_AUDIT_RETENTION_DAYS` (default 180 days) × 86400. The TTL assertion compares against this value, not a literal.
+- **What an entry must carry** — `requiredPaths` must be exactly `action`, `actorRole`, `actorScope`, `actorUserId`, `level`, `outcome`, `timestamp`.
+  - `actorRole` is restricted to `admin | user | anonymous | system`, `outcome` to `success | failure`, and `level` to `info | warn`.
+  - `anonymous` must be present so unauthenticated events (e.g. a failed login) remain attributable.
+  - `actorRoleName` exists, is not required, and has no enum, so renaming a preset role can't fail a write.
+- **Credential** — `actorCredentialId` exists and is optional (the API-key id).
+- **Options** — `timestamps: false` with a required `timestamp` (the entry is stamped when the event happens, not when it is written), and `bufferCommands: false`, so an unreachable database makes the write reject instead of buffering. The caller's fallback of logging the entry depends on that rejection.
+- **Indexes and retention**
+  - `indexSpecs` must equal four compound `<field>_1_timestamp_-1` indexes (`action`, `actorUserId`, `subjectId`, `targetId`) plus `timestamp_1`.
+  - `indexOptionSpecs` must show `expireAfterSeconds=${RETENTION_SECONDS}` on `timestamp_1` only, and `(none)` on the others.
+  - `timestamp_1` must be a single-field ascending index, the direction TTL requires.
 
 ## Relationships
-
-- **`src/modules/audit-logs/model.ts`** — source of `auditLogSchema`, the single object under test.
-- **`tests/support/schema.ts`** — provides the assertion helpers (`requiredPaths`, `enumOf`, `pathNames`, `optionsOf`, `indexSpecs`, `indexOptionSpecs`) that inspect the Mongoose schema introspection API.
-- **`src/infrastructure/config/store.ts`** — provides `currentEnvironment()` so the retention window in the test stays in lockstep with the deployed configuration.
+- `src/modules/audit-logs/model.ts` — provides `auditLogSchema`, the sole subject under test.
+- `tests/support/schema.ts` — imported as `@tests/schema`. It supplies the introspection helpers `enumOf`, `indexOptionSpecs`, `indexSpecs`, `optionsOf`, `pathNames` and `requiredPaths`.
+- `src/infrastructure/config/store.ts` — `currentEnvironment()` supplies `NODE_AUDIT_RETENTION_DAYS` for the expected TTL.
 
 ## Notes
-
-- The TTL index **must** be a single-field ascending index; the same `timestamp` field appears descending in compound indexes, and confusing the two yields an index that silently never expires documents. The dedicated test for this exists to catch exactly that.
-- `RETENTION_SECONDS` is derived from the environment, not a literal, so updating `NODE_AUDIT_RETENTION_DAYS` in config moves both the runtime policy and this test together.
-- `bufferCommands: false` is load-bearing: the caller's fallback (log the entry to stdout and increment `auditSinkFailuresTotal`) only fires if the write **rejects**; a buffered-then-later-resolved write would suppress that signal and lose the entry silently.
+- The test's `?? 180` default is meant to mirror the model's own default. If the two diverge, the TTL assertion would fail.
+- Index and required-path assertions use exact array equality, so adding, removing or reordering any index or required field requires updating this test.
+- The index spec strings use the format `name: field+1, timestamp-1`, as produced by the helpers.

@@ -1,43 +1,40 @@
 ---
 source: src/modules/payments/tests/integration/webhook-rate-limit.test.ts
-sha256: c42e763b335b82a4e2af711e5f7806fece8d543e35bf07a083bd97dfa1df8a1c
-generated_at: 2026-11-14T21:21:23.716292+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c42e763b335b82a4e2af711e5f7806fece8d543e35bf07a083bd97dfa1df8a1c
+context_sha256: 8a5ba77203660311babb69252651cfde0b8c99d968742f3f09dcc5474b4f815c
+generated_at: 2026-11-22T07:04:27.078319+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/webhook-rate-limit.test.ts
 
 ## Purpose
-
-Integration test that exercises the payment webhook's rate-limit budget over a real HTTP stack (supertest + Express). It verifies three properties of the real limiter and real controller together: only *refused* (forged-signature) deliveries spend the budget, the budget is scoped per /24 address block, and a rate-limit refusal writes no audit row. No database is involved because a delivery that names no intent applies nothing.
+Integration test of the payment webhook's rate-limit budget over real HTTP. It wires the real limiter (`webhookLimiter`) and the real controller (`postPaymentWebhook`) into a small Express app and checks that only refused (forged) deliveries spend the budget, per address block (/24), and that a refusal writes no audit row. A delivery naming no intent applies nothing, so no database is needed.
 
 ## Key elements
-
-- **`CAP`** – Constant (`3`) set low enough to be exhausted in a handful of requests.
-- **`loadWebhook()`** – Builds a minimal Express app wiring the real `webhookLimiter` (reloaded via `withReloadedRateLimits` with a custom cap) in front of the real `postPaymentWebhook` controller. Registers `fakePaymentProvider`, attaches the locale middleware, captures `rawBody` for signature verification, and returns `{ app, auditLogger }`.
-- **`deliver(loaded, address, signed)`** – Sends a single `POST /payments/webhook/fake` request from a given `X-Forwarded-For` address, either with a valid signature or a forged one.
-- **`inOneBlock(count)`** – Generates `count` distinct IPs inside `203.0.113.0/24`.
-- **`statusesOf(loaded, addresses, signed)`** – Sends deliveries sequentially (order-sensitive) and returns the array of HTTP status codes.
-- **`describe('the payment webhook budget')`** – Four test cases:
-  1. Forgeries rotating addresses in one /24 hit 429 after the cap.
-  2. Those refusals produce no `auditLogger.log` call.
-  3. Signed deliveries from the same IP pass through indefinitely past the cap.
-  4. A second /24 block retains its own independent budget.
+- `CAP` — the limiter cap used in tests (3), low enough to cross quickly. Passed as `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX`.
+- `loadWebhook()` — loads `@modules/payments/rate-limits` fresh through `withReloadedRateLimits` with the cap set, then imports `auditLogger` from the fresh registry and registers `fakePaymentProvider`. It builds the app: `trust proxy` = 1, a JSON body parser with a `verify` hook storing `rawBody`, `attachLocale`, and `POST /payments/webhook/:provider` with `webhookLimiter` then `postPaymentWebhook`. Returns `{ app, auditLogger }`.
+- `deliver(loaded, address, signed)` — sends one supertest POST to `/payments/webhook/fake` with `X-Forwarded-For: address`. The body is `{"id":"evt_limit"}`. The signature header is a valid `signWebhookPayload(body)` or the forged `t=1,v1=forged`.
+- `inOneBlock(count)` — generates `count` distinct addresses `203.0.113.N` inside one /24.
+- `statusesOf(loaded, addresses, signed)` — sends deliveries sequentially and returns their status codes. Sequential because the budget is order-sensitive.
+- Test cases:
+  - Forgeries rotating addresses in one /24 give `[400, 400, 400, 429, 429]`.
+  - The 429 refusal triggers no `auditLogger.log` call (spied).
+  - Signed deliveries from one address stay `204` past the cap.
+  - A different block (`198.51.100.9`) is unaffected and still gets `400`.
 
 ## Relationships
-
-- **`tests/support/rate-limit-harness.ts`** – `withReloadedRateLimits` re-imports `rate-limits.ts` with a custom `NODE_PAYMENT_WEBHOOK_RATE_LIMIT_MAX` env value so the limiter reflects the low cap.
-- **`src/modules/payments/rate-limits.ts`** – Source of `webhookLimiter`, the real limiter under test.
-- **`src/modules/payments/controllers/post-payment-webhook.ts`** – The real controller that handles the webhook and returns the 400/429/204 responses.
-- **`src/modules/payments/providers/index.ts`** – Re-exports `signWebhookPayload` and `WEBHOOK_SIGNATURE_HEADER` used to craft valid vs. forged signatures.
-- **`src/modules/payments/providers/registry.ts`** – `registerPaymentProvider` installs the fake so the controller can resolve it.
-- **`scenarios/support/doubles/payments/fake.ts`** – Provides `fakePaymentProvider`, the no-op provider that makes the test database-free.
-- **`src/infrastructure/http/middlewares/locale.ts`** – `attachLocale` middleware ensures the controller's translated refusal messages work (i18next dictionaries are booted in the original module registry).
-- **`src/infrastructure/adapters/logger.ts`** – `auditLogger` is imported from the *reloaded* registry (the same instance the limiter's refusal path writes to) and spied on to assert no audit row is produced.
+- `tests/support/rate-limit-harness.ts` — supplies `withReloadedRateLimits` (imported as `@tests/rate-limit-harness`), which reloads the limits module with env overrides.
+- `src/modules/payments/rate-limits.ts` — provides `webhookLimiter`, the unit under test.
+- `src/modules/payments/controllers/post-payment-webhook.ts` — the real controller behind the limiter.
+- `src/modules/payments/providers/index.ts` — provides `signWebhookPayload` and `WEBHOOK_SIGNATURE_HEADER`.
+- `src/modules/payments/providers/registry.ts` — `registerPaymentProvider` registers the fake provider.
+- `scenarios/support/doubles/payments/fake.ts` — supplies `fakePaymentProvider`, served at `/payments/webhook/fake`.
+- `src/infrastructure/http/middlewares/locale.ts` — `attachLocale` supplies the locale needed for the controller's translated refusal copy.
+- `src/infrastructure/adapters/logger.ts` — `auditLogger` is spied on to assert no audit writes.
 
 ## Notes
-
-- **Module-registry split is intentional.** The controller and i18n live on the *original* registry (where i18next is initialised); the audit logger is pulled from the *reloaded* registry because that is the copy the limiter's refusal code references. Mixing them up would either break `t()` or spy on the wrong logger instance.
-- **`trust proxy` = 1** simulates a single reverse-proxy hop so that `X-Forwarded-For` populates `request.ip`, matching production. Without it the limiter would key on the supertest socket IP.
-- **Sequential delivery matters.** `statusesOf` is deliberately serial; the rate-limit budget is order-sensitive and parallel requests would make the assertion flaky.
-- **`afterAll(jest.resetModules)`** is required so that subsequent test files in the same worker start with a clean module cache after `withReloadedRateLimits` has swapped the registry.
+- `rateLimit()` reads its config once, so the limiter must be imported after the cap is set. Hence the fresh load per test via the harness.
+- The controller and i18n deliberately stay on the original module registry because i18next is booted there. A reset would leave `t()` with no dictionaries. `auditLogger` is instead taken from the fresh registry, since that is the one the limiter writes to.
+- `afterEach` restores mocks and `afterAll` calls `jest.resetModules()`.
+- `webhook-signature.ts` is not imported directly. Signing goes through the `providers` index.

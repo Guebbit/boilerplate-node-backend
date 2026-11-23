@@ -1,33 +1,38 @@
 ---
 source: src/infrastructure/surfaces/create-search-controller.ts
-sha256: 4a1f9b65e262d07c83b28387bd3baa15e44de0ed6ed2cd5822084e6193ce605b
-generated_at: 2026-11-14T18:19:41.853913+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f7500fd42e48e1570a223c5b60390606f80eab697181d72b5a6b78babfea1d08
+context_sha256: 3ddc820ac468ce8f8667092e9e1b5c8e72ba4768e0ea1931d7f39855b8ab78d4
+generated_at: 2026-11-22T03:11:00.915760+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/surfaces/create-search-controller.ts
 
 ## Purpose
-
-Factory that produces a standardized Express search controller for any entity module. It fixes the shared pipeline — `readInput` (surface `'search'`) → optional module overlay → `parseBody` against a Zod schema → module-specific `runSearch` → `successResponse` / `catchAs` — so each entity only supplies its schema, any extra input fields, and the search logic itself.
+Provides the shared controller shape for list-and-search modules, each of which exposes `GET /x` and `POST /x/search` through a single controller. The flow is: read input from the `search` surface, overlay module-specific fields, validate against the module's schema, run the search, send a success response, and catch errors. Only the extra query fields and the search itself differ per module.
 
 ## Key elements
-
-- **`SearchControllerSpec<TSchema, TResult>`** — interface a module fills in: `entity` (plural name, used to derive the operation name e.g. `getProducts`), `schema` (Zod type), optional `extendInput` (overlay for coercions or request-derived values a plain field list can't express), and `runSearch` (the actual search, receiving validated input + the Express `Request`).
-- **`mergedSearchInput(request, extendInput?)`** — builds the raw input object from the request using `readInput` with `surface: 'search'`, `stringArrays: ['id']`, `csvLists: ['sort']`, then applies the module's `extendInput` overlay if present. Exported separately so the response cache can key on the exact value the controller will validate.
-- **`createSearchController(spec)`** — returns a named Express handler. Wires `mergedSearchInput` → `parseBody` (422 on failure) → `runSearch` → `successResponse`, with `catchAs` for the 500 path. Operation name is derived as `get<Entity>`.
+- **`SearchControllerSpec<TSchema, TResult>`** is the interface describing what varies per entity:
+  - `entity`: the plural entity name (e.g. `'products'`). It is used to name the operation (`getProducts`).
+  - `schema`: the Zod schema the merged input is validated against.
+  - `extendInput?`: an optional `(input, request) => overlay` function. It returns only the fields to overlay (coercions, request-derived values such as an admin check, or a multi-value query param reduced to one), not the whole object.
+  - `runSearch`: `(parsed, request) => Promise<TResult>`, the module's own search.
+- **`mergedSearchInput(request, extendInput?)`** builds the pre-validation input. It calls `readInput` with `surface: 'search'`, `stringArrays: ['id']` and `csvLists: ['sort']`, then spreads the `extendInput` overlay on top. It is exported so the response cache can key on the same value the controller validates.
+- **`createSearchController(spec)`** returns an Express handler wrapped by `namedHandler` under the operation name from `operationName('get', entity)`. On each request it:
+  1. Computes the merged input.
+  2. Calls `parseBody(schema, merged, response)`. On failure this responds 422 and returns `undefined`, and the handler returns early.
+  3. Calls `runSearch`, then `successResponse`.
+  4. On a rejection, `catchAs(response, operation)` logs the failure under the operation name and responds 500.
 
 ## Relationships
-
-- **`@infrastructure/http/controller`** — consumes `namedHandler`, `operationName`, `parseBody`, and `catchAs` for handler naming, schema validation, and structured error handling.
-- **`@infrastructure/http/request`** — calls `readInput` to merge params/query/body per the `'search'` surface rules.
-- **`@infrastructure/http/response`** — calls `successResponse` to emit the 200 payload.
-- **Module controllers** (`get-products`, `get-orders`, `get-payments`, `get-refunds`, `get-tasks`, `get-users`, `get-examples`, `get-orders-export`) — each supplies a `SearchControllerSpec` to `createSearchController`, providing their own schema, any `extendInput` overlay, and `runSearch`.
-- **`tests/unit/infrastructure/surfaces/create-search-controller.test.ts`** — unit tests for the factory and `mergedSearchInput`.
+- `@infrastructure/http/controller` supplies `operationName`, `namedHandler`, `parseBody` and `catchAs`.
+- `@infrastructure/http/request` supplies `readInput`.
+- `@infrastructure/http/response` supplies `successResponse`.
+- Module controllers are the consumers: `get-examples`, `get-orders`, `get-orders-export`, `get-payments`, `get-refunds`, `get-products`, `get-tasks` and `get-users`. Each supplies its own entity, schema, optional `extendInput` and `runSearch`.
+- `tests/unit/infrastructure/surfaces/create-search-controller.test.ts` covers this file.
 
 ## Notes
-
-- `id` is parsed via `stringArrays` (preserves `?id=a&id=b` as an array) rather than `ids` (which collapses a repeated key to its first entry — correct for single-row `update`/`delete` but wrong for a batch filter).
-- `sort` uses `csvLists`, which splits only the query-string CSV. A CSV sent in the request body is left intact and rejected by the schema's enum, preventing silent acceptance.
-- `extendInput` receives the already-merged `readInput` result and the raw `Request`, and must return only the overlay object (it is spread on top, not replacing). Omit it when no coercion or request-derived value is needed.
-- The operation name (`get<Entity>`) appears in stack traces, request log lines, and generated `docs/modules/` surface tables — keep the `entity` string consistent with the URL path.
+- `id` goes through `stringArrays`, not `ids`. `ids` collapses a repeated key to its first entry, which would turn `?id=a&id=b` into `?id=a` for a batch filter.
+- `sort` is split from CSV only for the query. A CSV in a body is not split, so the schema's enum rejects it.
+- A GET request's body is never parsed, so `request.body` is `undefined` there. A body exists only on `POST …/search`.
+- The operation name also appears in stack traces, the request log line and the generated `docs/modules/` surface tables, so it should stay consistent with the handler.

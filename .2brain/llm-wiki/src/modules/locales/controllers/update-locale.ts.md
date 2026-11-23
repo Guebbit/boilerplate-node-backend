@@ -1,35 +1,35 @@
 ---
 source: src/modules/locales/controllers/update-locale.ts
-sha256: b9580ec8f1ed1fad7b6b94e885c5e09012cc4faed2d74af6bb5811b321c34e69
-generated_at: 2026-11-14T20:19:20.882444+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 230e5892c69c40df93e51b37104eba4977a4e27c9cd7ed9c422b3f234bfb4d47
+context_sha256: 534189175f2e6dc39eab89b03c5f52f84c993f8e31af1ef23445e596f38b2a3f
+generated_at: 2026-11-22T05:44:27.080312+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/controllers/update-locale.ts
 
 ## Purpose
-
-Handler pair for `PUT /locales/:locale` (full replace) and `PATCH /locales/:locale` (partial merge), built on the shared `createUpdateController` factory. The locale tag is always read from the path parameter, never from the request body, because changing a tag would effectively rename an entire dictionary referenced by every entry.
+Defines the HTTP controllers for `PUT /locales/:locale` (full replace) and `PATCH /locales/:locale` (partial merge). Both are produced by the shared `createUpdateController` factory. The locale tag identifies the dictionary that every entry references, so it is read only from the URL path and never from the request body.
 
 ## Key elements
-
-- **`replaceLocale`** — exported `PUT` handler (full-replace semantics).
-- **`updateLocale`** — exported `PATCH` handler (merge semantics).
-- **`createUpdateController` invocation** — single factory call that produces both handlers. Notable configuration:
-  - `replaceSchema` / `patchSchema` extend the base `ReplaceLocaleBody` / `UpdateLocaleBody` with `name` and `nativeName` validated against `localeService.localeDisplayName`.
-  - `idFrom` extracts the tag from `request.params.locale`, coerces to `String`, and normalises via `localeService.normalizeTag` (e.g. `pt-br` → `pt-BR`).
-  - `update` delegates to `localeService.updateLanguage(tag, changes, callerContextOf(request))`.
-  - `present` delegates to `localeService.describeStoredLanguage(row, localeService.standingOn(request.caller))`.
+- **`replaceLocale`**: handler for `PUT`, destructured from the factory's `replace`.
+- **`updateLocale`**: handler for `PATCH`, destructured from the factory's `update`.
+- **Factory config**:
+  - `versioned: true` and `entity: 'locale'`.
+  - `replaceSchema`: `ReplaceLocaleBody` (from `@api/schemas.zod`) with `name` and `nativeName` overridden by `localeService.localeDisplayName`.
+  - `patchSchema`: `UpdateLocaleBody` (from `@api/schemas.zod`) with the same two fields overridden by `localeDisplayName.optional()`.
+  - `idFrom`: reads `request.params.locale` and normalizes it with `localeService.normalizeTag`.
+  - `update`: calls `localeService.updateLanguage(tag, changes, callerContextOf(request))`.
+  - `present`: formats the stored row with `localeService.describeStoredLanguage(row, localeService.standingOn(request.caller))`.
 
 ## Relationships
-
-- **`@infrastructure/surfaces/create-update-controller`** — the factory that assembles the two HTTP handlers from the configuration object defined here.
-- **`@infrastructure/http/request`** — supplies `callerContextOf`, used to pass the authenticated caller's context into the service call.
-- **`../services` (localeService)** — the domain service that performs `normalizeTag`, `updateLanguage`, and `describeStoredLanguage`; also provides the `localeDisplayName` schema fragment used for input validation.
-- **`routes.ts`** (same module) — imports `replaceLocale` / `updateLocale` and wires them to the `PUT` / `PATCH /locales/:locale` routes.
+- **`src/infrastructure/surfaces/create-update-controller.ts`**: supplies the factory that builds both handlers. This file only supplies the config.
+- **`src/infrastructure/http/request.ts`**: provides `callerContextOf`, which turns the request into the caller context passed to `updateLanguage`.
+- **`src/modules/locales/services/index.ts`**: provides `localeService`. This file uses its display-name validators, `normalizeTag`, `updateLanguage`, `describeStoredLanguage` and `standingOn`.
+- **`src/modules/locales/routes.ts`**: the route definitions are the consumer of `replaceLocale` and `updateLocale`. This file does not reference the routes itself.
 
 ## Notes
-
-- **No ObjectId format check on the tag.** The tag is a plain string field, not a Mongo ObjectId. A malformed tag simply misses every document in `findByTag` and surfaces as a standard 404 — no explicit validation is needed.
-- **Tag is normalised before use.** This ensures the `If-Match` (ETag) key matches the key the repository's `save` produces, so optimistic-concurrency checks work consistently regardless of the case the client sent.
-- **`versioned: true`** enables the `If-Match` / optimistic-locking path built into the factory.
+- The path param is `:locale`, not the `:id` the factory would normally validate, so `idFrom` is overridden.
+- There is no tag format check on purpose. `findByTag` matches a plain string field, so a malformed tag matches no language and ends in the normal 404.
+- Normalization keeps `If-Match` versioning keyed the way the repository's `save` keys it (for example `pt-br` becomes `pt-BR`).
+- `updateLanguage` audits the change itself, so the controller does no auditing.

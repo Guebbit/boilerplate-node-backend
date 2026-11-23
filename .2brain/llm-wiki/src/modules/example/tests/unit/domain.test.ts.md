@@ -1,34 +1,38 @@
 ---
 source: src/modules/example/tests/unit/domain.test.ts
-sha256: 86fcb64993591cc9c8cb15d0758771bf403a24d6ac7be3dc6d6b58985cef1e39
-generated_at: 2026-11-08T05:55:52.351745+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 86fcb64993591cc9c8cb15d0758771bf403a24d6ac7be3dc6d6b58985cef1e39
+context_sha256: fcc8a3b81c5029761157ae4c8886a26c38fd1e48985d5ef937422c2c5669b324
+generated_at: 2026-11-22T05:14:46.131000+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/tests/unit/domain.test.ts
 
 ## Purpose
-
-Unit tests for the example domain's lifecycle rules and validation helpers. It locks down the state machine (which events are legal from which status), the `publishedAt` stamping invariant, the body-length ceiling, and the permission-aware action list — all without a database.
+Database-free unit tests for the example module's lifecycle rules. They cover which events each status allows, when `publishedAt` is stamped, the body-length ceiling, and which actions a caller sees for a given status.
 
 ## Key elements
+- **`initialExampleStatus`**: must equal `ExampleStatus.draft`, so nothing is public until its owner publishes it.
+- **`canApply(event, status)`**: the allowed transitions are:
+  - `publish` from draft
+  - `archive` from draft or published
+  - `unarchive` from archived
 
-- **`initialExampleStatus` test** — asserts the default is `ExampleStatus.draft`.
-- **`canApply` tests** — table-driven checks of allowed and refused `(event, status)` pairs across the three statuses.
-- **`statusAfter` tests** — verifies the target status each event produces (`publish`→published, `archive`→archived, `unarchive`→draft).
-- **`isPublished` test** — confirms only `ExampleStatus.published` satisfies the predicate.
-- **`shouldStampPublishedAt` tests** — verifies the timestamp is set on first publish, never overwritten, and never set for draft/archived transitions.
-- **`fitsBodyLength` tests** — boundary checks at and one-over the ceiling.
-- **`exampleActionsFor` tests** — table-driven verification that the returned action map reflects both the current status and the caller's `update`/`delete` permissions.
+  Every other combination is refused. A published example is withdrawn by archiving it, not by publishing again.
+- **`statusAfter(event)`**: `publish` gives published, `archive` gives archived, and `unarchive` gives draft.
+- **`isPublished(status)`**: true only for `published`. The test checks this by filtering every `ExampleStatus` value.
+- **`shouldStampPublishedAt(status, publishedAt)`**: true only when the status is published and no stamp exists yet. It is false if a stamp is already set, and false for draft or archived.
+- **`fitsBodyLength(body, max)`**: accepts a body exactly at the ceiling and refuses one character over.
+- **`exampleActionsFor(status, { update, delete })`**: returns a flag object with `publish`, `archive`, `unarchive`, `update` and `delete`.
+  - For a caller who may edit, the event flags follow `canApply` for that status.
+  - `update` and `delete` are passed through from the caller's permissions.
+  - For a caller with no edit rights, every flag is false.
 
 ## Relationships
-
-- **`src/modules/example/domain/index.ts`** — the sole source under test; all functions (`canApply`, `exampleActionsFor`, `fitsBodyLength`, `initialExampleStatus`, `isPublished`, `shouldStampPublishedAt`, `statusAfter`) are imported from this barrel.
-- **`src/types/index.ts`** — provides `ExampleStatus`, the enum used in every assertion and test-case tuple.
-- **`src/modules/example/domain/lifecycle.ts`** — the implementation file behind the barrel; tests exercise its exported logic indirectly through the `domain/index` re-exports.
+- Imports `canApply`, `exampleActionsFor`, `fitsBodyLength`, `initialExampleStatus`, `isPublished`, `shouldStampPublishedAt` and `statusAfter` from `src/modules/example/domain/index.ts` (via `../../domain`). The lifecycle logic in `src/modules/example/domain/lifecycle.ts` is the likely source of the status and event rules, but that is not visible from this file.
+- Imports `ExampleStatus` from `src/types/index.ts` (via the `@types` alias). It supplies the `draft`, `published` and `archived` values used as inputs and expectations.
 
 ## Notes
-
-- The `canApply` test table encodes the full transition matrix: there is no direct `published → archived → published` skip; you must `unarchive` back to `draft` first. The test comments call this out ("a published example is withdrawn by archiving it").
-- `exampleActionsFor` is permission-aware: when both `update` and `delete` are `false`, **all** actions (including status transitions) are suppressed, not just the destructive ones. This is a product rule worth remembering when extending the action set.
-- Tests use `it.each` with `as const` tuples to keep the expected/actual pairs visible at a glance and to get good failure messages.
+- The tests are pure, with no database or fixtures. They use `it.each` tables to cover the transition matrix.
+- The `canApply` tables list every allowed and refused pair.
+- Describe and test names carry the rationale, such as why a published example cannot be re-published.

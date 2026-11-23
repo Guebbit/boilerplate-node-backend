@@ -1,40 +1,34 @@
 ---
 source: src/modules/inventory/openapi.yaml
-sha256: ca31d3b84d24af3f639e386a49b03a88a0eccbb415d2960658dedd0b73e2acb9
-generated_at: 2026-11-14T20:04:46.035158+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ef66ab9c7f18206bb5df179bed736112bdbf0b1caa98fb0454d36e03717036ac
+context_sha256: 50ef088d491a23090decaee468780d11473e4c6bed343128b44313753981ad07
+generated_at: 2026-11-22T05:20:15.664190+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/inventory/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 contract for the inventory module. It defines the REST surface for stock levels, preorder allowances, the stock-movement ledger, and counter-changing operations (receive, adjust), including auth scopes, idempotency requirements, and shared error codes.
+OpenAPI 3.1.0 contract (v0.1.0) for the inventory module. It declares the module's `Inventory` tag (family `Catalogue`: stock counters and the holds placed against them), its module-specific error code, and the admin-facing endpoints for viewing stock, preorder allowances and the stock-movement ledger, and for changing stock.
 
 ## Key elements
-
-- **Tag `Inventory`** (`x-family: Catalogue`) — single tag covering all operations; describes scope as "stock counters and the holds placed against them."
-- **`x-error-codes`** — module-level custom error `INVENTORY_BELOW_RESERVED` (409): requested on-hand count falls below already-reserved units.
-- **`GET /inventory/levels`** (`listInventoryLevels`) — paged stock board, most-scarce-first; supports `lowOnly` filter. Scope `read:StockLevel`.
-- **`GET /inventory/preorders`** (`listPreorderLevels`) — paged preorder allowances (cap, outstanding split by paid/unpaid). Admin-only; never public.
-- **`GET /inventory/levels/{productId}`** (`getInventoryLevel`) — single product's counters and availability.
-- **`PATCH /inventory/levels/{productId}`** (`updateInventoryLevel`) — RFC 7396 merge-patch; only `backorderLimit` is editable. Idempotent. Scope `update:StockLevel`.
-- **`GET /inventory/movements`** (`listStockMovements`) — paged, newest-first ledger of every counter delta; filterable by `productId` and `reason`.
-- **`POST /inventory/levels/{productId}/receive`** (`receiveStock`) — the only unit-creating transition. Requires `Idempotency-Key` header; specific idempotency error codes (400/409/422). Scope `create:StockMovement`.
-- **Schemas** (referenced, defined later in the truncated file): `InventoryLevelsResponse`, `PreorderLevelsResponse`, `InventoryLevel`, `UpdateInventoryLevelRequest`, `StockMovementsResponse`, `ReceiptRequest`, `StockMovementReason`.
+- **Tag `Inventory`**: the tag all of this module's operations file themselves under.
+- **`x-error-codes`**: declares `INVENTORY_BELOW_RESERVED` (409), raised when the requested on-hand count is below what open orders have already reserved.
+- **`GET /inventory/levels`** (`listInventoryLevels`): the stock board. Every product with its three counters and derived availability, most scarce first. Takes `PageParam` and `PageSizeParam`, plus a `lowOnly` boolean filter (default false) for products at or under the low-availability threshold. Requires `read:StockLevel`.
+- **`GET /inventory/preorders`** (`listPreorderLevels`): the preorder board. Each product's cap and what is outstanding against it, split into unpaid and paid orders, most outstanding first. `backordered` counts outstanding units; `ordered` is the lifetime count from the ledger. Requires `read:StockLevel`.
+- **`GET /inventory/levels/{productId}`** (`getInventoryLevel`): one product's level. An unknown product, a product with no level row and a malformed id all return the same 404. Requires `read:StockLevel`.
+- **`PATCH /inventory/levels/{productId}`** (`updateInventoryLevel`): RFC 7396 merge-patch, accepting `application/json` and `application/merge-patch+json`. Only `backorderLimit` is editable. `0` closes the allowance and `null` removes the cap. It is idempotent and leaves no ledger row, though it is audited. Requires `update:StockLevel`.
+- **`GET /inventory/movements`** (`listStockMovements`): the paged ledger, newest first, filterable by `productId` and `reason` (`StockMovementReason`). `meta.totalItems` counts everything matching the filters. Requires `read:StockLevel`.
+- **`POST /inventory/levels/{productId}/receive`** (`receiveStock`): records a supplier delivery. It raises `onHand` but not `reserved`. It requires an `Idempotency-Key` header (`RequiredIdempotencyKeyHeader`) and has per-operation `x-error-codes` for idempotency failures (400 `IDEMPOTENCY_KEY_REQUIRED`; 409 `IDEMPOTENCY_IN_FLIGHT` and `IDEMPOTENCY_OUTCOME_UNKNOWN`; 422 `IDEMPOTENCY_KEY_MISMATCH`). Requires `create:StockMovement` and a `ReceiptRequest` body.
+- **Local schemas referenced**: `InventoryLevelsResponse`, `PreorderLevelsResponse`, `InventoryLevel`, `UpdateInventoryLevelRequest`, `StockMovementsResponse`, `StockMovementReason` and `ReceiptRequest`, all under `#/components/schemas`.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — All common parameters (`PageParam`, `PageSizeParam`, `RequiredIdempotencyKeyHeader`), the `Id` schema, and standard error responses (`Unauthorized`, `Forbidden`, `ValidationError`, `NotFound`) are pulled in via `$ref`.
-- **`src/modules/inventory/module.ts`** — The runtime module that implements the endpoints described here; this YAML is its declarative contract.
-- **`src/modules/inventory/module.yaml`** — Module metadata/configuration that the runtime loader reads alongside this spec.
-- **`src/modules/inventory/authorization.yaml`** — Defines the `bearerAuth` / `apiKeyAuth` schemes and scope semantics (`read:StockLevel`, `update:StockLevel`, `create:StockMovement`) referenced in every operation's `security` block.
-- **`src/modules/delivery/module.yaml`** — The `receive` endpoint is the inventory-side counterpart of a supplier delivery; the two modules are paired conceptually (delivery triggers a stock receipt).
+- **`src/modules/inventory/authorization.yaml`**: the neighbor in the dependency graph. The permission names used in `security` (`read:StockLevel`, `update:StockLevel`, `create:StockMovement`) are the scopes this file relies on. This page doesn't show how that file defines them.
 
 ## Notes
-
-- **Ordering is implicit:** list endpoints that represent a queue (levels, preorders) or a log (movements) do **not** accept a `sort` parameter — the order is fixed by the contract description.
-- **PATCH ≠ stock movement:** `updateInventoryLevel` changes only the preorder limit and explicitly leaves no ledger row; actual counter changes go through `receive` / `adjust` (the latter is in the truncated portion).
-- **Idempotency on `receive` is mandatory:** a missing key yields 400; a key whose first attempt is still in-flight or has an unknown outcome yields 409, and no counter change occurs. Callers must read the level back before retrying with a new key.
-- **File is truncated** in the provided content; additional paths (e.g. `adjust`, possibly `cancel`) and all `components/schemas` definitions exist below the cut point.
-- **`x-family: Catalogue`** on the tag is a cross-cutting grouping hint consumed by tooling; it does not affect the OpenAPI spec validation.
+- Every operation is secured with either `bearerAuth` or `apiKeyAuth`, using the same scope.
+- The list endpoints are queues or logs, so they take no `sort` parameter. The ordering is fixed.
+- Shared parameters, responses and the `Id` schema (`PageParam`, `PageSizeParam`, `RequiredIdempotencyKeyHeader`, `Unauthorized`, `Forbidden`, `NotFound`, `ValidationError`) are referenced from `shared/contracts/openapi.root.yaml`, not defined here.
+- Customers never see raw counts (`onHand`, `reserved`). They get `availability` and `availabilityDate` from `GET /products/{id}/availability`, which is outside this file.
+- The movements ledger is documented as having no gaps, because each row is written by the same call that moves the counter.
+- Lowering `backorderLimit` below what is already outstanding is allowed. It affects only new orders.

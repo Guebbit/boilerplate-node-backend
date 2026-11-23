@@ -1,36 +1,37 @@
 ---
 source: src/modules/example/openapi.yaml
-sha256: 96ad687ee10cdcdc7d120c5a74b2c589f4d3bf8d4d9c41954e527b29d5e5c3ce
-generated_at: 2026-11-14T19:59:49.666781+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 11b2e91fc16089223f2686de19486f730d411a02a86bf17c6af52f28988df1de
+context_sha256: e9695d64818611eacba756079c6803836dc38a0e46956f4572f34fe991ffe575
+generated_at: 2026-11-22T05:10:02.020300+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 contract for the **example** module — a small, complete reference domain intended as the starting template for new modules. It declares the full CRUD surface (`/examples`, `/examples/search`, `/examples/{id}`), the status lifecycle (draft → published → archived), custom error codes, and the module's slice of the account data export. The tag description explicitly notes it is safe to delete.
+OpenAPI 3.1 contract for the `example` module, described in the file itself as the small, complete domain to copy when starting a new module (and safe to delete). It declares the module's tag, error codes, account-export section, paths, and (further down) component schemas. Shared pieces come from `shared/contracts/openapi.root.yaml` via `$ref`.
 
 ## Key elements
-
-- **`x-error-codes`** — Module-level 409 codes for illegal status transitions (`EXAMPLE_NOT_PUBLISHABLE`, `EXAMPLE_NOT_ARCHIVABLE`, `EXAMPLE_NOT_UNARCHIVABLE`), each documenting the `details` payload and which `Example.actions.*` flag signals the transition is open.
-- **`x-personal-data`** — Declares the `examples` array that the bundler injects into `POST /account/export`'s `AccountExportResponse`.
-- **`/examples` (GET/POST)** — List (query-param filtered, JSON:API sort grammar) and create (idempotent via `Idempotency-Key`; rate-limited by `createExampleLimiter`).
-- **`/examples/search` (POST)** — DTO-friendly alias (`x-alias-of: listExamples`) that accepts the same filters as a JSON body instead of query params.
-- **`/examples/{id}` (GET/PUT/PATCH/DELETE)** — Full CRUD. PUT requires `title`+`body` (RFC 9110 §9.3.4 whole-replacement); PATCH uses RFC 7396 merge-patch (accepts both `application/json` and `application/merge-patch+json`).
-- **`x-versioned`** — Marks operations that receive bundler-injected `ETag`/`If-Match` headers and 412 handling.
-- **`x-cache: private-no-cache`** — On both list and single-read responses, signalling the answer varies by caller.
-- **Security scopes** — `read:Example`, `create:Example`, `update:Example`, `delete:Example`, `display:Example` (cross-account read), plus unauthenticated/cookie access for published reads.
+- **`tags`**: a single `Examples` tag (`x-family: Example`) that all operations use.
+- **`x-error-codes`**: module-level 409 codes `EXAMPLE_NOT_PUBLISHABLE`, `EXAMPLE_NOT_ARCHIVABLE` and `EXAMPLE_NOT_UNARCHIVABLE`. Each carries `errors[].details` of `{ status }`, and the matching `Example.actions.publish|archive|unarchive` flag says whether the transition is open.
+- **`x-personal-data`**: adds an `examples` array of `ExportExample` to the `POST /account/export` response (`AccountExportResponse`). It lists every example the account owns, drafts and archived included, and is empty rather than absent.
+- **`/examples`**
+  - `GET listExamples`: requires `read:Example`; `x-cache: private-no-cache`. Takes page, page size, `sort` (JSON:API style `-createdAt,title`, form, not exploded), text, and `status` parameters. Returns `ExamplesResponse`. Callers see their own examples by default; `display:Example` sees everyone's.
+  - `POST createExample`: requires `create:Example`. Accepts an `Idempotency-Key` header, where the same key replays the first answer. Returns 201 `Example` with a `Location` header. Declares 409 `IDEMPOTENCY_IN_FLIGHT`, 422 `IDEMPOTENCY_KEY_MISMATCH`, and 429. Per the inline comment, `createExampleLimiter` is applied in `routes.ts`.
+- **`/examples/search`**: `POST searchExamples` takes a JSON body (`SearchExamplesRequest`) and returns `ExamplesResponse`. It is marked `x-alias-of: listExamples`, the DTO form of the same filters.
+- **`/examples/{id}`**
+  - `GET getExampleById`: open to anonymous callers (`security: [{}, bearerAuth, cookieAuth]`). A `published` example is public. Owners see their own drafts and archived ones, and `display:Example` sees any. Everything else answers `404`, never `403`. Never shared-cached.
+  - `PUT replaceExampleById`: requires `update:Example`; `title` and `body` are required (`ReplaceExampleRequest`). Status changes go through `POST /examples/{id}/publish|archive|unarchive`.
+  - `PATCH updateExampleById`: RFC 7396 merge-patch, accepting `application/json` and `application/merge-patch+json` (`UpdateExampleRequest`).
+  - `DELETE deleteExampleById`: requires `delete:Example`. It permanently removes the example and its cover image.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — All shared `$ref` targets (parameters: `PageParam`, `PageSizeParam`, `TextParam`, `IdPathParam`, `IdempotencyKeyHeader`; responses: `Unauthorized`, `Forbidden`, `ValidationError`, `Conflict`, `NotFound`, `TooManyRequests`; headers: `Location`) resolve into this file.
-- **`src/modules/example/rules.yaml`** — Sibling module file (presumably runtime validation rules or routing config) that pairs with this contract; not referenced by `$ref` from the YAML but co-located as the module's rule set.
+- `src/modules/example/rules.yaml`: the sibling file in the module. The scopes used here (`read|create|update|delete|display:Example`) are authorization concepts, so it likely holds the matching rules. This is inferred from the graph link, since the visible content doesn't reference it directly.
 
 ## Notes
-
-- **404, never 403, for unowned resources** — `GET /examples/{id}` deliberately leaks no ownership or draft-existence signal; only the owner (or a `display:Example` holder) gets a 200.
-- **Status changes are separate endpoints** — `publish`, `archive`, `unarchive` live under `POST /examples/{id}/…` (truncated in this file); PUT/PATCH never mutate `status`.
-- **Idempotency on create only** — `Idempotency-Key` is a shared header param; 409 means in-flight, 422 means key-reuse-with-different-body.
-- **Bundler-injected headers** — `ETag`, `Content-Location`, `If-Match`, and 412 are added post-hoc per `x-versioned`; they do not appear in the visible response schemas.
-- **Delete cascades to cover image** — Not a separate API; implied by the DELETE description.
+- The `x-*` keys (`x-versioned`, `x-cache`, `x-alias-of`, `x-error-codes`, `x-personal-data`, `x-family`) are project conventions, not standard OpenAPI.
+- Per-operation `x-error-codes` map an HTTP status to code names, for example `'409': [IDEMPOTENCY_IN_FLIGHT]`.
+- The shared parameters, headers and responses (`PageParam`, `IdPathParam`, `Location`, `Unauthorized`, `ValidationError`, and others) are `$ref`s into `shared/contracts/openapi.root.yaml`.
+- The bundler post-processes the file. `x-versioned` adds `ETag` and `Content-Location` to the 2xx answers of `POST /examples`. On `/examples/{id}` it adds `If-Match` and a 412 to get, put, patch and delete, and `ETag` to the 200s. It also merges `x-personal-data` into `AccountExportResponse`.
+- 404 is used in place of 403 on single-resource reads to avoid leaking ownership or draft existence.
+- Removing the module removes its export section.

@@ -1,30 +1,34 @@
 ---
 source: src/modules/example/controllers/post-example.ts
-sha256: 1d42420de253ed54a059b5ed21096b941fafbfbb6b01f3909fbdd3969c1a7246
-generated_at: 2026-11-14T19:57:22.758892+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 94e7249ea4d497b3803f0229c7ab60d6bfda69a2b997375644753c9527144286
+context_sha256: ee564135ccf7a034be2810863a5ae0d06c3c8becd3234ca42d1d286b2637dc15
+generated_at: 2026-11-22T05:07:48.589800+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/controllers/post-example.ts
 
 ## Purpose
-HTTP handler for `POST /examples`. Validates the JSON body against the generated Zod schema (with whitespace trimming applied), delegates to `exampleService.create`, and answers `201 Created` with a `Location` header pointing to the new resource.
+Express controller for `POST /examples`. It validates the request body, creates a draft example owned by the caller through the service layer, and replies `201 Created` with a `Location` header. It serves as the module's template for a "create" controller.
 
 ## Key elements
-- **`createTrimmedBody`** – Local schema: `CreateExampleBody` extended so `title` and `body` are whitespace-trimmed before validation. Ensures `"   "` fails as an empty-field 422 rather than passing as a valid (but meaningless) string.
-- **`postExample`** *(exported)* – The Express handler, wrapped in `namedHandler('postExample', …)`. Parses the body, calls the service, and on success sets resource identity headers (`answerAsResource`) before sending the `201` + `Location` body (`createdResponse`). Errors are funnelled through `catchAs(response, 'postExample')`.
+- `createTrimmedBody` (module-private): `CreateExampleBody` (generated schema from `@api/schemas.zod`) extended so `title` and `body` pass through `trimmedInto` first. A whitespace-only value therefore fails with the same field-level 422 as an empty one.
+- `postExample` (exported): handler wrapped in `namedHandler('postExample', ...)`. Flow:
+  1. `parseBody(createTrimmedBody, readInput(request, { surface: 'create' }), response)`. If it returns `undefined`, the handler stops with `Promise.resolve()`.
+  2. `exampleService.create(body, callerContextOf(request))`.
+  3. `refused(response, result)` is checked, and the handler returns if it was refused.
+  4. Otherwise it builds `location = /examples/${result.data.id}`, calls `answerAsResource(response, result.data, location)`, then `createdResponse(response, result.data, location)`.
+  5. `.catch(catchAs(response, 'postExample'))` handles errors.
 
 ## Relationships
-- **`src/infrastructure/http/controller.ts`** – Supplies the handler plumbing: `namedHandler`, `parseBody`, `refused`, `catchAs`.
-- **`src/infrastructure/http/request.ts`** – `readInput` extracts the raw body (tagged `surface: 'create'`); `callerContextOf` derives the authenticated caller for the service call.
-- **`src/infrastructure/http/response.ts`** – `createdResponse` sends the final `201` with body and `Location`.
-- **`src/infrastructure/http/preconditions.ts`** – `answerAsResource` emits resource-identity headers (ETag, Last-Modified) on the response.
-- **`src/infrastructure/http/schemas.ts`** – `trimmedInto` wraps an existing Zod string schema to apply `.trim()`.
-- **`src/modules/example/services/index.ts`** – Exports the `exampleService` instance whose `create` method performs the actual persistence / business logic for the new example.
-- **`src/modules/example/routes.ts`** – Imports `postExample` and mounts it on the `POST /examples` route.
+- `src/infrastructure/http/controller.ts`: supplies `namedHandler`, `parseBody`, `refused` and `catchAs`, which cover handler naming, body parsing, refused-result handling and error mapping.
+- `src/infrastructure/http/request.ts`: `readInput` reads the request input for the `create` surface, and `callerContextOf` extracts the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `createdResponse` sends the 201 response with the `Location`.
+- `src/infrastructure/http/preconditions.ts`: `answerAsResource` is called with the response, the created resource and its location, to set the new example's real tag and the resource it belongs to.
+- `src/infrastructure/http/schemas.ts`: `trimmedInto` provides the trimming wrapper for the schema fields.
+- `src/modules/example/services/index.ts`: exports `exampleService`, whose `create` method performs the creation.
+- `src/modules/example/routes.ts`: the route layer that presumably mounts `postExample` at `POST /examples`. The mounting itself is not visible in this file.
 
 ## Notes
-- Whitespace-only strings are deliberately rejected at the *field* level (422) via the `trimmedInto` transform, giving a clearer error message than a "required" failure on a string that is technically present.
-- `answerAsResource` is called **before** `createdResponse`; the order matters because the preconditions helper must set headers while the response is still open.
-- The handler uses a promise chain (`.then` / `.catch`) rather than `async/await`; `catchAs` is the unified error boundary for this handler.
-- `parseBody` returning `undefined` signals validation failure has already been handled (a 422 was sent); the handler short-circuits without touching the service.
+- Validation failures and service refusals are handled by helpers that write the response themselves. The handler only returns early and does not throw or respond in those branches.
+- The handler always returns a Promise, including on the early-exit path.

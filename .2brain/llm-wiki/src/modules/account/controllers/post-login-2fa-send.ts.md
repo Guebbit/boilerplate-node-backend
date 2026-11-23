@@ -1,44 +1,37 @@
 ---
 source: src/modules/account/controllers/post-login-2fa-send.ts
-sha256: 279de6151e5d155db7e058e4420b9306b483405c50c75f40eb5e5f91e6881c6b
-generated_at: 2026-11-08T04:05:04.528145+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:24:50.149539+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/controllers/post-login-2fa-send.ts
 
 ## Purpose
-
-Thin HTTP adapter that handles `POST /account/login/2fa/send`. It validates the request body, resolves a two-factor challenge token, delegates to `twoFactorService.sendLoginCode`, and returns the delivery result. It exists to keep the login 2FA flow's I/O concerns (body parsing, response shaping, metrics) separate from the service layer.
+Express controller for `POST /account/login/2fa/send`. It is a thin HTTP adapter over `twoFactorService.sendLoginCode`: it sends a fresh two-factor code (by mail or text) against a live login challenge. The endpoint is public, like the rest of the login flow, because the challenge token is the credential.
 
 ## Key elements
-
-- **`postLoginTwoFactorSend(request, response)`** — The sole export. Express handler that:
-  - Parses the body against `SendTwoFactorCodeBody` (Zod).
-  - Resolves the challenge: `parsed.challenge` first, falling back to the MFA cookie via `readMfaChallengeCookie`.
-  - Calls `twoFactorService.sendLoginCode(challenge, method, callerContext)`.
-  - Responds 200 with `TwoFactorDelivery` on success, 401 with a localized error if no challenge is found, or a database error via `rejectDatabaseError`.
-  - Increments the `authTwoFactorCodeSentTotal` counter on every exit path (success / failure / unknown method).
+- `postLoginTwoFactorSend(request, response)` is the only export. It does the following:
+  - Validates the body with `parseBody(SendTwoFactorCodeBody, ...)`. If parsing fails, `parseBody` has already written the response, so the handler records a failure metric with `method: 'unknown'` and returns.
+  - Takes `method` from the parsed body.
+  - Takes the challenge from `parsed.challenge`, or falls back to `readMfaChallengeCookie(request)`. If neither is present, it responds `401` with `t('account.two-factor.challenge-invalid')`.
+  - Calls `twoFactorService.sendLoginCode(challenge, method, callerContextOf(request))`.
+  - If `refused(response, result)` reports a refusal, it records a failure and returns. Otherwise it records success and replies `200` with `successResponse<TwoFactorDelivery>(response, result.data, 200)`.
+  - On a thrown or rejected error, it records a failure and calls `rejectDatabaseError(response, 'postLoginTwoFactorSend', error)`.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/account/services/index.ts` | Calls `twoFactorService.sendLoginCode` — the core business logic. |
-| `src/infrastructure/http/controller.ts` | Uses `parseBody` for Zod validation and `refused` to short-circuit on service-level rejection. |
-| `src/infrastructure/http/response.ts` | Emits `successResponse` (200) and `rejectResponse` (401). |
-| `src/infrastructure/http/errors.ts` | `rejectDatabaseError` maps unexpected exceptions to a safe HTTP error. |
-| `src/infrastructure/http/request.ts` | `callerContextOf` extracts caller metadata (IP, user-agent, etc.) for the service call. |
-| `src/infrastructure/i18n/index.ts` | `t` provides the localized "challenge invalid" message. |
-| `src/modules/account/metrics.ts` | `authTwoFactorCodeSentTotal` Prometheus counter, tagged with `method` and `status`. |
-| `src/modules/account/oauth/mfa-redirect.ts` | `readMfaChallengeCookie` — cookie fallback when the client omits the `challenge` field (mirrors the pattern in `postLoginTwoFactor`). |
-| `src/types/index.ts` | `TwoFactorSendRequest` (route generic) and `TwoFactorDelivery` (response payload type). |
-| `src/modules/account/routes.ts` | Registers this handler on the `POST /account/login/2fa/send` route. |
-| `src/infrastructure/adapters/logger.ts` | Indirect dependency through `rejectDatabaseError` / service internals; no direct import here. |
+- `src/types/index.ts` provides `TwoFactorSendRequest` (the request body type) and `TwoFactorDelivery` (the success payload type).
+- `infrastructure/http/controller.ts` provides `parseBody` and `refused`.
+- `infrastructure/http/response.ts` provides `successResponse` and `rejectResponse`.
+- `infrastructure/http/errors.ts` provides `rejectDatabaseError`.
+- `infrastructure/http/request.ts` provides `callerContextOf`, which builds the caller context passed to the service.
+- `infrastructure/i18n` provides `t`, used for the localized 401 message.
+- `services/index.ts` provides `twoFactorService`, which holds the actual send logic.
+- `metrics.ts` provides `authTwoFactorCodeSentTotal`, a counter labelled by `method` and `status`.
+- `oauth/mfa-redirect.ts` provides `readMfaChallengeCookie`, the cookie fallback for the challenge.
+- `routes.ts` in the same module presumably mounts this handler. The file itself does not show this.
 
 ## Notes
-
-- The endpoint is **public** (no auth middleware); the challenge token in the body or cookie is the credential.
-- The cookie fallback (`readMfaChallengeCookie`) exists for parity with `postLoginTwoFactor` in `mfa-redirect.ts`; if you change the challenge-resolution order here, keep both in sync.
-- Metrics use `method: 'unknown'` when body parsing fails, since no delivery method was extracted yet.
-- `refused(response, result)` is a helper that checks whether the service returned a rejection *and* already wrote the response; the handler returns early in that case without touching metrics a second time.
+- The request body schema `SendTwoFactorCodeBody` is imported from `@api/schemas.zod`.
+- The cookie fallback for the challenge is the same one `postLoginTwoFactor` uses.
+- Every outcome increments `authTwoFactorCodeSentTotal`. Validation failures use `method: 'unknown'`, since the method is not known until the body parses.
+- The handler returns the promise chain, but every path (success, refusal, error) writes its own response.

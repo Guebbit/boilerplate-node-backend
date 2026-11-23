@@ -1,32 +1,38 @@
 ---
 source: src/modules/account/tests/unit/session-strategy.test.ts
-sha256: e0ba30759df3c281ecd82bf72c9cfd5c8e02e6dcf9653167b26b9b01776e43f9
-generated_at: 2026-11-08T04:50:26.269782+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e0ba30759df3c281ecd82bf72c9cfd5c8e02e6dcf9653167b26b9b01776e43f9
+context_sha256: 07b0eb46657297cffe95355efcc48aeaa8c564206f5aa6dfc05de315e85ae018
+generated_at: 2026-11-22T04:09:11.905785+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/session-strategy.test.ts
 
 ## Purpose
-
-Unit tests that verify the session-strategy seam: the `activeStrategy` factory picks the correct adapter per call based on `NODE_SESSION_MODE`, the resolver consults that live selection (not a frozen snapshot) when deciding whether a cookie can authenticate ordinary routes, and the mint guard enforces second-factor proof on armed accounts.
+Unit tests for the seam between the account module's two session modes (`jwt` and `cookie`). They verify that the active strategy is chosen per call from `NODE_SESSION_MODE`, that the auth resolver defers to that choice, and that the mint guard enforces second-factor requirements.
 
 ## Key elements
-
-- **`describe('activeStrategy')`** — three tests confirming the default is `jwtStrategy`, that the returned object is the exact adapter for the named mode, and that the choice re-evaluates on every call (mode change after import is honoured, not cached).
-- **`describe('accountAuthResolver')`** — verifies `cookieAuthenticates()` returns `true` only in cookie mode, and that `fromBearer` / `fromCookie` reject out-of-mode credentials (`{ miss: 'revoked' }` for a JWT in cookie mode, `{ miss: 'malformed' }` for a non-session-id cookie).
-- **`describe('assertSecondFactor')`** — covers the three branches: throws `SecondFactorRequiredError` (carrying `userId`) when the account is armed but the proof lacks a factor; passes when the factor is present; is a no-op when no factor is armed.
+- **`describe('activeStrategy')`**
+  - With no mode set, it returns `jwtStrategy`.
+  - Parameterized over `jwt` and `cookie`, it returns the matching adapter, and its `.mode` equals the mode name.
+  - It follows a mode changed after import. Switching `cookie` to `jwt` yields `cookieStrategy` and then `jwtStrategy`, so the choice is not frozen at first use.
+- **`describe('accountAuthResolver')`**
+  - `cookieAuthenticates()` is `false` in `jwt` mode and `true` in `cookie` mode.
+  - In `cookie` mode, `fromBearer` with a JWT-shaped string resolves to `{ miss: 'revoked' }`. The test treats it as a stale credential left by a mode switch, not a forged one.
+  - In `cookie` mode, `fromCookie('not-a-session')` resolves to `{ miss: 'malformed' }`.
+  - The test title says both are turned away "without a lookup", but the test does not assert that.
+- **`describe('assertSecondFactor')`**
+  - An account with `twoFactorEnabledAt` set and proof `['pwd']` throws `SecondFactorRequiredError`. The error carries `userId: 'u1'` and `name: 'SecondFactorRequiredError'`.
+  - The same account with proof `['pwd', 'otp']` passes.
+  - An account with no armed factor (`{ id: 'u2' }`) passes.
 
 ## Relationships
-
-- **`session/strategy.ts`** — source of `activeStrategy`, the function under test.
-- **`session/jwt-strategy.ts`** / **`session/cookie-strategy.ts`** — the two adapters; tests assert identity (`toBe`) against these singletons.
-- **`session/resolver.ts`** — source of `accountAuthResolver`; tests exercise its `cookieAuthenticates()`, `fromBearer()`, and `fromCookie()` surface.
-- **`session/mint-guard.ts`** — source of `assertSecondFactor` and the `SecondFactorRequiredError` class.
-- **`tests/support/environment.ts`** — provides `setEnvironment` to flip `NODE_SESSION_MODE` between assertions without mocking the module system.
+- `src/modules/account/session/strategy.ts` supplies `activeStrategy`, which is the main subject under test.
+- `src/modules/account/session/cookie-strategy.ts` and `src/modules/account/session/jwt-strategy.ts` supply `cookieStrategy` and `jwtStrategy`. The tests compare against them by identity (`toBe`).
+- `src/modules/account/session/resolver.ts` supplies `accountAuthResolver`, which the tests use to check that it consults the active strategy.
+- `src/modules/account/session/mint-guard.ts` supplies `assertSecondFactor` and `SecondFactorRequiredError`. The module doc says both adapters call the guard from `issue`, but this file tests it directly and does not exercise `issue`.
+- `tests/support/environment.ts` supplies `setEnvironment`, imported via the `@tests/environment` alias. It sets `NODE_SESSION_MODE` per test.
 
 ## Notes
-
-- Strategy selection is asserted with `toBe` (reference identity), not `toEqual` — the two adapters are expected to be stable singletons.
-- The "mode changed after import" test exists specifically to guard against a regression where `activeStrategy` memoises the first lookup.
-- The `jwtShaped` bearer token in the resolver test is deliberately a JWT sent to a cookie-mode resolver, modelling a credential left behind by a mode switch (stale, not forged).
+- The first `activeStrategy` test relies on `NODE_SESSION_MODE` being unset by default, so it assumes the environment is clean between tests. The file does no cleanup itself, so any reset presumably happens in shared test setup.
+- Tests use the `@tests/…` and `@modules/…` path aliases.

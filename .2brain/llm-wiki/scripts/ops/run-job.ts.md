@@ -1,39 +1,41 @@
 ---
 source: scripts/ops/run-job.ts
-sha256: 3463a5e0d269808d1321c07ab2466166c4769e08111904465cddc90c68cac806
-generated_at: 2026-11-14T17:38:39.503500+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f04d55e8c1f5c19c953166d9d5fb816b156d8980f83de30df9942503fd51e492
+context_sha256: d555221a316cd1d8f249ae178271f77676dbd6d0a1529eeb94d7197b69e35652
+generated_at: 2026-11-22T02:12:02.233236+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/ops/run-job.ts
 
 ## Purpose
-
-Single entry point for every scheduled job (`npm run job <name>`). It resolves the named job from the declaration registry, connects to infrastructure, boots like the app, executes the work, and records the outcome — all without ever being invoked at boot. Designed to be triggered exclusively from cron.
+The single runner for every scheduled job, invoked as `npm run job <name>` (e.g. `npm run job reap:orders`). It looks up the named job declaration, connects, boots like the app, runs the job (under its lease, if it has one), and records the outcome for `/observability/health`. It is meant to be run from cron (`docker/crontab`, generated from the same declarations), never on boot. With no name or an unknown name it prints the known jobs and exits non-zero.
 
 ## Key elements
-
-- **`allJobs()`** — Returns the combined set of job declarations: unowned app jobs (`appJobs`) followed by each enabled module's jobs (`resolveJobs(enabledModules)`).
-- **`execute(job)`** — Orders the connection/boots based on `job.connectFirst`. If `false`, the work runs *before* `startJob()` (for sweep jobs that don't need Mongo); otherwise it connects → `prepareJob()` → `runJobWork(job)`.
-- **`requestedJob()`** — Parses a single positional CLI argument via `parseArgs`, looks it up in `allJobs()`, or prints the known names and `process.exit(1)`.
-- **Entry-point block (bottom)** — Calls `boundQueueRetries()` to cap broker reconnects, then delegates to `runScript(job.name, () => execute(job), cleanup)` where cleanup stops database and queue connections.
+- `allJobs()`: returns every job this build runs. These are `appJobs` (jobs no module owns) followed by `resolveJobs(enabledModules)`.
+- `execute(job)`: runs the job with one of two orderings.
+  - By default it calls `startJob()`, then `prepareJob()`, then `runJobWork(job)`.
+  - If `job.connectFirst === false`, it runs `runJobWork(job)` first and calls `startJob()` afterwards. This suits a sweep that never needs Mongo, and it skips `prepareJob()`.
+- `requestedJob()`: reads one positional argument with `node:util` `parseArgs`. It finds the matching job by `name`, and if none matches it logs `Unknown job ...` plus the known names and calls `process.exit(1)`.
+- Module-level `job`: the job resolved at import time via `requestedJob()`.
+- Entry point: calls `boundQueueRetries()`, then `void runScript(...)`.
+  - The name recorded is `undefined` for leased jobs and `job.name` otherwise.
+  - The work is `execute(job)`.
+  - Cleanup is `Promise.all([stopDatabase(), stopQueue(), stopPubSub()])`.
 
 ## Relationships
-
-- **`scripts/ops/prepare-job.ts`** — Provides `prepareJob` (app-style boot) and `runJobWork` (the actual job body). This file orchestrates *when* they are called.
-- **`scripts/run-script.ts`** — `runScript` wraps the execution, records success/failure (via lease document or by name), and manages the process exit code. This file supplies the work and cleanup callbacks.
-- **`src/app/jobs.ts`** — Source of `appJobs`, the jobs that don't belong to any specific module.
-- **`src/kernel/registry.ts`** — Source of `resolveJobs(enabledModules)` and the `JobDeclaration` type.
-- **`src/modules.ts`** — Source of `enabledModules`, which determines which module job lists are included.
-- **`src/infrastructure/runtime/database.ts`** — `startJob()` (connect) and `stopDatabase()` (cleanup).
-- **`src/infrastructure/adapters/queue.ts`** — `boundQueueRetries()` (prevents infinite reconnect) and `stopQueue()` (cleanup).
-- **`src/infrastructure/config/dotenv.ts`** — Side-effect import; loads env vars before anything else.
-- **`src/infrastructure/runtime/mongoose-boot.ts`** — Side-effect import; must load before any Mongoose schema is built.
+- `src/app/jobs.ts` (`appJobs`) and `src/modules.ts` (`enabledModules`) supply the declarations. `resolveJobs` in `src/kernel/registry.ts` extracts each module's jobs and defines the `JobDeclaration` type.
+- `scripts/ops/prepare-job.ts` provides `prepareJob` (the app-like boot) and `runJobWork` (the work itself).
+- `scripts/run-script.ts` provides `runScript`, which wraps execution and records the outcome.
+- `src/infrastructure/runtime/database.ts` provides `startJob` (connect) and `stopDatabase`.
+- `src/infrastructure/adapters/queue.ts` provides `boundQueueRetries` and `stopQueue`.
+- `src/infrastructure/adapters/pubsub.ts` provides `stopPubSub`.
+- `src/infrastructure/config/dotenv.ts` and `src/infrastructure/runtime/mongoose-boot.ts` are imported for their side effects only.
 
 ## Notes
-
-- **Import order is load-bearing.** `dotenv` and `mongoose-boot` are side-effect imports that must execute before any model or adapter module is evaluated; reordering them silently breaks Mongoose defaults.
-- **`connectFirst: false`** is an opt-out for sweep/cleanup jobs that must run even when Mongo is unreachable. The work executes, *then* `startJob()` is attempted.
-- **Lease-aware outcome recording.** When `job.lease` is set, `runScript` records through the lease document so a skipped run (held by another instance) is not misread as a success.
-- **No forced-exit deadline.** The process is expected to give up on a dead broker (via `boundQueueRetries`) rather than retry indefinitely; there is no external timeout wrapper.
-- **Floating promise is intentional.** `runScript` never rejects — it reports failure via the process exit code — hence the `// eslint-disable-next-line` for `no-floating-promises`.
+- Import order matters. `mongoose-boot` must load before any model, because Mongoose defaults are read at schema build.
+- Job processes have no forced-exit deadline, so `boundQueueRetries()` makes them give up on a dead broker instead of retrying forever.
+- Leased jobs record their outcome through their own lease document, so a skipped run is not reported as a success. For these, `runScript` receives `undefined` as the name.
+- Jobs are idempotent, so a missed or overlapping cron run costs nothing.
+- The job lookup happens at module load, so an invalid name exits before anything runs.
+- The `no-floating-promises` ESLint rule is disabled on the `runScript` call because `runScript` never rejects (failure is reported via `process.exitCode`).

@@ -1,42 +1,38 @@
 ---
 source: scripts/eslint/barrel-allowed-sources.ts
-sha256: c11a4c0b9d0ccbefa76b909d105e211131534b4421b3479c92267d0282bcaf4c
-generated_at: 2026-11-08T02:50:08.051262+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ebe38d8729153294cdffbce6e4809470c2fae2649ec61a7f781894a93ab00551
+context_sha256: a650206425d48c28861911aa37d091e3e12aa58ea181d146ea7b0b6ef9cf5305
+generated_at: 2026-11-22T02:05:28.811885+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/eslint/barrel-allowed-sources.ts
 
 ## Purpose
-
-Custom ESLint rule that enforces the DDD barrel-publishing contract (`docs/theory/strategic-ddd.md §5`): a module's `index.ts` may only re-export services, domain rules, events, and emails **as values**, and model + presenter(s) **as types only**. It blocks leaking repositories, wiring files, mongoose runtime values, and presenter functions in any export form (`export *`, `export { x } from`, or `import…export` relay).
+A custom ESLint rule (`barrelAllowedSources`) that restricts what a module's barrel (`src/modules/<name>/index.ts`) may re-export. A barrel may publish services, domain rules, events and emails as values, and the model and presenter(s) as types only. Repositories, the model's runtime value, presenter functions and wiring files are refused in every export form. It enforces the "published language" rule described in the file's `@see` doc reference (section 5, the barrel).
 
 ## Key elements
-
-- **`barrelAllowedSources`** (exported) — the ESLint rule, created via `RuleCreator.withoutDocs`. No options; 7 message IDs (`notAllowed`, `modelAsValue`, `modelNamedValue`, `presenterAsValue`, `presenterNamedValue`, `repositoryExport`, `wiringExport`).
-- **`VALUE_SOURCES`** — `Set` of stems allowed as value exports: `services`, `service`, `domain`, `events`, `emails`.
-- **`PRESENTER_SOURCES`** — `Set` of `presenter` / `presenters`.
-- **`TYPE_SOURCES`** — `VALUE_SOURCES` ∪ `model` ∪ `PRESENTER_SOURCES`; the universe of stems permitted under `export type *`.
-- **`MODULE_BARREL_PATH`** — regex that matches `src/modules/<name>/index.ts` (absolute or bare-relative) to scope the rule and identify the module name.
-- **`isRepositorySource(stem)`** — flags `repository`.
-- **`isWiringSource(stem)`** — flags `routes`, `module`, `probes`, `metrics`, `analytics`, `audit`, `controllers`, `controllers/*`.
-- **`isModelRuntimeValueName(name)`** — returns true for names matching `<x>Schema` (non-Zod), `apply*Transform`, or `<x>Model`; the three shapes a named pick from `./model` must not carry.
-- **`sourceStem(specifier)`** — strips `./` and `/index` to reduce a specifier to its bare stem.
-- **`reportSource`** (inner) — reports and returns `true` if the stem is a repository or wiring file.
-- **`reportModelNamedValuePicks`** (inner) — iterates specifiers of a named `./model` export and reports any that match `isModelRuntimeValueName`.
-- **`Program` visitor** — builds an `importSourceOf` map (local name → stem) for the `import…export` relay pattern.
-- **`ExportAllDeclaration` / `ExportNamedDeclaration` visitors** — the core checking logic for `export *`, `export type *`, and `export { x } from './y'`.
+- `barrelAllowedSources`: the exported rule, built with `ESLintUtils.RuleCreator.withoutDocs`. It takes no options and has the message ids `notAllowed`, `modelAsValue`, `modelNamedValue`, `presenterAsValue`, `presenterNamedValue`, `repositoryExport` and `wiringExport`.
+- `VALUE_SOURCES`: `services`, `service`, `domain`, `events`, `emails`. These may be exported as values.
+- `PRESENTER_SOURCES`: `presenter`, `presenters`.
+- `TYPE_SOURCES`: `VALUE_SOURCES` plus `model` and the presenter sources. These are accepted under `export type *`.
+- `isRepositorySource` / `isWiringSource`: flag the `repository` stem, and the wiring stems `routes`, `module`, `probes`, `metrics`, `analytics`, `audit`, `controllers` and `controllers/*`.
+- `isModelRuntimeValueName`: a naming heuristic for named picks from `./model`. It flags `*Schema` (except names starting with `zod`), `apply*Transform` and `*Model`.
+- `sourceStem`: strips the leading `./` and a trailing `/index`, so `./services/index` and `./services` both give `services`.
+- `MODULE_BARREL_PATH`: a regex matching `src/modules/<name>/index.ts` that captures the module name. The leading separator is optional so relative test filenames match.
+- `create` visitors:
+  - `Program` collects local import names mapped to source stems.
+  - `ExportAllDeclaration` handles `export *` and `export type *`.
+  - `ExportNamedDeclaration` handles `export { x } from './y'`.
+  - The file also covers the `import { x }; export { x }` form by resolving it through the import map. That handling is cut off in the excerpt I was given, so I can't describe it further.
 
 ## Relationships
-
-- **`scripts/eslint/index.ts`** — imports and registers `barrelAllowedSources` into the ESLint flat config; the rule is scoped to files matching the module-barrel path.
-- **`tests/unit/scripts/eslint/barrel-allowed-sources.test.ts`** — unit-tests the rule with `RuleTester`, covering each message ID and the products-only `tax`/`config` exception.
+- `scripts/eslint/index.ts`: the neighboring ESLint scripts entry point, which presumably exposes the rule.
+- `tests/unit/scripts/eslint/barrel-allowed-sources.test.ts`: the unit test for this rule. The `MODULE_BARREL_PATH` comment says test filenames are bare relative paths.
 
 ## Notes
-
-- **Products exception:** only the `products` module barrel may name-pick from `./tax` (VAT lookup) or `./config` (`productPagePath`). The module name is extracted from `context.filename` via `MODULE_BARREL_PATH`; all other modules are rejected for those stems.
-- **`factories` is never allowed**, but this rule does not special-case it — `no-restricted-imports` in `eslint.config.ts` blocks the import categorically upstream.
-- **Zod schemas are exempt** from `isModelRuntimeValueName`: any name starting with `zod` (case-insensitive) followed by `Schema` is treated as a validation schema, not a mongoose runtime value.
-- **`import { x } from './y'; export { x };`** carries no source on the export node, so the rule resolves the stem through the `importSourceOf` map built during the `Program` pass.
-- **`MODULE_BARREL_PATH`** uses `(?:^|[/\\])` so it matches both absolute paths (CI) and bare relative filenames that `RuleTester` supplies in tests.
-- The file's header comment says "five messages" but the `MessageIds` type and `messages` object define **seven**.
+- The `tax` and `config` named-pick exception applies only to the `products` barrel. The module name is read from the file path.
+- `export type *` from a repository or wiring source is still reported, because `reportSource` runs before the type-only check.
+- A named pick from `./presenter(s)` is reported unless it is a type-only export. A named pick from `./model` is checked by name only when it is not type-only.
+- Model checks rely on naming conventions (`<name>Schema`, `apply<Name>Transform`, `<name>Model`). A model runtime value that doesn't follow them would not be caught.
+- The `MessageIds` doc comment says "five messages", but seven ids are declared.

@@ -1,56 +1,47 @@
 ---
 source: src/modules/orders/tests/integration/erase-cancels-unpaid.test.ts
-sha256: 32a632c677bfd056ed8a1b6b252df28c5677db78ab065c8bd113a422a7cbf560
-generated_at: 2026-11-08T07:04:28.633770+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 12e48e9df4312b7bd7c3b1ff477843dd73e91da2b75b8d8cbf741ea8a9949777
+context_sha256: 7923ecd2e2db50504607251f0c6bdb343302f2fa7b218f8848548698df0a751e
+generated_at: 2026-11-22T06:27:41.092378+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/erase-cancels-unpaid.test.ts
 
 ## Purpose
-
-Integration test verifying that a **hard** erasure of a user account cancels all of their never-paid orders (releasing the inventory reservation through the reservation-sweep path) while leaving paid orders intact as detached invoices. It drives the flow through `userService.remove` with real module wiring so a missing hook registration in the orders module would be caught.
+Integration test suite verifying that erasing a user account cancels the account's never-paid orders. The cancel goes through the same path as the reservation sweep, so held stock is released, and it happens only after the erasure has committed. Paid orders are the invoice, so they are only detached, never canceled. The tests drive `userService.remove` through the real module wiring (via `registerCheckoutModules`). A direct call to the hook would still pass if `src/modules/orders/module.ts` stopped registering it.
 
 ## Key elements
-
-- **`heldOrderFor(user, quantity)`** – Local helper that creates a product, a pending order, and a real `inventoryService.reserveForOrder` call, asserting the hold succeeded. Returns `{ order, product }` for subsequent assertions.
-- **`describe('orders — erasing an account cancels its never-paid orders')`** – The test suite. Individual `it` blocks cover:
-  - Order status becomes `canceled`; stock counters reset (`reserved → 0`).
-  - Stock ledger records both `reserve` and `release` movements for the order reference.
-  - PII detachment: `userId` cleared, `piiClockStartedAt` set.
-  - Multiple unpaid orders all canceled.
-  - No email is enqueued to the erased address (mailer mock).
-  - Analytics emits `ORDER_CANCELED`, **not** `ORDER_RESERVATION_EXPIRED`.
-  - A `paid` order remains `paid`, only detached.
-  - An already-`canceled` order is left unchanged.
-  - Another account's pending order is untouched.
-  - A **soft** delete (`removeById` with `hardDelete: false`) does *not* cancel the order.
-- **`jest.mock('@infrastructure/adapters/mailer')`** – Replaces `enqueueEmail` with a mock so the test can assert zero calls.
-- **`jest.mock('@infrastructure/observability/analytics')`** – Replaces `emitAnalyticsEvent` (replaced, not spied on — see `tests/support/ports.ts` rationale).
-- **`beforeEach`** – Clears the mailer mock and calls `registerCheckoutModules()` to wire the real module graph.
-- **`afterEach`** – Calls `resetDomainEvents()` to isolate event-bus state between tests.
+- `mockEnqueueEmail`: typed handle on the `jest.fn()` that replaces `enqueueEmail` from the mailer adapter. Cases assert on which mail was enqueued.
+- `jest.mock` of `@infrastructure/observability/analytics`: keeps the real exports but replaces `emitAnalyticsEvent` with `jest.fn()`.
+- `heldOrderFor(user, quantity = 3)`: helper that creates a product (`onHand: 10`) and a pending order, then calls `inventoryService.reserveForOrder` so the units are really held, as checkout leaves them. Returns `{ order, product }`.
+- `beforeEach` / `afterEach`: clear the mail mock and call `registerCheckoutModules()` before each test, then `resetDomainEvents()` after each.
+- Test cases, in the `describe` block "orders — erasing an account cancels its never-paid orders":
+  - Cancels the order and returns the held units (`reserved` goes 3 → 0, `available` returns to 10).
+  - Leaves a `reserve` then a `release` movement in the stock ledger.
+  - Still detaches the order: `userId` is unset and `piiClockStartedAt` is set.
+  - Cancels every never-paid order of the account, not just one.
+  - Enqueues no mail to the erased address.
+  - Emits `ORDER_CANCELED` and not `ORDER_RESERVATION_EXPIRED`.
+  - Leaves a paid order `paid` but detached.
+  - Leaves an already-canceled order canceled.
+  - Does not touch another account's pending order or its reservation.
+  - Cancels nothing on a soft delete (`userService.removeById(user.id, false, callerContextAs('admin'))`).
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `@modules/users` (`userService`) | Entry point: `eraseAsScheduled` / `removeById` trigger the erasure flow. |
-| `@modules/users/tests/factories` | `createUser`, `eraseAsScheduled` for fixture setup and the erasure call. |
-| `@modules/products/tests/factories` | `createProduct`, `countersOf` for stock-level assertions. |
-| `@modules/orders/tests/factories` | `createOrder`, `toOrderItem`, `markOrderPaidAt`, `readOrder`, `forceOrderStatus`. |
-| `@modules/inventory` (`inventoryService`) | `reserveForOrder` to establish the hold; `listMovements` to inspect the ledger. |
-| `@modules/orders/analytics` | `ordersAnalyticsEvents` enum for expected event names. |
-| `@infrastructure/adapters/mailer` | Mocked; assertion target for "no email sent." |
-| `@infrastructure/observability/analytics` | Mocked; observed via `observePort` for event-name assertions. |
-| `@kernel/events` | `resetDomainEvents` in `afterEach` for isolation. |
-| `@types` | `OrderStatus`, `StockMovementReason` enum values. |
-| `tests/support/checkout-modules` | `registerCheckoutModules` wires the full module graph per test. |
-| `tests/support/callers` | `callerContextAs` for the soft-delete call. |
-| `tests/support/ports` | `observePort` helper for analytics spy. |
+- `@modules/users/tests/factories` supplies `createUser` and `eraseAsScheduled`. `eraseAsScheduled` triggers the erasure under test.
+- `@modules/users` (`userService`) is called directly only for the soft-delete case.
+- `@modules/orders/tests/factories` supplies `createOrder`, `toOrderItem`, `markOrderPaidAt`, `readOrder` and `forceOrderStatus` for building and inspecting orders.
+- `@modules/products/tests/factories` supplies `createProduct` and `countersOf`, which reads `onHand`, `reserved` and `available`.
+- `@modules/inventory` (`inventoryService`) is used for `reserveForOrder` and `listMovements`, to check the stock ledger.
+- `@modules/orders/analytics` supplies `ordersAnalyticsEvents` (`ORDER_CANCELED`, `ORDER_RESERVATION_EXPIRED`) for the analytics assertions.
+- `@infrastructure/adapters/mailer` is mocked (`enqueueEmail`).
+- `@infrastructure/observability/analytics` is partly mocked (`emitAnalyticsEvent`) and observed with `observePort` from `@tests/ports`.
+- `@kernel/events` supplies `resetDomainEvents`, which isolates event wiring between tests.
+- `@tests/checkout-modules` supplies `registerCheckoutModules`, the real module wiring. `@tests/callers` supplies `callerContextAs`. `@tests/setup-test-db` supplies `setupTestDb`.
+- `@types` supplies the `OrderStatus` and `StockMovementReason` enums.
 
 ## Notes
-
-- The test deliberately calls `userService.remove` (the public service) rather than the internal erasure hook, so a broken hook registration in `orders/module.ts` would fail the test. A direct hook call would hide that regression.
-- The mailer mock asserts on the **queue** (no `enqueueEmail` call), not on a sent copy — the point is that the erased address is never reached.
-- Analytics is **replaced** (full mock) rather than spied, following the convention documented in `tests/support/ports.ts`; this avoids partial real-side-effects during the test.
-- `eraseAsScheduled` performs a hard delete; the soft-delete case is a separate test using `removeById(…, false, …)` to confirm orders survive.
+- The mailer is mocked at the queue level on purpose: the check is that nothing is queued for an erased account's address, regardless of the email copy.
+- The analytics module is replaced rather than spied on; the reason is documented in `tests/support/ports.ts`.
+- The soft-delete case expects the order to stay `pending`, because the account can still come back.

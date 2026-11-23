@@ -1,30 +1,27 @@
 ---
 source: src/modules/observability/controllers/get-observability-health.ts
-sha256: 1b7b5eda6465d7048f960ec2bba520ba0bd9b990c866f49e1448f44aaaadf0f8
-generated_at: 2026-11-08T06:38:37.582890+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3e9944adf8f11c0e5fc28649a582b45f3634b41be63f468341082a36a3fda727
+context_sha256: fb9be26d75880ef78a6b1f17806133d76607937f3a001f2d1cd60b5b53fcbee9
+generated_at: 2026-11-22T06:00:49.192971+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/controllers/get-observability-health.ts
 
 ## Purpose
-
-HTTP controller for `GET /observability/health`. It delegates payload construction to the observability service and shapes the resulting `ObservabilityHealth` object into a standard success response. It intentionally keeps no business logic of its own.
+Express controller for `GET /observability/health`, the detailed, authenticated readiness view (backing services, telemetry wiring, process resources, per-job outcomes). It does not build the payload itself; it calls the observability service and shapes the HTTP response.
 
 ## Key elements
-
-- **`getObservabilityHealth(_request, response)`** — Exported Express handler. Calls `observabilityService.buildObservabilityHealth()`, wraps the result via `successResponse<ObservabilityHealth>`, and funnels any rejection into `catchAs(response, 'getObservabilityHealth')`.
+- `getObservabilityHealth(_request, response)` — the only export. Calls `observabilityService.buildObservabilityHealth()`, then on success sends the result with `successResponse<ObservabilityHealth>(response, health)`. Errors are routed through `catchAs(response, 'getObservabilityHealth')`. The request object is unused.
 
 ## Relationships
-
-- **`@infrastructure/http/response`** — `successResponse` formats the 200 JSON envelope.
-- **`@infrastructure/http/controller`** — `catchAs` provides the unified error-to-HTTP mapping on rejection.
-- **`../services` (observability service barrel)** — Source of `observabilityService.buildObservabilityHealth()`, which actually assembles the readiness/dependency data.
-- **`@types`** — Supplies the `ObservabilityHealth` type used as the response generic.
-- **`src/modules/observability/routes.ts`** — Registers this handler on the `/observability/health` route.
-- **`src/modules/observability/tests/unit/dependency-health.test.ts`** — Unit tests covering the dependency-health data this endpoint returns.
+- `src/infrastructure/http/response.ts` — provides `successResponse`, used to send the health payload.
+- `src/infrastructure/http/controller.ts` — provides `catchAs`, which handles rejected promises for this controller.
+- `src/modules/observability/services/index.ts` — exports `observabilityService`, whose `buildObservabilityHealth()` produces the data.
+- `src/types/index.ts` — supplies the `ObservabilityHealth` type (imported via the `@types` alias).
+- `src/modules/observability/routes.ts` — the route layer that exposes this handler at `/observability/health`.
+- `src/modules/observability/tests/unit/dependency-health.test.ts` — related test file in the module's unit tests.
 
 ## Notes
-
-- Three distinct health endpoints exist on purpose: this one (detailed, authenticated readiness), `GET /readyz` (binary, unauthenticated, load-balancer probe), and `GET /livez` (liveness). The JSDoc explicitly warns that an orchestrator restart triggered by liveness failure would not recover a downed Redis, so the endpoints must not be conflated.
-- The file contains no branching or business logic; if the health shape changes, edit the service, not this controller.
+- Three separate endpoints exist on purpose: this one is detailed and authenticated. `GET /readyz` is the binary, unauthenticated probe for load balancers. `GET /livez` is liveness. The source explains that orchestrators restart on liveness failure, and restarting this process would not recover a downed Redis, so readiness and liveness are kept apart.
+- The handler uses a promise chain, not `async/await`.

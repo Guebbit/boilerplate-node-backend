@@ -1,39 +1,32 @@
 ---
 source: scripts/scaffold/demo-remove-validation-labels.ts
-sha256: cc88d787b4af7b8720f7f81c66ae033e79233e9ce0060fe21456aed14a8157aa
-generated_at: 2026-11-14T17:40:58.497925+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:15:23.675320+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/scaffold/demo-remove-validation-labels.ts
 
 ## Purpose
-
-Cleans up the shared locale dictionaries (`shared/locales/<locale>.json`) after a module is removed. The cross-cutting test `tests/cross-cutting/validation-attributes.test.ts` rejects any `validation.attributes` label that no surviving request field uses, so this module identifies which labels belong *only* to the removed module and strips them from every locale file before the module folders are deleted.
+When a demo scaffold removes modules, this file finds the shared validation labels (`validation.attributes` in `shared/locales/<locale>.json`) that only the removed modules' request fields used, and deletes them. This keeps `tests/cross-cutting/validation-attributes.test.ts` passing, since that test refuses any label nothing uses. The fields must be read before the module folders are deleted.
 
 ## Key elements
-
-- **`readRemovedFields(repoRoot, names)`** — *exported.* Computes the set of field names that appear in the removed modules' contracts but are **not** carried by any surviving module's JSON request body or query parameter. Must be called while the removed module folders still exist on disk.
-- **`stripValidationLabels(repoRoot, fields)`** — *exported.* For each field in the set, deletes its key from `validation.attributes` in every `shared/locales/*.json` file. Returns an array of `RemovalNote` objects describing what was removed and where.
-- **`contractsIn(directory)`** — *internal.* Parses all `openapi*.yaml` files in a given directory into an array of YAML objects.
-- **`eachObject(node, visit)`** — *internal.* Depth-first walker over any parsed YAML/JSON node; invokes `visit` once per plain-object encountered.
-- **`reachableFields(roots, schemas)`** — *internal.* Collects every `properties` key reachable from `roots`, following `$ref` links (matched by last path segment) into `components.schemas`.
-- **`jsonBody(requestBody)`** — *internal.* Extracts the `application/json` schema from a `requestBody` object; returns `[]` for multipart or other content types.
-- **`requestFields(contracts)`** — *internal.* Computes the full set of fields a group of contracts' requests can carry (JSON body fields + query parameter names).
-- **`anyFields(contracts)`** — *internal.* Collects every field name anywhere in a set of contracts (request *and* response).
+- `readRemovedFields(repoRoot, names)` (exported): returns the set of field names that the removed modules' `openapi*.yaml` contracts mention anywhere (request or response) and that no surviving request carries. "Surviving" means the surviving modules' contracts plus `shared/contracts`. It must run while the removed folders still exist.
+- `stripValidationLabels(repoRoot, fields)` (exported): for each `shared/locales/*.json`, deletes the matching keys from `validation.attributes`. It rewrites the file only if something was dropped, and returns one `RemovalNote` (`{ file, detail }`) per changed file.
+- `requestFields` (internal): approximates what the validation-attributes test reads from the generated `*Body` schemas. It collects every field reachable from an `application/json` request body, plus every query parameter name. Multipart bodies are not counted.
+- `reachableFields` (internal): collects `properties` keys under the given roots. It follows each `$ref` into the component `schemas` by its last path segment, and tracks visited targets to avoid loops.
+- `anyFields` (internal): collects every `properties` key in the contracts, regardless of where it appears.
+- `contractsIn`, `eachObject`, `jsonBody` (internal): contracts loading and traversal helpers. `contractsIn` parses the `openapi*.yaml` files in a folder, `eachObject` walks a parsed YAML tree depth first, and `jsonBody` extracts a JSON request-body schema.
 
 ## Relationships
-
-- **`scripts/modules-on-disk.ts`** — imports `modulesWith` to discover surviving modules (used to build the "surviving" contract set).
-- **`src/infrastructure/object-guards.ts`** — imports `isPlainObject` for runtime type-narrowing of parsed YAML/JSON nodes throughout the file.
-- **`scripts/scaffold/demo-remove-registry.ts`** — imports the `RemovalNote` type used as the return type of `stripValidationLabels`.
-- **`scripts/scaffold/demo-remove-modules.ts`** — this file must run **before** `demo-remove-modules` deletes module folders; it reads those folders' contracts while they still exist.
-- **`tests/unit/scripts/scaffold/demo-remove-validation-labels.test.ts`** — unit tests covering both exported functions.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** — exercises the CI wave ordering that constrains when this step runs relative to folder deletion.
+- `scripts/modules-on-disk.ts`: `modulesWith(modulesRoot, 'openapi.yaml')` lists the modules on disk that have a contract, which gives the survivors.
+- `scripts/scaffold/demo-remove-registry.ts`: provides the `RemovalNote` type that `stripValidationLabels` returns.
+- `src/infrastructure/object-guards.ts`: `isPlainObject` is used throughout the YAML traversal.
+- `scripts/scaffold/demo-remove-modules.ts`: part of the same removal scaffold.
+- `tests/unit/scripts/scaffold/demo-remove-validation-labels.test.ts`: unit tests for this file.
+- `tests/unit/scripts/mutation/ci/waves.test.ts`: listed as a neighbor in the graph. Nothing in this file shows how the two interact.
 
 ## Notes
-
-- **Ordering is critical.** The module doc explicitly states `readRemovedFields` must be called *before* the module folders are removed. Calling it after deletion will silently produce an empty set.
-- **JSON formatting assumption.** `stripValidationLabels` writes files back as `JSON.stringify(obj, null, 4) + '\n'`. This is a lossless round-trip *only* if the file was originally formatted exactly that way; any custom indentation or key ordering in the locale file will be normalized.
-- **`$ref` resolution is shallow.** Only the last segment of a `$ref` path is used to look up a schema. This matches the repo convention where fragments name siblings by component name, but it will silently miss cross-document `$ref`s.
-- **Multipart bodies are excluded.** `jsonBody` only picks up `application/json` schemas; fields carried solely in multipart request bodies will not appear in the "surviving" set and could be incorrectly flagged as removable.
+- The JSON rewrite assumes the locale files are exactly `JSON.stringify(..., null, 4)` plus a trailing newline, so nothing else in them changes.
+- A label is removed only if a removed module names the field and no surviving request does. A field that survives only in a response does not keep its label.
+- The `$ref` handling is deliberately simple: it follows only the last path segment, which is how fragments name a sibling's component. Schema names are merged across all contracts into one namespace.
+- The module header says the read-before-delete ordering follows the one kept by `demo-remove-authorization.ts`.

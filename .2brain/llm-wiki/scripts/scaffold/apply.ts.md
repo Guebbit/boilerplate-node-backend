@@ -1,39 +1,40 @@
 ---
 source: scripts/scaffold/apply.ts
-sha256: a3fb503b267168acea0eb6a38edd7494891feb2d58fc663f46a8cfa51e213867
-generated_at: 2026-11-08T02:57:34.925942+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a06cf32cda9dc1c8603859359ddc0e7abbae80f5be91ad579d56d0d978df4bc7
+context_sha256: afdc47cdb1851c3543d0120ade8f6fcb1d927f32f0e124522606cc3bca1af8ed
+generated_at: 2026-11-22T02:13:43.617657+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/scaffold/apply.ts
 
 ## Purpose
-
-The I/O half of the module scaffolder. Given a fully computed plan (produced by the pure sibling files), it either refuses to proceed—returning every reason the scaffold would collide with existing state—or writes the planned files and central edits to disk. It exists to keep all disk-touching logic isolated so that tests can point it at a scratch directory and the pure planning logic stays unit-testable without filesystem access.
+The I/O half of the module scaffolder. It refuses to scaffold when the module already exists or its schema names collide, then writes the planned files and applies the central registry edits. All decisions live in the pure neighbouring files. This file only touches the disk, under a caller-supplied `root`, so tests can point it at a scratch directory.
 
 ## Key elements
-
-- **`REGISTRY`** (const) – Repo-relative path of the central module registry (`src/modules.ts`), used for both the refusal check and the central-edit write.
-- **`takenSchemaNames(root)`** – Scans every module under `src/modules` for an `openapi.yaml` fragment and returns the set of all declared schema names. Used to detect cross-module name collisions.
-- **`refusalsFor(root, plan)`** (exported) – Returns an array of human-readable strings explaining why the scaffold must not proceed: directory exists, docs file exists, already registered, or schema-name collision.
-- **`writePlanned(root, relative, content, formatText)`** – Creates parent directories and writes a single planned file after running it through the injected `formatText` function.
-- **`applyScaffold(root, options, formatText)`** (exported) – The main entry point. Calls `planModule`, checks `refusalsFor` (throws with all reasons joined if any), computes all central edits up-front, then writes planned files followed by central edits. Returns the `ScaffoldPlan` that was written.
+- `refusalsFor(root, plan)` (exported): returns a list of human-readable reasons the scaffold can't proceed. It checks these in order:
+  - `src/modules/<kebab>/` already exists.
+  - `docs/modules/<kebab>.md` already exists.
+  - The module is already registered in the registry file (`src/modules.ts`).
+  - Schema names collide with another module's contract. The message suggests `--entity <Name>`.
+- `applyScaffold(root, options, formatText)` (exported, async): plans the module, throws an `Error` listing every refusal joined by newlines, computes all central edits, then writes the planned files and the edits. It returns the `ScaffoldPlan`.
+- `takenSchemaNames(root)` (internal): collects the schema names under `components.schemas` from every module's contract fragment.
+- `writePlanned(...)` (internal): creates the parent folder, formats the content, and writes the file.
+- `REGISTRY`: the constant `'src/modules.ts'`.
 
 ## Relationships
-
-- **`scripts/scaffold/plan.ts`** – Source of `planModule`, `collidingSchemas`, and the `ScaffoldPlan` type. All decisions about *what* to write live there; this file only executes.
-- **`scripts/scaffold/central-edits.ts`** – Provides `centralEdits(plan.names)`, which yields the list of edits (e.g., registry line insertions) applied after the module files.
-- **`scripts/scaffold/registry.ts`** – `isRegistered` is used during the refusal check to see whether the kebab-case name already appears in `src/modules.ts`.
-- **`scripts/scaffold/format-text.ts`** – Supplies the `FormatText` type. The concrete formatter is injected by the caller so this module never imports Prettier directly.
-- **`scripts/scaffold/options.ts`** – Provides the `ScaffoldOptions` type consumed by `applyScaffold`.
-- **`scripts/modules-on-disk.ts`** – `modulesWith` lists module folders that contain a given file (`openapi.yaml`), enabling the schema-name collision scan.
-- **`scripts/contracts/fragments.ts`** – `readModuleFragment` reads a module's `openapi.yaml` to extract its declared schema components.
-- **`tests/unit/scripts/scaffold/apply.test.ts`** – Unit-tests for the refusal logic and the write path, using a scratch `root` and an identity `formatText`.
-- **`tests/unit/scripts/mutation/ci/waves.test.ts`** – Exercises broader CI-wave behavior that may invoke or depend on the scaffolding pipeline.
+- `./options`: supplies the `ScaffoldOptions` type.
+- `./plan`: provides `planModule` (options → plan), `collidingSchemas`, and the `ScaffoldPlan` type.
+- `./central-edits`: `centralEdits` returns the edits to existing central files. Each has a `path` and an `apply(text)` function.
+- `./registry`: `isRegistered` checks whether the module is already registered.
+- `./format-text`: provides the `FormatText` type. The formatter is injected, not imported.
+- `../modules-on-disk` (`modulesWith`): enumerates module folders that contain a contract fragment file.
+- `../contracts/fragments` (`readModuleFragment`): reads each module's contract fragment.
+- `scripts/scaffold/scaffold-module.ts` is a graph neighbour. It is presumably the entry point that calls `applyScaffold`, but the call is not visible in this file.
+- `tests/unit/scripts/scaffold/apply.test.ts` exercises this file. `tests/unit/scripts/mutation/ci/waves.test.ts` is also a graph neighbour, and this file does not show how it relates.
 
 ## Notes
-
-- **Atomicity-by-construction:** All central edits are read, transformed, and formatted *before* any file is written. If `formatText` throws mid-batch, the tree is left untouched rather than half-scaffolded.
-- **No Prettier import here:** `formatText` is a required parameter with no default. In production the caller wires in a real formatter; in tests an identity function is passed. This keeps the module free of a Prettier dependency.
-- **Refusal is all-or-nothing:** `applyScaffold` collects every problem, then throws once with all reasons newline-joined. It never writes a file after finding even one refusal.
-- **`root` is always the first parameter** in every function, making the entire file relocatable for test fixtures without monkey-patching `fs`.
+- **Nothing is written on a refusal.** Refusals are checked first, and all central edits are computed, formatted and read from disk before any write. A central file that has changed shape therefore leaves the tree untouched rather than half-scaffolded.
+- **Atomicity is limited to the compute phase.** The write loops themselves are not transactional.
+- **`formatText` is required, not defaulted**, so this file never loads Prettier. Tests pass an identity function.
+- **Write order:** the planned new files are written first, then the central edits.

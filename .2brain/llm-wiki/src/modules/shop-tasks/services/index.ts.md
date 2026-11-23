@@ -1,32 +1,29 @@
 ---
 source: src/modules/shop-tasks/services/index.ts
-sha256: 173f089882868694ae2c99630c0c5551243136ec2eff0ad925e5f21244c2ff3b
-generated_at: 2026-11-14T21:52:31.366822+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 173f089882868694ae2c99630c0c5551243136ec2eff0ad925e5f21244c2ff3b
+context_sha256: d7b581a5b18fdd29151c089c4585bbf1ccabc5998d38c9639f78f9ca801f36de
+generated_at: 2026-11-22T07:42:53.317258+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/services/index.ts
 
 ## Purpose
-
-Barrel aggregation for the shop-tasks service. It collects the event handlers defined across six sibling service files into a single `shopTasksService` object so that `module.ts` (and the module barrel) has one import to subscribe to, rather than importing each handler individually.
+Barrel for the shop-tasks service. It gathers the event handlers and scheduled or query functions from the sibling service files into one object, `shopTasksService`, so the rest of the module has a single entry point. `module.ts` subscribes its event handlers through this object.
 
 ## Key elements
-
-- **`shopTasksService`** (const export) — the sole public export. An object assembled by spreading `shopTasks` and `shopNotices`, then adding four standalone functions: `onFulfillmentOrderDelayed`, `tellOutcomeUnknown`, `runStaffDigest`, `workSummary`.
+- `shopTasksService` (the only export): a plain object that merges the following.
+  - `...shopTasks` (from `tasks.ts`): opens and clears to-dos.
+  - `...shopNotices` (from `notices.ts`): writes messages and staff notices.
+  - `onFulfillmentOrderDelayed` (from `delayed.ts`): the one event that both tasks and notices care about.
+  - `tellOutcomeUnknown` (from `outcome-unknown.ts`).
+  - `runStaffDigest` (from `digest.ts`): the scheduled summary.
+  - `workSummary` (from `work-summary.ts`): counts the navigation badges.
 
 ## Relationships
-
-- **`src/modules/shop-tasks/module.ts`** — the consumer; subscribes to the handlers exposed by `shopTasksService`.
-- **`src/modules/shop-tasks/index.ts`** — the module-level barrel; re-exports `shopTasksService` outward.
-- **`src/modules/shop-tasks/services/tasks.ts`** — provides the `shopTasks` object (open/clear to-dos).
-- **`src/modules/shop-tasks/services/notices.ts`** — provides the `shopNotices` object (messages, staff notices).
-- **`src/modules/shop-tasks/services/delayed.ts`** — provides `onFulfillmentOrderDelayed`, the shared delayed-order handler.
-- **`src/modules/shop-tasks/services/digest.ts`** — provides `runStaffDigest` (scheduled summary).
-- **`src/modules/shop-tasks/services/outcome-unknown.ts`** — provides `tellOutcomeUnknown`.
-- **`src/modules/shop-tasks/services/work-summary.ts`** — provides `workSummary` (navigation badge counts).
+- Imports and re-composes `tasks.ts`, `notices.ts`, `delayed.ts`, `outcome-unknown.ts`, `digest.ts` and `work-summary.ts`. It contains no logic of its own.
+- `module.ts` is the subscriber of these handlers, per the module doc comment.
+- `src/modules/shop-tasks/index.ts` is the module's public barrel. It sits in the same dependency graph as this file, but this file's content doesn't show how it uses the service.
 
 ## Notes
-
-- `shopTasks` and `shopNotices` are spread (`...`), so their internal keys become top-level properties of `shopTasksService`. The other four are attached by their own function names. Callers must know which key names come from the spread objects versus the explicit ones.
-- The file is declared `@module` with no other named exports; the only way to reach any handler is through `shopTasksService.<key>`.
+- `shopTasks` and `shopNotices` are spread, so their member names become top-level keys. A name that appears in both objects, or that matches one of the explicitly listed members, would be overwritten by the later entry. Keep names unique across these files.

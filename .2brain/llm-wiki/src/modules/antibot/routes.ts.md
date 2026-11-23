@@ -1,27 +1,23 @@
 ---
 source: src/modules/antibot/routes.ts
-sha256: 5db8df7caa214642a1d3a74e65b100468e253c31c4a6997350e8d28a81e105ad
-generated_at: 2026-11-08T05:00:40.961440+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ff948384890d070b345feb8968eb1f36baec824269fa979bc35b5634244dec1f
+context_sha256: 7b1f59624054e953d1727e7aefd469f46080ae5e2f8205f3e8a4e79d73b8a098
+generated_at: 2026-11-22T04:19:47.333290+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/antibot/routes.ts
 
 ## Purpose
-
-Defines the Express route table for the antibot module. It exposes a single public endpoint (`GET /challenge`) that delivers the challenge configuration a self-hosted provider needs to render its widget. The route is intentionally stateless and write-free, so it is bounded only by the global burst brake in `app/security.ts`.
+Route table for the antibot module. It exposes a single public route that gives a client the challenge it needs to render the widget of a self-hosted antibot provider. Which widget the client renders is determined by the `antibot` field on `GET /config`, not by this file.
 
 ## Key elements
-
-- **`router`** (exported `Router`) — The Express router instance. Mounts the antibot endpoints on the application.
-- **`GET /challenge`** — The sole route; delegates to `getAntibotChallenge`. Returns 404 when the active provider issues no challenge.
+- `router` — Express `Router` for antibot endpoints.
+- `GET /challenge` — mapped to `getAntibotChallenge`. The mount path is not set here. The in-file comment names the full path `/antibot/challenge`. It returns 404 when the active provider issues no challenge.
 
 ## Relationships
-
-- **`src/modules/antibot/controllers/get-antibot-challenge.ts`** — Imported and used as the handler function for `GET /challenge`. This file is the sole request handler in the route table.
-- **`src/modules/antibot/module.ts`** — Upstream consumer that mounts this `router` onto the parent Express app (standard module-mount pattern).
+- `src/modules/antibot/controllers/get-antibot-challenge.ts` — supplies the `getAntibotChallenge` handler, which is the only route handler registered here.
+- `src/modules/antibot/module.ts` — a graph neighbor. The file content does not show how the two connect. Presumably the module mounts this `router`, but that is not visible here.
 
 ## Notes
-
-- The path is `/challenge`, not `/config`. The module doc comment references `GET /config` as the client-facing path, implying the parent mount prefix is `/antibot` and the full path becomes `/antibot/challenge` — but the client-facing name is "config."
-- Because the handler writes nothing, the only rate-limiting protection is the global burst brake; there is no per-route throttle here.
+- The route is bounded only by the global burst brake in `src/app/security.ts`. It writes nothing, so it costs no more than any other request a scanner sends.

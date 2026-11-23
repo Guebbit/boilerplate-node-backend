@@ -1,35 +1,34 @@
 ---
 source: src/modules/account/tests/unit/operator-identity.test.ts
-sha256: ba51ffe4e6c610886aa0d56601ef19d8a490706f366d0ea4b6b20166bc0a7f19
-generated_at: 2026-11-08T04:48:23.135668+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ba51ffe4e6c610886aa0d56601ef19d8a490706f366d0ea4b6b20166bc0a7f19
+context_sha256: 7489a2aedab068ff9b80410bb1a6e487f73258d49ab02d136309db62287545ab
+generated_at: 2026-11-22T04:07:21.002251+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/unit/operator-identity.test.ts
 
 ## Purpose
-
-Unit tests for the account module's operator-identity service and its boot gate. Verifies that `assertModuleConfig` refuses to boot when any required `NODE_LEGAL_*` variable is missing, and that `operatorIdentity()` correctly reads required fields, omits unset optional fields, falls back to `NODE_SUPPORT_EMAIL`, and prefers `NODE_LEGAL_EMAIL` when both are set.
+Unit tests for the operator's legal identity, which is read live from `NODE_LEGAL_*` environment variables. They cover two things: the `operatorIdentity()` service, and the boot gate that refuses to start when a required field is missing. The tests only read environment variables, so a unit suite is enough.
 
 ## Key elements
-
-- **`REQUIRED`** – const object listing the five mandatory `NODE_LEGAL_*` env variables and a satisfying sample value for each.
-- **`REQUIRED_VARIABLES`** – `Object.keys(REQUIRED)` cast to `(keyof typeof REQUIRED)[]`; used to drive `it.each` and the cleanup list.
-- **`withoutEnvironmentInThisFile(…)`** – called at module level; guarantees none of the `NODE_LEGAL_*` / `NODE_SUPPORT_EMAIL` variables leak in from the host environment.
-- **`describe('the operator boot gate', …)`** – two tests: one parameterised over each required variable asserting a boot failure, one confirming boot succeeds with only the required set (phone optional).
-- **`describe('operatorIdentity', …)`** – three tests covering: required-only read, optional fields + email fallback/priority, and the throw when a required field is absent.
+- `REQUIRED`: a map of the five required variables (`NODE_LEGAL_NAME`, `NODE_LEGAL_STREET`, `NODE_LEGAL_CITY`, `NODE_LEGAL_ZIP`, `NODE_LEGAL_COUNTRY`), each with a valid sample value.
+- `REQUIRED_VARIABLES`: the keys of `REQUIRED`, cast to a typed key array.
+- `withoutEnvironmentInThisFile([...])`: clears the required variables plus the optional ones (`NODE_LEGAL_PHONE`, `NODE_LEGAL_VAT_NUMBER`, `NODE_LEGAL_TRADE_REGISTER`, `NODE_LEGAL_REGISTRATION_NUMBER`, `NODE_LEGAL_EMAIL`, and `NODE_SUPPORT_EMAIL`) for this file.
+- `describe('the operator boot gate')`:
+  - A parameterised test unsets each required variable in turn. It expects `assertModuleConfig([accountModule], [])` to throw an error mentioning that variable's name.
+  - A second test checks that boot works without a phone number, so the error does not match `/NODE_LEGAL/`.
+- `describe('operatorIdentity')`:
+  - With only the required fields set, the result contains exactly those fields plus `email`, which comes from `NODE_SUPPORT_EMAIL`. The optional keys are left out.
+  - With the optional fields set, `phone`, `vatNumber`, `tradeRegister` and `registrationNumber` are carried through. `NODE_LEGAL_EMAIL` takes precedence over the support address.
+  - With a required field unset (`NODE_LEGAL_CITY`), `operatorIdentity()` throws rather than return an empty notice.
 
 ## Relationships
-
-- **`src/modules/account/services/operator-identity.ts`** – the system under test; `operatorIdentity()` is the pure function exercised in the second describe block.
-- **`src/kernel/module-config.ts`** – provides `assertModuleConfig`, the boot-validation entry point used by the first describe block.
-- **`src/modules/account/module.ts`** – imported as `accountModule` and passed to `assertModuleConfig` so the real module config rules are checked.
-- **`src/modules/account/services/index.ts`** – re-export barrel from which `operatorIdentity` is imported.
-- **`tests/support/environment.ts`** – supplies `withoutEnvironmentInThisFile` (cleanup) and `setEnvironment` (per-test env mutation).
+- `src/kernel/module-config.ts` supplies `assertModuleConfig`, which runs the boot checks.
+- `src/modules/account/module.ts` is the account module passed to `assertModuleConfig`. Its env requirements are what the tests exercise.
+- `src/modules/account/services/index.ts` re-exports `operatorIdentity`, which is implemented in `src/modules/account/services/operator-identity.ts`.
+- `tests/support/environment.ts` supplies `setEnvironment` and `withoutEnvironmentInThisFile`, which manage the environment variables per test.
 
 ## Notes
-
-- The boot-gate tests explicitly set `NODE_ENV: 'development'` because `assertModuleConfig` short-circuits (skips validation) under `NODE_ENV=test`. Forgetting this makes the tests pass trivially.
-- `withoutEnvironmentInThisFile` is called at the **top of the module**, not inside a `beforeEach`, so the env is cleared once before any test runs.
-- The `email` field has a fallback chain: `NODE_LEGAL_EMAIL` → `NODE_SUPPORT_EMAIL` → (error if neither). The tests assert both branches.
-- `operatorIdentity()` throws (rather than returning partial data) when a required field is missing, which is distinct from the boot-gate path—both guard the same variables but at different lifecycle points.
+- `assertModuleConfig` short-circuits under `NODE_ENV=test`. Each boot-gate test therefore sets `NODE_ENV: 'development'` first.
+- Setting a variable to `undefined` through `setEnvironment` is how the tests simulate it being unset.

@@ -1,37 +1,36 @@
 ---
 source: src/modules/locales/services/messages.ts
-sha256: 642e8de8acdbb9b09258cae9f7e07e78d3e3585864142a2964c96a994bc04903
-generated_at: 2026-11-08T06:26:21.035449+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 642e8de8acdbb9b09258cae9f7e07e78d3e3585864142a2964c96a994bc04903
+context_sha256: 43152a9a1fd1955eeda8d7dfaf636e5fd1db97a47fbd765d4f66854e7b941daa
+generated_at: 2026-11-22T05:48:17.012906+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/services/messages.ts
 
 ## Purpose
-
-Provides the two read paths for stored locale copy: `readMessages` serves a single frontend app's per-language entries to a client, and `readApiOverrides` builds the backend's own override tree. A third function, `readLocaleOverlay`, bundles both plus the active/inactive tag lists so the i18n provider refreshes copy and served-language state atomically.
+Provides the two reads that serve stored translation copy: the overrides a frontend client downloads for one language, and the overrides the API itself overlays on its built-in i18n. Both turn flat repository rows into nested message trees via `buildMessageTree`. They differ in which app's keyspace they may serve: frontend apps only for clients, the backend app only for the API.
 
 ## Key elements
-
-- **`readMessages(tag, app?, includeInactive?)`** — Looks up a language row and its entries for the given frontend app, returns `{ locale, revision, messages }` via `generateSuccess`, or a 404 (`languageNotFound`) for unknown apps, missing languages, and inactive languages (unless `includeInactive` is set). `app` defaults to `frontendApp()`.
-- **`readApiOverrides()`** — Fetches all backend-app rows, groups them by locale, and expands each group into a message tree with `buildMessageTree`. Per-locale `try/catch` logs a warning and skips a locale whose keys cannot form a tree. Inactive languages are **included** deliberately.
-- **`readLocaleOverlay()`** — Runs `readApiOverrides`, `localeRepository.listActiveTags()`, and `localeRepository.listInactiveTags()` concurrently; resolves to a single `LocaleOverlay` object. Keeps the last good set of both in place on failure (caller-side, per the i18n provider).
+- **`readMessages(tag, app = frontendApp(), includeInactive = false)`**: returns `ResponseSuccess<LocaleMessages>` (`locale`, `revision`, `messages` tree) or a `ResponseReject`.
+  - Returns `languageNotFound()` when `app` is not a frontend app (this covers the backend app and unconfigured ids), when the language is unknown, or when it is inactive and `includeInactive` is false.
+  - The payload is overrides only, not a full dictionary. Clients merge it over their bundled copy key by key.
+- **`readApiOverrides()`**: loads all backend-app entries with `listEntriesByApp(backendApp())`, groups them by locale, and builds a tree per locale. It includes inactive languages. A locale whose keys cannot form a tree is skipped, and a warning is logged.
+- **`readLocaleOverlay()`**: runs `readApiOverrides()`, `listActiveTags()` and `listInactiveTags()` together and returns a `LocaleOverlay` of `{ overrides, activeTags, inactiveTags }`.
 
 ## Relationships
-
-- **`../repository`** (`repository.ts`) — `localeRepository` (language row lookups, active/inactive tag lists) and `localeEntryRepository` (entry rows per app/locale).
-- **`../apps`** (`apps.ts`) — `frontendApp()`, `backendApp()`, `isFrontendApp()` determine which keyspace each read is scoped to.
-- **`./keys`** (`keys.ts`) — `buildMessageTree` expands flat `{key, value}` rows into a nested object for both exports.
-- **`./languages`** (`languages.ts`) — `languageNotFound` supplies the 404 response in `readMessages`.
-- **`@infrastructure/i18n`** (`index.ts`) — `LocaleOverlay` type shapes the return of `readLocaleOverlay`; the i18n provider is the caller that rebuilds its overlay from this.
-- **`@infrastructure/http/response`** (`response.ts`) — `generateSuccess`, `ResponseSuccess`, `ResponseReject` define the HTTP-shaped return of `readMessages`.
-- **`@infrastructure/adapters/logger`** (`logger.ts`) — `logger.warn` in the per-locale catch of `readApiOverrides`.
-- **`@types`** (`types/index.ts`) — `LocaleMessages`, `LocaleApp` shared type imports.
-- **`services/index.ts`** — barrel re-export for this module.
+- **`../repository`**: `localeRepository` (`findByTag`, `listActiveTags`, `listInactiveTags`) and `localeEntryRepository` (`listEntries`, `listEntriesByApp`) supply the data.
+- **`../apps`**: `frontendApp`, `backendApp` and `isFrontendApp` decide which app each read may serve.
+- **`./keys`**: `buildMessageTree` expands flat rows into nested trees.
+- **`./languages`**: `languageNotFound` supplies the shared 404 response.
+- **`@infrastructure/http/response`**: `generateSuccess` and the `ResponseSuccess` / `ResponseReject` types.
+- **`@infrastructure/i18n`**: the `LocaleOverlay` type. `readLocaleOverlay` is the read its provider calls on each refresh.
+- **`@infrastructure/adapters/logger`**: used to log a warning when a language is skipped.
+- **`@types`**: `LocaleMessages` and `LocaleApp`.
 
 ## Notes
-
-- **Inactive-language asymmetry:** `readMessages` returns 404 for inactive languages (prevents leaking draft existence to public clients) unless the caller passes `includeInactive = true`. `readApiOverrides` intentionally **includes** inactive languages so a backend translation-in-progress isn't silently reverted mid-refresh.
-- **Per-locale isolation in `readApiOverrides`:** a key that is simultaneously a string leaf and a group throws inside `buildMessageTree`; the `try/catch` is scoped per locale so one malformed dictionary degrades to a `logger.warn` without affecting other languages.
-- **Mutation-testing guard:** the `Stryker disable all` / `Stryker restore all` comments around the `logger.warn` call tell Stryker not to mutate that block (it is a deliberate no-op recovery path).
-- **`readLocaleOverlay` atomicity:** all three reads run in `Promise.all`; the i18n provider treats a rejected promise as "keep last good overlay" so copy and the served-language list never update independently.
+- A 404 is returned for inactive languages so that a draft translation's existence is not leaked. The exception is `includeInactive`, which staff use to preview drafts (its value comes from `callerScope`).
+- `readApiOverrides` includes inactive languages on purpose. `active` controls public visibility, not whether an override applies, so excluding them would revert backend copy mid-translation.
+- The overlay's `readLocaleOverlay` fetches overrides and active/inactive tags together, so a failed read leaves the last good set of both in place.
+- `buildMessageTree` throws when a key is both a string and a group. `readApiOverrides` catches this per locale, with an eslint-disable and Stryker-disable around the try/catch and the warning, so one malformed dictionary does not break the whole refresh.
+- `readMessages` does not catch such errors.

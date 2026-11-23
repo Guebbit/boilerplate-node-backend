@@ -1,41 +1,41 @@
 ---
 source: src/modules/stats/openapi.yaml
-sha256: e80486761076c7dd60b10f135a4391562907bd4e24a31411e88f629350e69437
-generated_at: 2026-11-14T22:01:39.144618+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e80486761076c7dd60b10f135a4391562907bd4e24a31411e88f629350e69437
+context_sha256: 7f3aba86ac2efd0d4afe36d962f2b90d926a48df14042f45873919e465614311
+generated_at: 2026-11-22T07:51:33.899347+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stats/openapi.yaml
 
 ## Purpose
-
-OpenAPI 3.1.0 contract for the **stats** module: the set of read-only, staff-facing endpoints that expose sales, product, category, payment, operations, customer, and pipeline figures for the staff dashboard. It defines the request/response shapes so clients and the implementing service stay in sync without either side reading the other's source.
+OpenAPI 3.1.0 contract (v0.1.0) for the `stats` module. It defines read-only, staff-facing sales and operations reporting endpoints, all tagged `Stats` (family "Running the shop"). The figures are computed on demand from the modules that own the underlying data.
 
 ## Key elements
+All operations are `GET`, require `bearerAuth` with scope `read:Stats`, are marked `x-cache: private-no-cache`, and reference shared `Unauthorized`/`Forbidden` responses. All except `/stats/pipeline` also reference `ValidationError`.
 
-- **`/stats/sales`** (`getSalesStats`) — Headline totals, prior-period comparison, and per-bucket (day / Monday-week / month) series per currency. Parameters: `from`, `to`, and `StatsIntervalParam`.
-- **`/stats/products`** (`getProductStats`) — Top-N products ranked by net sales (units ordered minus units reversed). Accepts a `limit` (1–100, default 10).
-- **`/stats/products/{productId}`** (`getProductSalesSeries`) — Per-bucket units ordered and reversed for a single product, plus its frozen title.
-- **`/stats/categories`** (`getCategoryStats`) — Net sales and units per category (from the categories each order line froze).
-- **`/stats/payments`** (`getPaymentMixStats`) — Payment count and amount grouped by method and provider for succeeded payments in the period.
-- **`/stats/operations`** (`getOperationsStats`) — Cancellation rate (cohort), return rate, and refund rate.
-- **`/stats/customers`** (`getCustomerStats`) — New vs. returning customer counts (matched by account, not email).
-- **`/stats/pipeline`** (`getPipelineStats`) — Point-in-time snapshot: bank transfers awaiting funds and paid-but-unshipped orders. No `from`/`to` params.
-- **`components.parameters`** — Shared `StatsFromParam`, `StatsToParam`, `StatsIntervalParam` reused across period-based endpoints.
-- **`components.schemas`** — `SalesStats`, `ProductStats`, `ProductSeries`, `CategoryStats`, `PaymentMix`, `OperationsStats`, `CustomerStats`, `PipelineStats` (definitions truncated in the source).
-- **`tags`** — Single `Stats` tag with `x-family: Running the shop`.
+- `/stats/sales` (`getSalesStats`): headline totals, the same totals for the equal-length prior period, and per-currency buckets by day, week (Monday) or month. The range may not pass 731 days or 400 buckets.
+- `/stats/products` (`getProductStats`): top products by net sales, with units ordered, units reversed, net units and net sales. It takes a `limit` query parameter (1–100, default 10).
+- `/stats/products/{productId}` (`getProductSalesSeries`): per-bucket units ordered and reversed for one product, plus its frozen title. It also returns `404`. `productId` uses the shared `Id` schema.
+- `/stats/categories` (`getCategoryStats`): net sales and units per category.
+- `/stats/payments` (`getPaymentMixStats`): succeeded payments by method and provider, with count and amount.
+- `/stats/operations` (`getOperationsStats`): cancellation, return and refund rates.
+- `/stats/customers` (`getCustomerStats`): new versus returning paying customers.
+- `/stats/pipeline` (`getPipelineStats`): a snapshot with no period or parameters. It covers bank transfers awaiting money and paid orders not yet shipped.
+- Shared parameters in `components.parameters`: `StatsFromParam` and `StatsToParam` (required, shop-local calendar dates, inclusive) and `StatsIntervalParam`.
+- Response schemas referenced from `components/schemas`: `SalesStats`, `ProductStats`, `ProductSeries`, `CategoryStats`, `PaymentMix`, `OperationsStats`, `CustomerStats`, `PipelineStats`.
 
 ## Relationships
-
-- **`shared/contracts/openapi.root.yaml`** — All standard error responses (`Unauthorized`, `Forbidden`, `ValidationError`, `NotFound`) and the `Id` schema are `$ref`'d from this file, so error shapes and the product-ID type are defined once at the root level and reused here.
+- `src/modules/stats/authorization.yaml` is the neighbor file. This contract's operations require the `read:Stats` scope under `bearerAuth`, which is presumably defined and granted there.
+- The contract also uses `$ref`s to a shared root contract for the common error responses (`Unauthorized`, `Forbidden`, `ValidationError`, `NotFound`) and the `Id` schema.
+- `/stats/products/{productId}` points to `GET /orders?productId=…&paidFrom=…`, which belongs to a different module, for the orders behind a product's figures.
 
 ## Notes
-
-- Every operation is marked `x-cache: private-no-cache` — no intermediary may cache these responses.
-- All endpoints require the `read:Stats` bearer scope; there are no write or admin operations in this module.
-- Amounts are grouped by currency and **never converted**; figures are net of VAT unless stated otherwise.
-- All date parameters and bucket edges are **shop-local** (`NODE_SHOP_TIMEZONE`), not UTC.
-- Period range is capped at **731 days / 400 buckets** to bound query cost.
-- Category rows intentionally **do not sum to the total** (a product in two categories appears in both).
-- Customer identity is matched by **account only**; email is never used because erased accounts share a placeholder address.
-- `/stats/pipeline` is a **snapshot** (no date range), unlike every other endpoint in the module.
+- Money is net of VAT unless stated otherwise. It is grouped by currency and never converted.
+- A sale is dated by `paidAt`. A reversal is dated by the credit note's `issuedAt`.
+- Days are shop-local, using `NODE_SHOP_TIMEZONE`. Bucket edges fall at shop-local midnight.
+- Product and category stats read order lines as they were frozen, so a deleted order drops out.
+- A product in several categories counts in each, so category rows do not sum to the total.
+- The customer split matches by account only, never by email, because erased accounts share one placeholder address.
+- The refund rate is credit notes ÷ invoices, VAT included. The return rate is units returned ÷ units ordered.
+- Responses are never cached because they are the shop's money.

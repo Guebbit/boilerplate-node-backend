@@ -1,38 +1,36 @@
 ---
 source: src/modules/payments/domain/transfer-reference.ts
-sha256: c58844ee901b82d7243bf821a2f5febb0c1a56033145eb2388835f1a60889a0f
-generated_at: 2026-11-08T07:20:33.336110+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 804aeaae2032468404dd4f493420cb53dc774cfb66958fe1d7b4bb86ccf32a98
+context_sha256: efb49a036d1de2fcfa3f3ce304b1b6664a6325a1d3e9af0a287d6083034a1fe8
+generated_at: 2026-11-22T06:44:42.228955+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/domain/transfer-reference.ts
 
 ## Purpose
-
-Implements ISO 11649 "RF" creditor-reference generation and validation for `bank_transfer` payments. A deterministic reference is minted from the order's ObjectId when the transfer opens; admins later paste the reference back from their bank's website, and this module verifies the Mod-97 check digits before any lookup proceeds.
+Builds and parses the ISO 11649 "RF" creditor reference carried by a `bank_transfer` payment. A customer writes the code into their bank transfer, and an admin later pastes it back from the bank's website. Mod-97 check digits (ISO 7064 MOD 97-10, the scheme IBAN uses) mean a mistyped code is rejected instead of matching the wrong order. The reference is derived deterministically from the order's id, so a redelivered `order.created` can't mint a second, different reference. The file is hand-rolled because `ibantools` has no ISO 11649 support, and it imports no persistence code, like the other `domain/` files.
 
 ## Key elements
-
-- **`buildReference(seed: string): string`** — Converts a 24-hex ObjectId to a 19-char base-36 payload, appends two Mod-97 check digits, and returns the full `RF…` reference. Deterministic; no second write needed.
-- **`parseReference(input: string): string | null`** — Strips whitespace, uppercases, validates the `RF` + 2-digit check + 1–21 payload shape, then confirms the Mod-97 remainder equals 1. Returns the normalized string or `null`.
-- **`computeCheckDigits(payload: string): string`** — Internal. Computes the two-digit check value (`98 − remainder`) for a payload.
-- **`remainder97(payload, checkDigits): bigint`** — Internal. Computes `BigInt(payload + "RF" + checkDigits) mod 97` after letter→digit substitution.
-- **`numericStringFor(value: string): string`** — Internal. Maps `A`–`Z` to `10`–`35` via `replaceAll` so the resulting numeric string is unambiguous.
-- **Constants** — `PAYLOAD_LENGTH` (19, fixed to avoid shape collision with 24-char hex), `CHECK_DIGIT_BASE` (98), `MOD97_DIVISOR` (`BigInt(97)`).
+- `buildReference(seed)`: takes the order id as 24 hex characters (an ObjectId hex string). It converts the id to base-36 uppercase and left-pads it with `0` to 19 characters. It then returns `RF` + 2 check digits + payload. The result is ungrouped, e.g. `RF132EY8H44VJAVZKX80JRL`.
+- `parseReference(input)`: strips all whitespace and uppercases the input. It requires the shape `RF` + 2 digits + 1–21 alphanumerics, then verifies the checksum. It returns the normalized reference, or `null` if the shape or checksum is invalid.
+- Internal helpers:
+  - `PAYLOAD_LENGTH` (19): base-36 digits needed to hold 96 bits, so all references are the same length.
+  - `CHECK_DIGIT_BASE` (98): the base for computing the check digits.
+  - `numericStringFor`: maps letters to two-digit numbers (`A`=10 … `Z`=35) via a regex `replaceAll`.
+  - `remainder97`: computes the mod-97 remainder over `payload + "RF" + checkDigits` as a `BigInt`.
+  - `computeCheckDigits`: returns `98 - remainder` of the payload with `"00"` as check digits, zero-padded to 2 digits.
 
 ## Relationships
-
-- **`domain/index.ts`** — Re-exports this module so sibling services can import from the domain barrel.
-- **`services/transfer.ts`** — Calls `buildReference` with the order id when a `bank_transfer` payment is created.
-- **`services/list.ts`** — Passes admin-supplied input through `parseReference` to filter transfers by reference.
-- **`tests/unit/transfer-reference.test.ts`** — Unit-covers `buildReference` / `parseReference` round-trips and check-digit edge cases.
-- **`tests/integration/transfer-reference-filter.test.ts`** — Exercises the `list`-service filter path end-to-end.
-- **`tests/factories.ts`** — Uses `buildReference` to mint known references for test fixtures.
+- Graph neighbors: `src/modules/payments/domain/index.ts`, `src/modules/payments/services/transfer.ts`, `src/modules/payments/services/list.ts`, `src/modules/payments/tests/factories.ts`, `src/modules/payments/tests/unit/transfer-reference.test.ts` and `src/modules/payments/tests/integration/transfer-reference-filter.test.ts`. Only the following is visible in this file:
+- The `parseReference` doc comment says its output is what `getByTransferReference` looks up by.
+- The module doc says the reference is minted when the transfer payment opens. That is presumably the transfer service's job (`src/modules/payments/services/transfer.ts`), but the file doesn't show it.
+- The two test files and `src/modules/payments/tests/factories.ts` are the likely consumers for coverage and fixtures. Nothing in this file confirms how they use it.
 
 ## Notes
-
-- **ES6 target constraint:** `BigInt(97)` call form is used instead of the `97n` literal because `tsconfig` targets ES6; a `ts-check` run fails on the literal. An eslint-disable comment documents this at each site.
-- **No persistence imports:** Consistent with every other `domain/` file in the repo — this module is pure computation.
-- **Hand-rolled arithmetic:** `ibantools` (the payments module's IBAN/BIC library) lacks ISO 11649 support, so the Mod-97 logic lives here rather than in a dependency.
-- **Grouping is display-only:** `buildReference` returns an ungrouped string; the frontend is responsible for inserting spaces every 4 characters, same convention as `bankTransferIbanFriendly` for IBANs.
-- **`parseReference` also accepts 24-char hex payloads** (the regex allows `[\dA-Z]{1,21}` and the base-36 payload is 19 chars, but the regex is slightly permissive) — the Mod-97 check is what actually validates correctness.
+- The checksum is computed over `payload + "RF" + checkDigits`, not the written order `RF` + check digits + payload.
+- Collision-free by construction: base-36 encodes every bit of the id, whereas a hash could collide.
+- Grouping into blocks of 4 for display is left to the frontend, as with `bankTransferIbanFriendly` for the IBAN.
+- `BigInt(97)` and `BigInt(1)` are used instead of bigint literals because `tsconfig.json` targets ES6 (literals need ES2020). The `unicorn/prefer-bigint-literals` lint rule is disabled inline for this.
+- `parseReference` accepts payloads of 1–21 characters, which is looser than the fixed 19 that `buildReference` produces.
+- The module doc points to a `libraries` section of the payments module docs, but the referenced doc file is not part of this repository's known files.

@@ -1,40 +1,38 @@
 ---
 source: src/modules/products/tests/integration/transactional-write.test.ts
-sha256: 7b5a20814529320f6a120b5b759ac0cf4c20082b7eaee3cdad26d1c0f61b163b
-generated_at: 2026-11-08T07:53:09.900437+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 85341a4cd1a595288a9cd9acf0cdfc77f547b5cfb3b5fbf14bfaa15355f29f0c
+context_sha256: 63e1128c91309ff0e8e8cc1de7060b87fdd3bded75eac94b342a6433d4ff110f
+generated_at: 2026-11-22T07:18:29.685845+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/integration/transactional-write.test.ts
 
 ## Purpose
-
-Integration test that proves a product write (create or update) and its translation rows are committed atomically against a real Mongo instance, and that the resulting `product.created` outbox event rides the same transaction. The translation port is replaced with a double whose `write` can be forced to fail, simulating a locales store dying mid-write.
+Integration test (real Mongo) verifying that a product write and its translation rows commit atomically, and that the event the write announces is stored through the transactional outbox. The translation port is replaced by a double whose `write` can be made to fail, simulating a locales store dying mid-write.
 
 ## Key elements
-
-- **`write` (module-level `jest.Mock`)** — stand-in for the translation port's `write` method; swapped per test via `mockRejectedValueOnce` to simulate failure.
-- **`beforeEach` / `afterEach`** — register and unregister a full `TranslationPort` double (via `registerTranslationPort`) with a fixed `en` fallback locale and no-op reads.
-- **`rowsNamed(name)`** — helper that queries `outboxEventModel` by event name to assert outbox row presence/absence.
-- **`describe('productService.create is one transaction')`** — two cases: (1) translation-write failure rolls back both the product row and the outbox row; (2) success commits product, translation, and outbox event together.
-- **`describe('productService.create after its commit')`** — verifies that a post-commit re-read failure (`findById` rejection) does not turn the response into an error; the already-committed document is returned as `ResponseSuccess`.
-- **`describe('productService.updateById is one transaction')`** — verifies that a failed translation write during update leaves the old row unchanged.
+- `setupTestDb()` — sets up the test database for the suite.
+- `FALLBACK` — constant `'en'`, the fallback locale used in the port's `plan` result and in translation payloads.
+- `write` (`jest.Mock`) — the translation port's `write`, reassigned in `beforeEach` and made to reject per test.
+- `beforeEach` / `afterEach` — register a full translation port double via `registerTranslationPort`, then unregister it (`undefined`) after each test.
+- `rowsNamed(name)` — helper that queries `outboxEventModel` for outbox rows by event name.
+- `productService.create is one transaction` — covers two cases:
+  - A failing translation write leaves no product and no `product.created` outbox row.
+  - A successful create commits the product, calls `write` once, and stores exactly one `product.created` row whose `aggregateId` and `payload.productId` match the new product id.
+- `productService.create after its commit` — if the post-commit `productRepository.findById` re-read rejects, `create` still returns a successful result and the product persists.
+- `productService.updateById is one transaction` — when the translation write fails, the existing product keeps its old `price` and `active` values.
 
 ## Relationships
-
-- **`@kernel/translation`** — `registerTranslationPort` injects the double; `afterEach` passes `undefined` to restore.
-- **`@kernel/outbox`** — `outboxEventModel` is queried to assert event rows; `settleOutboxNudges` is awaited to let async outbox processing finish before assertions.
-- **`@modules/products/services`** — `productService` is the system under test (`create`, `updateById`, `zodProductCreateSchema`).
-- **`@modules/products/repository`** — `productRepository.count` and (via spy) `productRepository.findById` are used to verify DB state.
-- **`@modules/products/tests/factories`** — `createProduct` / `readProduct` seed and read fixture products.
-- **`@modules/products/model`** — `ProductDocument` type imported for casting `ResponseSuccess`.
-- **`@infrastructure/http/response`** — `ResponseSuccess` type used to type-assert service results.
-- **`@tests/callers`** — `testCallerContext` and `callerContextAs('admin')` supply caller context.
-- **`@tests/setup-test-db`** — `setupTestDb()` provisions the real Mongo instance.
+- `@kernel/translation` — `registerTranslationPort` installs the test double.
+- `@kernel/outbox` — `outboxEventModel` is queried directly; `settleOutboxNudges` is awaited after a successful create.
+- `../../services` (`productService`) — the system under test (`create`, `updateById`, `zodProductCreateSchema`).
+- `../../repository` (`productRepository`) — used for `count({})` assertions and spied on (`findById`) to simulate a re-read failure.
+- `@modules/products/tests/factories` — `createProduct` seeds a product and `readProduct` reads it back for the update test.
+- `@tests/setup-test-db` and `@tests/callers` — DB setup, and caller contexts (`testCallerContext`, `callerContextAs('admin')`).
+- `@infrastructure/http/response` (`ResponseSuccess`) and `../../model` (`ProductDocument`) — types only, used to type the `create` result.
 
 ## Notes
-
-- This suite runs against **real Mongo**; only the translation port and (in one case) `productRepository.findById` are mocked.
-- `settleOutboxNudges()` must be awaited after a successful create before asserting outbox rows — the outbox write is asynchronous relative to the main transaction.
-- The post-commit re-read test uses `jest.spyOn` + `jest.restoreAllMocks()` inline rather than the per-test `write` swap, because it targets the repository layer, not the port.
-- `FALLBACK` is hard-coded to `'en'`; the test file's doc comment notes this matches every environment the suite runs in.
+- The re-read test calls `jest.restoreAllMocks()` at its end, not in `afterEach`, so a failure before that line would leave the `findById` spy in place.
+- The `findById` mock is `mockRejectedValueOnce`, so it affects only the first call.
+- `updateById` is passed a plain object rather than going through `zodProductCreateSchema.parse`.

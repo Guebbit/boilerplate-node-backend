@@ -1,33 +1,31 @@
 ---
 source: src/modules/observability/tests/unit/metrics-overview.support.ts
-sha256: 6fdd04be4596869530feb69510f3ce02af66ecd49d736e52d5cafd91aa18b3f1
-generated_at: 2026-11-14T20:30:59.291616+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 23a26b9403a7116f06f0eeaf7b688de678f70027f72e7ee9af6cf0b5193a5ede
+context_sha256: cf233affae36bd895debbe034655e15d60d659700cb6a28d275cd6c674fddfe3
+generated_at: 2026-11-22T06:05:37.675321+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/observability/tests/unit/metrics-overview.support.ts
 
 ## Purpose
-
-Shared helpers for the two metrics-overview unit-test suites. It exposes small functions to look up registered counters/histograms by name and to invoke the controller and capture the payload it passes to `successResponse`, so each test file doesn't repeat that plumbing.
+Shared helpers for the metrics-overview unit test suites. It provides a way to look up registered metrics by name and a way to run the overview controller and capture the payload it passes to `successResponse`.
 
 ## Key elements
-
-- **`Overview`** (interface) — the subset of the controller's response payload that the suites assert on: `auth` counters, optional `business` counters, and `database` counters.
-- **`counter(name)`** — resolves a registered metric by name via `metricsRegistry.getSingleMetric` and wraps the result in an `asStub` exposing only `inc`. Typed loosely (not narrowed to `Counter`) because the registry returns a `Metric` union.
-- **`histogram(name)`** — same lookup pattern, wrapped in an `asStub` exposing only `observe`.
-- **`runOverview()`** — calls `getObservabilityMetricsOverview` with two stubbed args, then reads the last call's second argument from the `(successResponse as jest.Mock)` mock and returns it as `Overview`.
+- `Overview` (interface): the subset of the controller's payload the tests assert on. It has `auth` (`loginSuccess`, `loginFailure`, `signupSuccess`), an optional `business` (`checkoutSuccess`, `ordersCreated`), and `database` (`queriesTotal`, `errorsTotal`).
+- `counter(name)`: resolves a metric from `metricsRegistry` by name, the same way the controller does. It is cast with `asStub` to an object exposing `inc(labelsOrValue?, value?)`.
+- `histogram(name)`: the same lookup, cast to an object exposing `observe(labels, value)`.
+- `runOverview()`: calls `getObservabilityMetricsOverview` with empty stub arguments. It then reads the last call recorded on the mocked `successResponse` and returns its second argument as an `Overview`.
 
 ## Relationships
-
-- **Imports** `asStub` from `tests/support/stub.ts`.
-- **Imports** `getObservabilityMetricsOverview` from `src/modules/observability/controllers/get-observability-metrics-overview.ts` (the controller under test).
-- **Imports** `successResponse` from `src/infrastructure/http/response.ts` (read from its jest mock at runtime).
-- **Imports** `metricsRegistry` from `src/infrastructure/observability/metrics-registry.ts` (used by `counter` and `histogram`).
-- **Consumed by** `metrics-overview.test.ts` and `metrics-overview-shop.test.ts`.
+- `src/modules/observability/controllers/get-observability-metrics-overview.ts`: the controller that `runOverview` invokes.
+- `src/infrastructure/http/response.ts`: `runOverview` reads the mocked call history of its `successResponse` export. The file does not mock the module itself.
+- `src/infrastructure/observability/metrics-registry.ts`: exports `metricsRegistry`, which `counter` and `histogram` use to look up metrics.
+- `tests/support/stub.ts`: supplies `asStub`, which is used for the loose typings and for the dummy controller arguments.
+- `metrics-overview.test.ts` and `metrics-overview-shop.test.ts`: the two suites that share these helpers.
 
 ## Notes
-
-- `jest.mock` is per test-file and hoists within that file, so **each consuming suite must mock `@infrastructure/http/response` itself**. This module does not mock it; it simply reads the already-installed mock in `runOverview`.
-- `runOverview` takes the **last** call of `successResponse` (`calls.at(-1)`), assuming the controller issues exactly one success response per invocation.
-- The loose typing of `counter` is intentional: asserting the return type as `Counter` would be circular with the very lookup under test.
+- Each importing suite must call `jest.mock('@infrastructure/http/response')` itself. `jest.mock` is per test file and hoists there, so this support module cannot do it. Without the mock, `successResponse` is not a mock and `runOverview` will not work.
+- `counter` and `histogram` are typed loosely on purpose, to avoid narrowing the registry's `Metric` union to `Counter`.
+- `runOverview` takes the most recent `successResponse` call (`calls.at(-1)`), so it returns `undefined` at runtime if the controller never called it.
+- `business` is optional because it is absent when no shop module is mounted.

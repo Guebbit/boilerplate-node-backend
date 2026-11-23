@@ -1,34 +1,34 @@
 ---
 source: src/modules/notifications/emails.ts
-sha256: 406fc6bcc68eea631cfea9ebf254053dc6058823074372a5baecb22f12eb0d51
-generated_at: 2026-11-08T06:31:16.659891+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e150fdec96255b06f923dcdc60715824a2e5ea2607d317bf55929b4e2f25bb67
+context_sha256: ab665a4173c81a5d47b4ef1b7a410e10265c48644285cbda88eb79420ddca6da
+generated_at: 2026-11-22T05:53:30.508725+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/emails.ts
 
 ## Purpose
-
-Builds the single email a work-notice can send to a staff member: a short "what happened" summary in the recipient's language plus a deep link to the relevant screen. Only notices whose routing specifies `email: 'now'` produce a mail; all others remain bell-only. The wording is resolved from the notice code's own i18n dictionary path so each module ships its email copy alongside its notice definitions.
+Builds the single email a staff work notice can send: a short "what happened" summary plus a link to the screen where the notice is handled, written in the recipient's language. Only notices whose route says `email: 'now'` are mailed; others appear only in the bell. Wording comes from the notice code's own dictionary path, so modules that add notices ship their copy alongside them.
 
 ## Key elements
-
-- **`staffNoticeEmail`** *(exported)* — The sole public function. Takes `locale`, a `StaffNoticeBody`, and a `StaffLink`; returns a fully-formed `EmailContent` object (subject, title, summary, link, link label) ready to hand to the mailer.
-- **`taskWhat`** *(private)* — Resolves a task's human-readable label (kind, plus category when kind is `contact`) via i18n. Falls back to `tasks.task-category.none` when no category was chosen.
-- **`wordsOf`** *(private)* — Returns the extra `what` interpolation for the four task-related notice codes; returns `{}` for all other codes.
+- `staffNoticeEmail(locale, body, link)` (exported): returns an `EmailContent` for a notice.
+  - Uses the `notifications.staff-notice` template.
+  - Subject, meta title, title and summary come from the translator. Subject and summary are interpolated with the notice params plus extra words.
+  - `link` is built with `frontendLink(template, locale, parameters)`. The label is `notifications.staff-mail.open`.
+  - `data` also carries `locale`.
+- `taskWhat(t, parameters)` (internal): names a task by its kind (`tasks.task-kind.<kind>`). For `contact` tasks it appends the category (`tasks.task-category.<category>`, or `tasks.task-category.none` if absent), joined as `kind · category`.
+- `wordsOf(t, body)` (internal): supplies the extra `what` word for the task codes `task-opened`, `task-overdue`, `task-due-soon` and `task-assigned` (all under `notifications.staff.`). It returns `{}` for every other code.
 
 ## Relationships
-
-- **`@infrastructure/adapters/mailer`** — Imports the `EmailContent` type; the returned object is the shape the mailer adapter consumes.
-- **`@infrastructure/i18n`** — Imports `translator` to obtain a locale-bound `t` function used for every string in the email.
-- **`@infrastructure/http/frontend-link`** — Imports `frontendLink` to assemble the deep-link URL from `template`, `locale`, and `parameters`.
-- **`./staff-routing`** — Imports the `StaffLink` and `StaffNoticeBody` types that define the input contract.
-- **`./index.ts`** — Barrel file that re-exports `staffNoticeEmail` to the rest of the module.
-- **`services/staff.ts`** — Upstream caller that assembles the `StaffNoticeBody` and `StaffLink` and invokes `staffNoticeEmail` when routing dictates an immediate email.
-- **Tests** (`staff-routing.test.ts` in two locations, `mailer-templates.test.ts`) — Exercise the email output and the routing decisions that gate whether this file is called.
+- `./staff-routing`: provides the `StaffNoticeBody` and `StaffLink` types. Routing decides whether the mail is sent at all (`email: 'now'`), and the notice writer supplies the link.
+- `@infrastructure/adapters/mailer`: provides the `EmailContent` type that is returned. The mailer templates test covers the template side.
+- `@infrastructure/i18n`: provides `translator(locale)`, used for all wording.
+- `@infrastructure/http/frontend-link`: provides `frontendLink`, which builds the localized link URL.
+- Related modules and tests: `src/modules/notifications/services/staff.ts`, `src/modules/notifications/index.ts` and the two `staff-routing` unit tests sit in the same dependency graph.
 
 ## Notes
-
-- **Dictionary-path convention:** the email copy lives under a sibling key of the notice code — `notifications.staff.task-opened` → `notifications.staff-mail.task-opened` (the `.staff.` segment is replaced with `.staff-mail.`). Adding a new staff notice requires adding both the notice definition *and* its `staff-mail` dictionary entry.
-- **Interpolation scope:** only the four `task-*` codes inject the `what` parameter into the translated strings. Other codes rely solely on `body.params`.
-- **No user-typed text in the mail:** the `taskWhat` helper deliberately uses only closed enum codes (`kind`, `category`) so the email never carries free-form visitor input.
+- The dictionary path is derived by replacing `.staff.` with `.staff-mail.` in the notice code. For example, `<module>.staff.<kind>` becomes `<module>.staff-mail.<kind>`. A new notice needs matching `subject`, `meta-title`, `title` and `summary` entries under that path.
+- Task mails use only closed codes (kind and category), so nothing the visitor typed ends up in the mail.
+- The `contact` category falls back to "none" so the mail doesn't look broken.
+- A new notice code that interpolates extra words must be added to `wordsOf`. It is not generic.

@@ -1,32 +1,42 @@
 ---
 source: scripts/testing/report-results.ts
-sha256: cd56c196cc47b85f883e60810b2870127fe45c43f9efdbb3323b4636957b7c9b
-generated_at: 2026-11-14T17:42:55.892376+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:19:17.185777+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/testing/report-results.ts
 
 ## Purpose
-A standalone CLI script (`npm run test:report`) that reads a Jest `--json` report and prints a human-readable summary answering two questions a raw log cannot: *which module a failure belongs to* and *where the time went*. It is intentionally a read-only reporter; it never sets a non-zero exit code.
+A CLI script (`npm run test:report`) that reads a Jest-style JSON test report and prints a summary a raw log can't give: results grouped by module (not just by file) and where the time went. It reads the report only and never fails the build. The runner has already gated on the result. The header says the frontend's copy is a declared fork, not synced and not listed in `SHARED_FILES`.
 
 ## Key elements
-
-- **`REPO_ROOT` / `DEFAULT_REPORT`** — Resolves the repo root via `process.cwd()` (CJS/ESM-agnostic) and the default report path `tmp/reports/test-report.json`. An optional CLI argument (`process.argv[2]`) overrides the file.
-- **`Report` / `SuiteResult`** — Minimal TypeScript interfaces describing the slice of Jest's JSON output this script actually reads.
-- **`bucketOf(file)`** — Maps a test-file path to a label: the domain name from `src/modules/<name>/tests/…`, a parenthesised layer from `tests/<layer>/…`, a parenthesised area from `src/<area>/…`, or `(other)`. No registration or config required.
-- **Bucket rollup (IIFE-style loop)** — Single pass over `report.testResults` accumulating suite count, test count, failure count, and suite duration per bucket into a `Map<string, Bucket>`.
-- **Print sections** — Four `console.log` blocks: headline totals, per-bucket table (modules first, then layers), slowest 8 suites, slowest 8 individual tests, and a failures list (bucket, file, test name, first line of failure message).
-- **`SLOWEST = 8`** — Row limit for the "slowest" sections.
+- `REPO_ROOT`: `process.cwd()`, used instead of `__dirname` or `import.meta.url` so the file works unchanged in both CommonJS and ESM repos.
+- `DEFAULT_REPORT`: the default report path, `tmp/reports/test-report.json` under the repo root, where the `test:*:report` scripts write according to the source comment. A different path can be passed as the first CLI argument.
+- `SLOWEST`: 8, the number of rows in each "slowest" list.
+- `SuiteResult` / `Report`: the subset of Jest's `--json` output the script reads. These are the counts plus `testResults[]` with `assertionResults`.
+- `bucketOf(file)`: maps a test path to a label.
+  - `src/modules/<name>/...` becomes `<name>`.
+  - `tests/<layer>/...` becomes `(layer)`.
+  - `src/<area>/...` becomes `(area)`.
+  - Anything else becomes `(other)`.
+- `seconds(ms)`: formats milliseconds as `1.2s`.
+- `readReport(file)`: parses the JSON. If the file is missing, it prints how to produce one and exits with code 2.
+- Top-level script body, in order:
+  1. Roll suites up into a `Map<string, Bucket>` holding suites, tests, failed and milliseconds.
+  2. Sort the rows: modules alphabetically first, then parenthesised layer buckets.
+  3. Print a headline with totals and summed suite time.
+  4. Print the per-bucket table.
+  5. Print the slowest suites.
+  6. Print the slowest tests.
+  7. Print the failures, only if there are any.
 
 ## Relationships
-
-No graph neighbors are recorded. The file is self-contained: it imports only `node:fs` and `node:path`, reads a JSON file, and writes to stdout. The header comment notes it is a *declared fork* in the frontend repo (not kept in step, not listed in `SHARED_FILES`).
+No graph neighbors. It depends only on `node:fs` and `node:path`. Its input is the JSON written by the `test:*:report` npm scripts, such as `npm run test:unit:report`.
 
 ## Notes
-
-- **Always exits 0.** The script explicitly does not re-gate on failures; the runner that produced the report already did. A second non-zero exit here could disagree with the runner's verdict.
-- **`process.cwd()` over `__dirname`.** The file must remain byte-identical across CJS and ESM repos; `__dirname` is unavailable in ESM, `import.meta.url` in CJS. This is only safe because the script is always invoked via `npm run` from the package root.
-- **Wall-clock vs. suite time.** The "suite time" total sums per-suite durations, which exceeds real wall-clock when workers run in parallel. The script labels it "suite time" rather than "elapsed."
-- **Crashed suites.** A suite that failed on import has no `startTime`/`endTime`; the script treats the duration as 0 rather than `NaN`.
-- **Failure detail is intentionally truncated** to the first line of `failureMessages[0]` — the full stack belongs in the runner's own output.
+- Suite time is `endTime - startTime` summed across suites. With parallel workers this exceeds real wall-clock time, even though the variable is named `wall`. Missing timings count as 0.
+- Only tests with `status === 'failed'` count as failures. Each failure shows only the first line of its first failure message.
+- Layer and area buckets sort after modules on purpose. A leading `(` would otherwise sort before letters in ASCII.
+- The script always ends with exit code 0, except for the missing-report exit 2. This is intentional, so it can't contradict the test runner's own verdict.
+- It runs on import, with no `main` function or exports.
+- The script uses `toSorted` and `replaceAll`, so it needs a recent Node version.

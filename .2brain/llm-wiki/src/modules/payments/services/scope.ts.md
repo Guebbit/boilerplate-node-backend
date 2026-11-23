@@ -1,33 +1,31 @@
 ---
 source: src/modules/payments/services/scope.ts
-sha256: 4696f2a6b339313b64ac86ff58dbb4f0654cf39880b278a82e05271f75ade43f
-generated_at: 2026-11-08T07:29:23.081399+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4696f2a6b339313b64ac86ff58dbb4f0654cf39880b278a82e05271f75ade43f
+context_sha256: f4fed7b7940ba64eae516847cf249a9b1fc123f7a2211ced61cff79a37523509
+generated_at: 2026-11-22T06:53:37.273326+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/scope.ts
 
 ## Purpose
-
-Defines the four row-scope predicates every other payment service calls before reading or writing the `Payment` collection. It centralises the distinction between *read* scope (role-driven, may span all records) and *payer/buyer* scope (strictly the caller's own records), so that money-moving operations never inherit a broad `display:*` grant.
+Defines the row-scoping rules for the payments collection. Every other payments service reads through these helpers to decide which payments, orders, and fields a caller may touch. It separates the broad READ scope from the narrower, owner-only scope used for money-moving steps.
 
 ## Key elements
-
-- **`callerScope(context?)`** — Returns the Mongo filter for payments a caller is permitted to *read*. Delegates to `accessibleFilter(context, 'Payment')`.
-- **`payerScope(context?)`** — Returns the filter for payments a caller may **CONFIRM** or **SYNC**. Resolves to `paymentRepository.ownerScope(context.id)` when a caller exists; falls back to the anonymous `callerScope` (matches nothing).
-- **`buyerOrderScope(context?)`** — Returns the filter for *orders* a caller may open a payment intent against. Uses `orderService.ownLiveScope(context.id)` for authenticated callers; anonymous fallback is `orderService.callerScope(undefined)`.
-- **`readsAllPayments(context?)`** — Boolean: `true` when the caller holds the `display:Payment` ability (checked via `heldRules` + `callerForSubject`). Used to gate provider-level fields (provider IDs, refund failure reasons) in responses.
+- `callerScope(context?)`: the READ scope. Returns `accessibleFilter(context, 'Payment')`. Payments are never soft-deleted, so ownership is the only axis, unlike orders' "own AND still there".
+- `payerScope(context?)`: the scope for CONFIRM and SYNC. With a caller, it returns the payment repository's owner scope for that caller's id, so only their own payments match. With no caller, it falls back to `callerScope(undefined)`, the anonymous read scope, which matches nothing.
+- `buyerOrderScope(context?)`: the orders a caller may open a payment intent on. With a caller, it returns the orders service's own-live scope for that caller's id, so only their own live orders match. With no caller, it falls back to the orders service's anonymous caller scope.
+- `readsAllPayments(context?)`: returns true only when a context exists and the caller's rules for `Payment` hold `display:Payment`. It is used to decide whether the provider's own ids and a refund's failure reason may be sent.
 
 ## Relationships
-
-- **`@kernel/access/query`** — `accessibleFilter` is the generic role→filter resolver that `callerScope` wraps for the `Payment` collection.
-- **`@kernel/ability` / `@kernel/permissions`** — `heldRules` and `callerForSubject` together answer "does this caller hold ability X on Y?" for `readsAllPayments`.
-- **`@modules/orders` (`orderService`)** — Supplies `ownLiveScope` and `callerScope` so `buyerOrderScope` can filter orders without re-implementing order-scoping logic.
-- **`../repository` (`paymentRepository`)** — Provides `ownerScope`, the canonical "belongs to user X" filter reused by `payerScope`.
-- **Sibling services** (`intent.ts`, `list.ts`, `refunds.ts`, `settlement.ts`, `view.ts`) — All import these predicates (via `services/index.ts`) to gate their queries; none of them define their own scope logic.
+- `src/kernel/access/query.ts` supplies `accessibleFilter`, which `callerScope` wraps.
+- `src/kernel/permissions.ts` (`callerForSubject`) and `src/kernel/ability.ts` (`heldRules`) are used by `readsAllPayments` to check the held rules.
+- `src/modules/orders/index.ts` exposes the `orderService` used by `buyerOrderScope`. `callerScope` mirrors the orders rule over this module's collection.
+- `src/modules/payments/repository.ts` supplies `paymentRepository`, used by `payerScope` to build the owner scope.
+- `src/types/auth-context.ts` and `src/types/index.ts` relate to the `AuthContext` type, which is imported from `@types`.
+- The sibling services (`intent`, `refunds`, `external-refunds`, `settlement`, `list`, `view`) sit next to this file in the dependency graph. The file's own header says all of them read through it, but their exact usage isn't visible here.
 
 ## Notes
-
-- The critical invariant: `payerScope` and `buyerOrderScope` **never** call `accessibleFilter` for an authenticated caller. A role that merely holds `display:Payment` or `display:Order` can read broadly but must not gain the ability to confirm, sync, or create payment intents on other users' records.
-- Payments are never soft-deleted, so there is no "still there" axis here—unlike the orders scope pair mentioned in the doc comment.
-- The anonymous fallbacks intentionally return a filter that matches nothing (or the generic read scope with no caller), ensuring no data leaks when `AuthContext` is absent.
+- Do not use `callerScope` for confirm or sync. A role holding `display:Payment` would widen it to everyone's payments, which is why `payerScope` exists. `buyerOrderScope` follows the same reasoning for `display:Order`.
+- `readsAllPayments` checks the key name `display:Payment` in the held rules, not the `holds` helper. `holds` would also return true for `read:Payment`.
+- Every helper accepts an optional context. Without one, the result is the anonymous scope, which matches nothing, so the default is deny.

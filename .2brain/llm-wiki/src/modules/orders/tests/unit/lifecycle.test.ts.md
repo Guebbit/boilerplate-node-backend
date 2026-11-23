@@ -1,37 +1,39 @@
 ---
 source: src/modules/orders/tests/unit/lifecycle.test.ts
-sha256: 16e84597db59ca1da006655d0640ed3c231519a76d3ebf8b1c8fcbf55789a29c
-generated_at: 2026-11-14T20:57:18.736284+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 064e31750e2fbd1aba05aca39a4e29d2b222956282848394b86ef62c3e13720a
+context_sha256: 93dc836f5e13a0514cd9a89e3dfba9b99ac7430fcae2ec1f6b0abdb52fb4dea2
+generated_at: 2026-11-22T06:36:37.880116+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/lifecycle.test.ts
 
 ## Purpose
-
-Unit tests for the order-lifecycle transition table. Rather than re-listing every row (which would pass against a table copied wrong), the suite asserts the *properties* the table must satisfy: actor permissions per status, terminal-state immutability, forward-only direction, and the agreement between `canTransition` and the table's inverse lookups. Pure—no mocks, no database.
+Pure unit tests (no mocks, no database) for the order lifecycle in `src/modules/orders/domain/lifecycle.ts`. Per its header, the tests assert the *sentences* the transition table encodes (who may write which status, what is terminal, which direction is allowed) rather than restating the table row by row, so a mis-copied table can't pass against an equally mis-copied expectation.
 
 ## Key elements
-
-- **`EVERY_STATUS`** – derived from `Object.values(OrderStatus)` so a new enum member is covered automatically.
-- **`EVERY_ACTOR` / `REQUEST_ACTORS`** – the four actors (`customer`, `admin`, `system`, `withdrawal`) and the two an HTTP caller can be.
-- **`FULFILLMENT_SEQUENCE`** – the forward path `pending → paid → processing → shipped → delivered`; used to assert no actor may move backwards.
-- **`describe("the table names only the contract's statuses")`** – structural integrity: every `from`/`to` is a declared status, every event has ≥ 1 actor and origin, no self-loops, `canceled` is a dead-end, `delivered` exits only via `reship`.
-- **`describe('the named events')`** – pins the exact shape of `ship`, `deliver`, `fulfillmentComplete`, `UNDELIVERABLE_EVENT`, and `expire`.
-- **`describe('who may write …')`** – per-status actor gates (`paid`, `processing`, `shipped`, `delivered`); asserts only `system` (via recorded external facts) can reach them.
-- **`describe('who may cancel')`** – customer / admin / withdrawal / system cancellation windows; shipped goods are never cancelable.
-- **`describe('terminal states')`** – `canceled` is fully terminal; `delivered` exits only for a system `reship`; reopening is refused for every non-system actor.
-- **`describe('direction')`** – a property test over the full table verifying the only backward edges are `reopen` (shipped→processing) and `reship` (delivered→processing), both system-only and non-overridable.
-- **`describe('canTransition')`** – self-transitions always refused; `canTransition` agrees with both `statusesLeadingTo` and `statusesReachableFrom` for every (actor, from, to) triple.
+- **Test fixtures**
+  - `EVERY_STATUS`: `Object.values(OrderStatus)`, so new statuses are covered automatically.
+  - `EVERY_ACTOR`: `customer`, `admin`, `system`, `withdrawal`.
+  - `REQUEST_ACTORS`: `customer` and `admin`, the two actors an HTTP caller can be.
+  - `FULFILLMENT_SEQUENCE`: pending → paid → processing → shipped → delivered. Cancellation is not on it.
+- **`describe` blocks**
+  - *Table names only the contract's statuses*: every event uses declared statuses, has at least one actor and one origin, never lands on the status it leaves, and leaves `canceled` through no event. `delivered` is left only via `reship`.
+  - *Named events*: `ship`, `deliver` and `fulfillmentComplete` (the digital `processing → delivered` edge, system-only). `UNDELIVERABLE_EVENT` stays outside the actor table, so system cancels stay on `pending`. `expire` leaves only `pending`.
+  - *Who may write `paid` / `processing` / `shipped` / `delivered`*: only `system` reaches them, from specific origin statuses, and `admin` is refused a manual write.
+  - *Who may cancel*:
+    - `customer`: `pending` and `paid`.
+    - `admin` and `withdrawal`: `pending`, `paid` and `processing`.
+    - `system`: `pending` only (the "B21 race").
+    - Nobody may cancel `shipped`.
+  - *Terminal states*: nobody leaves `canceled`; only `system` leaves `delivered`, back to `processing`.
+  - *Direction*: a property check that the only backward edges along the fulfillment sequence are `system: shipped → processing` (`reopen`) and `system: delivered → processing` (`reship`). `canOverrideTo` refuses both.
+  - *`canTransition`*: no-op writes (`status → status`) are refused for every status and actor. The visible content ends partway through this block.
 
 ## Relationships
-
-- **`src/modules/orders/domain/lifecycle.ts`** – the module under test. All assertions reference its exports: `ORDER_EVENTS`, `UNDELIVERABLE_EVENT`, `canTransition`, `canOverrideTo`, `isPayable`, `canProcessOrder`, `isAwaitingGoods`, `canShip`, `canRecordArrival`, `hasShopStarted`, `orderActionsFor`, `statusesLeadingTo`, `statusesReachableFrom`, `paymentSettled`, `overridableTargetsFrom`, and the `OrderActor` / `OrderEvent` types.
-- **`src/types/index.ts`** – provides `OrderStatus`, the contract enum. The test derives `EVERY_STATUS` from it so a new status is picked up without editing this file.
+- Imports from `src/modules/orders/domain/lifecycle.ts`: `ORDER_EVENTS`, `UNDELIVERABLE_EVENT`, `canTransition`, `canOverrideTo`, `statusesLeadingTo`, `statusesReachableFrom`, the types `OrderActor` and `OrderEvent`, and other predicates and helpers. These include `isPayable`, `canProcessOrder`, `isAwaitingGoods`, `canShip`, `canRecordArrival`, `hasShopStarted`, `orderActionsFor`, `paymentSettled` and `overridableTargetsFrom`. Of these, only the first group is visibly exercised in the shown portion.
+- Imports `OrderStatus` from `@types` (`src/types/index.ts`) and uses it as the source of truth for the status set.
 
 ## Notes
-
-- The file intentionally avoids row-by-row restatement; the header comment and `docs/theory/tactical-ddd.md` §1 explain why (a wrong table would fail a property test but pass a copy-paste test).
-- Comments reference `src/modules/orders/services/status.ts` (`markProcessing`, delivery doors) to explain *why* certain actors are excluded—useful when reading the domain module in isolation.
-- `REQUEST_ACTORS` is declared but only used implicitly; the distinction between request-actors and `system`/`withdrawal` actors is the core permission model under test.
-- The `canTransition` bidirectional-agreement test iterates the full Cartesian product of status × actor, making it O(n²) in the enum size—acceptable given the small, stable enum.
+- Comments point to `src/modules/orders/services/status.ts`: `shipped`, `delivered` and `processing` are written by `system` only after `delivery` records the fact, and the generic `PUT /orders/:id` never carries `status`.
+- Admin override (`override:Order`, step-up) is described as the only reachable manual path onto `processing`.

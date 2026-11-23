@@ -1,30 +1,32 @@
 ---
 source: src/modules/addresses/controllers/delete-address.ts
-sha256: bb6191a8293bddb7dca01ab5a0486b69b3efa6f56b587aeacfcc5956e7cc4ef5
-generated_at: 2026-11-08T04:53:36.360483+00:00
-model: ollama:qwen3.8:27b
+source_sha256: bb6191a8293bddb7dca01ab5a0486b69b3efa6f56b587aeacfcc5956e7cc4ef5
+context_sha256: ee25c43ca696291a439b849da047959ba13e80dfa02af57629b76c24ae15c032
+generated_at: 2026-11-22T04:12:28.024575+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/addresses/controllers/delete-address.ts
 
 ## Purpose
-
-Thin HTTP adapter for `DELETE /account/addresses/:addressId`. Validates the path-param ID, delegates deletion to `addressService.remove`, and returns a bodyless `204 No Content` on success. Exists to keep Express request/response concerns out of the service layer.
+Express controller for `DELETE /account/addresses/:addressId`. It is a thin HTTP adapter over the address service's `remove` operation. It removes a single address entry, never the whole address book, and replies with no body.
 
 ## Key elements
-
-- **`deleteAddress(request, response)`** (exported) — the sole handler. Extracts `id` from `request.authContext`, validates the `addressId` param via `requireId`, calls `addressService.remove(id, addressId)`, then either short-circuits with a refusal or sends `noContentResponse`. Errors are funneled through `catchAs(response, 'deleteAddress')`.
+- `deleteAddress(request, response)`: the exported handler.
+  - Reads the authenticated user's `id` from `request.authContext!`. The non-null assertion relies on the `isAuth` middleware having run.
+  - Validates the `addressId` route param with `requireId`, using the `addresses.not-found` message and the param name `addressId`. If validation fails, the handler returns early, because `requireId` has already written the error response.
+  - Calls the address service's `remove(id, addressId)`.
+  - If `refused(response, result)` reports that a refusal was sent, the handler stops. Otherwise it sends `noContentResponse(response)`.
+  - Any rejection goes to `catchAs(response, 'deleteAddress')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — provides `catchAs` (unified error-to-response mapping) and `refused` (checks a service result for a "rejected" outcome and sends the appropriate 4xx).
-- **`src/infrastructure/http/ids.ts`** — provides `requireId`, which validates the `addressId` path param (format + 404 via the `addresses.not-found` message) before the call proceeds.
-- **`src/infrastructure/http/response.ts`** — provides `noContentResponse` (sends `204` with no body).
-- **`src/modules/addresses/routes.ts`** — registers `deleteAddress` as the handler for the `DELETE /account/addresses/:addressId` route.
-- **`src/modules/addresses/service.ts`** — `addressService.remove(id, addressId)` performs the actual deletion and ownership check; this file never touches the repository directly.
+- `src/infrastructure/http/controller.ts`: supplies `refused` (handles service refusals) and `catchAs` (error handler tagged with the controller name).
+- `src/infrastructure/http/ids.ts`: supplies `requireId`, which validates the route id.
+- `src/infrastructure/http/response.ts`: supplies `noContentResponse` for the success reply.
+- `src/modules/addresses/service.ts`: supplies the `addressService` export, whose `remove` method does the actual deletion.
+- `src/modules/addresses/routes.ts`: the route table that mounts this handler for `DELETE /account/addresses/:addressId`.
 
 ## Notes
-
-- `request.authContext!` uses a non-null assertion that is safe only because `isAuth` middleware runs before this handler; there is no runtime guard here.
-- The response intentionally carries **no body** (204). If the deleted address was the user's default, the repository promotes the oldest remaining entry, but the client must refetch the list to observe the change.
-- The `refused` check sits between the service call and the success response, meaning an ownership mismatch (or similar policy rejection) is surfaced as an early return with an appropriate status code rather than an exception.
+- If the deleted address was the default, the oldest remaining entry is promoted. The doc comment attributes this to `repository.ts`, not to this controller.
+- The response carries no body, so a client displaying the address book must refetch it to see where the default flag ended up.
+- The handler is not `async`. It returns early with `undefined` on validation failure, and otherwise returns the promise chain.

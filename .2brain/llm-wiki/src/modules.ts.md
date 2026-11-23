@@ -1,40 +1,30 @@
 ---
 source: src/modules.ts
-sha256: 342143bd399edd27f7ce68ac3dae89bcf1a541d52fc7d320287e66d72bd0ec20
-generated_at: 2026-11-14T18:24:59.196692+00:00
-model: ollama:qwen3.8:27b
+source_sha256: e639c2442fdc78427488f40a4faf25426c810c615aaf79b856316a8c58f4c14e
+context_sha256: 07a3bc4b2994e7515f0df41640f0a9c80053dccd11660432390546ac5fd4d8c4
+generated_at: 2026-11-22T03:15:23.512106+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules.ts
 
 ## Purpose
-
-The single module registry for the build: declares which domain modules this server serves and provides the canonical list, name set, directory collector, and compile-time name type that the app tier, docs generators, ops scripts, and test scenarios all consume. It is the one place a developer adds or removes a module (alongside the corresponding folder under `src/modules/`).
+The single registry of which domain modules this build serves. It imports each module's manifest from `src/modules/<name>/module`, exposes them as one list, and derives lookup helpers from it. The app tier, docs generators and ops scripts all walk this list.
 
 ## Key elements
-
-- **`enabledModules: AppModule[]`** — the ordered array of every mounted module. Consumed by app boot, route registration, job registration, doc generation, and ops scripts.
-- **`servedModuleNames: ReadonlySet<string>`** — the set of module names, built once so the 405 guard and `OPTIONS` handler both read the same membership.
-- **`enabledModuleDirectories(kind)`** — returns the flat list of per-module directories for a given manifest field (`'locales'` or `'templates'`), filtering out modules that don't ship one. Used by `bootI18n` and `registerTemplateDirectories`.
-- **`ModuleName`** (type) — a hand-maintained string-literal union of every module name, giving compile-time safety instead of a bare `string`. Used by scenario tables to make invalid module references a type error.
+- `enabledModules: AppModule[]` — every module the build serves, alphabetical (28 entries, including `example`).
+- `servedModuleNames: ReadonlySet<string>` — names of the mounted modules, built once. It decides whether a contract path is one this server can answer (the 405 guard and the `OPTIONS` answer).
+- `enabledModuleDirectories(kind: 'locales' | 'templates'): string[]` — collects each module's own `locales` or `templates` directory, skipping modules that ship none. The consumers are `bootI18n` for locales and `registerTemplateDirectories` (`mailer.ts`) for templates.
+- `ModuleName` — a hand-written string-literal union of all module names, so module tables can be keyed on it and naming an unmounted module is a compile error (for example `shopModules` in `scenarios/index.ts`).
 
 ## Relationships
-
-- **`src/app/routes.ts`** — iterates `enabledModules` to register routes; reads `servedModuleNames` for the 405 / `OPTIONS` guard.
-- **`src/app/jobs.ts`** — walks `enabledModules` to collect and register module jobs.
-- **`src/app/boot-rendering.ts`** — calls `enabledModuleDirectories('templates')` to register per-module template directories.
-- **`src/app/config.ts`** — reads module-level configuration during boot.
-- **`scripts/docs/generate-jobs.ts`**, **`generate-rate-limit-budgets.ts`** — walk `enabledModules` to produce documentation artifacts.
-- **`scripts/ops/prepare-job.ts`**, **`run-job.ts`**, **`reapply-erasures.ts`**, **`reencrypt.ts`** — ops scripts that iterate `enabledModules` to apply per-module actions.
-- **`scripts/setup/required-keys.ts`** — walks `enabledModules` to validate required configuration keys.
-- **`scripts/db/index-sync.ts`** — walks `enabledModules` to sync database indexes.
-- **`scenarios/check.ts`** — uses `ModuleName` to key scenario tables, making a typo a compile error.
-- **`scripts/scaffold/names.ts`** — scaffolding helper that keeps in sync with the registry when a new module is added.
+The listed neighbors depend on this file. It imports only `AppModule` from `@kernel/registry` and the per-module `module` files.
+- `src/app.ts`, `src/app/routes.ts`, `src/app/jobs.ts`, `src/app/config.ts` and `src/app/boot-rendering.ts` are the app tier that consumes the registry. Boot-time locale and template registration goes through `enabledModuleDirectories`.
+- `scripts/docs/generate-jobs.ts`, `scripts/docs/generate-rate-limit-budgets.ts`, `scripts/ops/*` (`prepare-job`, `run-job`, `reapply-erasures`, `reencrypt`), `scripts/db/index-sync.ts`, `scripts/setup/required-keys.ts`, `scripts/scaffold/names.ts` and `scenarios/check.ts` are listed as graph neighbors. The file's own header says docs and scripts walk the registry.
+- The contract bundlers do not read this file. They run before `enabledModules` can be imported, because the modules import the generated `@api/` client. They discover modules from disk instead.
 
 ## Notes
-
-- **Order is alphabetical and purely cosmetic.** Mount order, import resolution, and `subscribe` timing do not depend on array position.
-- **Bundlers do not read this list.** Contract-generating bundlers run before `enabledModules` is importable (modules import the generated `@api/` client), so they discover modules from the filesystem (`scripts/contracts/section-order.ts`).
-- **`ModuleName` is hand-listed, not derived.** `AppModule.name` is typed `string`, so TypeScript will not narrow a literal union from the array. Adding a module means adding one more member here in addition to the import and the `enabledModules` entry.
-- **Adding a module is a multi-file change.** Beyond this file, the conditional lists in `scripts/scaffold/central-edits.ts` must be updated. Removing is `rm -rf` the folder plus deleting all those entries.
-- **`example`** is a real entry in the registry, not a placeholder.
+- Adding a module takes three edits here: the import, the `enabledModules` entry and the `ModuleName` member. It also takes the conditional lists in `scripts/scaffold/central-edits.ts`. Removing one means `rm -rf` of the folder plus deleting those edits.
+- Alphabetical order is only to keep diffs boring. Import resolution and `subscribe` timing don't depend on it.
+- Mount order matters in one place: `inventory` must come before `products`, so `GET /products/availability` isn't matched as `GET /products/{id}` (`src/modules/inventory/availability-routes.ts`). Alphabetical order already gives this.
+- `ModuleName` can't be derived from `enabledModules`, because `AppModule.name` is typed `string` and the literal can't be recovered. Keep it in sync with the array by hand.

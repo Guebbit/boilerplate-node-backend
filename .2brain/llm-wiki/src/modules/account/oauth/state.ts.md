@@ -1,43 +1,38 @@
 ---
 source: src/modules/account/oauth/state.ts
-sha256: 6b0b67fb7d933834fc4c51330b3d88c8523f0e0cc902d82f3dbb2badf7fc4c86
-generated_at: 2026-11-14T18:38:37.369683+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6128e987fdf212a33beb4c0aeebbee7b15f36f2843206b5056e08ad1366d2ed3
+context_sha256: 67bf551e0792525bb04f7c9ab6e75c6f4d1f0504e7293e5f6c6e59238f7ebc29
+generated_at: 2026-11-22T03:33:10.489249+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/oauth/state.ts
 
 ## Purpose
-
-Defines the per-attempt cookie set and helper functions that carry an OAuth login from the start controller through the provider round-trip and back to the callback. It mints CSRF `state` and PKCE `verifier` tokens, provides idempotent cookie set/destroy pairs, and supplies the validation predicates (`isSameOriginPath`, `isLocaleTag`, `stateMatches`) that the callback must apply before trusting any client-writable cookie value.
+Owns the per-attempt cookies an OAuth login needs before the browser leaves for the provider: the CSRF `state` (a double-submit cookie, no server-side session or extra secret), the PKCE `verifier`, the saved `continue` path, and the saved `locale`. It also provides the generators, cookie setters/clearers, and validators for those values. `continue` and `locale` are untrusted input, so they are validated before being saved and again when read back.
 
 ## Key elements
-
-- **Cookie name constants** — `OAUTH_STATE_COOKIE`, `OAUTH_VERIFIER_COOKIE`, `OAUTH_CONTINUE_COOKIE`, `OAUTH_LOCALE_COOKIE`, `OAUTH_LINK_COOKIE`: re-exported from `cookieData` in `@infrastructure/http/cookies.generated`.
-- **`OAUTH_COOKIE_TTL_MS`** — shared TTL (minutes-scale) pulled from the same generated cookie metadata.
-- **`generateOAuthState()`** — 128-bit random hex string (CSRF token).
-- **`generateCodeVerifier()`** — 32 random bytes base64url-encoded (PKCE verifier, 43 chars per RFC 7636 §4.1).
-- **`codeChallengeOf(verifier)`** — SHA-256 → base64url (RFC 7636 §4.2 S256 transform).
-- **`oauthCookieOptions()`** (internal) — spreads `hostCookieOptions()` (yields the `__Host-` prefix, among other flags) and sets `maxAge`.
-- **Cookie set/destroy pairs** — `createStateCookie`/`destroyStateCookie`, `createVerifierCookie`/`destroyVerifierCookie`, `createLinkCookie`/`destroyLinkCookie`, `createContinueCookie`/`destroyContinueCookie`, `createLocaleCookie`/`destroyLocaleCookie`. Each set takes an Express `Response` and a value; each destroy clears the cookie with the same options.
-- **`stateMatches(cookieValue, queryValue)`** — plain string equality guard for the double-submit CSRF check.
-- **`isSameOriginPath(value)`** — type-guard: value must be a string starting with `/` that resolves to the same origin under WHATWG URL parsing (catches `//evil`, `/\evil`, absolute URLs, etc.).
-- **`isLocaleTag(value)`** — type-guard: value must match a loose BCP 47 subtag pattern (`/^[A-Z]{2,3}(?:-[\dA-Z]{2,8}){0,3}$/i`).
+- **Cookie name constants**: `OAUTH_STATE_COOKIE`, `OAUTH_VERIFIER_COOKIE`, `OAUTH_CONTINUE_COOKIE`, `OAUTH_LOCALE_COOKIE` and `OAUTH_LINK_COOKIE`. All come from `cookieData` in `@infrastructure/http/cookies.generated`. The link cookie is present only when a signed-in account is connecting a provider.
+- **`generateOAuthState()`**: 16 random bytes as hex (128 bits).
+- **`generateCodeVerifier()`**: 32 random bytes as base64url (43 characters, per RFC 7636 §4.1).
+- **`codeChallengeOf(verifier)`**: the S256 transform (SHA-256, base64url) sent to the provider as `code_challenge`.
+- **`create*Cookie` / `destroy*Cookie`** for state, verifier, link, continue and locale. Each takes an Express `Response` and sets or clears the cookie with shared options.
+- **`stateMatches(cookieValue, queryValue)`**: true only when both values are non-empty strings and are equal. It uses a plain comparison, since neither side is secret.
+- **`isSameOriginPath(value)`**: type guard that accepts only a string starting with `/` that resolves to the same origin when parsed with WHATWG `URL` against a placeholder origin. This rejects absolute URLs, `//host` and `/\host`.
+- **`isLocaleTag(value)`**: type guard for a BCP 47-shaped tag (2–3 letters, then up to three 2–8 character alphanumeric subtags). It is deliberately looser than the set of served locales.
 
 ## Relationships
-
-- **`src/modules/account/session/cookies.ts`** — provides `hostCookieOptions()`, which supplies the `__Host-` prefix and other cookie flags consumed by every cookie set/destroy in this file.
-- **`src/modules/account/controllers/get-oauth-start.ts`** — calls the token generators, `codeChallengeOf`, and the `create*` cookie functions to arm the browser before the 302 to the provider.
-- **`src/modules/account/controllers/get-oauth-callback.ts`** — reads the cookies back, applies `stateMatches`, `isSameOriginPath`, and `isLocaleTag`, then calls the `destroy*` functions on both success and failure paths.
-- **`src/modules/account/controllers/post-oauth-link-start.ts`** — calls `createLinkCookie` when a signed-in account initiates provider linking (no `state`/`verifier` involved in that path).
-- **`src/modules/account/tests/unit/oauth-state.test.ts`** — unit-tests the generators, `codeChallengeOf`, `stateMatches`, `isSameOriginPath`, and `isLocaleTag` in isolation.
-- **`tests/unit/scenarios/oauth-providers.test.ts`** — exercises the full start→callback sequence using this module's cookie helpers alongside provider fakes.
-- **`scenarios/support/doubles/oauth-fake.ts`** — test double that fabricates the cookie values this module validates, used in scenario-level tests.
+- **`../session/cookies`**: supplies `hostCookieOptions()`. This file adds a `maxAge` to build the shared `oauthCookieOptions()`.
+- **`get-oauth-start.ts`, `post-oauth-link-start.ts`**: the login-start and link-start controllers. They are the "start" side of the handshake, and `isSameOriginPath` is applied at "the start controller" against the query param.
+- **`get-oauth-callback.ts`**: the callback side. It checks `state` and re-validates the `continue` and `locale` cookies. The doc comments say every cookie is cleared on both success and failure.
+- **`oauth-state.test.ts`** and **`oauth-providers.test.ts`**: tests covering this module.
+- **`oauth-fake.ts`**: a scenario test double for the provider.
 
 ## Notes
-
-- **Plain comparison in `stateMatches`.** The comparison is deliberately not constant-time; neither the cookie nor the query param is secret (the token is handed to the provider in the same response). This is not a password check.
-- **Double validation of `continue` and `locale`.** Both are validated at the start controller (against the query param) *and* again at the callback (against the cookie readback), because a cookie is client-writable and must never be trusted on first read alone.
-- **`PLACEHOLDER_ORIGIN`.** `isSameOriginPath` resolves against `http://same-origin.invalid` rather than the real host, so the check is pure and environment-independent.
-- **`LOCALE_TAG` is intentionally loose.** It accepts any syntactically valid BCP 47 tag shape; the deployment's actual supported-locale list is enforced by the frontend, not here.
-- **`__Host-` prefix is the subdomain isolation mechanism.** The `hostCookieOptions()` import is what prevents a sibling subdomain from planting or overwriting the `state` cookie and winning the double-submit check.
+- All cookies share one TTL, taken from the state cookie's `maxAgeMs` in `cookieData`. It is intentionally short, long enough to pick an account and short enough to bound reuse.
+- `clearCookie` is called with the same options as `cookie`, so the clear matches the cookie that was set.
+- The `__Host-` prefix, via `hostCookieOptions()`, stops a sibling subdomain from planting cookies. Without it, an attacker could inject both halves of the double-submit `state` check.
+- Every `destroy*Cookie` is documented as being called at the same points as `destroyStateCookie`.
+- `createContinueCookie` and `createLocaleCookie` must only be called with already-validated values. The file does not validate inside them.
+- `isSameOriginPath` mirrors the frontend's `usePostLoginRedirect#isSameOriginPath` on purpose, so the two flows share one rule.
+- The file's module doc links to a page on why both `state` and PKCE are used, under the "federated-login" section of its authentication defences documentation.

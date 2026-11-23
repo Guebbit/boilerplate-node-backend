@@ -1,34 +1,32 @@
 ---
 source: src/main.ts
-sha256: 3f8466738a2239521e27efb348c45ed16581e2dfb957b6e1cf9078afbff71252
-generated_at: 2026-11-14T18:24:44.321822+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f2fc9c18b81beeb258e753b50b39e5612b96c666690aad1ed9d4488280108d5b
+context_sha256: 9715015c743338bc66498ee3f3f99b6c2cb7ab20217930c03fb5b78516f41cd0
+generated_at: 2026-11-22T03:15:09.961631+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/main.ts
 
 ## Purpose
-
-The default single-process entry point for the application. It orchestrates the exact bootstrap sequence—loading environment variables, setting Mongoose defaults, starting OpenTelemetry tracing—then dynamically imports the HTTP server so that tracing patches are in place before Express or Mongoose are loaded. It is the target of `npm start`, `npm run dev`, `e2e:serve`, `debug`, `dev:docker`, and the production image CMD.
+The default process entry point: one process runs one app. It is what `npm start`, `npm run dev`, `e2e:serve`, `debug`, `dev:docker` and the production image's CMD run. Its main job is to enforce a strict startup order so that OpenTelemetry can patch express, http and the models before they load.
 
 ## Key elements
-
-- **`import './infrastructure/config/dotenv'`** — Side-effect import; loads `.env` into the process environment before any other module reads configuration.
-- **`import '@infrastructure/runtime/mongoose-boot'`** — Side-effect import; sets Mongoose connection/query defaults before any schema is built.
-- **`startTracing()` (from `@infrastructure/runtime/otel-sdk`)** — Initialises the OTel SDK. Must run before Express/HTTP/Mongoose are loaded because it monkey-patches them.
-- **`logger` (from `@infrastructure/adapters/logger`)** — Used solely in the error path to log a failed server load.
-- **`import('./serve').catch(…)`** — Dynamic import that builds, listens, and wires signal handlers for the HTTP server. On failure, logs the error and sets `process.exitCode = 1`.
+- **Side-effect imports (in order):** `dotenv` loads `.env` into the environment. `mongoose-boot` sets Mongoose defaults, which are read at schema build.
+- **`startTracing()`** (from `otel-sdk`): starts the OpenTelemetry SDK before `serve` is loaded.
+- **`loadDevelopmentDoubles()`**: registers the development doubles. It is a no-op outside `NODE_ENV=development`.
+- **Dynamic `import('./serve')`**: builds the app, listens, and wires the signal handlers. It is dynamic because a static import would be hoisted above `startTracing()`. Nothing uses the instance it returns.
+- **Error handler:** if loading the doubles or `serve` fails, it logs `Could not load the server.` through `logger.error` (with the message from `extractErrorMessage`) and sets `process.exitCode = 1`.
 
 ## Relationships
-
-- **`src/infrastructure/config/dotenv.ts`** — Imported first (side-effect only); responsible for loading the `.env` file into the process environment before any subsequent module reads configuration.
-- **`src/infrastructure/runtime/mongoose-boot.ts`** — Imported second (side-effect only); sets Mongoose options that take effect at schema-definition time.
-- **`src/infrastructure/runtime/otel-sdk.ts`** — Source of `startTracing()`, the only function called from this file; must execute before the dynamic `./serve` import resolves.
-- **`src/infrastructure/adapters/logger.ts`** — Provides the `logger` instance used in the `.catch` handler for a failed `./serve` import.
+- `src/infrastructure/config/dotenv.ts`: imported first, because every other import reads the environment.
+- `src/infrastructure/runtime/mongoose-boot.ts`: imported before any model loads.
+- `src/infrastructure/runtime/otel-sdk.ts`: provides `startTracing`, called before `serve` is imported.
+- `src/app/development-doubles.ts`: provides `loadDevelopmentDoubles`, which runs after tracing and before `serve`. The doubles are therefore registered before the config gate and any request.
+- `src/infrastructure/adapters/logger.ts`: provides `logger`, used only for the startup failure message.
+- `./serve`: loaded dynamically and not listed among the graph neighbors.
 
 ## Notes
-
-- **Import order is load-bearing.** A static `import './serve'` would be hoisted above `startTracing()`, breaking OTel's instrumentation. The dynamic `import()` is intentional and must not be refactored to a static import.
-- **`process.exitCode` is set (not `process.exit`)** so that any in-flight async work can flush before the process actually exits.
-- A separate cluster-mode entry point exists at `src/cluster.ts` (`npm run start:cluster`); do not conflate the two.
-- `extractErrorMessage` from `@guebbit/js-toolkit` normalises non-`Error` rejections before logging.
+- Don't convert the `serve` import to a static import or reorder the imports. Either change breaks OTel instrumentation, and the `.env` and Mongoose defaults ordering.
+- To scale, run more copies of this entry. Do not fork inside it.
+- A startup failure sets the exit code rather than calling `process.exit`.

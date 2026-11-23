@@ -1,35 +1,34 @@
 ---
 source: src/modules/returns/domain/index.ts
-sha256: 9bbe89a1ed725300f152c01a1fdd45c6b963b57f4f9d8fca5de29781343203d2
-generated_at: 2026-11-14T21:33:07.202061+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c001fedd4a6df320dd10315b808ceca62f8f7ebb1d882bf9905dbfb831d839a3
+context_sha256: 251fb212d4e7e79b8345d4bccf505b9113a568f534f8295f33830bea0abe53dd
+generated_at: 2026-11-22T07:22:55.126659+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/domain/index.ts
 
 ## Purpose
-
-Barrel export for the returns **domain layer**. It re-exports every public symbol (values and types) from the individual domain submodules so that consumers can import from a single path (`returns/domain`) without reaching into each file. The module doc-comment asserts this layer contains pure business rules only — no Express, Mongoose, or other tier dependencies — a constraint enforced by lint.
+Barrel file for the Returns module's domain layer. It re-exports the pure business rules and their types from the sibling domain files, so other code can import from one entry point. The module doc comment says this layer holds pure rules only and is lint-guaranteed to be free of Express, Mongoose and every tier.
 
 ## Key elements
+The file contains no logic of its own, only re-exports grouped by source file:
 
-- **Lifecycle** — `RETURN_EVENTS`, `returnLifecycle`, status constants (`QUANTITY_HOLDING_RETURN_STATUSES`, `BACK_RETURN_STATUSES`), `holdsReturnedGoods`, `handsUnitsBack`, `initialStatusFor`; types `ReturnEvent`, `ReturnStatus`, `ReturnReason`, `ReturnKind`, `ReturnRemedy`.
-- **Quantities** — `returnableQuantities`, `quantitiesByProduct`, `returnableLinesOf`, `wireLines`, `checkRequestedLines`, `takesLastUnit`; types `ProductQuantity`, `LinesVerdict`.
-- **Reasons** — `CONFORMITY_REASONS`, `WITHDRAWAL_WINDOW_REASONS`, `isGuaranteeReason`, `isReasonOpen`, `policyExceptionsOf`, `reasonsOpenAt`; type `FrozenDeadlines`.
-- **Statement** — `checkStatement`; types `Statement`, `StatementInput`, `StatementVerdict`.
-- **Restock** — `resolveRestock`; types `RestockRequest`, `RestockVerdict`.
-- **Status projection** — `projectReturnStatus`; types `ProjectedReturn`, `ProjectedReturnStatus`.
-- **Refund amount** — `refundAmountFor`, `cancellationRefundFor`, `shippingStillOwed`; types `RefundInputs`, `RefundBreakdown`, `RefundVerdict`, `CancellationInputs`.
-- **Accounting** — `accountsOf`; types `AccountedReturn`, `OrderAccounts`.
-- **Refund due** — `PROOF_OPENS_REFUND_FOR`, `proofOpenedRefund`, `proofOpensRefund`, `refundDueByOf`; types `RefundDueInput`, `ReturnRefundDue`.
+- **`./lifecycle`**: `RETURN_EVENTS`, `returnLifecycle`, `QUANTITY_HOLDING_RETURN_STATUSES`, `BACK_RETURN_STATUSES`, `holdsReturnedGoods`, `handsUnitsBack`, `initialStatusFor`. Types: `ReturnEvent`, `ReturnStatus`, `ReturnReason`, `ReturnKind`, `ReturnRemedy`.
+- **`./quantities`**: `returnableQuantities`, `quantitiesByProduct`, `returnableLinesOf`, `wireLines`, `checkRequestedLines`, `takesLastUnit`. Types: `ProductQuantity`, `LinesVerdict`.
+- **`./reasons`**: `CONFORMITY_REASONS`, `WITHDRAWAL_WINDOW_REASONS`, `isGuaranteeReason`, `isReasonOpen`, `policyExceptionsOf`, `reasonsOpenAt`. Type: `FrozenDeadlines`.
+- **`./statement`**: `checkStatement`. Types: `Statement`, `StatementInput`, `StatementVerdict`.
+- **`./restock`**: `resolveRestock`. Types: `RestockRequest`, `RestockVerdict`.
+- **`./status-projection`**: `projectReturnStatus`. Types: `ProjectedReturn`, `ProjectedReturnStatus`.
+- **`./refund-amount`**: `refundAmountFor`, `cancellationRefundFor`, `shippingStillOwed`. Types: `RefundInputs`, `RefundBreakdown`, `RefundVerdict`, `CancellationInputs`.
+- **`./accounting`**: `accountsOf`. Types: `AccountedReturn`, `OrderAccounts`.
+- **`./refund-due`**: `PROOF_OPENS_REFUND_FOR`, `proofOpenedRefund`, `proofOpensRefund`, `refundDueByOf`. Types: `RefundDueInput`, `ReturnRefundDue`.
 
 ## Relationships
-
-- **Re-exports from** every sibling in `src/modules/returns/domain/`: `lifecycle`, `quantities`, `reasons`, `statement`, `restock`, `status-projection`, `refund-amount`, `accounting`, `refund-due`. This file defines no logic of its own; it is a pure re-export surface.
-- **Consumed by** `src/modules/returns/index.ts` (module-level barrel), `src/modules/returns/repository.ts`, and the services under `src/modules/returns/services/` (`cancel-remainder`, `cancel-right`, `cancel`, `cancellation-refund`), all of which import domain symbols through this index rather than the sub-files directly.
+- It re-exports from nine sibling files: `lifecycle.ts`, `quantities.ts`, `reasons.ts`, `statement.ts`, `restock.ts`, `status-projection.ts`, `refund-amount.ts`, `accounting.ts` and `refund-due.ts`.
+- The other neighbors (`src/modules/returns/index.ts`, `repository.ts`, and the `services/cancel*.ts` files) are listed as graph neighbors. This file's content doesn't show how they use it, so presumably they consume the domain API through this barrel or its siblings.
 
 ## Notes
-
-- Adding a new domain submodule requires a matching `export` block here for the surface to be visible to upper layers.
-- The "pure rules only / lint-guaranteed" claim means you should not import Express, Mongoose, or other tier modules *through* this path; a lint rule (referenced in `docs/theory/domain-layer.md`) enforces that.
-- Because this is a barrel, tree-shaking depends on the bundler honouring ESM named re-exports; in practice most consumers import specific names, so the full surface is not a runtime cost.
+- Type-only exports use `export type`, which keeps them erased at runtime.
+- Types such as `ReturnReason`, `ReturnKind` and `ReturnRemedy` are exported from `./lifecycle`, not from `./reasons`.
+- New domain rules need an export added here to be part of the public domain surface.

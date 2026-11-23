@@ -1,42 +1,39 @@
 ---
 source: src/modules/invoicing/tests/integration/reencrypt.test.ts
-sha256: cd772d7206c37c76802141f4b4d4eff8404181c00078b5ca60a557c52a54b5ef
-generated_at: 2026-11-14T20:16:01.531811+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f12acc7c889a8390dcdf41a6562a9426283c67174618073c5b782fd2f3ca8b26
+context_sha256: b898ba510b30275fbfb8f18abc513936cd4ab028e9945d2cf967815b1165d771
+generated_at: 2026-11-22T05:39:12.121001+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/tests/integration/reencrypt.test.ts
 
 ## Purpose
-
-Integration test that verifies the invoicing module's `reencrypt` walk: when the PII encryption key is rotated (a new key is prepended to the `NODE_PII_ENCRYPTION_KEY` environment variable), the buyer address fields stored on an invoice are re-encrypted under the new key version, remain decryptable under the invoice's own id, and a second invocation is a no-op (idempotency).
+Integration test for the invoicing module's `reencrypt` walk. It checks that the buyer billing address frozen on an invoice is rewritten from the old PII key to the newest key, that it still decrypts using the invoice's own id, and that a second run is a no-op.
 
 ## Key elements
-
-- **`describe('invoicing reencrypt')`** — single test block exercising key rotation end-to-end against a real (test) database.
-- **`invoicingModule.reencrypt(false)`** — the function under test; called twice to assert migration then idempotency. Returns an object with a `rewritten` count.
-- **`withEnvironmentOverrides`** — wraps the test body so `NODE_PII_ENCRYPTION_KEY` is set to a two-version rotation string (`v2:…,v1:…`) without mutating the process environment permanently.
-- **`keyVersionOf(raw.billingAddress.city)`** — asserts the stored ciphertext now carries the `v2` prefix.
-- **`decryptInvoiceParty(raw.billingAddress, 'invoice', raw._id)`** — confirms the re-encrypted fields still decrypt to the original plaintext using the invoice id as the decryption key.
-- **`markPaid` → `waitForInvoice`** — trigger path: marking the order paid causes the invoicing module to emit an invoice, which the test then polls for.
-- **`setupTestDb()` / `registerModules` / `resetDomainEvents`** — standard integration-test scaffolding (clean DB per run, full module graph registered, event bus reset between tests).
+- `setupTestDb()` — sets up the test database for the suite.
+- `beforeEach` — registers the users, products, inventory, orders and invoicing modules via `registerModules`.
+- `afterEach` — calls `resetDomainEvents()` to clear domain events between tests.
+- Single test, `moves the buyer address to the newest key, and a second run changes nothing`:
+  - Creates a user, a product (price `10.00`) and an order with a full billing address (including `vatNumber`).
+  - Calls `markPaid` on the order, then `waitForInvoice` to wait for the invoice to be generated.
+  - Under `withEnvironmentOverrides`, sets `NODE_PII_ENCRYPTION_KEY` to `v2:new-pii-key-material,v1:test-pii-encryption-key`.
+  - Asserts that the first `invoicingModule.reencrypt(false)` returns `rewritten === 6`, and the second returns `0`.
+  - Reads the raw invoice via `invoiceModel` and asserts `keyVersionOf(billingAddress.city)` is `'v2'`.
+  - Asserts that `decryptInvoiceParty(billingAddress, 'invoice', invoice._id)` returns the original `city` (`London`) and `vatNumber` (`GB123456789`).
 
 ## Relationships
-
-- **`src/modules/invoicing/module.ts`** — provides `reencrypt`, the function being tested.
-- **`src/modules/invoicing/pii.ts`** — provides `decryptInvoiceParty` used to verify decryption correctness.
-- **`src/modules/invoicing/model.ts`** — provides `invoiceModel`, used to read the raw stored ciphertext from the database.
-- **`src/infrastructure/security/versioned-secret.ts`** — `keyVersionOf` extracts the key-version prefix from a ciphertext blob.
-- **`src/kernel/registry.ts`** — `registerModules` wires all modules into the in-process service registry for the test.
-- **`src/kernel/events.ts`** — `resetDomainEvents` clears the event bus between test cases.
-- **`src/modules/orders/friends/payments.ts`** — `markPaid` is the action that triggers invoice creation.
-- **`src/modules/orders/tests/factories.ts`** — `createOrder` / `toOrderItem` build the order fixture.
-- **`src/modules/products/tests/factories.ts`** — `createProduct` builds the product fixture.
-- **`src/modules/invoicing/tests/factories.ts`** — `waitForInvoice` polls until the asynchronously created invoice is queryable.
-- **`src/modules/users/module.ts`, `src/modules/products/module.ts`, `src/modules/inventory/module.ts`, `src/modules/orders/module.ts`** — registered alongside the invoicing module so cross-module event resolution works correctly.
+- `@kernel/registry` (`registerModules`) and `@kernel/events` (`resetDomainEvents`) handle module wiring and event cleanup.
+- Registers the `users`, `products`, `inventory`, `orders` and `invoicing` modules. Invoicing is the module under test (`reencrypt`).
+- `orders/friends/payments` (`markPaid`) is what triggers invoice creation. `waitForInvoice` from `invoicing/tests/factories` waits for the result.
+- Uses the `products`, `users` and `orders` test factories (`createProduct`, `createUser`, `createOrder`, `toOrderItem`) to build the data.
+- `invoicing/model` (`invoiceModel`) is used to read the stored document directly.
+- `invoicing/pii` (`decryptInvoiceParty`) is used to verify decryption.
+- `infrastructure/security/versioned-secret` (`keyVersionOf`) reads the key version of an encrypted field.
 
 ## Notes
-
-- The expected `rewritten` count of **5** corresponds to the five billing-address fields (`fullName`, `street`, `city`, `zip`, `country`). If the schema gains or loses a PII field, this assertion will need updating.
-- The rotation string order matters: the **first** entry is the *newest* key. The test asserts migration to `v2`, i.e. the leading version.
-- The `false` argument to `reencrypt` is not further documented in this file; it likely toggles a "force" or "dry-run" mode. Check `module.ts` for the parameter contract.
+- The expected `rewritten` count of `6` is hard-coded. The test does not say which fields it covers.
+- The old key `v1:test-pii-encryption-key` stays in the rotation string so existing data can still be decrypted. `v2` is listed first and is the key the test expects after re-encryption.
+- The `false` argument to `reencrypt` is not explained in the file.
+- Decryption is bound to the invoice id, passed as the `'invoice'` context plus `_id`.

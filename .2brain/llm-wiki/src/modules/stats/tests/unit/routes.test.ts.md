@@ -1,31 +1,27 @@
 ---
 source: src/modules/stats/tests/unit/routes.test.ts
-sha256: 2fc6284f4511cad7c1de738c2fd4a8b42b5a9fd2c395ec583dc56b99845b91a9
-generated_at: 2026-11-08T08:27:18.523768+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2fc6284f4511cad7c1de738c2fd4a8b42b5a9fd2c395ec583dc56b99845b91a9
+context_sha256: 5784011232b3feb1b697cbaabfd1e3542d85f85d1c668b3382c6e2cc683cf883
+generated_at: 2026-11-22T07:53:17.894017+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stats/tests/unit/routes.test.ts
 
 ## Purpose
-
-Unit test for the stats route table that verifies structural invariants: the exact set of mounted routes, that every route is a read-only `GET`, that each requires an authenticated session, and that every route is guarded by the single `read:Stats` permission. It exists to catch accidental privilege escalation (a route gaining a write action) or route drift (an undocumented endpoint appearing).
+Unit test that pins the stats router's route table. It asserts that the module exposes exactly eight read-only GET routes, that every route requires a session, and that every route is guarded by the single permission `read:Stats`. Its stated aim is that adding a write, a public route, or a different permission becomes a deliberate decision rather than an accident.
 
 ## Key elements
-
-- **`jest.mock('@infrastructure/http/middlewares/rate-limit', …)`** — Stubs the rate-limit middleware with `securityMock()` from the shared test-support module so tests never trigger real throttling.
-- **`describe('stats routes')`** — Contains three assertions against the imported `router`:
-  - *exact signatures* — asserts the router exposes exactly 8 `GET` paths (`/sales`, `/products`, `/products/:productId`, `/categories`, `/payments`, `/operations`, `/customers`, `/pipeline`) in order.
-  - *session guard (per route)* — `it.each` over every signature; asserts `isAuth` appears in the guard chain.
-  - *single permission rule* — asserts every route's permission list maps to exactly `['read:Stats']` (one entry, no writes).
+- **`mounts exactly the documented reads, all GET`**: compares `routeSignatures(router)` to an ordered list: `GET /sales`, `/products`, `/products/:productId`, `/categories`, `/payments`, `/operations`, `/customers`, `/pipeline`.
+- **`%s requires a session`** (`it.each` over every signature): checks that `guardsOn(router, signature)` contains `isAuth`.
+- **`guards every route on the one rule`**: maps `routeTable(router)` permissions to `action:subject` strings and expects `read:Stats` for each of the 8 routes.
+- **`jest.mock` of `@infrastructure/http/middlewares/rate-limit`**: replaced with `securityMock()` from `@tests/routes`, loaded through `jest.requireActual`.
 
 ## Relationships
-
-- **`src/modules/stats/routes.ts`** — The subject under test; the file imports its `router` export and inspects it structurally.
-- **`tests/support/routes.ts`** — Supplies the inspection helpers `routeSignatures`, `routeTable`, `guardsOn`, and `securityMock` used to extract route metadata from the Express-style router without issuing HTTP requests.
+- **`src/modules/stats/routes.ts`**: provides the `router` under test, imported from `@modules/stats/routes`.
+- **`tests/support/routes.ts`**: imported as `@tests/routes`. It supplies the helpers `routeSignatures`, `routeTable`, `guardsOn` and the `securityMock` used to stub the rate-limit middleware.
 
 ## Notes
-
-- The mock target (`@infrastructure/http/middlewares/rate-limit`) and its factory (`@tests/routes.securityMock`) are in different packages — this is intentional so the real middleware is never loaded.
-- Tests are purely declarative against the router object; no HTTP calls, no database, no supertest. They will not catch handler-logic bugs, only routing/guard misconfiguration.
-- The signature list is ordered and exhaustive; adding, removing, or reordering a route in `routes.ts` without updating this file will fail CI.
+- The `jest.mock` call comes before the `router` import so the router is built with the mocked rate-limit middleware.
+- The expected signature list is order-sensitive, so reordering routes in the router will fail the first test.
+- The hardcoded `length: 8` in the permission test must be updated together with the route list when routes are added or removed.

@@ -1,31 +1,27 @@
 ---
 source: src/modules/payments/services/stats.ts
-sha256: ae4d5abc409eef713dc485a2bc7eb7f592257e64cc3a76ff7983cccb24e059f4
-generated_at: 2026-11-08T07:29:50.332034+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7af2495ab056b0ac0e660f962007e8a0d9199300f99b13fff5d5e3dbcdb0dcd3
+context_sha256: 75fcba3785845d751f8a16de5ae1cc508b09dc8446f50bd5a3e62e264ac5fa94
+generated_at: 2026-11-22T06:53:59.342996+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/services/stats.ts
 
 ## Purpose
-
-Computes the payments "mix" for reporting: how much money came in, grouped by payment method, provider, and currency. It wraps the raw repository aggregation into a clean, typed result suitable for display or further processing.
+Provides the payments mix for the stats: how much money came in, broken down by payment method, provider and currency. It is a thin service layer that reads aggregated sums from the payment repository and converts them into typed rows with `Money` amounts.
 
 ## Key elements
-
-- **`MixRow`** (interface) — one grouped bucket: `method`, `provider`, `currency`, `payments` (count), `amount` (as `Money`).
-- **`methodMix(window)`** (function, exported) — fetches payments that *took money* (i.e. `succeeded`, regardless of later refund) within the given half-open `ReportWindow`, grouped by method + provider + currency. Returns `Promise<MixRow[]>`.
+- `MixRow` (interface): one row of the mix with `method` (`PaymentMethod`), `provider`, `currency`, `payments` (count) and `amount` (`Money`).
+- `methodMix(window)`: takes a `ReportWindow` (half-open) and returns `Promise<MixRow[]>`. It counts payments created in the window that took money, meaning `succeeded` payments whether refunded or not. Payments that never settled are excluded. It delegates to the repository's `sumMix(window)` and maps each row's `_id.method`, `_id.provider` and `_id.currency` plus `payments` and `amount` into a `MixRow`.
 
 ## Relationships
-
-- **`src/domain-primitives/money.ts`** — imports `toMinorUnits` (to convert the raw numeric amount into a `Money` value) and the `Money` type used in `MixRow`.
-- **`src/infrastructure/persistence/report.ts`** — imports the `ReportWindow` type that defines the query time range.
-- **`src/modules/payments/repository.ts`** — calls `paymentRepository.sumMix(window)` to perform the actual aggregation query.
-- **`src/modules/payments/services/index.ts`** — barrel file that re-exports this module's public API to consumers.
-- **`src/types/index.ts`** — provides the `PaymentMethod` union type used in `MixRow`.
+- `src/modules/payments/repository.ts`: supplies `paymentRepository`, whose `sumMix` method does the aggregation. Its rows are shaped `{ _id: { method, provider, currency }, payments, amount }`.
+- `src/domain-primitives/money.ts`: provides `toMinorUnits`, which turns each row's raw `amount` into `Money` using the row's currency, and the `Money` type.
+- `src/infrastructure/persistence/report.ts`: provides the `ReportWindow` type for the time window.
+- `src/types/index.ts`: provides the `PaymentMethod` type.
+- `src/modules/payments/services/index.ts`: a sibling index in the same services folder. The file shown does not reference it.
 
 ## Notes
-
-- "Took money" means the payment reached the `succeeded` state; a later refund does **not** remove it from the mix. Payments that never settled (e.g. pending/failed) are excluded.
-- The repository returns `_id` as a compound key (`{ method, provider, currency }`); this service flattens that into top-level fields on `MixRow`.
-- The file is a pure function service — no side effects, no state. It exists to keep the `Money` conversion and shape-mapping logic out of the repository layer.
+- The "took money" filtering is not done in this file. It is documented here but implemented by `sumMix` in the repository.
+- Rows are grouped per method, provider and currency, so the same method and provider can appear more than once if several currencies are involved. Amounts are never summed across currencies here.

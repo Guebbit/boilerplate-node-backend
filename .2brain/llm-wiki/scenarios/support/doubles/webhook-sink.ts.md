@@ -1,34 +1,32 @@
 ---
 source: scenarios/support/doubles/webhook-sink.ts
-sha256: c4a3f9441e9d55873c27b852276ce8d08e3b46524c02ea923b0c92f56e1c8880
-generated_at: 2026-11-08T02:34:49.221928+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d5caf69ab08486179746a0a1ce0ad8896e90ec5548f7cb8b0e44fb8e7ea89beb
+context_sha256: b112d49a43a0792d40842e34e4ef57f5e7afa6acac8fd3688d82a68451c75c2a
+generated_at: 2026-11-22T01:48:32.761695+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/support/doubles/webhook-sink.ts
 
 ## Purpose
-
-Test double that registers an SSRF exemption and TLS trust for the demo webhook sink (a local `webhook-tester` proxy or a Cypress listener). Because the sink lives on loopback or a private compose address, the production SSRF guard would reject it; this file lets the dev preload script opt in without baking an exemption into production code. Never shipped.
+A test double (never shipped) that makes the demo webhook sink reachable and trusted by a process running the development doubles. The sink sits on loopback or a private compose address, which the SSRF guard normally refuses. This file registers the sink's origin as an SSRF exemption and adds the sink's test CA to the process's trusted TLS roots. Production code therefore carries no exemption of its own.
 
 ## Key elements
-
-- **`SINK_CA_PATH`** – Resolved path to `../tls/webhook-sink-ca.pem`, the committed test CA that signed the sink's leaf certificate.
-- **`trustSinkCertificateAuthority()`** *(private)* – Reads the CA PEM, then **adds** it to the process's default TLS roots via `tls.setDefaultCACertificates([...defaults, pem])`. No-ops if the CA is already present (idempotent).
-- **`registerWebhookSinkExemption()`** *(exported)* – Reads `NODE_WEBHOOK_DEMO_SINK_URL` from the config store. If set and parseable, registers the sink's full origin (scheme + host + port) via `registerSsrfExemptOrigin` and calls `trustSinkCertificateAuthority`. If the env var is unset or not a valid URL, the function is a no-op.
+- `registerWebhookSinkExemption()` (exported): reads `NODE_WEBHOOK_DEMO_SINK_URL` from `currentEnvironment()`, trims it, and returns silently if it is unset or not a parseable URL. Otherwise it calls `registerSsrfExemptOrigin(new URL(sinkUrl).origin)` and then `trustSinkCertificateAuthority()`.
+- `trustSinkCertificateAuthority()` (internal): reads the committed PEM at `../tls/webhook-sink-ca.pem` (`SINK_CA_PATH`, relative to `__dirname`). It gets the current roots with `tls.getCACertificates('default')`, returns early if the CA is already present, and otherwise calls `tls.setDefaultCACertificates([...defaults, pem])`.
+- `SINK_CA_PATH`: path to the committed test CA that signed the sink's leaf certificate.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/ssrf-exemptions.ts`** – Provides `registerSsrfExemptOrigin`, which this file calls to whitelist the sink's origin.
-- **`src/infrastructure/config/store.ts`** – Provides `currentEnvironment`, from which this file reads `NODE_WEBHOOK_DEMO_SINK_URL`.
-- **`scenarios/support/doubles/register.ts`** – The caller that invokes `registerWebhookSinkExemption` during the dev preload phase.
-- **`tests/unit/scenarios/webhook-sink.test.ts`** – Unit tests for this module.
-- **`tests/support/webhook-receiver.ts`** – The sink-side receiver that this exemption is configured for.
-- **`tests/integration/scenarios/webhooks-seed.test.ts`** – Integration scenario that exercises the sink end-to-end.
+- `./register` (`register.ts`) calls `registerWebhookSinkExemption`.
+- `@infrastructure/adapters/ssrf-exemptions` provides `registerSsrfExemptOrigin`, which records the exempt origin.
+- `@infrastructure/config/store` provides `currentEnvironment()`, the source of `NODE_WEBHOOK_DEMO_SINK_URL`.
+- `tests/unit/scenarios/webhook-sink.test.ts` unit-tests this module.
+- `tests/integration/scenarios/webhooks-seed.test.ts` and `tests/support/webhook-receiver.ts` are neighbors in the graph, but nothing in the file shows how they interact with it.
 
 ## Notes
-
-- Requires **Node ≥ 24.5** for `tls.getCACertificates` and `tls.setDefaultCACertificates`.
-- `trustSinkCertificateAuthority` intentionally **appends** to the existing default roots. Passing just `[pem]` would discard public CAs and break every other TLS connection (including `fetch`).
-- The exempted origin is the full WHATWG origin (scheme, host, **and port**), so exempting `http://localhost:3070` does not open the rest of that host.
-- The whole module is a no-op unless `NODE_WEBHOOK_DEMO_SINK_URL` is set and parseable — no sink, no exemption, no trust.
+- The exemption covers the whole origin, port included. A sink on `:3070` does not exempt the rest of that host.
+- The exemption and the CA trust are tied together: with no sink configured, neither is applied. No launcher needs to set `NODE_EXTRA_CA_CERTS`.
+- The CA is appended to the defaults. Passing a bare `[pem]` would drop the public roots and break other TLS calls.
+- The trust change is process-wide and applies to later TLS connections, including `fetch`.
+- `tls.getCACertificates` and `tls.setDefaultCACertificates` require Node >= 24.5.
+- Repeat calls do not add the CA twice, because of the already-present check.

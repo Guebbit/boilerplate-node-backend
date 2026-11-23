@@ -1,36 +1,31 @@
 ---
 source: src/modules/cart/rate-limits.ts
-sha256: a39e0b47cbbc5fe22772a96693ea693524ce013ec891f9c1082253d2865299dc
-generated_at: 2026-11-08T05:15:43.128841+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d314b53b1c28f68685e78d57575f2999f146bce59c85fbfd68a58e6837fb0c9b
+context_sha256: 911c5eb73b912cf02ff0c9e8150807f5e5e4a4deaf48a635289b680905043c0b
+generated_at: 2026-11-22T04:34:36.706378+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/rate-limits.ts
 
 ## Purpose
-
-Declares the two cart-specific rate-limit budgets (checkout and merge) and converts them into ready-to-use Express middleware via the shared `buildRateLimiter` factory. It exists because these two endpoints are the most expensive per-request operations in the cart module and need per-account limits beyond the global brake.
+Defines the cart module's own rate-limit budgets: one for `POST /cart/checkout` and one for `POST /cart/merge`. Budgets are plain data (`RateLimitBudget`), declared on `./module.ts`'s `rateLimits`, and turned into Express middleware by the shared `buildRateLimiter` factory that all modules use.
 
 ## Key elements
-
-- **`CHECKOUT_BUDGET`** (internal) — `RateLimitBudget` config for `POST /cart/checkout`. Sourced from `cartRateLimitData.checkout` (generated file), keyed by authenticated account. Every attempt counts, refused or placed.
-- **`checkoutLimiter`** (exported `RequestHandler`) — Express middleware for the checkout route.
-- **`MERGE_BUDGET`** (internal) — `RateLimitBudget` config for `POST /cart/merge`. Sourced from `cartRateLimitData.cartMerge`, keyed by authenticated account. Justified because one merge ≈ 100 catalogue reads + cart writes, which the global brake under-counts.
-- **`mergeLimiter`** (exported `RequestHandler`) — Express middleware for the merge route.
-- **`cartRateLimits`** (exported `readonly RateLimitBudget[]`) — The two budgets in an array; consumed by `module.ts` to register them on the module's `rateLimits` manifest.
+- `checkoutLimiter` — `RequestHandler` for `POST /cart/checkout`, built from `CHECKOUT_BUDGET`. Limits checkout attempts per window, per account. Every attempt counts, whether refused or placed.
+- `mergeLimiter` — `RequestHandler` for `POST /cart/merge`, built from `MERGE_BUDGET`. Limits merges per account per window. Every request counts, replays included.
+- `cartRateLimits` — `readonly RateLimitBudget[]` of `[CHECKOUT_BUDGET, MERGE_BUDGET]`, listed on the module's `rateLimits`.
+- `CHECKOUT_BUDGET` / `MERGE_BUDGET` (not exported) — spread the numeric settings from `cartRateLimitData.checkout` and `cartRateLimitData.cartMerge` (imported from `./rate-limits.generated`). They then add `keyedBy: KEYED_BY_AUTHENTICATED_ACCOUNT` and `keyGenerator: accountIdOf`.
 
 ## Relationships
-
-- **`src/infrastructure/http/middlewares/rate-limit.ts`** — Provides `buildRateLimiter`, `accountIdOf`, and `KEYED_BY_AUTHENTICATED_ACCOUNT`; the factory and keying primitives used to construct both limiters.
-- **`src/modules/cart/module.ts`** — Imports `cartRateLimits` and lists them under the module's `rateLimits` declaration.
-- **`src/modules/cart/routes.ts`** — Applies `checkoutLimiter` to `POST /cart/checkout` and `mergeLimiter` to `POST /cart/merge`.
-- **`src/types/index.ts`** / **`src/types/rate-limit-budget.ts`** — Define the `RateLimitBudget` interface re-exported via the `@types` alias.
-- **`src/modules/cart/tests/integration/checkout-rate-limit.test.ts`** — Integration tests exercising `checkoutLimiter` under load.
-- **`src/modules/cart/tests/integration/merge-rate-limit.test.ts`** — Integration tests exercising `mergeLimiter` under load.
+- `src/infrastructure/http/middlewares/rate-limit.ts` — supplies `buildRateLimiter`, `accountIdOf` and `KEYED_BY_AUTHENTICATED_ACCOUNT`, which this file uses.
+- `src/types/rate-limit-budget.ts` / `src/types/index.ts` — provide the `RateLimitBudget` type, imported via the `@types` alias.
+- `src/modules/cart/module.ts` — lists `cartRateLimits` as its `rateLimits`.
+- `src/modules/cart/routes.ts` — the limiters are mounted on the checkout and merge routes.
+- `src/modules/cart/tests/integration/checkout-rate-limit.test.ts` and `merge-rate-limit.test.ts` — integration tests for the two limiters.
 
 ## Notes
-
-- Numeric limits live in `rate-limits.generated.ts` (imported as `cartRateLimitData`); this file only wires them into keyed budgets.
-- Both budgets are deliberately keyed by **account**, not IP/address. The merge budget's doc comment calls out the reason: an IP key would reset on every new address, letting a stolen session hammer the cart indefinitely.
-- Budgets count **every** request that reaches the middleware, including refused checkouts and replayed merges—the cost is the request itself, not its outcome.
-- The global rate-limit brake (applied elsewhere) still runs in front of these; these budgets are a second, per-account layer specifically for the two most expensive cart operations.
+- Both budgets are keyed on the authenticated account, not the IP address. The routes require sign-in, and an IP key would reset per address for a stolen session.
+- The merge budget exists because the global brake counts a large merge as a single request, which under-counts its work.
+- Checkout is limited because each successful attempt holds stock, writes an order, burns an order number, sends mail and clears the products cache.
+- The actual limits (window and size) come from `./rate-limits.generated`, not from this file. Change them there.

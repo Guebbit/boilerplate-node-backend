@@ -1,37 +1,32 @@
 ---
 source: src/modules/example/services/owner.ts
-sha256: e54c2350be7710a34d25a02709c2185c5ea3afc5a85f9ff5ba31df43f41192d5
-generated_at: 2026-11-08T05:53:57.924668+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 83389be304eb1b0af3a6ebcf29fa056eb073c0a4f56138f93cb8cedd0d7d6d84
+context_sha256: 07a804255f1b5c397aad0cfbfd0c705c18bc67528d513a05c3d7ca1a2a1bc4c4
+generated_at: 2026-11-22T05:12:42.829489+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/services/owner.ts
 
 ## Purpose
-
-The single point in the example module where another module's (users) data is read. It resolves an owner's display name and presents stored example documents as the contract's `Example` shape — either for a signed-in caller (with per-caller actions) or publicly (with actions disabled).
+Resolves the owner's display name for an example and uses it to build the contract's `Example` shape. The collection stores only the owner's `userId`, so this file reads the name from the `users` module (through its barrel, `@modules/users`) and offers two presentation paths: one for a signed-in caller and one for anyone.
 
 ## Key elements
-
-- **`ownerNameOf(userId)`** — Fetches a user's `username` via `userService.getById`; falls back to a translated placeholder (`t('example.owner-unknown')`) if the account no longer exists.
-- **`ownerNamesOf(userIds)`** — Batch variant: deduplicates the input, fetches each distinct owner in parallel, returns a `Map<string, string>`. A page of rows owned by one person costs one read, not N.
-- **`presentForCaller(document, context)`** — Resolves the owner name, then delegates to `presentExample` with actions computed by `actionsForRows(context)` for that specific caller.
-- **`presentPublic(document)`** — Same as above but passes `NO_KEYS` (`{ update: false, delete: false }`) to `exampleActionsFor`, so the public read exposes no mutation actions.
-- **`NO_KEYS`** (module-private) — The constant `{ update: false, delete: false }` representing "a stranger holds no keys."
+- `ownerNameOf(userId)`: calls `userService.getById` and returns the username. If the account no longer exists, it returns the translated `example.owner-unknown` placeholder.
+- `ownerNamesOf(userIds)`: resolves names for a page of rows. It de-duplicates the ids, so there is one `users` read per distinct owner, and returns a `Map<userId, name>`.
+- `presentForCaller(document, context)`: returns an `Example` with the owner's name filled in and `actions` computed for this caller via `actionsForRows(context)`, using the row's `userId` and `status`.
+- `presentPublic(document)`: returns an `Example` with the owner's name and `actions` computed with no keys. `NO_KEYS` is `{ update: false, delete: false }`, so all actions come out false.
+- `NO_KEYS` (private constant): the permissions a stranger holds on an example, which is none.
 
 ## Relationships
-
-- **`@modules/users`** (`src/modules/users/index.ts`) — Sole cross-module data read; calls `userService.getById`. Per the module contract this file must never reach into the users repository or model directly.
-- **`@infrastructure/i18n`** — Uses `t()` for the "unknown owner" placeholder string.
-- **`../model`** (`src/modules/example/model.ts`) — Consumes the `ExampleDocument` type as its input shape.
-- **`../presenter`** (`src/modules/example/presenter.ts`) — Delegates final `Example` shaping to `presentExample`.
-- **`../domain`** (`src/modules/example/domain/index.ts`) — Uses `exampleActionsFor` for the public (no-caller) action set.
-- **`./actions`** (`src/modules/example/services/actions.ts`) — Uses `actionsForRows` to compute caller-specific permissions.
-- **`@types`** (`src/types/index.ts`, `src/types/auth-context.ts`) — Imports the `Example` contract type and `CallerContext`.
+- `src/modules/users/index.ts`: the source of owner data. `userService` is imported from the `@modules/users` barrel, the only cross-module read, and it never touches the users repository or model.
+- `src/infrastructure/i18n/index.ts`: `t()` supplies the unknown-owner placeholder.
+- `src/modules/example/presenter.ts`: `presentExample(document, name, actions)` does the final shaping into `Example`.
+- `src/modules/example/domain/index.ts`: `exampleActionsFor(status, keys)` computes the actions for the public path.
+- `src/modules/example/services/actions.ts`: `actionsForRows(context)` computes the actions for the caller path.
+- `src/modules/example/model.ts`: supplies the `ExampleDocument` type.
+- `src/types/index.ts`: supplies `CallerContext` and `Example`.
 
 ## Notes
-
-- This file is the **only** place in the example module that reads from the users module; all other reads/writes go through the example's own services. Keep it that way.
-- `ownerNameOf` is async (returns `Promise<string>`), so both present helpers are also async even though they look like simple mappers.
-- `ownerNamesOf` deduplicates via `Set` before issuing reads; callers can safely pass an un-deduplicated array.
-- The action sets differ by path: `presentForCaller` gets per-user permissions from `actionsForRows`, while `presentPublic` hard-codes both flags to `false` via `NO_KEYS`.
+- `userId` is stringified with `String(document.userId)` before lookup and before building the row passed to `actionsForRows`.
+- `ownerNamesOf` exists to avoid one read per row, but `presentForCaller` and `presentPublic` each resolve a single document's owner on their own.

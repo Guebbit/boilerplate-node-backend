@@ -1,35 +1,35 @@
 ---
 source: src/modules/delivery/domain/tracking.ts
-sha256: c3c1d9ca6dfd6986a6ba2ce650213071a249c807cf2f484e4bba4e4f7a09b907
-generated_at: 2026-11-08T05:29:48.512956+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c3c1d9ca6dfd6986a6ba2ce650213071a249c807cf2f484e4bba4e4f7a09b907
+context_sha256: 2e8ac7a0477bc0df25bae89ffbe51aeeae57f708583c118c95132761727a30d8
+generated_at: 2026-11-22T04:49:22.755549+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/domain/tracking.ts
 
 ## Purpose
-
-Defines the single rule that determines whether a shipment is "awaiting tracking" — i.e. it shipped via a tracked method but the carrier's code has not yet been recorded. This one predicate drives the `Shipment.awaitingTracking` flag and the "tracked, still without a code" row in the staff digest.
+Defines the single rule for whether a shipment is still waiting for the carrier's tracking code. This rule backs the `Shipment.awaitingTracking` flag and the staff digest's "tracked, still without a code" row.
 
 ## Key elements
-
-- **`TrackingFacts`** (interface) — The minimal read-only shape the question needs: `kind` (`physical` vs. digital), `status`, and optional `trackingCode`. Callers construct this from whatever entity they have; the function stays pure.
-- **`isAwaitingTracking(shipment, shippingMethodId)`** (exported const) — Returns `true` only when all of the following hold:
-  1. `kind` is `FulfillmentOrderKind.physical`
-  2. `status` is `ShipmentStatus.shipped`
-  3. `trackingCode` is absent
-  4. `shippingMethodId` is defined **and** `findShippingMethod(id)?.tracked === true`
+- `TrackingFacts` (interface): the shipment fields the rule reads.
+  - `kind`: a `FulfillmentOrderKind`. `physical` means a parcel. A digital fulfillment never had a carrier.
+  - `status`: a `ShipmentStatus`.
+  - `trackingCode`: optional string.
+- `isAwaitingTracking(shipment, shippingMethodId)`: returns `true` only when all of these hold:
+  - `kind` is `physical`.
+  - `status` is `shipped`.
+  - `trackingCode` is empty or missing.
+  - `shippingMethodId` is defined.
+  - `findShippingMethod(shippingMethodId)?.tracked === true`.
 
 ## Relationships
-
-- **`./rates` → `findShippingMethod`** — Called *live* at evaluation time (not cached from checkout), so a rate-table change retroactively changes which shipments count as "awaiting."
-- **`@types`** — Source of the `FulfillmentOrderKind` and `ShipmentStatus` enums used in the predicate.
-- **`domain/index.ts`** — Barrel file; re-exports this module so consumers can import from the domain root.
-- **`services/actions.ts`, `services/digest.ts`** — Downstream consumers that call `isAwaitingTracking` when building actions or the digest summary row.
-- **`tests/unit/tracking.test.ts`** — Unit tests covering the truth table of the predicate.
+- Imports `FulfillmentOrderKind` and `ShipmentStatus` from `@types` (`src/types/index.ts`).
+- Imports `findShippingMethod` from `./rates` (`src/modules/delivery/domain/rates.ts`) to check whether the order's method is `tracked`.
+- `src/modules/delivery/services/digest.ts` is named in this file's own docs as a consumer of the rule (the staff digest row).
+- `src/modules/delivery/domain/index.ts`, `src/modules/delivery/services/actions.ts` and `src/modules/delivery/tests/unit/tracking.test.ts` are graph neighbors of this file.
 
 ## Notes
-
-- The shipping-method lookup is **not** frozen at order creation. If ops toggles `tracked` on a rate, the set of "awaiting" shipments changes immediately on the next call — no migration needed, but also no historical stability.
-- The function is pure over its inputs (no I/O, no date checks). Any time-sensitivity (e.g. "has been waiting > N days") belongs to the caller, not here.
-- Digital shipments (`kind !== physical`) always return `false` regardless of status or code — there is no carrier to produce a code.
+- The shipping method is looked up live, not frozen at checkout. A rate change can therefore change which shipments count as waiting.
+- An unknown method id, or no method id, gives `false`, because the optional chaining yields `undefined`, which is not `=== true`.
+- Any non-empty `trackingCode` makes the result `false`. An empty string counts as no code.

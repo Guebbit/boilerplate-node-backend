@@ -1,51 +1,47 @@
 ---
 source: src/modules/account/tests/integration/session-modes.test.ts
-sha256: 77e0da43306d877653e86d238a56a2e5af4b2e6e6bb0c3926e9422f8dc290ca7
-generated_at: 2026-11-14T19:12:04.326161+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c81b05806c673b2a432c25cf0e5cd18e4cac13d0bcae8344d3e675068782528f
+context_sha256: 439efe04760f2b0fcc5142885470cd3e4683af0b98dcef06f681c9d06715e056
+generated_at: 2026-11-22T04:01:58.755186+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/session-modes.test.ts
 
 ## Purpose
-
-Integration test suite that exercises the full session lifecycle (login, remember-me tiers, keep-alive, revocation, 2FA, OAuth, password change/reset, step-up) against real HTTP routes under **both** `NODE_SESSION_MODE` values (`cookie` and `jwt`). The core promise it enforces: the strategy port exposes identical behavior regardless of which transport is active, and a session issued under one mode is never usable under the other.
+Integration test for the account module's two session modes, `jwt` and `cookie` (selected by `NODE_SESSION_MODE`). It drives the real HTTP routes. The first block, `describe.each(MODES)`, runs the same assertions under both modes, which tests the promise of the session strategy port. Mode-specific blocks and a "switching" block (a session belongs to the mode that issued it) are described in the header comment. They are not visible in the part of the file shown here.
 
 ## Key elements
-
-- **`MODES` / `describe.each(MODES)`** – runs the entire suite twice, once per session mode, switching `NODE_SESSION_MODE` in `beforeEach`.
-- **`signIn` / `account`** – helpers that hit `POST /account/login` and package the returned credential (bearer token + refresh cookie for `jwt`; session cookie alone for `cookie`) into a `SignedIn` object.
-- **`statusOfSession` / `statusOfCredential` / `statusOfBearer` / `statusOfCookie`** – thin wrappers that probe a session's liveness using the mode-appropriate endpoint (`GET /account` vs `POST /account/refresh`).
-- **`keepAlive`** – simulates the client's periodic renewal; for `jwt` mode it performs a refresh and returns the new token pair.
-- **`TIERS`** – the three "remember me" durations (1 day / 7 days / 30 days) asserted via `Max-Age` on `Set-Cookie`.
-- **`armTotp`** – drives the two-step TOTP setup + confirm flow and returns the confirm response (which re-mints the caller's session).
-- **`oauthLogin`** – performs a full start → callback round trip through the registered `fake` OAuth provider.
-- **`claimedBy`** – reads the `amr` (authentication method) claim back from either the refresh token (decoded via `jose`) or the session row in the database.
-- **`eventually`** – polling helper for writes that land after the HTTP response returns.
-- **`beforeAll` / `beforeEach`** – registers `fakeOAuthProvider` and sets `NODE_CORS_ORIGIN` to a fixed test origin.
+- **`MODES`**: `['jwt', 'cookie']`, the values the shared block is parameterised over.
+- **`logIn(email, body)`**: `POST /account/login` with the `Origin` header set to `FRONTEND`, the way a browser sends it.
+- **`signIn(email, mode)`**: logs in and returns a `SignedIn` object (`response`, `headers`, `cookie`). In `jwt` mode the headers are the access-token bearer plus the `__Host-session` refresh cookie. In `cookie` mode they are the cookie alone.
+- **`account(mode, email)`**: creates a verified customer and signs it in.
+- **`statusOfSession` / `statusOfCredential`**: check whether a session is still alive. They use `GET /account` in `cookie` mode and `POST /account/refresh` in `jwt` mode. They deliberately avoid the access token, which is stateless and outlives revocation.
+- **`statusOfBearer` / `statusOfCookie`**: status of `GET /account` for a `ses_…` bearer or a bare cookie.
+- **`sessionsOf`, `ownSessionId`**: read `GET /account/sessions` and find the entry marked `current`.
+- **`keepAlive`**: uses the session the way each mode keeps it alive. `cookie` mode calls `GET /account`. `jwt` mode refreshes and returns new headers.
+- **`TIERS`, `maxAgeOf`, `clears`**: the "remember me" tiers (short 1 day, medium 7 days, long 30 days), a `Max-Age` parser, and a check for cookie-clearing `Set-Cookie` lines.
+- **`armTotp`**: sets up and confirms a TOTP factor through the 2FA routes, using `codeFor`. It returns the confirm response and the secret.
+- **`claimedBy`**: reads the `amr` claim. In `jwt` mode it decodes the refresh token with `decodeJwt`. For a `ses_…` id it reads the database row via `sessionRowFor`.
+- **`oauthLogin`**: a full start-to-callback round trip through the `fake` OAuth provider.
+- **`eventually`**: polls for a write that lands after the response.
+- **Visible tests in `describe.each`**: `/config` reports the mode and lifetimes. A login authenticates the next request. The session list has one entry marked current, and its `createdAt` matches the row's `startedAt`. The credential never appears in the list or the database.
 
 ## Relationships
-
-- **`scenarios/support/doubles/oauth-fake.ts`** – provides `fakeOAuthProvider`, registered at the top of the suite so the OAuth round-trip tests work without a real IdP.
-- **`src/modules/account/oauth/providers/index.ts`** – `registerOAuthProvider` is called in `beforeAll` to inject the fake provider into the runtime registry.
-- **`src/modules/account/session/strategy.ts`** – imports `activeStrategy` and the `SessionRequest` type; the tests verify the port's contract holds in both modes.
-- **`src/modules/account/session/config.ts`** – imports `getAccessTokenRing` and `getRefreshTokenAudience` for JWT assertion helpers.
-- **`src/modules/account/session/key-ring.ts`** – imports `keyId` for token-signing assertions.
-- **`src/modules/account/session/mint-guard.ts`** – imports `SecondFactorRequiredError`, asserted when a 2FA-gated action is attempted without the factor.
-- **`src/modules/account/repository.ts`** – imports `sessionRepository` for direct row inspection (e.g. verifying credentials are not persisted in plaintext).
-- **`src/modules/account/services/index.ts`** – imports `accountService` for service-level assertions alongside route-level ones.
-- **`src/modules/account/tests/factories.ts`** – imports `plantToken`, `sessionRowFor`, `sessionRowsOf` to seed and read session rows directly.
-- **`src/modules/users/tests/factories.ts`** – imports `createUser`, `userRepository`, `PLAIN_PASSWORD`, `REPLACEMENT_PASSWORD` to create accounts and drive password-change tests.
-- **`src/modules/users/friends/account.ts`** – imports `accountUserService` for cross-module account assertions.
-- **`src/infrastructure/security/hash-token.ts`** – imports `hashToken` for verifying stored token hashes.
-- **`tests/support/clock.ts`** – imports `advanceDate` / `freezeDate` to control time-dependent assertions (token expiry, `Max-Age` boundaries).
-- **`src/modules/account/tests/unit/family-liveness.test.ts`** – sibling test in the same directory; shares the factories and conventions but does not import from this file.
+- **`@tests/*` helpers** (`http`, `setup-test-db`, `environment`, `clock`, `cookies`, `stub`, `totp`): provide the HTTP client, DB setup, env overrides, date freezing, cookie parsing and TOTP codes. `tests/support/clock.ts` is the clock source.
+- **`scenarios/support/doubles/oauth-fake.ts`**: supplies `fakeOAuthProvider`. It is registered under `'fake'` through `registerOAuthProvider` from `oauth/providers`, because production never registers it.
+- **`users/tests/factories`**: `createUser`, `userRepository`, and the `PLAIN_PASSWORD` and `REPLACEMENT_PASSWORD` constants.
+- **`../factories`** (account tests): `plantToken`, `sessionRowFor`, `sessionRowsOf`.
+- **`session/strategy`**: `activeStrategy` and the `SessionRequest` type.
+- **`session/mint-guard`**: `SecondFactorRequiredError`.
+- **`session/config`, `session/key-ring`**: `getAccessTokenRing`, `getRefreshTokenAudience` and `keyId`.
+- **`../../repository` and `../../services`**: `sessionRepository` and `accountService`.
+- **`users/friends/account`**: `accountUserService`.
+- **`infrastructure/security/hash-token`**: `hashToken`.
+- **`src/modules/account/tests/unit/family-liveness.test.ts`**: listed as a graph neighbour. No interaction is visible in the shown content.
 
 ## Notes
-
-- The test file is **mode-parametric**: every scenario runs under both `cookie` and `jwt`. When a test asserts on a header or cookie shape, it must branch on `mode` — the helper functions (`statusOfSession`, `keepAlive`, etc.) abstract this away, but new tests that inspect raw headers must remember to handle both shapes.
-- The `fake` OAuth provider is **only** registered in this suite's `beforeAll`; it is absent from production. Do not assume it exists in other test files.
-- `signIn` always sets the `Origin` header to `FRONTEND` (`https://shop.example`); `cookie`-mode origin checks depend on this matching `NODE_CORS_ORIGIN` (set in `beforeEach`).
-- The `eventually` helper polls up to 40 × 50 ms (≈2 s). If a new write has longer async propagation, the test will fail with "the write never landed" rather than hanging.
-- `claimedBy` uses `decodeJwt` from `jose` **without verification** — the comment notes this is intentional: the test reads back what the app itself signed.
-- The file is truncated in this wiki snapshot; the full suite includes additional scenarios (logout-everywhere, revoking one session, password change/reset, step-up, cross-mode isolation) that follow the same helper patterns.
+- The shared block calls `setEnvironment({ NODE_SESSION_MODE: mode })`. The file-level `beforeEach` sets `NODE_CORS_ORIGIN` to `https://shop.example` and `NODE_MAIL_TRANSPORT` to `outbox`.
+- In `cookie` mode, writes check `Origin`, so the helpers send it.
+- Access tokens are stateless. Revocation ends the ability to obtain a next session, not the existing access token.
+- `jose` (`SignJWT`, `decodeJwt`) is imported. The `decodeJwt` use is documented as an unverified read of what the app itself signed.

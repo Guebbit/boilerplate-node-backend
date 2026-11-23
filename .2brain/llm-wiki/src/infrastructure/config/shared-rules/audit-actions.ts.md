@@ -1,27 +1,24 @@
 ---
 source: src/infrastructure/config/shared-rules/audit-actions.ts
-sha256: d085b4be61d6ab5a6c8e363b3599c4e4d3fd6f2f8e2db107a102235e05f40fca
-generated_at: 2026-11-14T17:56:44.861468+00:00
-model: ollama:qwen3.8:27b
+source_sha256: d085b4be61d6ab5a6c8e363b3599c4e4d3fd6f2f8e2db107a102235e05f40fca
+context_sha256: fd3ff3df948ee8d0a5a36c5bd22b0d718955c21f91f955171c3ce1b7d495f68a
+generated_at: 2026-11-22T02:44:27.865170+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/config/shared-rules/audit-actions.ts
 
 ## Purpose
-
-Defines the Zod validation schema for `shared/rules/audit-actions.yaml`, which holds audit action identifiers that are not scoped to any specific module. It ensures the YAML file contains only well-formed `security.*` dotted strings.
+Defines the Zod schema for `shared/rules/audit-actions.yaml`, which lists audit actions that don't belong to any module. It validates that file's structure so malformed action names are rejected when the rules are loaded.
 
 ## Key elements
-
-- **`auditActionsSchema`** — A `z.strictObject` (rejecting any unexpected top-level keys) with a single key `actions`, whose value is validated by `keyedListSchema` constrained by the regex `/^security(\.[a-z][\d_a-z]*){1,3}$/`.
-- **`keyedListSchema`** (imported) — Reused from `./generate-spec` to enforce the list-element format against the provided regex.
+- `auditActionsSchema`: a `z.strictObject` (unknown keys are rejected) with a single field, `actions`.
+- `actions`: built with `keyedListSchema`, using the regex `/^security(\.[a-z][\d_a-z]*){1,3}$/`. Each entry must be a dotted string that starts with `security`, followed by 1–3 segments. Each segment starts with a lowercase letter and may contain lowercase letters, digits and underscores.
 
 ## Relationships
-
-- **`./generate-spec`** — Provides `keyedListSchema`, the shared helper that wraps a regex into a Zod list-element schema. This file is the consumer.
+- Imports `keyedListSchema` from `./generate-spec`, which supplies the keyed-list schema factory. This file only passes it the pattern for valid keys.
+- `registry.ts` is a graph neighbor. Nothing in this file's content shows how it interacts with it.
 
 ## Notes
-
-- The doc-comment mandates **relative imports only**, pointing to `load.ts` for the convention. Avoid adding bare or alias imports here.
-- The regex allows up to **three** additional dot-separated segments after the `security` prefix (e.g. `security.auth.login.fail`), each starting with a lowercase letter and containing only `[a-z0-9_]`.
-- The comment "actions that belong to no module" implies this file is the *fallback/global* bucket; module-scoped audit actions presumably live elsewhere.
+- The `security.` prefix is what reaches the platform operator's alerts. Naming an action under `security.*` therefore has alerting consequences.
+- The module comment says to use relative imports only, as explained in `load.ts`. Don't switch to path aliases here.

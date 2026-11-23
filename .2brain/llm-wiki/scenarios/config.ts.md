@@ -1,32 +1,35 @@
 ---
 source: scenarios/config.ts
-sha256: 0648431a997ffb07de1056f9768236d443f880b4dc57c9a38a585a16f8479f58
-generated_at: 2026-11-08T02:28:20.168699+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T01:42:19.648246+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scenarios/config.ts
 
 ## Purpose
 
-Defines two configuration slices consumed exclusively by the demo seeder and dev preload: the `NODE_SEED_*` credential variables (13 persona passwords + one shared TOTP secret) and the demo webhook-sink URL. Each variable has a committed, public fallback so the seeder works out-of-the-box in development; production never reads these slices.
+Defines the seeder's and the demo's own environment variables as config slices. These are the `NODE_SEED_*` account passwords and TOTP secret, each with a committed, public fallback, plus the demo webhook sink's URL. They are read through the shared config layer, so a blank value counts as unset. They are not part of the app's boot gate, because the seeder is a script and production has none of these variables.
 
 ## Key elements
 
-- **`seedPassword(fallback: string)`** — Internal helper. Wraps `text({ default: fallback, sensitive: true })` so every seed field gets a committed value and is marked sensitive for logging/masking.
-- **`seedPasswordsConfig`** — A `defineConfig` named `scenario-seeds`. Declares 14 `text` fields (`NODE_SEED_*_PASSWORD` for each persona, plus `NODE_SEED_STAFF_TOTP_SECRET`). Fallbacks are pulled from `personas.accounts.*.defaultPassword` and `personas.staffTotpSecret`.
-- **`seedPasswords(): Record<PersonaName, string>`** — Resolves the config and returns a flat map of persona name → password string. Spelled out field-by-field (not generated) so the env-var names remain the stable, documented contract.
-- **`demoSinkConfig`** — A `defineConfig` named `scenario-webhook-sink`. Declares a single `text` field, `NODE_WEBHOOK_DEMO_SINK_URL`, with **no** default (blank means unset). Read by the seeder (to write the subscription URL) and by the dev preload (to exempt the loopback/compose origin from the SSRF check).
+- `seedPassword(fallback)` (private): builds a `text({ default: fallback, sensitive: true })` field.
+- `seedPasswordsConfig`: a `defineConfig` slice named `scenario-seeds`. It has 14 fields:
+  - 13 `NODE_SEED_<ACCOUNT>_PASSWORD` variables, one per persona: admin, user, editor, moderator, unverified, two-factor, pending-email, banned, second-shopper, manager, warehouse, support and operator.
+  - `NODE_SEED_STAFF_TOTP_SECRET`, the one authenticator secret shared by every armed account.
+  - Each default comes from `personas.accounts.<name>.defaultPassword`, or from `personas.staffTotpSecret` for the TOTP secret.
+- `seedPasswords()`: resolves `seedPasswordsConfig()` and returns a `Record<PersonaName, string>` keyed by persona name. Each value is the env override, or the committed default if none is set. It maps the 13 passwords only and does not include the TOTP secret.
+- `demoSinkConfig`: a `defineConfig` slice named `scenario-webhook-sink` with a single field, `NODE_WEBHOOK_DEMO_SINK_URL: text()`. It has no default declared here.
 
 ## Relationships
 
-- **`src/infrastructure/config/define.ts`** — Imports `defineConfig`; the two config slices are built through it.
-- **`src/infrastructure/config/fields.ts`** — Imports the `text` field type used for every entry in both slices.
-- **`scenarios/personas-schema.ts`** — Imports the `personas` data (to source default passwords and the staff TOTP secret) and the `PersonaName` type (used as the key type of `seedPasswords`'s return value).
+- `scenarios/personas-schema.ts`: supplies `personas` (the account defaults and `staffTotpSecret`) and the `PersonaName` type. The in-file comments say the committed passwords come from `shared/scenarios/personas.yaml`.
+- `src/infrastructure/config/define.ts`: provides `defineConfig`, which builds both slices.
+- `src/infrastructure/config/fields.ts`: provides the `text` field helper.
+- `scenarios/accounts.ts` and `scenarios/webhooks.ts`: they are graph neighbors, but this file does not import them. The comments say the seeder reads the sink URL when it writes the webhook subscription. Their direct use of these exports is not visible in this file.
 
 ## Notes
 
-- Fallbacks are **intentionally public**. The safety boundary is that `scenario:apply` refuses to run outside development/test, not that the values are secret.
-- `NODE_SEED_STAFF_TOTP_SECRET` is a shared authenticator secret, not a per-account password, but it reuses the `seedPassword` helper for consistency.
-- `demoSinkConfig`'s field has no default, unlike every `seedPassword` field — a blank value means "unset" here, consistent with the rest of the config layer.
-- This module is **not** part of the application boot gate; it is read only by the seeder script and the dev preload.
+- The password fallbacks are real, public demo values rather than placeholders. The comments say `scenario:apply` refuses to run outside development or test, and that this is what keeps them away from any database other than a developer's or CI's.
+- The fields are marked `sensitive: true` even though their defaults are committed.
+- The password keys in `seedPasswords()` are written out by hand because the variable names are the stable, documented part.
+- `demoSinkConfig` is read by the seeder and by the development doubles. The doubles exempt this origin from the SSRF address check, since the sink is on loopback or a private compose address. Production code never reads it.

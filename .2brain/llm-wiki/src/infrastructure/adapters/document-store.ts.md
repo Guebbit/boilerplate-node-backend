@@ -1,41 +1,33 @@
 ---
 source: src/infrastructure/adapters/document-store.ts
-sha256: a9338d552f1bdddfd482845a0934f23c670541950994a2385333e8d172c643df
-generated_at: 2026-11-14T17:52:50.483128+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 1deb83342d45a0287e120faf321054ace689d607794a84e1974db63f65cf6d7e
+context_sha256: ba31758c16bc8ffe54ec802aa5a2fb3f1ffb3b75fb310d588defcc87e558505a
+generated_at: 2026-11-22T02:35:51.531268+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/document-store.ts
 
 ## Purpose
-
-Disk-backed cache of rendered PDF documents (invoices, credit notes) so that a second download streams an existing file instead of re-launching Chromium. It is explicitly **not** a record store: the authoritative invoice data lives in Mongo, and these PDFs are regenerable copies with a finite retention window.
+A small on-disk store for finished PDFs (invoices, credit notes) so a repeat download streams a saved file instead of re-rendering with Chromium. It is a regenerable cache, not a record: the frozen invoice data in Mongo is the legal record, and stored PDFs are never backed up and are deleted after a retention window.
 
 ## Key elements
-
-- **`documentRoot()`** *(private)* — Resolves the absolute directory for stored documents from `pdfConfig().NODE_DOCUMENT_STORE_PATH`.
-- **`NAME_PATTERN`** *(private)* — Regex `/^[\w-]{1,80}\.pdf$/`; the only name shape the store will read or write.
-- **`resolveName(name)`** *(private)* — Validates a name against `NAME_PATTERN` and returns the joined path, or `undefined` if the name is malformed.
-- **`readDocument(name)`** — Returns the PDF bytes, or `undefined` if absent or the name is invalid. Treats `ENOENT` as a normal "not found" rather than an error.
-- **`writeDocument(name, bytes)`** — Atomically writes a PDF (temp file in same directory, then rename). Rejects invalid names with a thrown `Error`. Creates the root directory if missing.
-- **`reapDocuments(retentionMs)`** — Deletes all stored files last modified before `Date.now() - retentionMs`. Intended for the nightly `reap:invoice-pdfs` job. Returns a `ReapResult`.
-- **`removeDocument(name)`** — Deletes a single file. Returns `false` (not an error) if the file is absent or the name is invalid.
+- `readDocument(name)` — returns the file's bytes, or `undefined` if absent (ENOENT) or the name is invalid. Other read errors are rethrown.
+- `writeDocument(name, bytes)` — creates the root directory if needed, then writes atomically (temp file in the same directory, renamed over the final name). Rejects with an `Error` for an invalid name.
+- `reapDocuments(retentionMs)` — deletes every file last modified at or before `Date.now() - retentionMs`. Used by the nightly `reap:invoice-pdfs` job. Returns a `ReapResult` (files checked and deleted).
+- `removeDocument(name)` — deletes one document ahead of retention. An absent file counts as success. Resolves to whether a file was deleted; `false` for an invalid name.
+- Internal `documentRoot()` — resolves `pdfConfig().NODE_DOCUMENT_STORE_PATH` on each call.
+- Internal `NAME_PATTERN` / `resolveName` — the only accepted name is `/^[\w-]{1,80}\.pdf$/` (for example `invoice-<id>.pdf`). Anything else is never joined onto a path.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/config.ts`** — Imports `pdfConfig` to read `NODE_DOCUMENT_STORE_PATH`, the root directory for all stored documents.
-- **`src/infrastructure/adapters/filesystem.ts`** — Imports `reapDirectory`, `unlinkIfPresent`, and `writeFileAtomically`; this module delegates all low-level file operations to that adapter.
-- **`src/modules/invoicing/jobs.ts`** — Consumes `reapDocuments` as the nightly retention job.
-- **`src/modules/invoicing/services/render.ts`** — Calls `readDocument` / `writeDocument` to check for a cached PDF before rendering and to persist the result after rendering.
-- **`src/modules/invoicing/services/retention.ts`** — Calls `removeDocument` to delete a specific document ahead of its retention window.
-- **`tests/unit/infrastructure/adapters/document-store.test.ts`** — Unit tests for read/write/remove/reap behavior.
-- **`src/modules/invoicing/tests/unit/render.test.ts`** — Exercises the render path that reads from / writes to this store.
-- **`src/modules/invoicing/tests/integration/retention.test.ts`** — Integration tests covering the reap and remove flows end-to-end.
+- `src/infrastructure/adapters/config.ts` — supplies `pdfConfig()`, from which the store root `NODE_DOCUMENT_STORE_PATH` is read.
+- `src/infrastructure/adapters/filesystem.ts` — supplies `writeFileAtomically`, `reapDirectory`, `unlinkIfPresent` and the `ReapResult` type, which do the atomic write, directory reaping and tolerant delete.
+- `src/modules/invoicing/jobs.ts`, `src/modules/invoicing/services/render.ts` and `src/modules/invoicing/services/retention.ts` — invoicing-side files in the graph that sit alongside this store. The module doc names the nightly `reap:invoice-pdfs` job as the caller of `reapDocuments`, and the render flow is the read/write path for downloads.
+- `tests/unit/infrastructure/adapters/document-store.test.ts`, `src/modules/invoicing/tests/unit/render.test.ts` and `src/modules/invoicing/tests/integration/retention.test.ts` — tests covering the store and its consumers.
 
 ## Notes
-
-- **Path-traversal guard is name-only.** The regex rejects anything that isn't `\w-` + `.pdf`; no caller-supplied string is ever joined into a path unless it matches. There is no `..` filtering because the pattern excludes `/` and `.` entirely.
-- **Plaintext by design.** The PDFs are not encrypted at rest; the module's header states that at-rest protection is the host's responsibility, consistent with the Mongo data files.
-- **Retention is by modification time, not access time.** A re-download does not extend a document's life; only re-rendering (which rewrites the file) resets the clock.
-- **Re-rendering after reap follows the *current* template.** The numeric data is immutable (from Mongo), but visual layout can shift if the template changed between renders.
-- **`writeDocument` rejects invalid names; `readDocument` / `removeDocument` return sentinel values (`undefined` / `false`).** Callers should match the error-handling style they expect.
+- The store is outside `NODE_PUBLIC_PATH` because it holds personal and financial data. Files are plaintext on disk by design; at-rest protection is the host's responsibility, as with the Mongo data files.
+- A PDF re-rendered after its file was reaped uses the current template, so an old invoice may look different, though the numbers it prints do not change.
+- Retention is based on modification time, so a document is kept from when it was rendered, not from its last download.
+- The default root is dev-only; a deployment should mount a volume at the configured path.
+- Name validation is the path-traversal guard: callers never pass a path, only a short slug ending in `.pdf`.

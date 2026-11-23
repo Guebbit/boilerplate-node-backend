@@ -1,57 +1,47 @@
 ---
 source: src/modules/account/session/config.ts
-sha256: 709fdabaf29c82288fc851bb368e2e447d4e629ec8a49e1901fa0e1579d0ea11
-generated_at: 2026-11-08T04:26:48.293697+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T03:45:30.686891+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/session/config.ts
 
 ## Purpose
-
-Declares and validates the full set of session-related environment variables (mode selector, per-tier TTLs, signing key rings, TOTP encryption ring, device-cookie HMAC secret, issuer/audience, rotation windows) in a single `defineConfig` block, then exposes a battery of typed getter functions that the JWT and cookie strategies read at runtime. It holds no token and issues none; it is the single source of truth for *how long* and *with what key* a session lives.
+Declares the account-sessions configuration: which session mode is used (`jwt` or `cookie`), how long each session tier lives, the signing/encryption secrets, and the refresh-token rotation windows. It holds policy only — it issues and stores no tokens. Other session files read from it (signing, cookie storage, cookie `maxAge`).
 
 ## Key elements
-
-- **`sessionConfig`** — The `defineConfig` instance named `account-sessions`. Contains all fields, their defaults, presence/required rules, and a boot-time `check` that enforces `REUSE_WINDOW > ROTATION_GRACE` in JWT mode.
-- **`selectsCookieMode`** (internal) — Predicate that trims/lower-cases `NODE_SESSION_MODE` and returns `true` for `"cookie"`; used by `skipWhen` so key-ring fields are optional in cookie deployments.
-- **`TOKEN_EXPIRY`** (internal) — Maps `RememberTier` → env-var key, satisfying `Record<RememberTier, string>` so a new tier is a compile error.
-- **`getSessionMode()`** — Returns the resolved `SessionMode` (`'jwt'` | `'cookie'`), read per call.
-- **`getExpiryTime(remember?)`** — Server-side session lifetime in seconds (short/medium/long tier; defaults to short when no tier).
-- **`getExpiryTimeMilliseconds(remember?)`** — Millisecond wrapper around the above.
-- **`getStaffIdleTimeSeconds()`** / **`getStaffLifetimeSeconds()`** — Staff/admin inactivity and absolute-lifetime caps (0 disables).
-- **`getAccessExpiryTime()`** — Access-token lifetime in seconds (default 600); intentionally independent of the session tier.
-- **`getCookieMaxAgeMilliseconds(remember?)`** — `maxAge` for the session cookie, or `undefined` for a browser-session cookie.
-- **`getAccessTokenRing()`** / **`getRefreshTokenRing()`** — Ordered (newest-first) signing/verification key rings.
-- **`getTokenIssuer()`** / **`getAccessTokenAudience()`** / **`getRefreshTokenAudience()`** — `iss` and `aud` claims; derive from `NODE_URL` when the dedicated vars are unset. Refresh audience defaults to `NODE_URL/account/refresh` to keep the two token types distinct.
-- **`getTotpEncryptionKeyRing()`** — `VersionedKey[]` ring protecting 2FA material; versioned entries enable per-row decryption during rotation.
-- **`getRotationGraceMilliseconds()`** — Window after rotation during which the old refresh token is still honoured (default 10 s).
-- **`getReuseWindowMilliseconds()`** (truncated in source) — How long a rotated-away token is remembered for replay detection (default 1 day).
+- **`sessionConfig`** — the `defineConfig` schema named `account-sessions`. Fields:
+  - Shared by both modes: `NODE_SESSION_MODE` (default `jwt`) and the three `NODE_SESSION_TIME_*` tiers (`SHORT`, `MEDIUM`, `LONG`; defaults 1 day / 7 days / 30 days, in seconds, min 1).
+  - Staff-only: `NODE_SESSION_IDLE_TIME_STAFF` (default 1800s) and `NODE_SESSION_LIFETIME_STAFF` (default 86400s). `0` disables either.
+  - `jwt`-oriented: `NODE_TOKEN_ACCESS_TIME` (default 600s), `NODE_TOKEN_ACCESS` and `NODE_TOKEN_REFRESH` key rings, `NODE_TOKEN_ISSUER`, `NODE_TOKEN_ACCESS_AUDIENCE`, `NODE_TOKEN_REFRESH_AUDIENCE`, `NODE_TOKEN_ROTATION_GRACE_MS` (default 10s) and `NODE_TOKEN_REUSE_WINDOW_MS` (default `DAY_MS`).
+  - Always required: `NODE_TOTP_ENCRYPTION_KEY` (versioned key ring) and `NODE_DEVICE_COOKIE_SECRET` (a `secret`, `productionOnly`).
+  - A `check` that fails boot if, outside `cookie` mode, the reuse window does not exceed the rotation grace.
+- **`getSessionMode()`** — returns the configured mode, read on each call.
+- **`getExpiryTime(remember?)` / `getExpiryTimeMilliseconds(remember?)`** — server-side session lifetime for a `RememberTier`; no tier falls back to `short`.
+- **`getCookieMaxAgeMilliseconds(remember?)`** — the cookie's `maxAge`, or `undefined` (browser-session cookie) when no tier is ticked.
+- **`getStaffIdleTimeSeconds()` / `getStaffLifetimeSeconds()`** — the staff idle timeout and absolute lifetime cap.
+- **`getAccessExpiryTime()`** — access-token lifetime, kept separate from the refresh-tier TTLs.
+- **`getAccessTokenRing()` / `getRefreshTokenRing()`** — signing rings, newest first.
+- **`getTokenIssuer()`, `getAccessTokenAudience()`, `getRefreshTokenAudience()`** — use the configured value, else derive from `NODE_URL` (the refresh audience appends `/account/refresh`).
+- **`getTotpEncryptionKeyRing()`** — the versioned key ring protecting second-factor material.
+- **`getRotationGraceMilliseconds()`** — how long a just-rotated refresh token is still honoured.
+- The file continues past this point with further accessors, including one for the reuse window.
 
 ## Relationships
-
-- **`session-mode.ts`** — Provides `SESSION_MODES` (allowed values) and the `SessionMode` type consumed by the `choice` field and `getSessionMode`.
-- **`infrastructure/config/define.ts`** — Supplies `defineConfig`, the builder that validates fields at boot and enforces the `check` predicate.
-- **`infrastructure/config/fields.ts`** — Supplies all field constructors (`choice`, `int`, `keyRing`, `secret`, `text`, `versionedKeyRing`) used to declare the shape.
-- **`infrastructure/config/store.ts`** — Provides the `Environment` type read by `selectsCookieMode` (the `skipWhen` predicate).
-- **`infrastructure/http/config.ts`** — Provides `siteConfig` whose `NODE_URL` seeds the issuer/audience fallbacks via the internal `ownUrl()` helper.
-- **`infrastructure/security/versioned-secret.ts`** — Provides the `VersionedKey` type returned by `getTotpEncryptionKeyRing`.
-- **`domain-primitives/time.ts`** — Imports `DAY_MS` as the default for `NODE_TOKEN_REUSE_WINDOW_MS`.
-- **`jwt-strategy.ts`** — Consumes the access/refresh rings, issuer, audiences, access expiry, rotation grace, and reuse window to sign and verify tokens.
-- **`cookie-strategy.ts`** — Consumes `getExpiryTime`, `getCookieMaxAgeMilliseconds`, and `getStaffIdleTimeSeconds` / `getStaffLifetimeSeconds` to set cookie lifetimes and enforce staff caps.
-- **`idle.ts`** — Reads the staff idle/lifetime seconds to implement the inactivity and absolute-lifetime timers.
-- **`device-cookie.ts`** — Reads `NODE_DEVICE_COOKIE_SECRET` to HMAC the familiar-device cookie.
-- **`get-refresh-token.ts`** (controller) — Calls `getRefreshTokenRing`, `getRotationGraceMilliseconds`, and `getReuseWindowMilliseconds` during rotation and replay checks.
-- **`reencrypt.ts`** — Uses `getTotpEncryptionKeyRing` to re-encrypt 2FA secrets under a newer ring entry.
-- **`public-config.ts`** — Reads session config to expose non-secret values (mode, tiers) to the client.
-- **`module.ts`** — Wires the session sub-module, registering strategies and controllers that depend on this config.
+- Built with `defineConfig` (`src/infrastructure/config/define.ts`) and the field builders `choice`, `int`, `keyRing`, `secret`, `text` and `versionedKeyRing` (`src/infrastructure/config/fields.ts`). It uses the `Environment` type from `src/infrastructure/config/store.ts` for the `skipWhen` predicate.
+- Imports `DAY_MS` from `src/domain-primitives/time.ts`.
+- Imports `SESSION_MODES` and `SessionMode` from `../session-mode`.
+- Reads `siteConfig().NODE_URL` from `src/infrastructure/http/config.ts` to derive default issuer and audiences.
+- Uses the `VersionedKey` type from `src/infrastructure/security/versioned-secret.ts`.
+- Its own docs name `./jwt`, `./cookie-strategy` and `./cookies` as consumers; `jwt-strategy.ts` and `cookie-strategy.ts` are neighbors in the graph.
+- Other neighbors (`device-cookie.ts`, `idle.ts`, `module.ts`, `get-refresh-token.ts`, `public-config.ts`, `reencrypt.ts`) depend on it. This is consistent with the staff idle/lifetime, device-cookie secret, TOTP ring and mode accessors, but the file content does not show how each uses it.
 
 ## Notes
-
-- The two signing rings (`NODE_TOKEN_ACCESS`, `NODE_TOKEN_REFRESH`) and the TOTP key ring all share a `minLength: 16` / `minBytes: 32` floor and a recognisable placeholder string; a boot with the placeholder still in place fails.
-- `skipWhen: selectsCookieMode` means the access/refresh rings are **not required** in cookie mode — a cookie deployment signs nothing.
-- The boot-time `check` is a silent-failure guard: if the reuse window ≤ grace window in JWT mode, replay detection is impossible but every request would still "work" (clean 401). The check turns that into a loud boot error.
-- `NODE_SESSION_IDLE_TIME_STAFF` and `NODE_SESSION_LIFETIME_STAFF` accept `0` to disable; they apply only to staff/admin sessions, never to shopper sessions.
-- The TOTP ring is **versioned** (`VersionedKey[]`), unlike the JWT rings (`string[]`), because ciphertext rows must remain decryptable after a key rotation.
-- All TTL fields default to non-zero values so that an unset variable never yields a TTL of 0 (instant expiry).
-- `getExpiryTime` defaults to the **short** tier when `remember` is absent, because a browser-session cookie can be restored by the browser and still needs a server-side bound.
+- `NODE_TOKEN_ACCESS` and `NODE_TOKEN_REFRESH` use `skipWhen: selectsCookieMode`, so `cookie` deployments need not set them. `selectsCookieMode` reads the raw `NODE_SESSION_MODE`, trimmed and lower-cased.
+- Each key-ring entry must meet `minLength: 16` and `minBytes: 32` and must not be the shipped placeholder. Because the rule applies to every comma-separated member, a rotated-in entry left as the placeholder also refuses to boot.
+- `NODE_DEVICE_COOKIE_SECRET` unset on a dev machine means no device cookie is set or honoured. In production, unset or the placeholder refuses to boot.
+- The TTL defaults and `min: 1` exist so an unset variable cannot give a TTL of zero. The staff limits use `min: 0` to allow switching off.
+- The reuse-window check runs at boot because its failure is silent: everything works, but replays just return 401 and reuse detection is lost.
+- The refresh audience differs from the access audience by default, so a token of one kind is refused as the other.
+- `TOKEN_EXPIRY` uses `satisfies Record<RememberTier, string>`, so adding a tier to the contract is a compile error here until it is mapped.
+- Accessors call `sessionConfig()` on each use rather than caching.

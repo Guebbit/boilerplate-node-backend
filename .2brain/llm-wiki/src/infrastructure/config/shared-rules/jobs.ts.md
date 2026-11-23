@@ -1,38 +1,33 @@
 ---
 source: src/infrastructure/config/shared-rules/jobs.ts
-sha256: 82db17b78756b65b8cd266792a2d6cc7dcb0648752655525e9a55816498c4e63
-generated_at: 2026-11-14T17:57:41.213655+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 82db17b78756b65b8cd266792a2d6cc7dcb0648752655525e9a55816498c4e63
+context_sha256: 60705f71328316cbbbb639a411a56a6d5c7cc8421ca546960bec5b62aad70819
+generated_at: 2026-11-22T02:45:21.201764+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/config/shared-rules/jobs.ts
 
 ## Purpose
-
-Defines the Zod schema for the **data** portion of a scheduled job entry as it appears in `shared/rules/jobs.yaml` (kernel jobs) and in each module's `module.yaml` `jobs:` block. It intentionally captures only what the crontab and the ops table need (name, schedule, summary); the executable code side lives separately as `JobDeclaration` in `@kernel/registry`.
+Defines the Zod schema for a scheduled job's *data*, as written in `shared/rules/jobs.yaml` (kernel jobs) and in each module's `module.yaml` `jobs:` block. It covers only what the crontab and ops table need: name, schedule and summary. Behavior (`run`, the lease, what the job needs booted) stays in code; `JobDeclaration` in `@kernel/registry` combines this data with that code.
 
 ## Key elements
-
-- **`CRON_SHAPE`** (internal) – Regex that shape-checks a five-field cron expression (digits, `* / , -`). Does not parse or validate semantics.
-- **`jobDataSchema`** (internal) – `z.strictObject` with three fields:
-  - `name` – must match `^(reap|sweep):[a-z0-9]+(-[a-z0-9]+)*$`
-  - `schedule` – five-field cron, UTC
-  - `summary` – non-empty string
-- **`JobData`** (exported type) – `z.infer` of `jobDataSchema`.
-- **`jobsBlockSchema`** (exported const) – `z.record(z.string(), jobDataSchema)`; the `jobs:` block keyed by export handle.
-- **`jobsSchema`** (exported const) – `z.strictObject({ jobs: jobsBlockSchema })`; the full shape of `shared/rules/jobs.yaml`.
+- `CRON_SHAPE` (private): regex that checks five whitespace-separated fields made of digits and `* / , -`. It is a shape check, not a cron parser.
+- `jobDataSchema` (private): a strict object with three fields:
+  - `name`: must match `reap:*` or `sweep:*` in kebab-case (`reap` for what deletes or scrubs, `sweep` for what retries or drains). Unique repo-wide.
+  - `schedule`: five-field cron expression, in the container's time zone (UTC).
+  - `summary`: non-empty one-liner, used as the comment above the job's `docker/crontab` entry.
+- `JobData`: type inferred from `jobDataSchema`.
+- `jobsBlockSchema`: `z.record(z.string(), jobDataSchema)`. A `jobs:` block, keyed by the handle the generated TypeScript exports each job under.
+- `jobsSchema`: strict object `{ jobs: jobsBlockSchema }`, the shape of `shared/rules/jobs.yaml`.
 
 ## Relationships
-
-- **`src/infrastructure/config/shared-rules/registry.ts`** – The doc comment references `JobDeclaration` in `@kernel/registry` as the superset of this schema (data + code: `run`, lease, boot requirements).
-- **`scripts/contracts/generate-shared-rule-schemas.ts`** – Consumes or validates these schemas as part of contract generation.
-- **`scripts/docs/module-descriptor.ts`** – Documents module descriptors; the `jobs:` block described here is part of what a module descriptor contains.
-- **`src/modules/shop-tasks/jobs.ts`** – A module-level jobs file whose data entries conform to the same `jobDataSchema` shape defined here.
-- **`tests/unit/infrastructure/config/ops-rules-schemas.test.ts`** – Unit tests exercising these schemas (shape, strictness, cron regex, name regex).
+- `registry.ts` (same folder) is the shared-rules registry that these schemas plug into.
+- `scripts/contracts/generate-shared-rule-schemas.ts` generates schemas for the shared rules.
+- `scripts/docs/module-descriptor.ts` and `src/modules/shop-tasks/jobs.ts` are graph neighbors, plausibly consumers of the job data or the `jobs:` block shape.
+- `tests/unit/infrastructure/config/ops-rules-schemas.test.ts` is the unit test for the ops rule schemas.
 
 ## Notes
-
-- All objects are **strict**: an unexpected key is a hard failure, treated as either a typo or a concern that belongs in code rather than config.
-- Cron validation is **shape-only** (five whitespace-separated fields of allowed characters); it will not catch semantically invalid expressions (e.g., `99 * * * *`).
-- Job names are namespaced by verb prefix: `reap:*` for delete/scrub jobs, `sweep:*` for retry/drain jobs. Names must be unique repo-wide.
-- The file enforces **relative imports only** (per the header comment and the convention in `load.ts` in the same directory).
+- Both object schemas are strict: an unknown key is rejected, as it is either a typo or behavior that belongs in code.
+- Uniqueness of `name` is not enforced by this schema. It is only documented as unique repo-wide.
+- Imports must be relative only (see `load.ts` in the same folder).

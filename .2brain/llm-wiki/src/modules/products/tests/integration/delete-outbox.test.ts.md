@@ -1,37 +1,34 @@
 ---
 source: src/modules/products/tests/integration/delete-outbox.test.ts
-sha256: 221a81e7431de247c896c150f599f5fb98f136c63a767981aabc184558c0ab9d
-generated_at: 2026-11-08T07:50:47.605233+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 221a81e7431de247c896c150f599f5fb98f136c63a767981aabc184558c0ab9d
+context_sha256: 6861858e94b1ed31e0341033fecae2e8ea2a3d4c4ac6d6b77eede8c241fe6d03
+generated_at: 2026-11-22T07:15:55.410863+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/integration/delete-outbox.test.ts
 
 ## Purpose
-
-Integration test that verifies the `product.deleted` domain event is written to the transactional outbox atomically with the product delete (both hard and soft paths), that a failing consumer is retried by the relay rather than silently dropped, and that the operation is idempotent on an already-deleted product.
+Integration test verifying that the `product.deleted` event is delivered through the transactional outbox on both delete paths (soft and hard). It checks that an outbox row exists exactly when the delete committed, and that a failing consumer is retried by the relay rather than lost.
 
 ## Key elements
-
-- **`rows()`** – helper that queries `outboxEventModel` for all `PRODUCT_DELETED` events regardless of status.
-- **`describe('product.deleted through the outbox')`** – top-level suite; sets up a `deleted` mock consumer subscribed via `onDomainEvent` and marks the kernel as wired.
-- **`it.each([false, true])` – "writes one row… and delivers it"** – asserts exactly one outbox row keyed on the product `aggregateId`, status `published`, and that the consumer receives the expected payload plus `eventId`.
-- **`it.each([false, true])` – "leaves no row… when the write fails"** – spies on `productRepository.deleteOne`/`save` to reject, then asserts zero outbox rows and the product still present (transactional consistency).
-- **`it` – "a throwing consumer… relay retry"** – makes the consumer reject once, confirms the row stays `pending` with `attempts: 1`, then forces `nextAttemptAt` to epoch and calls `relayOutbox()` to verify a second delivery.
-- **`it` – "announces nothing for a soft delete repeated…"** – calls `removeById` twice on an already-soft-deleted product and asserts only one outbox row exists (idempotency).
+- `setupTestDb()` – sets up the test database for the suite.
+- `rows()` – helper that queries `outboxEventModel` for all `product.deleted` rows in any state.
+- `beforeEach` – resets domain events, calls `markDomainEventsWired()` (the relay only dispatches in a process where modules have subscribed), and subscribes a `deleted` jest mock via `onDomainEvent(PRODUCT_DELETED, ...)`.
+- Test (parametrized over `hardDelete` false/true): `removeById` writes exactly one row with `aggregateId` = product id and `status: 'published'`, and the consumer is called once with `{ productId, hardDelete, titles: { en: 'Blue mug' } }` and a context containing `eventId` equal to the row's `_id`.
+- Test (parametrized): when the repository write fails (`deleteOne` for hard delete, `save` for soft), `removeById` rejects, no outbox row exists, and the product is still found.
+- Test: a consumer that throws once leaves the row `pending` with `attempts: 1`; after `nextAttemptAt` is reset to epoch, `relayOutbox()` publishes it (`published: 1`) and the consumer has been called twice.
+- Test: repeating a soft delete on an already-deleted product leaves only one row.
 
 ## Relationships
-
-- **`src/kernel/events.ts`** – provides `resetDomainEvents`, `markDomainEventsWired`, and `onDomainEvent` used to wire/unwire the mock consumer per test.
-- **`src/kernel/outbox.ts`** – provides `outboxEventModel` (Mongoose model queried by `rows()`), `settleOutboxNudges` (flushes async outbox nudges), and `relayOutbox` (triggers the retry relay in the retry test).
-- **`src/modules/products/events.ts`** – exports the `PRODUCT_DELETED` event-name constant used in both the subscription and the outbox query.
-- **`src/modules/products/services/index.ts`** – exports `productService`; its `removeById` method is the SUT under test.
-- **`src/modules/products/repository.ts`** – exports `productRepository`; spied on in the failure test to simulate a DB rejection, and used to confirm the product still exists.
-- **`src/modules/products/tests/factories.ts`** – exports `createProduct` to seed a product row before each scenario.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` initialises an in-memory/ephemeral Mongo instance for the suite.
+- `@kernel/events` – supplies `markDomainEventsWired`, `onDomainEvent`, `resetDomainEvents` for subscribing and isolating consumers.
+- `@kernel/outbox` – supplies `outboxEventModel`, `relayOutbox`, and `settleOutboxNudges` (awaited after deletes so delivery completes).
+- `../../events` – provides the `PRODUCT_DELETED` event name.
+- `../../repository` – `productRepository` is spied on (`deleteOne`, `save`) to simulate write failures and used for `findById` checks.
+- `../../services` – the `productService` exported from the services index; its `removeById(id, hardDelete)` method is the code under test.
+- `@modules/products/tests/factories` – `createProduct` creates fixtures.
+- `@tests/setup-test-db` – `setupTestDb` provides the database lifecycle.
 
 ## Notes
-
-- `markDomainEventsWired()` must be called in `beforeEach` because the relay only dispatches in a process that has registered at least one subscriber; without it the outbox row would remain `pending` and the consumer would never fire.
-- The retry test bypasses the normal backoff by setting `nextAttemptAt` to `new Date(0)` and then calling `relayOutbox()` directly — it does not rely on a real timer.
-- The failure test spies on different repository methods depending on `hardDelete` (`deleteOne` vs `save`), reflecting that the two delete paths use distinct write operations.
+- `afterEach` calls `jest.restoreAllMocks()`; the failure test also restores mocks before asserting so the repository read is not mocked.
+- Tests call `settleOutboxNudges()` after deletes before asserting on row state or consumer calls.

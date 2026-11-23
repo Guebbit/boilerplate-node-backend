@@ -1,40 +1,38 @@
 ---
 source: src/infrastructure/surfaces/create-item-controller.ts
-sha256: 3fd95ebea13fcaa506a428dda4799636eebc6163879143e1dd01ebcd2eff63ea
-generated_at: 2026-11-08T03:50:47.290570+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 3fd95ebea13fcaa506a428dda4799636eebc6163879143e1dd01ebcd2eff63ea
+context_sha256: 935d76462028e98948ccf18fd465b74c631b5db5fdf2812953ba82ae6356a6dd
+generated_at: 2026-11-22T03:10:27.961536+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/surfaces/create-item-controller.ts
 
 ## Purpose
-
-Factory for the shared "read-one" (GET by path id) Express handler. Centralizes the contract that a malformed id and a missing record both answer with the module's own 404 key, so every entity module gets identical behaviour from one landing site instead of duplicating the logic inline.
+Provides `createItemController`, a shared factory for a module's "read one by path id" Express handler. It exists so the decision "a malformed id answers as an unknown one (404 with the module's own key)" has a single landing site instead of being repeated inline per module.
 
 ## Key elements
-
-- **`ItemControllerSpec`** (interface) — the four things that differ per entity:
-  - `entity` — lower-case singular name (e.g. `'product'`); feeds `operationName` so logs, stack traces, and generated docs all agree.
-  - `fetch(id, request)` — the module-specific row lookup. Returns `unknown`; a miss is `null`/`undefined`/`void`. Receives the `Request` because visibility filtering (scope, permission) is caller-specific.
-  - `notFoundKey` — i18n key used for both the "bad id" and "no record" 404.
-- **`createItemController`** (exported function) — takes an `ItemControllerSpec`, returns a named Express handler that:
-  1. Calls `requireId` to validate the path parameter (404 before any DB call if it fails).
-  2. Calls `fetch`; on a miss sends 404 via `rejectResponse`.
-  3. On success sets an ETag (`setEtag`) and returns the item via `successResponse`.
-  4. Wraps unexpected errors with `catchAs`.
+- **`ItemControllerSpec`** – the per-entity config:
+  - `entity`: lower-case singular name (e.g. `'product'`); used to name the operation.
+  - `fetch(id, request)`: module-specific lookup returning `Promise<unknown>`. It receives the request because visibility depends on the caller (e.g. `callerScope` narrowing, `requirePermission`). A miss is `null`/`undefined`/`void`; any other value is serialized as is.
+  - `notFoundKey`: i18n key used for the 404 message.
+- **`createItemController(spec)`** – returns a named Express handler (e.g. `getProductItem`) that:
+  1. Calls `requireId` with `{ notFound: notFoundKey }`. If the id is invalid, it stops before touching the database.
+  2. Calls `fetch(id, request)`.
+  3. On a falsy result, sends a 404 via `rejectResponse` with `t(notFoundKey)`.
+  4. Otherwise calls `setEtag(response, item)` and then `successResponse(response, item)`.
+  5. Any thrown or rejected error goes to `catchAs(response, operation)`.
 
 ## Relationships
-
-- **`@infrastructure/http/controller`** — imports `operationName` (builds the `get<Entity>Item` label), `namedHandler` (attaches the name for tracing), and `catchAs` (unifies error handling).
-- **`@infrastructure/http/ids`** — imports `requireId` to validate the path parameter before the service is called.
-- **`@infrastructure/http/response`** — imports `successResponse` and `rejectResponse` for the 200 / 404 paths.
-- **`@infrastructure/http/preconditions`** — imports `setEtag` to stamp the version token the edit form will echo back as `If-Match`.
-- **`@infrastructure/i18n`** — imports `t` to translate the `notFoundKey` into the response body.
-- **`src/modules/*/controllers/get-*.ts`** (example, products, users, webhooks) — consumers; each supplies its own `ItemControllerSpec` and mounts the returned handler on its route.
-- **`tests/unit/infrastructure/surfaces/create-item-controller.test.ts`** — unit test covering the happy path, 404-on-miss, 404-on-bad-id, and error-rejection branches.
+- `src/infrastructure/http/controller.ts`: supplies `operationName('get', entity, 'Item')`, `namedHandler` (names the handler for stack traces, logs and `docs/modules/`) and `catchAs` (database-error rejection).
+- `src/infrastructure/http/ids.ts`: `requireId` validates the path id and answers the 404 itself.
+- `src/infrastructure/http/preconditions.ts`: `setEtag` sets the version that an edit form later sends back as `If-Match`.
+- `src/infrastructure/http/response.ts`: `rejectResponse` and `successResponse` write the responses.
+- `src/infrastructure/i18n/index.ts`: `t` translates `notFoundKey`. (`src/infrastructure/i18n/context.ts` is a graph neighbor but is not imported here.)
+- Consumers: `src/modules/example/controllers/get-example.ts`, `src/modules/products/controllers/get-product.ts`, `src/modules/users/controllers/get-user.ts` and `src/modules/webhooks/controllers/get-subscription.ts` are the module controllers that provide the spec for their own entity.
+- `tests/unit/infrastructure/surfaces/create-item-controller.test.ts` covers this factory.
 
 ## Notes
-
-- A malformed id is **not** a 400; it is deliberately answered as 404 with the same `notFoundKey`. This is a contract decision ("a malformed id answers as an unknown one") and should stay in this one place.
-- `fetch` is typed `(id, request) => Promise<unknown>` on purpose: the controller never inspects the item's shape, so any serialisable value passes through unchanged.
-- The operation name is built as `get` + `entity` + `Item` (e.g. `getProductItem`). If you rename `entity` in a module spec, the log line, stack-trace label, and `docs/modules/` table all shift with it.
+- The controller never inspects the fetched row. Any truthy value is treated as found and gets an ETag.
+- `fetch` is expected to signal a miss by returning an empty value, not by throwing.
+- A malformed id and a missing row produce the same 404 and message by design.

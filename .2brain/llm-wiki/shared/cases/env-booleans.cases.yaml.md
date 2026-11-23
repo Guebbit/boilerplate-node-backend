@@ -1,30 +1,33 @@
 ---
 source: shared/cases/env-booleans.cases.yaml
-sha256: 457aaeca2cafb993cf2c6361d2c8f14e4a3843f5ecfc746b6d547eaf7c94f46d
-generated_at: 2026-11-08T03:05:03.098640+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 457aaeca2cafb993cf2c6361d2c8f14e4a3843f5ecfc746b6d547eaf7c94f46d
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T02:21:14.463469+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # shared/cases/env-booleans.cases.yaml
 
 ## Purpose
-Shared test-case definitions that pin down how a single word is parsed into a boolean value when it arrives via an environment variable, query string, or form field. The file exists so every consumer of the boolean-parsing helper validates against the same contract without each one maintaining its own ad-hoc test list.
+A shared, data-only table of test cases defining how a single word is read as a boolean when it comes from an environment variable, a query string or a form field. Each case gives an input `word` and the expected result, so every implementation can be checked against the same rules. The header comment states that matching is trimmed and case-insensitive.
 
 ## Key elements
-- **`cases`** — an ordered list of `{ name, word, expect }` records. Each record feeds `word` through the parser and asserts the result equals `expect`.
-- **`expect` values** — three possible outcomes:
-  - `true` — the word maps to "on"
-  - `false` — the word maps to "off"
-  - `invalid` — the word is *not* a recognised boolean word (caller must treat this as a hard error, not a silent default)
-- **Recognised on-words** — `1`, `true`, `yes`, `on`
-- **Recognised off-words** — `0`, `false`, `no`, `off`
-- **Prototype-pollution guards** — explicit cases for `constructor` and `__proto__` confirm these lookups do not leak inherited object keys.
+- `cases:` is the top-level list. Each entry is `{ name, word, expect }`.
+- `expect: true` covers the on-words `1`, `true`, `yes` and `on`. Mixed case (`TrUe`, `YES`) and surrounding whitespace (`"  On \t"`) are also on.
+- `expect: false` covers the off-words `0`, `false`, `no` and `off`. Upper case (`FALSE`) and padded forms (`' No '`) are also off.
+- `expect: invalid` means "not a boolean word". It covers:
+  - empty or blank-only input (`''`, `'   '`)
+  - short forms (`y`, `n`, `t`)
+  - other numbers (`2`, `-1`)
+  - other words (`enabled`, `null`)
+  - a typo (`truee`)
+  - inherited object keys (`constructor`, `__proto__`)
 
 ## Relationships
-No graph neighbours are recorded for this file. It is a leaf data file consumed by whatever test-runner loads `.cases.yaml` fixtures.
+No graph neighbors. The file has no dependencies listed, and nothing in the provided content references it. It is a standalone fixture that a test runner or parser would load.
 
 ## Notes
-- Parsing is **trimmed and case-insensitive**; no other normalisation is applied.
-- `invalid` is a *distinct* sentinel from `false`. The header comment stresses that a set-but-unrecognised value is a **boot error**, never a silent fallback to a default. Blank/whitespace-only strings also resolve to `invalid`; the "blank means unset" interpretation is handled one layer above this parser.
-- The accepted vocabulary is intentionally small and fixed (`1/0/true/false/yes/no/on/off`). Common alternatives like `enabled`, `y`, `n`, `t`, and `null` are explicitly rejected so that a caller cannot rely on broader libraries (e.g. `yargs`, `dotenv-expand`) to interpret them.
-- Because the file is pure YAML data with no code, changes here only take effect when the consuming test suite is re-run; there is no build step or import to update.
+- The header comment says `invalid` is not a silent default. A set-and-wrong environment value is a boot error.
+- The same comment says a blank value counts as unset one layer above this parser. This file still lists blank and whitespace-only words as `invalid`, so that handling is outside what these cases define.
+- Only the exact words above are accepted. There is no fuzzy matching, so short forms like `y` and typos like `truee` are rejected.
+- The `constructor` and `__proto__` cases guard against implementations that look words up in a plain object, where inherited keys could be mistaken for valid entries.

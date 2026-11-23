@@ -1,37 +1,41 @@
 ---
 source: src/modules/example/tests/integration/translations.test.ts
-sha256: 66140eeaa781920cb8270b3e93e08a7b219aed8aa5f10afe564c23e52312cc21
-generated_at: 2026-11-14T20:01:40.465479+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 66140eeaa781920cb8270b3e93e08a7b219aed8aa5f10afe564c23e52312cc21
+context_sha256: 2e790b3222bf2f6aa86549978eb768210f6725fe1a6bf7db45a71cfb327b21fb
+generated_at: 2026-11-22T05:14:29.465524+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/tests/integration/translations.test.ts
 
 ## Purpose
-
-Integration tests that exercise the full translation lifecycle for an **example** entity through the real `/locales` HTTP routes. They verify that writing a fallback-language title copies the value onto the row, that a non-fallback language stores a translation slot without touching the row, that invalid payloads are rejected (422) with the row left unchanged, and that reads (single + list) resolve the correct title based on `Accept-Language`, including draft-language preview rules for staff vs. visitors.
+Integration tests for translating the example module's `title` through the `locales` module. They exercise the flow end to end over HTTP: the example module is registered as a translatable entity type, a fallback-language (`en`) write is copied onto the row itself, and a write in another language leaves the row untouched. They also check that reads resolve the title in the request's language.
 
 ## Key elements
-
-- **`registerLanguage(bearer, language)`** — posts a language to `POST /locales` so the translation slot has a real `locales` row behind it.
-- **`adminWithLanguages()`** — signs in as admin and registers `en` + `it`; returns the auth context used by every write test.
-- **`publishedWithItalian(italianActive)`** — creates a *published* example titled "Hello", patches an Italian translation, optionally deactivates Italian, then calls `refreshLocaleOverrides()` so read tests see a consistent cache.
-- **"translating an example's title through /locales" suite** — six tests covering: fallback write copies to row, non-fallback write stores slot only, undeclared field rejected (422), parameterized invalid-title cases (null, 201-char, whitespace-only) rejected with row untouched, trimmed title stored, and 404 for a missing example.
-- **"reading an example in the request's language" suite** — three tests covering: active-language resolution for any caller, draft-language preview (staff gets `it` + `cache-control: private, no-store`; visitor falls back to `en`), and list-endpoint title resolution.
+- **Setup hooks**: `setupTestDb()` provides the test database. `beforeAll` registers a locale override provider backed by `localeService.readLocaleOverlay()`. `afterEach` calls `resetLocaleOverrides()`. `afterAll` unregisters the provider.
+- **`registerLanguage(bearer, language)`**: POSTs to `/locales` through the real route, because a translation slot needs a real `locales` row.
+- **`adminWithLanguages()`**: authenticates as `admin` and registers `en` (the fallback) and `it`. It returns the admin's `user` and `bearer`.
+- **`publishedWithItalian(italianActive)`**: builds a published example titled "Hello" with an Italian "Ciao" translation. If `italianActive` is false it first deactivates `it`. It then calls `refreshLocaleOverrides()` and returns `{ id, bearer }`.
+- **`describe('translating an example's title through /locales')`**: tests `PATCH /locales/translations/example/:id` and covers these cases:
+  - An `en` write updates the row's title.
+  - An `it` write is stored in the response's `translations` and leaves the row title unchanged.
+  - A field the module did not declare translatable (`body`) returns 422.
+  - A parameterised case (`it.each`) returns 422 for a cleared title in `en` or `it`, a title over 200 characters, and a whitespace-only title. Each response has `errors[0].details` equal to `{ field: '<locale>.title' }`, and the row stays unchanged.
+  - The title is stored trimmed.
+  - An unknown example id returns 404.
+- **`describe('reading an example in the request's language')`**: tests `GET /examples/:id` and `GET /examples` with `Accept-Language`. It covers three behaviours:
+  - An active language resolves the translated title for anyone.
+  - A draft (inactive) language is previewed by staff with `Content-Language: it` and `Cache-Control: private, no-store`. A visitor gets the fallback title and `Content-Language: en`.
+  - The list endpoint also resolves the title.
 
 ## Relationships
-
-- **`src/modules/example/tests/factories.ts`** — provides `createExample` (seed an example row) and `fieldOf` (read a specific field back from the DB after an API call).
-- **`src/infrastructure/i18n/index.ts`** — source of `registerLocaleOverrideProvider`, `resetLocaleOverrides`, and `refreshLocaleOverrides`; the test wires the locale-service overlay into the i18n override registry in `beforeAll`/`afterAll` and resets it per-test.
-- **`src/modules/locales/index.ts`** — exports `localeService`; the test passes `localeService.readLocaleOverlay()` as the override-provider callback so the i18n layer can resolve per-locale values.
-- **`src/types/index.ts`** — provides `ExampleStatus` (used to create a *published* example in the read tests).
-- **`tests/support/http.ts`** — provides the `api()` supertest wrapper and `authenticateAs('admin')`.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` runs before the suite to ensure a clean database per run.
+- `@tests/setup-test-db` (`tests/support/setup-test-db.ts`): `setupTestDb` sets up the DB.
+- `@tests/http` (`tests/support/http.ts`): `api()` and `authenticateAs()` drive the HTTP calls and the admin login.
+- `../factories` (`src/modules/example/tests/factories.ts`): `createExample` and `fieldOf` create examples and read the stored field directly.
+- `@modules/locales` (`src/modules/locales/index.ts`): its `localeService` is used to feed the override provider. The `/locales` routes under test belong to this module.
+- `@infrastructure/i18n` (`src/infrastructure/i18n/index.ts`): provides `registerLocaleOverrideProvider`, `refreshLocaleOverrides` and `resetLocaleOverrides`.
+- `@types` (`src/types/index.ts`): imported by the tests to mark an example as published.
 
 ## Notes
-
-- Tests hit the **real HTTP routes** (supertest), not in-process service calls. Language registration goes through `POST /locales` because the translation endpoint requires an existing `locales` row; skipping this step would mask the FK/slot check.
-- `resetLocaleOverrides()` runs in `afterEach`; forgetting it would let override state leak between tests and cause false positives on reads.
-- The 422 validation tests assert the error detail shape (`{ field: "it.title" }`), which couples the test to the exact error-envelope contract.
-- Draft-language preview (`italianActive: false`) is only available to authenticated staff; the test asserts `content-language: it` **and** `cache-control: private, no-store` on the staff response to pin both the resolution and the caching policy.
-- The 201-char bound in the parameterized test implies a max-length of 200 on `title`; the exact limit lives in the module's validation contract, not in this file.
+- The override provider is registered once per file and the overrides are reset after each test. Tests that read a translated title must call `refreshLocaleOverrides()`, which `publishedWithItalian` does.
+- The 422 tests and the trim test show that the locales door applies the same validation and trimming as the example's own door.

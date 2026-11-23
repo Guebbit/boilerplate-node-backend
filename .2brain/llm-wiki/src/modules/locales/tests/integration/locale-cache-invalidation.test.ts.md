@@ -1,33 +1,41 @@
 ---
 source: src/modules/locales/tests/integration/locale-cache-invalidation.test.ts
-sha256: 48fc61e81e4de45bb42f8af39903c9b23e3665e7c830adc05197bd78bd608c05
-generated_at: 2026-11-14T20:23:26.964736+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T05:49:57.761845+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/tests/integration/locale-cache-invalidation.test.ts
 
 ## Purpose
-
-End-to-end integration test that proves an admin write to a locale entry or language list actually evicts the cached public dictionary response. It drives the real app (HTTP → middleware → routes) and asserts the stored response disappears by observing `cache-status` headers, rather than mocking the invalidation call. Its raison d'être is catching the class of bug where the tag written on the read path and the tag cleared on the write path disagree—undetectable in dev (TTL clamped to 30 s) but catastrophic in production (1-hour stale translations).
+End-to-end integration test that an admin write in the locales module invalidates the cached public reads (`GET /locales`, `/locales/:locale`, `/locales/:locale/messages`). The read stores a response under a cache tag and the write clears a tag, and nothing type-checks that the two match. A mismatch would go unnoticed in development, where the TTL is clamped to 30 seconds, and would serve hour-old translations in production. The test asserts that the cached response disappears, not that `invalidateCacheTags` was called with a string.
 
 ## Key elements
-
-- **`jest.mock('@infrastructure/adapters/cache')`** — in-memory double (two `Map`s) replacing only the Redis adapter. Implements `getCacheValue`, `setCacheValue` (honours the `ttlSeconds <= 0` skip guard), `invalidateCacheTags`, and `invalidateCacheTagsLogged`. The TTL clamp and response envelope in `http/middlewares/cache.ts` are *not* stubbed and run for real.
-- **`givenPublishedLanguage(bearer)`** — helper that POSTs a new language (`/locales`) and one entry (`/locales/pt/apps/demo-fe/entries`) through the real admin routes.
-- **"an admin write invalidates the cached public dictionary"** — two tests: (1) GET dictionary → assert HIT on repeat → PUT entry → assert MISS + new value; (2) GET manifest → assert HIT → POST new language → assert MISS + new tag present.
-- **"the cached dictionary is per app"** — registers entries under two apps (`demo-fe`, `kiosk`), warms the `demo-fe` cache, then asserts `?app=kiosk` is a separate MISS with different content.
-- **"a body on a GET never reaches the cache key"** — sends `{ app: 'kiosk' }` in a GET body while the query says `demo-fe`; asserts the response is `demo-fe`'s and a subsequent honest `?app=kiosk` request is still a MISS.
+- **`jest.mock('@infrastructure/adapters/cache', ...)`**: replaces the Redis cache adapter with an in-memory double and spreads the real module via `jest.requireActual`.
+  - A `responses` Map holds one entry per key, and a `tagged` Map holds a Set of keys per tag.
+  - `getCacheValue` reads from `responses`.
+  - `setCacheValue` ignores a TTL <= 0 and otherwise stores the value and registers its key under each tag.
+  - `invalidateCacheTags` deletes the keys under each tag and resolves `{ deleted, reachable: true }`.
+  - `invalidateCacheTagsLogged` is redeclared against the same double and resolves `undefined`.
+- **`givenPublishedLanguage(bearer)`**: creates language `pt` (`POST /locales`) and entry `cart.title` under the `demo-fe` app through the real admin routes.
+- **`cacheStatusOf(path)`**: returns the `cache-status` header of an anonymous GET.
+- **Test groups**:
+  - *an admin write invalidates the cached public dictionary*:
+    - Asserts miss, then hit, then miss with the new value after a PUT edit.
+    - Asserts that creating a language clears the cached manifest.
+  - *an edit clears only its own language*:
+    - Editing `pt` leaves the cached `es` dictionary and `es` row as hits, while `pt` and the manifest miss.
+    - A path in another case (`/locales/PT/messages`) is cleared by an edit to `pt`.
+  - *the cached dictionary is per app*: after a warm read of `?app=demo-fe`, `?app=kiosk` returns the kiosk dictionary as a miss.
+  - *a body on a GET never reaches the cache key*: a GET that sends `{ app: 'kiosk' }` in its body while the query says `demo-fe` must not store the demo-fe dictionary under the kiosk key.
 
 ## Relationships
-
-- **`tests/support/setup-test-db.ts`** — calls `setupTestDb()` once at module scope to provision a clean test database before any route hits Mongo.
-- **`tests/support/http.ts`** — supplies `api()` (supertest-style request builder) and `authenticateAs('admin')` used in every test for both authenticated writes and anonymous reads.
-- **`tests/support/environment.ts`** — supplies `setEnvironment({ NODE_LOCALE_APPS_EXTRA: … })` to register a second frontend app (`kiosk`) so the per-app and cache-key-poisoning tests have two apps to distinguish.
+- `tests/support/setup-test-db.ts`: `setupTestDb()` is called at module level to set up the database for the suite.
+- `tests/support/http.ts`: `api()` is the HTTP client used against the real app, and `authenticateAs('admin')` supplies the bearer token for write requests.
+- `tests/support/environment.ts`: `setEnvironment({ NODE_LOCALE_APPS_EXTRA: 'kiosk=Kiosk' })` registers a second frontend app in the per-app tests.
 
 ## Notes
-
-- The cache adapter is a **double, not a live Redis**, because the real adapter's `getCacheValue` resolves `undefined` on connection failure—on a machine without Redis every request would be a miss and a "cache hit" test would pass while proving nothing.
-- `invalidateCacheTagsLogged` is **redeclared** inside the mock factory. The real implementation calls `invalidateCacheTags` via a module-local binding captured by `jest.requireActual` *before* the factory runs, so overriding only the named export would leave the logged variant calling through to the real (unreachable) Redis.
-- Each test that expects a post-edit MISS **first asserts a confirmed HIT** on the intermediate read. Without that, a universal MISS (e.g., middleware caching disabled) would let the suite pass vacuously.
-- The per-app cache key is derived from the **query parameter** `?app=`, never the request body. The last `describe` block guards against a future refactor that accidentally folds the body into the key.
+- The cache is doubled because the real adapter's `getCacheValue` resolves `undefined` on any failure, so without Redis every request misses and a test against the real adapter would pass without proving anything.
+- `invalidateCacheTagsLogged` must be overridden explicitly. The real one calls `invalidateCacheTags` through a module-local binding that `requireActual` captured before the factory ran, so overriding the export alone does not reach it.
+- Each invalidation test asserts a proven HIT before the write. Without that, a later MISS would prove nothing.
+- The assertions read the `cache-status` header. Hits match `/; hit; ttl=\d+/` and misses contain `fwd=miss`.
+- The TTL clamp and the stored envelope in `http/middlewares/cache.ts` are deliberately not stubbed. The clamp decides whether anything is cached outside production.

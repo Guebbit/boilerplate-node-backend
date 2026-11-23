@@ -1,35 +1,34 @@
 ---
 source: src/modules/locales/controllers/get-locales.ts
-sha256: ac6645ea7f807092d84c0501046be45b81d7e706cb9e13ae9d689e589585bc55
-generated_at: 2026-11-14T20:17:47.358944+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7b63582bb31a8eb301e77b4e6405e691a7bd10ac9c5da8f36b3966920d540731
+context_sha256: 494add7288b065ab68acaf7ab62a38158978ebe41db94367dc27fff92f710b19
+generated_at: 2026-11-22T05:42:53.769413+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/locales/controllers/get-locales.ts
 
 ## Purpose
-
-Express route handlers for the three read-only locale endpoints (`GET /locales`, `GET /locales/:locale`, `GET /locales/:locale/dictionary`). They thin-wire the HTTP layer to `localeService` (database-backed) and to the filesystem-backed i18n dictionary, applying caller scoping, ETag caching, and standard error responses.
+Express controllers for the read side of the locales API: the manifest of languages (`GET /locales`), a single language row (`GET /locales/:locale`), and this API's own filesystem-backed message dictionary for one language (`GET /locales/:locale/dictionary`).
 
 ## Key elements
-
-- **`getLocales`** — Returns every language the deployment offers (both `api` and `app` scopes) with capability flags. Delegates to `localeService.listCapabilities`, passing the caller's scope and standing. Errors are funneled through `catchAs(response, 'listLocales')`.
-- **`getLocale`** — Returns a single language row. Calls `localeService.readLanguage` with the same scoping. On success, sets an ETag via `setEtag` (enables `If-Match` for edits) before sending the payload. A `refused` result short-circuits the response.
-- **`getLocaleDictionary`** — Serves the API's own ~60 message keys for a locale, read from the filesystem via `readLocaleDictionary`. Validity is checked with `hasServedDictionary` (which also serves as the path-traversal guard and the 404 check for disabled locales). Deliberately separate from the database-backed `GET /locales/:locale/messages` route so it remains available during a database outage.
+- **`getLocales`**: Calls `localeService.listCapabilities` with the caller's scope and standing, and returns the result as `LocaleCapabilities`. It lists languages from both tiers, and `scopes` marks each as `api` (usable as `Accept-Language`) or `app` (a dictionary is downloadable). The dynamic half is best-effort, so a database outage only removes the downloadable languages.
+- **`getLocale`**: Calls `localeService.readLanguage` for `request.params.locale` under the same scoping. If `refused(response, result)` is true it returns without sending anything further. Otherwise it sets an ETag from `result.data` (so a name edit can send `If-Match`) and responds with a `Language`.
+- **`getLocaleDictionary`**: Reads the API's own message dictionary (about 60 keys) from the filesystem.
+  - It answers 404 with `generic.error-unprocessable-content` if the locale is missing or `hasServedDictionary` is false.
+  - Otherwise it sets `Content-Language` to `canonicalLocale(locale)` and returns `{ locale, messages }` as a `LocaleDictionary`.
 
 ## Relationships
-
-- **`src/modules/locales/services/index.ts`** — Provides `localeService`; the only data source for the two capability endpoints.
-- **`src/modules/locales/routes.ts`** — Registers these three handlers upstream; the comment in this file notes that `getAuth` on the route is what makes `request.caller` readable.
-- **`src/infrastructure/http/response.ts`** — `successResponse` / `rejectResponse` wrap every outgoing payload.
-- **`src/infrastructure/http/controller.ts`** — `catchAs` (promise-rejection → error response) and `refused` (403/404 short-circuit) are the error-handling primitives.
-- **`src/infrastructure/http/preconditions.ts`** — `setEtag` attaches the `ETag` header on `getLocale`.
-- **`src/infrastructure/i18n/index.ts`** (re-exports from `served.ts`, `catalog.ts`, `context.ts`) — Supplies `hasServedDictionary`, `readLocaleDictionary`, and the `t` translation function used for the 404 error body.
-- **`src/types/index.ts`** — Defines `LocaleCapabilities`, `Language`, `LocaleDictionary` used as generic parameters on the response helpers.
+- **`../services` (`localeService`)**: Supplies `callerScope`, `readStanding`, `listCapabilities` and `readLanguage`, which the list and single-language controllers use for caller-based scoping.
+- **`@infrastructure/http/controller`**: Provides `catchAs` (the promise `.catch` handler, labelled `'listLocales'` / `'getLocale'`) and `refused` (detects service refusals).
+- **`@infrastructure/http/response`**: Provides `successResponse` and `rejectResponse`.
+- **`@infrastructure/http/preconditions`**: Provides `setEtag`.
+- **`@infrastructure/i18n`**: Provides `canonicalLocale`, `hasServedDictionary`, `readLocaleDictionary` and `t`.
+- **`@types`**: Provides the `Language`, `LocaleCapabilities` and `LocaleDictionary` types.
+- **`src/modules/locales/routes.ts`**: Mounts these controllers on the paths above.
 
 ## Notes
-
-- The two service-backed endpoints are "best-effort" on the dynamic half: a database outage degrades the downloadable-language list but does not affect the filesystem dictionary endpoint.
-- `getLocaleDictionary` intentionally does **not** call `localeService`; it trusts the served directory listing for both existence and security. A locale that is turned off in config is indistinguishable from an unknown one (both return 404).
-- The ETag on `getLocale` is set on the `Language` object itself; clients are expected to send `If-Match` on subsequent edits.
-- The controllers do no authentication of their own; they assume the caller context is already present on the request (provided by the route's middleware as noted in the inline comment).
+- The dictionary route is separate from the database-backed client UI copy at `GET /locales/:locale/messages`. It reads the filesystem so it still works when that route is down.
+- The supported list is derived from the dictionary directory itself, so `hasServedDictionary` serves as both the 404 check and the path-traversal guard. A language that is switched off returns 404, the same as an unknown one.
+- The dictionary route is language-neutral, so no middleware sets its content language. The handler sets `Content-Language` itself.
+- `getLocaleDictionary` is synchronous and has no `catchAs` wrapper, unlike the other two controllers.

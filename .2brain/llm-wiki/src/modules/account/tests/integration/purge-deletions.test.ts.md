@@ -1,49 +1,43 @@
 ---
 source: src/modules/account/tests/integration/purge-deletions.test.ts
-sha256: 5d9f9fdebbee55bbce3d569bdad8bfb443057fc9c9cc6787a27b829e58b367d7
-generated_at: 2026-11-08T04:40:27.150445+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 5d9f9fdebbee55bbce3d569bdad8bfb443057fc9c9cc6787a27b829e58b367d7
+context_sha256: 35fb0f29e8d80effc20530bacd46132994f337e3c2048777699e80d25dcbcb37
+generated_at: 2026-11-22T03:58:59.458771+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/purge-deletions.test.ts
 
 ## Purpose
-
-Integration test for `accountService.purgeScheduledDeletions`. Verifies the full purge cascade (user row, sessions, restore tokens) against a real test database, confirming that only owner-scheduled, due accounts are erased while not-yet-due, admin-deleted, and inactivity-reaped rows survive. Also asserts side effects: a goodbye email and the correct audit trail entries.
+Integration test for `accountService.purgeScheduledDeletions()`, the purge behind the `reap:scheduled-deletions` job. It checks that due, owner-requested deletions are erased through the real cascade and that nothing else is touched: not-yet-due rows, admin soft deletes and inactivity-reaper rows are kept, a second run is a no-op, and the audit trail records the system as the eraser.
 
 ## Key elements
-
-- **`scheduled(email, purgeAt)`** — local factory that creates an owner-deleted user with a session and an `account-restore` token already planted, returning the user for assertions.
-- **`daysFromNow(days)`** — tiny date helper (negative = past).
-- **`describe('purgeScheduledDeletions')`** — four test cases:
-  - *erases a due account with its sessions and links, and leaves the rest alone* — the main happy-path + selectivity check.
-  - *does nothing on a second run* — idempotency.
-  - *says goodbye to the address the account had, and records who erased it* — verifies `enqueueEmail` was called with the original address and `account.deleted` template, and that audit contains `system.user.erased` (not `admin.user.erased`) plus `AUTH_ACCOUNT_DELETE_COMPLETED` with the owner's `actorUserId`.
-  - *skips an account restored after the job read it* — simulates a race by pushing `purgeAt` into the future before the purge runs.
-- **Module-level `jest.mock` for audit** — fully replaces `@infrastructure/observability/audit` with `auditPortMock()` from `tests/support/ports.ts` (replace, not spy).
-- **Module-level `jest.mock` for mailer** — spreads real exports but stubs `enqueueEmail` as a `jest.fn()`.
-- **`beforeEach`** — calls `registerCheckoutModules()` so every module's erase hook is registered (mirrors boot), then clears the mailer mock.
-- **`afterEach`** — calls `resetDomainEvents()`.
+- `jest.mock` of `@infrastructure/observability/audit`: replaces the audit port with `auditPortMock()` from `@tests/ports`. It is not a spy.
+- `jest.mock` of `@infrastructure/adapters/mailer`: keeps the real module but makes `enqueueEmail` a resolved `jest.fn()`, so the mail queue can be read back.
+- `setupTestDb()`: sets up the test database.
+- `beforeEach`: calls `registerCheckoutModules()` and clears the `enqueueEmail` mock.
+- `afterEach`: calls `resetDomainEvents()`.
+- `daysFromNow(days)`: returns a date offset from now; negative values are in the past.
+- `scheduled(email, purgeAt)`: creates a verified user with `deletedAt` 30 days ago, `deletedBy: 'owner'` and the given `purgeAt`. It also plants a session and an `account-restore` token.
+- Test cases:
+  - Erases a due account plus its sessions and tokens. A not-yet-due account, an admin-deleted user and a reaper-deleted user all survive. The counts are `{ purged: 1, skipped: 0, failed: 0 }`.
+  - A second run returns all-zero counts.
+  - A goodbye email (`account.deleted`) goes to the address the account had. The audit events include `system.user.erased` and not `admin.user.erased`. The audit event `AUTH_ACCOUNT_DELETE_COMPLETED` is emitted with `actorUserId` set to the erased user.
+  - An account whose `purgeAt` is pushed into the future after being scheduled is skipped (`purged` is 0) and still exists.
 
 ## Relationships
-
-| Neighbor | Interaction |
-|---|---|
-| `src/modules/account/services/index.ts` | SUT: calls `accountService.purgeScheduledDeletions()`. |
-| `src/modules/account/audit.ts` | Imports `accountAuditActions` to assert the specific audit action constant. |
-| `src/modules/account/tests/factories.ts` | Imports `plantSession`, `plantToken`, `sessionRowsOf`, `tokenRowsOf` for setup and cascade assertions. |
-| `src/modules/users/tests/factories.ts` | Imports `createUser` to build fixture users. |
-| `src/modules/users/repository.ts` | Imports `userRepository` for existence checks and the race-condition update. |
-| `src/infrastructure/adapters/mailer.ts` | Mocked; `enqueueEmail` calls are read back to assert the goodbye mail. |
-| `src/infrastructure/observability/audit.ts` | Fully replaced by `auditPortMock`; observed via `observePort` from ports support. |
-| `src/kernel/events.ts` | `resetDomainEvents` in `afterEach` prevents event leakage between tests. |
-| `tests/support/checkout-modules.ts` | `registerCheckoutModules()` registers all module erase hooks so the real cascade fires. |
-| `tests/support/ports.ts` | Provides `auditPortMock()` (full replacement) and `observePort` (readable spy helper). |
-| `tests/support/setup-test-db.ts` | `setupTestDb()` manages the shared test database lifecycle. |
+- `src/modules/account/services/index.ts`: supplies `accountService`, the unit under test.
+- `src/modules/users/tests/factories.ts`: supplies `createUser` and `userRepository`, used to seed users and check existence. `updateMany` on the repository is used to simulate a restore.
+- `src/modules/account/tests/factories.ts`: supplies `plantSession`, `plantToken`, `sessionRowsOf` and `tokenRowsOf`, used to seed and inspect dependent rows.
+- `src/modules/account/audit.ts`: supplies `accountAuditActions`, used to assert the completion audit action.
+- `src/infrastructure/observability/audit.ts`: mocked, and `emitAuditEvent` is observed through `observePort` from `tests/support/ports.ts`.
+- `src/infrastructure/adapters/mailer.ts`: partially mocked, and `enqueueEmail` calls are inspected.
+- `tests/support/checkout-modules.ts`: `registerCheckoutModules` registers every module's erase hook.
+- `tests/support/setup-test-db.ts`: provides the database lifecycle.
+- `src/kernel/events.ts`: `resetDomainEvents` clears event state between tests.
+- `src/modules/users/repository.ts`: reached only through the users test factories' `userRepository`.
 
 ## Notes
-
-- The audit port is **replaced**, not spied — this follows the convention documented in `tests/support/ports.ts`. Use `observePort(auditPort.emitAuditEvent)` to read calls, not `jest.spyOn`.
-- `registerCheckoutModules` in `beforeEach` is essential: without it the purge cascade has no registered erase hooks and will silently skip related-row cleanup, making cascade assertions pass vacuously.
-- The test deliberately asserts `actions` does **not** contain `admin.user.erased` — the system purge must be distinguishable from an admin-initiated erase in the audit log.
-- The race test (`skips an account restored after the job read it`) updates `purgeAt` *after* `scheduled()` but *before* calling `purgeScheduledDeletions()`, simulating a concurrent restore between the query and the delete.
+- The cascade is the real one, so the erase hooks of all modules must be registered in `beforeEach`, as a boot would do.
+- The mailer mock spreads the real module, so only `enqueueEmail` is replaced.
+- Rows are distinguished by `deletedBy` (`owner`, `reaper`, or unset for the admin soft delete) and by `purgeAt`.

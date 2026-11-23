@@ -1,32 +1,30 @@
 ---
 source: scripts/docs/generate-scenario-registries.ts
-sha256: c157e59aaa6063084ea9a2af5ce0d7e1f9cc62cb01ca5e3b5cde64a1e4f1c8c7
-generated_at: 2026-11-08T02:48:46.851106+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c157e59aaa6063084ea9a2af5ce0d7e1f9cc62cb01ca5e3b5cde64a1e4f1c8c7
+context_sha256: 9c1dbdf221c5073e45ddbe91c5afee91c01936d929c7912f73ab85d07b32d038
+generated_at: 2026-11-22T02:04:09.188436+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/docs/generate-scenario-registries.ts
 
 ## Purpose
-
-CLI entry point (run via `npm run regenerate`) that rebuilds the two scenario registries from the on-disk file tree. Supports a `--check` mode that reports drift without writing, which is the mode `complete` invokes to verify registries are in sync.
+A small `tsx` CLI script behind `npm run regenerate`. It rebuilds the two scenario registries from the file tree, using the logic in `scripts/scaffold/scenario-registry.ts`. With `--check` it only reports drift instead of writing; this is the mode that `complete` runs.
 
 ## Key elements
+- `checkOnly`: boolean from `hasFlag('check')`. It selects between the two modes.
+- Check mode: calls `staleScenarioRegistries(REPO_ROOT, formatWithRepoConfig)`. It prints each stale file to stderr with the hint `Run: npm run regenerate`. It resolves to exit code `1` if any are stale, otherwise `0`.
+- Write mode: calls `writeScenarioRegistries(REPO_ROOT, formatWithRepoConfig)`. It logs `✓ Generated <file>` for each written file and resolves to `0`.
+- Final chain: sets `process.exitCode` to the resolved code. Any rejection is logged with `console.error` and sets `process.exitCode = 1`.
 
-- **`checkOnly`** — boolean derived from `hasFlag('check')`; selects between the two code paths.
-- **Check path** — calls `staleScenarioRegistries(REPO_ROOT, formatWithRepoConfig)`, prints each drifted file to stderr with a remediation hint, and exits `1` if any file is stale (else `0`).
-- **Write path** — calls `writeScenarioRegistries(REPO_ROOT, formatWithRepoConfig)`, logs each generated file to stdout, and exits `0`.
-- **Top-level promise chain** — sets `process.exitCode` from the resolved code; catches any thrown error, logs it, and exits `1`.
+The file has no exports. It runs on import and is meant to be executed directly.
 
 ## Relationships
-
-- **`scripts/cli.ts`** — imports `hasFlag` to detect the `--check` flag.
-- **`scripts/modules-on-disk.ts`** — imports `REPO_ROOT` as the base directory for both check and write operations.
-- **`scripts/scaffold/format-text.ts`** — imports `formatWithRepoConfig`, passed as the formatting function into the registry helpers.
-- **`scripts/scaffold/scenario-registry.ts`** — imports `staleScenarioRegistries` (drift detection) and `writeScenarioRegistries` (regeneration); this file contains the actual registry logic this script orchestrates.
+- `scripts/scaffold/scenario-registry.ts`: provides `staleScenarioRegistries` and `writeScenarioRegistries`, which do the actual generation and drift detection.
+- `scripts/scaffold/format-text.ts`: provides `formatWithRepoConfig`. It is passed to both functions as the formatter.
+- `scripts/modules-on-disk.ts`: provides `REPO_ROOT`, the root passed to the registry functions.
+- `scripts/cli.ts`: provides `hasFlag`, used to read `--check`.
 
 ## Notes
-
-- The script has no exported API; it is a side-effect-only entry point (shebang `#!/usr/bin/env tsx`).
-- `--check` mode intentionally writes nothing — it is safe to run in CI or as a pre-commit guard.
-- Exit code semantics: `0` = in sync / regenerated successfully; `1` = drift found or runtime error.
+- The script sets `process.exitCode` rather than calling `process.exit()`, so pending output can flush.
+- Check mode never writes files, so it is safe to run in CI or validation steps.

@@ -1,36 +1,37 @@
 ---
 source: src/infrastructure/http/middlewares/method-not-allowed.ts
-sha256: 42536a4dcb68cdd13b62a74cdba878b05aef056f3b6bde8146e395664b224db3
-generated_at: 2026-11-14T18:02:45.523681+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 7d3bd546bcc5e2c8fc3f9b2222deb7a73520f9d6757c2c0097729b29d2dea117
+context_sha256: 5bcbbddb55786f97c00670f8c6a6365324711a7eebe096dc4e19c9e1c4600ef0
+generated_at: 2026-11-22T02:50:58.111084+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/http/middlewares/method-not-allowed.ts
 
 ## Purpose
-
-Implements two Express middlewares that enforce HTTP method semantics before or around the routers: a **405 guard** that answers `405 + Allow` (RFC 9110 §15.5.6) when a request hits a known path with a method the contract does not declare, and an **OPTIONS handler** that answers `204 + Allow` (plus `Accept-Patch` when PATCH is available) for every `OPTIONS` request before any router runs. Both derive the allowed-method set from the generated path table and the set of modules this build actually serves.
+Implements the HTTP 405 guard and the `OPTIONS` answer. A path the contract knows, requested with a method it doesn't declare, gets `405` + `Allow` (RFC 9110 §15.5.6) instead of the catch-all's 404. Paths of modules this build doesn't serve stay 404.
 
 ## Key elements
-
-- **`allowedMethods`** (private) — Given the route table, the served-module set, a request path, and a `literalOnly` flag, returns the sorted list of methods that path supports. Adds `HEAD` whenever `GET` is present and `OPTIONS` whenever any method exists. Returns `[]` when no served path matches.
-- **`methodNotAllowed`** (exported) — Factory returning a `RequestHandler`. Accepts `routes`, `served`, and `literalOnly` (default `false`). Passes through when the path is unknown, the method is `OPTIONS`, or the method is allowed; otherwise sets the `Allow` header and calls `rejectResponse(response, 405)`.
-- **`answerOptions`** (exported) — Factory returning a `RequestHandler` for `OPTIONS` only. Computes allowed methods (preferring literal templates), sets `Allow` and optionally `Accept-Patch`, and responds `204`. Falls back to a 404 problem when no served module owns the path and the request is neither `OPTIONS *` nor a CORS preflight.
-- **`withoutTrailingSlash`** (private) — Strips a single trailing slash; root `/` is unchanged.
-- **`patchTypes`** (private) — Looks up the PATCH row for a path via `declaredOperation` and returns its declared media types (empty array when absent).
+- `allowedMethods(routes, served, path, shadowedOnly)` (internal): the single place `Allow` is computed. It collects the methods of every served route whose pattern matches the path, adds `HEAD` when `GET` is present, and adds `OPTIONS` when any method exists. It returns a sorted array, empty when nothing matches. With `shadowedOnly`, it counts only the templates with the fewest `{param}`, and only when a more specific template shadows another.
+- `methodNotAllowed(routes, served, shadowedOnly = false)`: middleware factory. It strips a trailing slash and computes the allowed methods. It calls `next()` if the set is empty, the request is `OPTIONS`, or the method is allowed. Otherwise it sets `Allow` and calls `rejectResponse(response, 405)`.
+- `answerOptions(routes, served, contentTypes)`: middleware factory that answers every `OPTIONS` request and passes other methods on.
+  - Served path: 204 + `Allow`, plus `Accept-Patch` when `Allow` includes `PATCH`.
+  - `OPTIONS *` or a CORS preflight (`Access-Control-Request-Method`): 204.
+  - Plain `OPTIONS` on a path no served module owns: 404 via `rejectResponse`.
+  - It tries the literal (most specific) templates first and falls back to all matches.
+- `withoutTrailingSlash(path)` (internal): strips one trailing slash; the root `/` is kept.
+- `patchTypes(contentTypes, path)` (internal): the declared PATCH media types for a path, read via `declaredOperation`. It returns an empty array when no PATCH row matches.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — Imports `rejectResponse`, used to send the 405 and the 404 problem body.
-- **`src/infrastructure/http/middlewares/content-type.ts`** — Imports `declaredOperation`, used by `patchTypes` to read the same PATCH row the 415 guard uses.
-- **`src/app/routes.ts`** — The consumer that mounts both middlewares: `methodNotAllowed` twice (once with `literalOnly=true` before the routers, once with `literalOnly=false` before the 404 catch-all) and `answerOptions` right after `cors`.
-- **`src/app/security.ts`** — Part of the broader middleware chain ordering; sits in the same security/contract-enforcement layer.
-- **`tests/unit/infrastructure/http/middlewares/method-not-allowed.test.ts`** — Unit tests covering both exports.
+- `src/infrastructure/http/response.ts`: provides `rejectResponse`, which produces the 405 and 404 problem responses.
+- `src/infrastructure/http/middlewares/content-type.ts`: provides `declaredOperation`, the same lookup the 415 guard uses, reused here for `Accept-Patch`.
+- `src/app/routes.ts` / `src/app/security.ts`: the app wiring that mounts these middlewares. The file doc describes two mounts for `methodNotAllowed`: before the routers with `shadowedOnly = true`, and right before the 404 catch-all. `answerOptions` is mounted right after `cors`. The exact split between the two app files isn't visible here.
+- `tests/unit/infrastructure/http/middlewares/method-not-allowed.test.ts`: unit tests for this file.
+- Types `OperationRoute` (`@api/operation-routes`) and `RequestContentType` (`@api/request-content-types`) describe the generated path and request-body tables passed in.
 
 ## Notes
-
-- **Two mount points, different scope.** The `literalOnly` flag controls whether templated paths (`/products/{id}`) are considered. The pre-router mount uses `literalOnly=true` so `DELETE /products/facets` does not accidentally match `/products/{id}`. The pre-404 mount uses `literalOnly=false` to cover everything else.
-- **OPTIONS is exempt from the 405 guard.** `methodNotAllowed` passes `OPTIONS` through unconditionally; `answerOptions` is the sole authority on that method.
-- **Unserved modules stay 404.** A path whose owning module is not in the `served` set produces an empty allowed list, so the guard calls `next()` and the 404 catch-all handles it.
-- **204 has no `Content-Length`.** The `answerOptions` handler calls `response.status(204).end()` deliberately (RFC 9110 §8.6).
-- **Trailing-slash normalisation** is applied inline in both handlers; the root path `/` is special-cased to avoid becoming an empty string.
+- `OPTIONS` is never judged by `methodNotAllowed`, because `answerOptions` handles it earlier.
+- Shadowing rule: the template with fewer `{param}` wins, so `/a/{id}/sync` shadows `/a/{id}/{other}`. A match with zero params always counts. This is why the early mount exists: `DELETE /products/facets` must not reach `/products/{id}`.
+- `answerOptions` relies on `cors` running with `preflightContinue: true`, so every `OPTIONS` reaches it.
+- The 204 is sent with `end()`, so it carries no body and no `Content-Length` (RFC 9110 §8.6).
+- The trailing-slash stripping is written twice, inline in `methodNotAllowed` and as `withoutTrailingSlash`.

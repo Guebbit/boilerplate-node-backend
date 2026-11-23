@@ -1,37 +1,30 @@
 ---
 source: src/app/boot-rendering.ts
-sha256: 959c17ad4c60fe1473e481eee6d9f8f27867f8b2c60a30e4893af6d5831e9699
-generated_at: 2026-11-14T17:47:45.484424+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 2106a0b90cac75f147c5a4e1c5bb20addd8083c5aed0784daf7571e8b2709502
+context_sha256: ba328f9c0dab698e779232f3fe2d94e2c1e11fec9e175152fac95c057b3dc371
+generated_at: 2026-11-22T02:29:24.715290+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/app/boot-rendering.ts
 
 ## Purpose
-
-Boots the "rendering" layer: translation files, mail templates, and admin-edited overlay copy. Both the web app and every scheduled job call it so that a mail reads identically regardless of where it is built.
+Boots everything that turns a key into text a person reads: translation files, mail templates, and admin-edited copy overrides. The web app and every scheduled job call it, so a mail reads the same wherever it is built. It must run after `registerModules` (which installs the overlay reader via `locales`' `onRegistered`) and after the database connects (the overlay is read from the database).
 
 ## Key elements
-
-- **`bootRendering(): Promise<void>`** — Orchestrates a three-step sequence:
-  1. `bootI18n(enabledModuleDirectories('locales'))` — loads per-module translation files.
-  2. `registerTemplateDirectories(enabledModuleDirectories('templates'))` — registers mail template directories.
-  3. `refreshLocaleOverrides()` — layers admin edits (stored in the DB) on top of the loaded resources.
+- `bootRendering(): Promise<void>` is the only export. It runs three steps in order:
+  1. `bootI18n(enabledModuleDirectories('locales'))` loads the translation files.
+  2. `registerTemplateDirectories(enabledModuleDirectories('templates'))` registers the mail template directories.
+  3. `refreshLocaleOverrides()` layers the admin's edits on top.
 
 ## Relationships
-
-- **`src/infrastructure/i18n/boot.ts`** — provides `bootI18n`, the function that loads locale resources.
-- **`src/infrastructure/i18n/overrides.ts`** — provides `refreshLocaleOverrides`, which reads the admin overlay from the database and patches loaded resources.
-- **`src/infrastructure/i18n/index.ts`** — barrel re-export of the above; the import source for this file.
-- **`src/infrastructure/adapters/mailer.ts`** — provides `registerTemplateDirectories`, which wires template paths into the mailer.
-- **`src/infrastructure/adapters/template-registry.ts`** — internal store consumed by `registerTemplateDirectories`.
-- **`src/modules.ts`** — provides `enabledModuleDirectories`, which resolves the `locales/` and `templates/` sub-paths of each enabled module.
-- **`src/app.ts`** — calls `bootRendering` during web-app startup.
-- **`scripts/ops/prepare-job.ts`** — calls `bootRendering` before executing a scheduled job, ensuring jobs see the same copy.
+- `src/infrastructure/i18n` (`index.ts`, with `boot.ts` and `overrides.ts` behind it): supplies `bootI18n` and `refreshLocaleOverrides`.
+- `src/infrastructure/adapters/mailer.ts`: supplies `registerTemplateDirectories`.
+- `src/modules.ts`: supplies `enabledModuleDirectories`, which resolves each enabled module's `locales` and `templates` directories.
+- `src/app/process-boot.ts` and `scripts/ops/prepare-job.ts`: neighbors in the dependency graph, presumably the web app and scheduled-job boot paths that call this function. The file itself only says that the web app and jobs boot it.
+- `src/infrastructure/adapters/template-registry.ts`: a graph neighbor. This file does not reference it directly.
 
 ## Notes
-
-- **Order is contractual.** `refreshLocaleOverrides` patches the resources `bootI18n` just loaded; running it before or independently of `bootI18n` would be a no-op or error.
-- **Must run after two prerequisites:** (1) `registerModules` has fired (the overlay reader is installed by the `locales` module's `onRegistered` hook) and (2) the database connection is live (the overlay is read from it).
-- **`refreshLocaleOverrides` never rejects.** An empty overlay is a valid state; the `.then()` chain awaits it purely for ordering, not for error handling.
-- **Modules own their copy.** Because `infrastructure` sits below modules in the dependency graph, it cannot discover module paths on its own; `enabledModuleDirectories` hands them in explicitly. Deleting a module therefore removes its strings and templates automatically.
+- Order matters: the overlay patches the resources `bootI18n` just loaded, so the refresh must come last.
+- The refresh never rejects, and an empty overlay is a valid state. It is awaited only to keep the ordering.
+- Modules carry their own copy, so deleting a module deletes its strings. `infrastructure` sits below every module and cannot look them up, so the directory paths are passed in.

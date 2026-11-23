@@ -1,30 +1,30 @@
 ---
 source: src/modules/payments/tests/integration/webhook-no-body.test.ts
-sha256: 6e8f8424c18d9f1ec97de9a7a956fc12f0dea04bba6d8ea3738c3e30c825572a
-generated_at: 2026-11-14T21:21:08.461335+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c85d2a924e5b52ccfb10bca2864a95a53fbedde3dd53339047faaec07d9db275
+context_sha256: f6167208efdf913138c1d1da20ff2b6ef66b2ac8d151019d8c4abd6ee0eaafdb
+generated_at: 2026-11-22T07:04:10.474540+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/webhook-no-body.test.ts
 
 ## Purpose
-
-Integration tests for the `POST /payments/webhook/:provider` endpoint covering the bodyless-request path. It verifies two distinct invariants: (1) a caller sending no body gets a 400 with **no** error-level log, and (2) the rare case where a body was sent but no raw body reached the controller (a parser-ordering break) gets a 400 **with** a specific error log.
+Integration test verifying that a payment webhook POST with no body is treated as the caller's mistake: the response is 400 and nothing is logged at error level. The "parser ordering" error is kept only for the real invariant break, where a body was sent but no raw body reached the controller.
 
 ## Key elements
-
-- **`webhookApp(withRawBodyHook: boolean)`** – Factory that builds a minimal Express app (supertest agent). When the flag is `true` it registers `express.json` with a `verify` callback that stores `request.rawBody`, mirroring the real app. When `false`, the raw-body hook is deliberately omitted to simulate a parser-ordering invariant break.
-- **`describe` block (4 cases)** – Exercises: bare POST (no body, no headers); `Content-Type: application/json` with no body; `Content-Type: text/plain` (JSON parser skips it, so `rawBody` is genuinely unset); and a body-sent-but-raw-body-missing scenario (hook omitted).
-- **`errorLog` spy** – `jest.spyOn(logger, 'error')` set up in `beforeEach`, restored in `afterEach`, to assert presence or absence of error-level logging per case.
+- `webhookApp(withRawBodyHook)`: builds a small Express app and returns it wrapped in `supertest`. When `withRawBodyHook` is true, it installs a JSON body parser with a `verify` hook that copies the buffer into `request.rawBody`. It then adds `attachLocale` and mounts `postPaymentWebhook` at `POST /payments/webhook/:provider`.
+- `describe('POST /payments/webhook/:provider without a body')`: spies on the logger's `error` method (mocked to return the logger) in `beforeEach` and restores it in `afterEach`.
+- Test cases:
+  - A bare POST gives 400 and no error log.
+  - A POST with only `Content-Type: application/json` gives 400 and no error log.
+  - A POST with `Content-Type: text/plain` gives 400 and no error log. The JSON parser skips it, so `rawBody` stays unset. This is the only bodyless shape that reaches the controller that way. An empty JSON request keeps an empty buffer.
+  - With the raw-body hook left out, a POST that sends JSON `{ id: 'evt_1' }` gives 400, and the logger's `error` method is called with an object whose `message` contains `parser ordering`.
 
 ## Relationships
-
-- **`src/modules/payments/controllers/post-payment-webhook.ts`** – The controller under test. Mounted at `/payments/webhook/:provider` in the test app; the tests assert its 400 responses and log calls.
-- **`src/infrastructure/adapters/logger.ts`** – The imported `logger` is spied on (via its `error` method) to verify logging presence or absence for each scenario.
-- **`src/infrastructure/http/middlewares/locale.ts`** – `attachLocale` is applied in the test app to match the real middleware chain, ensuring the controller's locale-dependent code paths are exercised.
+- `src/modules/payments/controllers/post-payment-webhook.ts`: the controller under test, mounted directly on the test app.
+- `src/infrastructure/http/middlewares/locale.ts`: `attachLocale` is applied as middleware before the route, as in the real app.
+- `src/infrastructure/adapters/logger.ts`: the exported `logger` is spied on to assert whether error-level logging happens.
 
 ## Notes
-
-- The "parser ordering" test (`webhookApp(false)`) is the **only** case where the raw-body hook is absent. The real application always installs it; this test intentionally simulates an invariant break that should never occur in production.
-- The `text/plain` case is singled out because it is the only bodyless shape that reaches the controller with `rawBody` unset. An empty `application/json` request still produces an empty buffer in `rawBody`, so it takes a different branch.
-- All four tests expect HTTP 400; the discriminator is whether `logger.error` was called.
+- The app is deliberately built without the raw-body hook in the last case. The real app never does this, so the case simulates the parser-ordering invariant break.
+- The `fake` provider segment in the URL is used in every request.

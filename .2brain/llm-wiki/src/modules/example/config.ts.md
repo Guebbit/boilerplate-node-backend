@@ -1,30 +1,25 @@
 ---
 source: src/modules/example/config.ts
-sha256: 45d4feea3bd6f7ed696e6db8aa744c81aefc8aeb3e064993ac76c7a5b1ae4d33
-generated_at: 2026-11-08T05:48:14.594487+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 760c6c51ad27e52abbc64ad65507a18267b530d7e24e34a5e8c2412df5037fa6
+context_sha256: 7e78bf924050b41d1fb09af690151635982eeb689de4ac66e7004f3da7e1a8e6
+generated_at: 2026-11-22T05:06:48.158232+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/config.ts
 
 ## Purpose
-
-Declares the single source of truth for the example module's environment variables. Every env var the module reads is typed, validated, and given defaults here at boot; no other file in the module touches `process.env` directly.
+Declares the environment variables the example module reads, in one typed place validated at boot. Per the file's doc comment, no other file reads `process.env`; the only setting here is the maximum length of an example's body.
 
 ## Key elements
-
-- **`exampleConfig`** (exported const) — the module's config object created via `defineConfig`. Exposes:
-  - `NODE_EXAMPLE_BODY_MAX_LENGTH` — an `int` field (default `5000`, min `1`, max `20 000`) representing the maximum body length an example may have.
+- `exampleConfig` — result of `defineConfig({ name: 'example', shape: {...} })`; the module's slice of the environment.
+  - `NODE_EXAMPLE_BODY_MAX_LENGTH` — an `int` field, default `5000`, minimum `1`, maximum `20_000`.
 
 ## Relationships
-
-- **`@infrastructure/config/define`** (`src/infrastructure/config/define.ts`) — provides `defineConfig`, the factory that wraps a field shape into a validated, typed config object.
-- **`@infrastructure/config/fields`** (`src/infrastructure/config/fields.ts`) — provides the `int` field descriptor used to type/range-check the single variable.
-- **`src/modules/example/module.ts`** — module entry point that registers or wires the example module; consumes `exampleConfig` so downstream code gets validated values without re-reading the environment.
-- **`src/modules/example/services/crud.ts`** — the CRUD service layer that reads `NODE_EXAMPLE_BODY_MAX_LENGTH` from `exampleConfig` when enforcing the body-length limit.
+- `src/infrastructure/config/define.ts` — provides `defineConfig`, used to build `exampleConfig`.
+- `src/infrastructure/config/fields.ts` — provides the `int` field helper used to declare the variable.
+- `src/modules/example/module.ts` and `src/modules/example/services/crud.ts` — graph neighbors of this file. The visible content does not show how they use `exampleConfig`.
 
 ## Notes
-
-- The module is intentionally minimal (one field) to serve as a **reference example** for how other modules should declare their env vars. New modules should mirror this file's structure: one `defineConfig` call, named fields, no raw `process.env` elsewhere.
-- The max is expressed with an underscore separator (`20_000`) for readability; it is a pure numeric literal, not a string.
-- See `docs/tools/configuration.md` (referenced in the file's JSDoc) for the broader convention behind this pattern.
+- The doc comment carries a `@see` reference on the ownership convention ("who owns what") in the project's configuration documentation.
+- To add a module setting, declare it in this `shape` rather than reading `process.env` elsewhere.

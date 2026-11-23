@@ -1,37 +1,43 @@
 ---
 source: src/modules/orders/tests/integration/service-search.test.ts
-sha256: 5e50d0d8721a982ddb9bc9b2c0ffe288f3b635cd55f8f3fb6ef14865fb00b2d5
-generated_at: 2026-11-08T07:10:03.616541+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 6705d468367c9e3ea67b2396e4ddfb78b8066034f0de2e94359ae6ebdfe862da
+context_sha256: a13cc026c7af7673edbad5327c2cc264511f5dedc8fa36902152f70d5e6401d6
+generated_at: 2026-11-22T06:33:33.900608+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/integration/service-search.test.ts
 
 ## Purpose
-
-Integration tests for `orderService.search`, verifying filtering, pagination, the three aggregate-derived totals, live image resolution on order line items, and the admin "awaiting transfer" view. Complements `service-crud.test.ts` (write path) by covering the full read pipeline end-to-end against a real database.
+Integration tests for `orderService.search`: filtering, pagination, the derived totals (`totalItems`, `totalQuantity`, `totalPrice`), the live `current` image on order lines, and the "Awaiting-transfer" admin view. It is the read half of the orders service tests; `service-crud.test.ts` covers the write half (`create`, `update`, `remove`, …).
 
 ## Key elements
-
-- **`describe('orderService.search — derived totals')`** — Four cases asserting that `totalItems` (distinct product lines), `totalQuantity` (sum of quantities), and `totalPrice` (sum of price × qty) appear on every search result and are computed correctly for single- and multi-product orders.
-- **`describe('orderService.search')`** — The main block. Covers: default pagination, filtering by `userId`, `email` (exact + case-insensitive), `paymentMethod` + `status` combo, `id` (array), embedded `productId`, explicit `page`/`pageSize`, the `scope` parameter (raw Mongoose `$match` merge), and the empty-result case.
-- **`describe('orderService.search — current (live) image')`** — Four cases for the `current` field on each order item: unchanged product, replaced image after purchase, product with no image (empty object), and hard-deleted product (`undefined`).
-- **`describe('orderService.search — the Awaiting-transfer view')`** — Verifies that pending `bank_transfer` orders are returned sorted by `payBy` ascending, with non-matching payment methods excluded.
-- **`setupTestDb()`** — Called at module top-level to provision/tear down the test database.
+- `setupTestDb()` is called at module level to prepare the test database.
+- `describe('orderService.search — derived totals')` checks that results carry computed fields. These are not stored on the document. `applyOrderTransform` derives them, and `.aggregate()` bypasses the schema's `toJSON`, so the repository's `normalize` step is the only thing that adds them.
+  - `totalItems` is the number of distinct product lines.
+  - `totalQuantity` is the sum of quantities.
+  - `totalPrice` is the sum of price × quantity, returned as a string such as `'45.00'`.
+- `describe('orderService.search')` covers the main search behaviour:
+  - Default pagination, and `meta.totalItems` / `meta.totalPages` (an empty result gives 0 for both).
+  - Filters: `userId`, `email` (exact match, and case-insensitive), `paymentMethod` combined with `status`, order `id` (array), and `productId` (matches the embedded product).
+  - `page` / `pageSize` paging.
+  - A second `scope` argument, a raw Mongoose filter merged into the `$match` stage (for example `{ userId: user1._id }`).
+- `describe('orderService.search — current (live) image')` checks that `items[0].items[0].current` is resolved from the catalogue product on every read:
+  - Unchanged product: `{ imageUrl }`.
+  - Image replaced after purchase: the new `imageUrl`.
+  - Product that never had an image: `{}`.
+  - Product hard-deleted: `current` is left out (asserted with `toBeUndefined`).
+- `describe('orderService.search — the Awaiting-transfer view')` starts with a test that lists pending bank transfers by nearest `payBy`, soonest first. It creates orders with `paymentMethod` and `payBy` values.
 
 ## Relationships
-
-- **`src/modules/orders/services/index.ts`** — Source of `orderService`, the unit under test in every assertion.
-- **`src/modules/orders/tests/factories.ts`** — Provides `createOrder`, `toOrderItem`, and `orderRepository` used to seed and inspect data.
-- **`src/modules/products/tests/factories.ts`** — Provides `createProduct`, `saveProduct`, `deleteProduct` for catalogue fixtures and the live-image mutation/delete scenarios.
-- **`src/modules/users/tests/factories.ts`** — Provides `createUser` for user fixtures (email, id) used in filtering tests.
-- **`tests/support/setup-test-db.ts`** — Imports and invokes `setupTestDb()` for DB lifecycle.
-- **`src/modules/orders/repository.ts`** — Not imported directly, but the tests implicitly exercise its `normalize` step and `applyOrderTransform` (aggregate pipeline) that produce the derived totals and the `current` image join.
+- `src/modules/orders/services/index.ts`: supplies `orderService`, the unit under test.
+- `src/modules/orders/tests/factories.ts`: supplies `createOrder`, `toOrderItem` and `orderRepository`.
+- `src/modules/products/tests/factories.ts`: supplies `createProduct`, `saveProduct` and `deleteProduct`. The last two are used to change or remove a product after an order exists.
+- `src/modules/users/tests/factories.ts`: supplies `createUser`.
+- `tests/support/setup-test-db.ts`: supplies `setupTestDb`, imported through the `@tests` alias.
+- `src/modules/orders/repository.ts`: not imported directly. Its `normalize` step is what the derived-totals tests exercise.
 
 ## Notes
-
-- `totalPrice` is asserted as a **string** (e.g. `'45.00'`), not a number — the aggregate pipeline formats it.
-- Email filter is case-insensitive (`'ALICE@Example.com'` matches `'alice@example.com'`).
-- The `scope` argument (second param to `search`) is a raw Mongoose filter object merged into `$match`; it is not part of the public query-options type.
-- When a product is hard-deleted, `current` is `undefined` (key absent), whereas a product with no image yields `{}`. These are distinct assertions.
-- The file's module doc-comment explicitly scopes this to the read path; write-path coverage lives in `service-crud.test.ts`.
+- Order lines store no image, so the `current` image tests rely on a live lookup against the product. Replacing or deleting the product changes the result without touching the order.
+- `orderRepository` is imported, but the visible part of the file does not use it.
+- Tests that need several users pass distinct `email` and `username` values to `createUser`.

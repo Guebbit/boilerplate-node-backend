@@ -1,36 +1,34 @@
 ---
 source: src/modules/orders/tests/unit/config.test.ts
-sha256: b60e7fc647712ce42ea6fff00b68d956fe9a60e34b4ce0d124f96e36658e04f2
-generated_at: 2026-11-08T07:11:31.954013+00:00
-model: ollama:qwen3.8:27b
+source_sha256: b60e7fc647712ce42ea6fff00b68d956fe9a60e34b4ce0d124f96e36658e04f2
+context_sha256: 97bd9cf5087fa51a3e279666c08e6d1e426d7882b929f11021be3d932db9e6a1
+generated_at: 2026-11-22T06:35:08.208003+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/orders/tests/unit/config.test.ts
 
 ## Purpose
-
-Unit tests for the orders module's environment-driven configuration functions (admin order limits, frontend link templates, withdrawal period, PII retention windows). The file exists to pin down default values, env-var overrides, validation boundaries, and the boot-time gate that `assertModuleConfig` runs against a valid/invalid deployment — ensuring the wiring is exercised, not just the pure reads.
+Unit tests for the orders module's environment-driven configuration: admin order limits, the order frontend link and page path, the withdrawal period, and the order PII claim windows. Boot-time checks are exercised through `assertModuleConfig` with the real orders manifest, so the wiring that makes the check run is tested as well. All of this is pure env reads, so unit tests are enough.
 
 ## Key elements
-
-- **`IDENTITY` / `IDENTITY_VARIABLES`** – Fixed legal-name/street/city/zip/phone values and their env-var names, used by the shared `configure()` helper.
-- **`TOUCHED`** – Complete list of env vars the gate reads; passed to `withoutEnvironmentInThisFile` so every var is cleared before each case and restored after the file.
-- **`configure()`** – Sets `NODE_ENV=development`, `NODE_URL`, `NODE_LEGAL_COUNTRY`, `NODE_SHOP_TIMEZONE`, and the full `IDENTITY` block so that `assertModuleConfig` has a valid baseline to break one thing in.
-- **`describe('the admin order limits')`** – Covers `maxAdminOrderLines` / `maxAdminOrderLineQuantity`: defaults (100 / 99 999), env overrides, ceiling enforcement via `createOrderBodyItemsMax` / `createOrderBodyItemsItemQuantityMax` from `@api/schemas.zod`, and rejection of values < 1.
-- **`describe('orderFrontendLink')`** – Verifies the default template (`/en/orders/{id}`), the `NODE_FRONTEND_LINK_ORDER` override, and URL-encoding of the id.
-- **`describe('orderPagePath')`** – Same template/override logic but returns the bare path (no host).
-- **`describe('the withdrawal period')`** – Default of 30 days; `assertModuleConfig` rejects `NODE_WITHDRAWAL_PERIOD_DAYS=20` and accepts `21`, reading back via `withdrawalPeriodDays()`.
-- **`describe('the order PII claim window')`** – `orderPiiDaysAfterGuarantee` (default 0) and `orderPiiDaysUndelivered` (default 540), plus env-var overrides.
+- `IDENTITY` / `IDENTITY_VARIABLES` — valid values for the required shop-identity variables (`NODE_LEGAL_NAME`, `NODE_LEGAL_STREET`, `NODE_LEGAL_CITY`, `NODE_LEGAL_ZIP`, `NODE_LEGAL_PHONE`) and their key list.
+- `TOUCHED` — every env variable the gate reads. It is passed to `withoutEnvironmentInThisFile` so they are cleared before each case and restored after the file.
+- `configure()` — sets a deployment that passes every check (`NODE_ENV=development`, `NODE_URL`, `NODE_LEGAL_COUNTRY=IT`, `NODE_SHOP_TIMEZONE=Europe/Rome`, plus `IDENTITY`). A case then breaks one thing.
+- `describe('the admin order limits')` — defaults are 100 lines and 99,999 units per line. `NODE_ADMIN_ORDER_MAX_LINES` and `NODE_ADMIN_ORDER_MAX_LINE_QUANTITY` override them. Values above the schema ceiling (`createOrderBodyItemsMax`, `createOrderBodyItemsItemQuantityMax`) are clamped to it. A limit below 1 throws.
+- `describe('orderFrontendLink')` — builds `http://localhost:8080/en/orders/<id>` from the default template. `NODE_FRONTEND_LINK_ORDER` overrides the template, and the id is URL-encoded.
+- `describe('orderPagePath')` — fills and encodes the id in the default template, and follows the override.
+- `describe('the withdrawal period')` — defaults to 30. At boot, 20 is rejected with an error matching `NODE_WITHDRAWAL_PERIOD_DAYS`. 21 is accepted and read back.
+- `describe('the order PII claim window')` — `orderPiiDaysAfterGuarantee` defaults to 0 and `orderPiiDaysUndelivered` to 540. Both are read from `NODE_ORDER_PII_DAYS_AFTER_GUARANTEE` and `NODE_ORDER_PII_DAYS_UNDELIVERED`.
 
 ## Relationships
-
-- **`src/kernel/module-config.ts`** – Provides `assertModuleConfig`, the boot-time validation gate that the withdrawal-period tests drive. Tests call it with `[ordersModule]` to trigger the full gate rather than reading the manifest directly.
-- **`src/modules/orders/config.ts`** – Source of every function under test (`maxAdminOrderLines`, `maxAdminOrderLineQuantity`, `orderFrontendLink`, `orderPagePath`, `orderPiiDaysAfterGuarantee`, `orderPiiDaysUndelivered`, `withdrawalPeriodDays`).
-- **`src/modules/orders/module.ts`** – Imported as `ordersModule` and passed to `assertModuleConfig` so the gate evaluates the real module manifest.
-- **`tests/support/environment.ts`** – Provides `withoutEnvironmentInThisFile` (bulk env cleanup) and `setEnvironment` (per-case env mutation) used throughout.
+- `src/kernel/module-config.ts` — provides `assertModuleConfig`, called as `assertModuleConfig([ordersModule], [])` for the boot-time withdrawal-period cases.
+- `src/modules/orders/config.ts` — the code under test: `maxAdminOrderLines`, `maxAdminOrderLineQuantity`, `orderFrontendLink`, `orderPagePath`, `orderPiiDaysAfterGuarantee`, `orderPiiDaysUndelivered` and `withdrawalPeriodDays`.
+- `src/modules/orders/module.ts` — the default export `ordersModule`, the manifest handed to `assertModuleConfig`.
+- `tests/support/environment.ts` — imported as `@tests/environment`. It supplies `withoutEnvironmentInThisFile` and `setEnvironment` for env isolation and setup.
 
 ## Notes
-
-- **`NODE_ENV` gate**: Every test that touches the boot-time gate must set `NODE_ENV` away from `test` first; otherwise `assertModuleConfig` short-circuits and the suite silently asserts nothing. The file-level doc comment calls this out explicitly.
-- **Ceiling is the Zod schema, not env**: An env value above `createOrderBodyItemsMax` / `createOrderBodyItemsItemQuantityMax` is clamped, not honoured — the schema is the contract ceiling.
-- **`withoutEnvironmentInThisFile` is file-scoped, not case-scoped**: All vars in `TOUCHED` are wiped after the file finishes, not after each test. Individual cases rely on `setEnvironment` to layer their own values on top.
+- `configure()` sets `NODE_ENV` to `development` because the config gate short-circuits under `NODE_ENV=test`. Without that, boot-check cases would assert nothing.
+- Cases that read config directly (limits, links, PII windows) do not call `configure()`. They rely on the cleared environment and the defaults.
+- The default link host `http://localhost:8080` appears in the expected URLs. It is not set by the test, so it comes from the config default with `NODE_FRONTEND_URL` unset.
+- The ceilings `createOrderBodyItemsMax` and `createOrderBodyItemsItemQuantityMax` are imported from `@api/schemas.zod`.

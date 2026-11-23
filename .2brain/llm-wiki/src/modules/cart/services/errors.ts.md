@@ -1,30 +1,25 @@
 ---
 source: src/modules/cart/services/errors.ts
-sha256: dd459dff544a8dc2fd07e6406b07db2190f546debfa4b9a5fd92c7aa4ac2e87f
-generated_at: 2026-11-08T05:16:50.279863+00:00
-model: ollama:qwen3.8:27b
+source_sha256: dd459dff544a8dc2fd07e6406b07db2190f546debfa4b9a5fd92c7aa4ac2e87f
+context_sha256: abc055afde4548516b5dc8ccf83c24edfa4ccd1f74dcd8fb8861fccb237c513e
+generated_at: 2026-11-22T04:35:43.848363+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/services/errors.ts
 
 ## Purpose
-
-Single source of truth for HTTP rejection responses raised by multiple cart services (basket and checkout). By centralising the code + message pair in one leaf module, the file guarantees that any service raising the same business error returns identical status, error code, and user-facing text.
+Holds refusals that more than one cart service raises, in a single leaf module. The error code and the message are defined once, so the services that raise them cannot drift apart.
 
 ## Key elements
-
-- **`shippingMethodNotFound()`** — Returns a `ResponseReject` with HTTP 404, error code `ERROR_CODES.CART_SHIPPING_METHOD_NOT_FOUND`, and an i18n-translated message (`cart.shipping-method-not-found`). Used when the caller requests a shipping method not offered by this deployment.
+- `shippingMethodNotFound()`: returns a `ResponseReject`, built with `generateReject`, with HTTP status 404. It carries one error whose code is `ERROR_CODES.CART_SHIPPING_METHOD_NOT_FOUND` and whose message is `t('cart.shipping-method-not-found')`. It is raised when the named shipping method is not offered by this deployment, both when the method is chosen on the basket and again at checkout.
 
 ## Relationships
-
-- **`src/infrastructure/http/response.ts`** — Provides `generateReject` (factory for the `ResponseReject` shape) and the `ResponseReject` type used in the function signature.
-- **`src/infrastructure/i18n/index.ts`** — Exports the `t` translation function used to resolve the user-facing error message at call time.
-- **`src/infrastructure/i18n/context.ts`** — Underlying locale context that backs the `t` function.
-- **`src/modules/cart/services/items.ts`** — Consumes `shippingMethodNotFound()` when a shipping method is selected on the basket.
-- **`src/modules/cart/services/checkout.ts`** — Consumes `shippingMethodNotFound()` again at checkout, ensuring the same 404/code/message is returned.
+- `src/infrastructure/http/response.ts`: provides `generateReject` and the `ResponseReject` type used to build the 404 response.
+- `src/infrastructure/i18n/index.ts`: provides the `t` function that resolves the message key.
+- `src/modules/cart/services/checkout.ts` and `src/modules/cart/services/items.ts`: neighbors in the dependency graph. Per the module doc, they are the cart services that share these refusals, and the code describes the shipping-method case as raised at the basket and at checkout.
+- `src/infrastructure/i18n/context.ts`: a graph neighbor, but this file does not import it directly.
 
 ## Notes
-
-- The module deliberately has **no state and no imports from other cart services**, keeping it a pure leaf so it can't create a circular dependency.
-- Error messages are resolved via `t(...)` at call time (inside the function body), so the locale is read when the response is actually generated, not at module-load time.
-- Adding a new shared cart error means adding one more `export const … = (): ResponseReject => generateReject(…)` here and wiring the same import into every service that should raise it.
+- The message is produced when `shippingMethodNotFound()` is called, not when the module loads. It is a function rather than a constant, so the `t()` lookup happens at call time.
+- The error code comes from `@api/error-codes`.

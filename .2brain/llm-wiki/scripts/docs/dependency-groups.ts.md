@@ -1,31 +1,29 @@
 ---
 source: scripts/docs/dependency-groups.ts
-sha256: 98c498355e730bb80a975f1643e70a1bc3b7c2f9eceb8dea319186ecf95de790
-generated_at: 2026-11-14T17:31:18.366894+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 67201ef25bfc229f7b356d0766c3127f16f83d9d9f48c6fbf0f22d79c2ac7c2c
+context_sha256: 13284e95a708187dfbfeb85b2b8eee1dc709608b99af0c0d93733832119490b1
+generated_at: 2026-11-22T02:02:04.766679+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/docs/dependency-groups.ts
 
 ## Purpose
-
-The hand-curated half of `docs/tools/package-dependencies.md`. It defines *which family* each npm package belongs to, *why* it exists in that family, and where to read more — while leaving the mechanical parts (which packages are actually installed, who imports them) to the auto-generated companion. Without this file, the dependency docs would be a flat, unexplained list.
+The hand-maintained half of the package-dependencies reference page: it declares which family each npm package belongs to, why it's there, and where to read more. Everything else on that page (which packages exist, who imports each) is derived by `generate-dependency-map.ts`, so it is not duplicated here.
 
 ## Key elements
-
-- **`DependencyGroup`** (interface) — one row of the docs table: `name`, `purpose` (prose), `readMore` (link(s) to other wiki pages), `match` (array of package-name patterns).
-- **`RUNTIME_GROUPS`** — 8 families of production dependencies (HTTP core, Security/auth, Persistence, Cache/messaging, Email/rendering/media, Observability, i18n, Declared config).
-- **`DEV_GROUPS`** — 12 families of dev-only dependencies (TS toolchain, type defs, testing, deeper testing, linting, architecture, code-shape audit, commit hygiene, contracts/codegen, docs site, maintenance).
-- **`matchesGroup(packageName, patterns)`** — returns a boolean: whether `packageName` is named by one of `patterns` (exact match or `prefix*` wildcard, e.g. `@opentelemetry/*`).
+- `DependencyGroup` (interface): `name` (table heading), `purpose` (one-line description), `readMore` (docs link), `match` (exact package names or `prefix*` globs).
+- `RUNTIME_GROUPS`: families for code that runs in production: HTTP core, Security and auth, Persistence, Cache and messaging, Email/rendering/media, Observability, i18n, Declared config.
+- `DEV_GROUPS`: build, lint, test and docs tooling that is never shipped: TypeScript toolchain, Type definitions, Testing, Deeper testing, Linting and formatting, Architecture, Code-shape audit, Commit hygiene, Contracts and codegen, Docs site, Maintenance.
+- `matchesGroup(packageName, patterns)`: returns true if the name equals a pattern exactly, or starts with the prefix of a pattern ending in `*`.
 
 ## Relationships
-
-- **`scripts/docs/generate-dependency-map.ts`** — the sole consumer. It derives the installed packages and their import graph, then calls `matchesGroup` to bucket each package into a `RUNTIME_GROUPS` or `DEV_GROUPS` entry. Packages that match no group and are imported by >1 module are dumped into an "Ungrouped" table; packages imported by exactly one module are listed under that module instead. This file provides the *semantics*; the generator provides the *facts*.
+`generate-dependency-map.ts` is the companion script. It derives the package and importer data, and this file supplies the grouping and rationale text. The comments here describe how the generator treats unmatched packages (see Notes).
 
 ## Notes
-
-- **Patterns vs. exact names.** Only two families use wildcard patterns (`@opentelemetry/*`, `@types/*`). Everything else is an exact string match — adding a new scoped sub-package (e.g. a new `@eslint/*` plugin) requires an explicit entry.
-- **"Ungrouped" is a feature, not a failure.** A package that matches no group and is imported by multiple modules surfaces in the docs page's Ungrouped table. This is intentional: visible beats silent, so contributors notice the gap.
-- **Single-import packages are deliberately absent.** If a package is imported by exactly one module and matches no group, the generator lists it under that module. Restating it here would duplicate ownership.
-- **Inline comments in `match` arrays** explain *why* a seemingly-unrelated package is grouped there (e.g. `@babel/plugin-transform-modules-commonjs` is babel-jest's one plugin; `@sinonjs/fake-timers` backs both the demo clock and jest fake timers). These are load-bearing context for anyone editing the list.
-- **Do not add a package list here.** The generator derives the actual installed packages and their importers. This file only supplies the grouping taxonomy. Duplicating the package roster would drift.
+- Matching is only exact name or trailing `*` prefix. There are no other glob forms.
+- A package that matches no group and is imported by more than one module appears in the page's "Ungrouped" table. It does not fail anything.
+- A package that matches no group and is imported by exactly one module is deliberately left out of these lists. The generator lists it under that module.
+- Some entries are narrow on purpose, and their `purpose` text says why. For example, `mongodb` is imported only as a type, and `tsx` is a runtime dependency because production runs the TS entrypoints directly.
+- Several `readMore` values are `'—'` where no docs page exists.
+- The file has a `#!/usr/bin/env tsx` shebang but only exports data and one helper.

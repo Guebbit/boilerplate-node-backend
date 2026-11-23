@@ -1,32 +1,25 @@
 ---
 source: scripts/setup/required-keys.ts
-sha256: 268841abb5834080a312c9d844211e87befc0534928e724109b0c53743c2289e
-generated_at: 2026-11-08T03:02:19.028624+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8230f2ba05b4b48b0ad4c8eac87ce72c6f9a176f877f253343e49bed87f410d9
+context_sha256: ad70f1c0520f7c2aeecc24ec4a92636fbbf43b49e00998697cde51bbe4c80c6b
+generated_at: 2026-11-22T02:18:21.526716+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/setup/required-keys.ts
 
 ## Purpose
-
-Derives the authoritative list of environment variables that `npm run setup` is allowed to fill, by reading the same config-slice declarations the runtime uses. This eliminates a hand-maintained list: any new module field that declares a `placeholder` is automatically included.
+Computes the list of environment variables that `npm run setup` is able to fill in. It reuses the boot gate's own config definitions instead of keeping a separate list, so a new module's secret is picked up automatically.
 
 ## Key elements
-
-- **`FillableKey`** (interface) — a pair of `{ key, placeholder }` identifying one env var and the exact placeholder string to replace.
-- **`fillableKeys()`** (exported function) — iterates `allConfigSlices(enabledModules)`, collects every field whose `presence` rule includes a `placeholder`, and returns a deduplicated `FillableKey[]`. Fields without a placeholder (e.g. `NODE_URL`, `NODE_CORS_ORIGIN`) are excluded because they represent "must be set" constraints, not "replace this token" ones.
+- `FillableKey` (interface): `{ key, placeholder }`. `key` is the env var name. `placeholder` is the exact text in `.env` that marks the variable as unset.
+- `fillableKeys()`: returns `FillableKey[]`. It goes through every field of every slice from `allConfigSlices(enabledModules)`. A field is kept only if its `presence` rule has a `placeholder`. Results are de-duplicated by name using a `Map`, so if the same name appears again, the later placeholder replaces the earlier one.
 
 ## Relationships
-
-- **`src/app/config.ts`** — provides `allConfigSlices`, the single source of field/presence definitions consumed here.
-- **`src/modules.ts`** — provides `enabledModules`, which scopes the slice iteration to active modules only.
-- **`scripts/setup/index.ts`** — the setup orchestrator; calls `fillableKeys()` to know which placeholders it may write into the environment file.
-- **`scripts/setup/environment-file.ts`** — reads the resulting key/placeholder pairs to perform the actual file substitution.
-- **`tests/unit/scripts/setup/required-keys.test.ts`** — unit-tests the derivation logic directly.
-- **`tests/unit/scripts/setup/first-run.test.ts`** — exercises the end-to-end first-run flow that depends on this list.
+- Imports `allConfigSlices` from `src/app/config.ts`. This supplies the app-level and module-declared config slices.
+- Imports `enabledModules` from `src/modules.ts`. This restricts the scan to modules that are enabled.
+- Its consumers are the sibling setup scripts (`environment-file.ts`, `index.ts`). Their tests, `required-keys.test.ts` and `first-run.test.ts`, are also graph neighbors. None of these files appear in the content shown, so the exact usage isn't visible here.
 
 ## Notes
-
-- A field is eligible **only** if its `presence` object has a truthy `placeholder` string. A field that merely requires presence (no placeholder) is intentionally *not* a `FillableKey` — it is the operator's responsibility to supply.
-- Deduplication is via a `Map` keyed on the variable name, so if the same name appears in more than one slice the last one wins.
-- The function is a pure reader of the config graph; it performs no I/O and has no side effects.
+- Fields whose presence rule has no `placeholder` are excluded, for example `NODE_URL` and `NODE_CORS_ORIGIN`. They name no wrong value to replace, only a missing one, so they stay the operator's own call.
+- The module doc says this mirrors how `assertModuleConfig` (`src/kernel/module-config.ts`) folds module-declared and app-level slices together.

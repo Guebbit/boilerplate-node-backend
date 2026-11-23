@@ -1,33 +1,36 @@
 ---
 source: src/modules/tasks/controllers/post-task-assign.ts
-sha256: 041ae18d542eaffcfff64ab42ddbcd317766d3c574dbad6726c563c608cc077c
-generated_at: 2026-11-14T22:06:26.361228+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ba4ba0fb69721b2283515eb35f27687f7f951bdfc6111800bdec20f7664cba59
+context_sha256: 9e223216137616c348e55afdcfcb4c12130f09a6da1501c4161524ce8b474fd4
+generated_at: 2026-11-22T07:58:10.967471+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/tasks/controllers/post-task-assign.ts
 
 ## Purpose
-
-HTTP controller for the `POST /tasks/:id/assign` endpoint. It validates the task ID and request body, then delegates to `taskService.assign` to hand a task to a specified user (or the caller themselves — "taking" is just self-assignment).
+Express controller for `POST /tasks/:id/assign`. It hands a task to one person; "taking" a task is simply assigning it to yourself. The route is staff-only, as stated in the doc comment.
 
 ## Key elements
-
-- **`postTaskAssign`** (exported function) — The sole handler. Accepts a typed Express `Request`/`Response`, validates the `:id` param via `requireId`, parses the body against the `AssignTaskBody` Zod schema, calls `taskService.assign(id, body.userId, callerContextOf(request))`, and responds with either a `refused` result, a `200` success envelope, or a caught error via `catchAs`.
+- `postTaskAssign(request, response)`: the only export. It does the following, in order:
+  1. Validates the `:id` param with `requireId`, using the not-found message key `generic.error-item-gone`.
+  2. Validates the body with `parseBody(AssignTaskBody, ...)`. The body carries a `userId`.
+  3. Calls `taskService.assign(id, body.userId, callerContextOf(request))`.
+  4. If `refused(response, result)` handles the result, it stops. Otherwise it responds `200` with `successResponse<Task>(response, result.data, 200)`.
+  5. Maps any thrown error through `catchAs(response, 'postTaskAssign')`.
 
 ## Relationships
-
-- **`src/infrastructure/http/controller.ts`** — Source of the shared helpers `catchAs`, `parseBody`, and `refused` used for validation, error handling, and rejection responses.
-- **`src/infrastructure/http/ids.ts`** — Provides `requireId`, which extracts and validates the `:id` route parameter.
-- **`src/infrastructure/http/request.ts`** — Provides `callerContextOf`, used to pass the authenticated caller's context into the service call.
-- **`src/infrastructure/http/response.ts`** — Provides `successResponse` for the standard success envelope.
-- **`src/modules/tasks/services/index.ts`** — Exports `taskService`; this controller is its only direct caller for the `assign` method.
-- **`src/modules/tasks/routes.ts`** — Registers `postTaskAssign` as the handler for the `POST /tasks/:id/assign` route.
-- **`src/types/index.ts`** — Supplies the `AssignTaskRequest` and `Task` types used in the function signature and response.
+- `src/infrastructure/http/ids.ts`: `requireId` extracts and validates the task id.
+- `src/infrastructure/http/controller.ts`: supplies `parseBody`, `refused` and `catchAs`, which handle body validation, service-refusal responses and error mapping.
+- `src/infrastructure/http/request.ts`: `callerContextOf` builds the caller context passed to the service.
+- `src/infrastructure/http/response.ts`: `successResponse` writes the success envelope.
+- `src/modules/tasks/services/index.ts`: exports `taskService`, which this handler calls for the assignment.
+- `src/types/index.ts`: provides the `AssignTaskRequest` and `Task` types.
+- `src/modules/tasks/routes.ts`: mounts this handler on the route (inferred from the neighbor relationship; the route wiring is not visible in this file).
 
 ## Notes
-
-- The endpoint serves dual purpose: assigning a task *to* someone and *taking* a task (assigning to self). No separate "take" route exists.
-- Success returns HTTP **200**, not 201, since the task already exists and only ownership changes.
-- The not-found error for an invalid `:id` uses the message key `generic.error-item-gone` (not a task-specific key).
-- Early returns via `Promise.resolve()` short-circuit the chain when ID or body validation fails, rather than throwing.
+- The handler contains no business logic, authorization or assignment rules. It only validates input, delegates to the service and shapes the response.
+- When `requireId` or `parseBody` returns a falsy value, the handler returns `Promise.resolve()`. It assumes the helper has already written the error response.
+- Both the not-found and the generic error paths rely on helpers writing to `response`. The handler itself never sends an error directly.
+- The request body is validated with the `AssignTaskBody` schema imported from `@api/schemas.zod`.
+- The staff-only restriction is described in the doc comment but not enforced here, so it is presumably applied at the route level.

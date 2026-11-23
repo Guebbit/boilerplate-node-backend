@@ -1,47 +1,46 @@
 ---
 source: src/modules/payments/tests/integration/refund-undeliverable.test.ts
-sha256: 91e7eba42047aa700cd0b88e23d86a9dc45c9a7fbb5078122e5e226b8d559b7f
-generated_at: 2026-11-14T21:18:08.339352+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 475b2bf0f29d362c6f07d7d98dcd81b0d8d0f1157c116f1e07532a91cef2108e
+context_sha256: 9dbdc96a027f818a8ef83cd2b70ff10bff5693d1748d11696f4694506f97cf57
+generated_at: 2026-11-22T07:01:19.971239+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/refund-undeliverable.test.ts
 
 ## Purpose
-
-Integration tests for the "undeliverable refund" flow: when a payment provider cannot deliver a refund to the buyer's card, the system mails the buyer exactly once (with no reason disclosed), marks the refund as `owedAnotherWay` in the buyer-facing view, and—critically—does **not** mail when the refusal reason is unrelated to the buyer's card. Uses a real MongoDB; the mailer is mocked.
+Integration test, run against a real Mongo database with the mailer mocked, for the case where a refund cannot reach the buyer's card. It checks that the buyer gets exactly one `payments.refund-undeliverable` mail that asks how they want the money and gives no reason. It also checks that the buyer-facing payment view reports `owedAnotherWay` instead of "retried automatically". Refusals that say nothing about the buyer's card mail nobody.
 
 ## Key elements
-
-- **`paidOrder()`** – Builds a user, a product (price 50.00), an order for 2 units, reserves inventory, pays by card, settles the outbox, and returns a `refuseWith(reason)` lever that arms the fake provider to refuse the next refund for that `providerRef`.
-- **`refund(orderId, amount)`** – Convenience wrapper that calls `refundOrderPayment` with an admin caller context.
-- **`settle()`** – Polls until `settleOutboxNudges()` has flushed all queued work.
-- **`mailsOf(template)`** – Filters the mocked `enqueueEmail` call history by template name for assertions.
-- **`describe('a refund the provider refused for good')`** – Four cases: single mail without reason + `owedAnotherWay: true`; idempotency when a transient refusal becomes final; return-refund path also mails; hand-settle clears `owedAnotherWay` and sends the success mail instead.
-- **`describe.each(['provider_unavailable', 'unknown', 'insufficient_funds', 'disputed'])`** – Verifies that non-card-related refusal reasons produce **zero** mails and no `owedAnotherWay` flag.
-- **`describe('a settled refund the bank sent back')`** – Simulates a late webhook via `deliver()` after the refund already settled; asserts the same single-mail behavior.
+- `mockEnqueueEmail`: the jest-mocked `enqueueEmail` from the mailer adapter, which stands in for the mail queue. Cases assert on the mails it received.
+- `mailsOf(template)`: filters the mocked calls by template name.
+- `settle()`: wraps `settleOutboxNudges` in `eventually`, so the outbox delivers everything written so far.
+- `paidOrder()`: builds a user, a product (50.00, 10 on hand) and an order of 2 items, reserves stock and pays by card. It returns `user`, `orderId`, `providerRef` and `refuseWith(reason)`, which makes the fake provider refuse refunds with a `RefundFailureReason`.
+- `refund(orderId, amount)`: an operator (admin) refund via `refundOrderPayment`.
+- Test groups:
+  - **Refused for good:**
+    - One mail, with no reason leaked (`lost_or_stolen_card` must not appear in the data), containing the amount, and the buyer view shows `owedAnotherWay: true` with no `failureReason`.
+    - The mail stays single when a transient `provider_unavailable` refusal later becomes a final `declined` one, even across two `retryOpenRefunds` calls. `NODE_PAYMENT_REFUND_RETRY_MINUTES` is set to `0` for this case.
+    - A refused return refund (`refundForReturn`) also mails.
+    - A hand settle (`settleRefundByHand`) clears `owedAnotherWay` and sends `payments.refund-issued` instead.
+  - **Refused as `provider_unavailable`, `unknown`, `insufficient_funds` or `disputed`** (`describe.each`): no undeliverable mail and no `owedAnotherWay`.
+  - **Settled refund the bank sent back:** a late failure (`expired_or_canceled_card`) is injected with `setFakeLateRefundFailure` and delivered twice via `deliver`. It yields one mail.
 
 ## Relationships
-
-- **`scenarios/support/doubles/payments/fake.ts`** – Provides `setFakeRefundFailure`, `setFakeLateRefundFailure`, and `refundRefOfRecord`; the levers that arm the fake provider to refuse refunds or report a late failure.
-- **`src/infrastructure/adapters/mailer.ts`** – Fully mocked; `enqueueEmail` is the sole mail assertion target.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges` is called to flush domain events and trigger side-effects (mailing, state transitions).
-- **`src/kernel/events.ts`** – `resetDomainEvents` in `afterEach` prevents cross-test leakage.
-- **`src/modules/payments/services/index.ts`** – Exports `paymentService`; the test calls `getForOrder` (buyer view), `retryOpenRefunds` (retry exhaustion), and `settleRefundByHand` (operator override).
-- **`src/modules/payments/repository.ts`** – Exports `paymentRepository`; `findByOrderId` is used to inspect persisted refund records.
-- **`src/modules/payments/module.ts`** – Registered via `registerCheckoutModules` in `beforeEach`.
-- **`src/modules/payments/tests/deliver.ts`** – `deliver()` simulates a provider webhook event for the late-refund scenario.
-- **`src/modules/payments/tests/factories.ts`** – `payByCard`, `refundOrderPayment`, `refundForReturn` build the payment/refund records under test.
-- **`src/modules/inventory/index.ts`** – Exports `inventoryService`; `reserveForOrder` is called in `paidOrder()` so the order is in a payable state.
-- **`src/modules/inventory/services/index.ts`** – Underlying service implementation re-exported through the module index.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `toOrderItem`.
-- **`src/modules/users/tests/factories.ts`** / **`src/modules/products/tests/factories.ts`** – `createUser`, `createProduct`.
-- **`src/types/index.ts`** – `RefundFailureReason` union type used to classify card-related vs. non-card refusal reasons.
+- `src/infrastructure/adapters/mailer.ts`: `enqueueEmail` is replaced with a jest mock.
+- `scenarios/support/doubles/payments/fake.ts`: supplies `setFakeRefundFailure`, `setFakeLateRefundFailure` and `refundRefOfRecord`, which control the fake provider.
+- `src/kernel/events.ts`: `resetDomainEvents` runs in `afterEach`.
+- `src/kernel/outbox.ts`: `settleOutboxNudges` flushes the outbox.
+- `src/modules/payments/services/index.ts`: the payment service, used for the buyer view, `retryOpenRefunds` and `settleRefundByHand`.
+- `src/modules/payments/repository.ts`: the payment repository, used to read the payment and its refunds.
+- `src/modules/payments/module.ts`: registered through `registerCheckoutModules([paymentsModule])`.
+- `src/modules/payments/tests/factories.ts`: `payByCard`, `refundOrderPayment` and `refundForReturn`.
+- `src/modules/payments/tests/deliver.ts`: `deliver` simulates a provider event for the late-failure case.
+- `src/modules/inventory/index.ts` and `src/modules/inventory/services/index.ts`: the inventory service, used to reserve stock before payment.
+- `src/modules/users/tests/factories.ts`, `src/modules/products/tests/factories.ts` and `src/modules/orders/tests/factories.ts`: create the user, product and order fixtures.
+- `src/types/index.ts`: supplies the `RefundFailureReason` type.
 
 ## Notes
-
-- **Card-related vs. non-card reasons is the core dichotomy.** Card-related (`lost_or_stolen_card`, `declined`, `expired_or_canceled_card`) triggers the mail; non-card (`provider_unavailable`, `unknown`, `insufficient_funds`, `disputed`) does not. This is the behavior contract under test.
-- The mail body must contain the refund amount but must **not** contain the refusal reason (asserted via regex on serialized data).
-- `NODE_PAYMENT_REFUND_RETRY_MINUTES: '0'` is set via `withEnvironmentOverrides` in the transient→final test to force immediate retry so two calls to `retryOpenRefunds` exhaust the retry window without real waiting.
-- `retryOpenRefunds` is called **twice** deliberately to ensure both retry attempts have been consumed before asserting the single mail.
-- The late-refund test calls `deliver` **twice** (idempotency check) and still expects exactly one mail.
+- Test helpers come from `@tests/*` (`setupTestDb`, `callers`, `eventually`, `environment`, `checkout-modules`). These are not in the neighbor list.
+- The `payments.refund-undeliverable` template is asserted by name only. The cases check the `data.body` content (`30.00`) and that `message.to` is defined, not the full mail.
+- `afterEach` calls `jest.restoreAllMocks()` after `resetDomainEvents()`, and `beforeEach` clears the mailer mock and re-registers the payments module.

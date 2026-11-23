@@ -1,51 +1,49 @@
 ---
 source: src/modules/account/tests/integration/export.test.ts
-sha256: b277416a7d4e5a23cbc685beea3d0c020209825e51600bf29f5404acb3dc4bf8
-generated_at: 2026-11-14T19:03:45.949533+00:00
-model: ollama:qwen3.8:27b
+source_sha256: acfe20fae7ae234fca60f616abcbbcfc96f54c60bba3e0de3879dc313dc25c95
+context_sha256: 78500eea51614cbdd633d42ac139922e0ae6efffcec1c061d98ee96acd71cb35
+generated_at: 2026-11-22T03:55:16.850026+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/export.test.ts
 
 ## Purpose
-
-Integration test for the account data-export job lifecycle: requesting an export, inline building (no broker), downloading, and expiration/reaping. It runs against a real Mongo instance and a real temporary export directory, exercising the actual services end-to-end. The only fakes are the mailer queue and the audit logger, both captured for assertions.
+Integration tests for the account data export as an asynchronous job: requesting an export records a row and queues a build, the worker writes the file and mails a link, a download streams it to its owner, and erasure and the reaper remove row and file together. It runs against real Mongo, a real temporary export directory and the real services. Only the mail queue and the audit port are faked (both captured). The HTTP side of the same flow is covered by `src/modules/shop/tests/contract/api.contract.test.ts`.
 
 ## Key elements
+- **`mockOutbox` / `jest.mock('@infrastructure/adapters/mailer')`**: replaces `enqueueEmail` and records `{ to, template, data, urgent }` for each mail.
+- **`mockAudit` / `jest.mock('@infrastructure/observability/audit')`**: replaces `recordAudit` and captures the fields of each audit event (only when a context is given).
+- **`setupTestDb()`**: sets up the database for the suite.
+- **`beforeEach` / `afterEach`**: create a temp dir in `root` and point `NODE_ACCOUNT_EXPORT_STORE_PATH` at it. They clear the captures, call `settleInlineExports()`, restore the original personal-data sections, restore mocks and delete the dir.
+- **Helpers**:
+  - `section(name, value)` builds a fixed-answer `PersonalDataSection`.
+  - `basicSections()` returns a profile section plus a cart section.
+  - `requestFor(overrides)` creates a verified user and calls `requestExport`, unwrapping the success.
+  - `fileOf(name)` reads a finished export file from `root`.
+  - `downloadOf(userId)` streams `openOwnExport` to text, or returns `undefined` if there is nothing to send.
+  - `gate()` returns a section that holds the build until `release()` is called.
+  - `exportDueIn(email, millis)` makes a ready export and moves its `expiresAt` (a negative value means already due).
+- **Test groups visible**:
+  - Notifications section: the export lists the account's own notifications and nobody else's.
+  - Users section: linked OAuth providers and enrolled 2FA methods appear, with no secret.
+  - Profile section: none of the `select: false` fields (password, backup codes, reauth code, MFA lockout, `tokensValidAfter` and similar) appear, checked with marker values.
+  - `requestExport`: answers 202 with a `building` row, which the worker then makes `ready`.
 
-- **`mockOutbox` / `jest.mock('@infrastructure/adapters/mailer')`** – Captures every queued email (`to`, `template`, `data`) so tests can assert on the download-link notification.
-- **`mockAudit` / `jest.mock('@infrastructure/observability/audit')`** – Captures audit events recorded during export operations.
-- **`section(name, value)` / `basicSections()`** – Helpers to build a minimal valid `PersonalDataSection` list (profile + cart) for tests that don't need the real registry.
-- **`requestFor(overrides?)`** – Creates a verified user and calls `requestExport`, unwrapping the success result.
-- **`fileOf(name)` / `downloadOf(userId)`** – Read the built export file or stream it via `openOwnExport` for content assertions.
-- **`gate()`** – Returns a section whose `collect` hangs until the caller invokes `release()`, enabling concurrency/ordering tests.
-- **`exportDueIn(email, millis)`** – Produces a ready-state export with a controlled `expiresAt` for reaping tests.
-- **`describe` blocks** – Cover: notifications-module content isolation, users-module content (OAuth + 2FA without secrets), profile schema `select:false` exclusion, `requestExport` 202→ready flow, and (truncated) erasure/reaping behavior.
-- **`settleInlineExports`** (from `src/modules/account/services/export.ts`) – The "wait for the worker" step; since no message broker is running, builds execute inline and this flushes them.
-- **`import '@tests/http'`** – Side-effect import that boots the app, triggering every module's `onRegistered` hook to install the real section list and erasers.
+  The file continues beyond this, with further cases that use the imports listed under Relationships.
 
 ## Relationships
-
-- **`src/modules/account/services/export.ts`** – Source of `requestExport`, `openOwnExport`, `readOwnExport`, `settleInlineExports`; the primary API under test.
-- **`src/modules/account/services/export-job.ts`** – `runExportJob` is the inline build worker invoked when no broker is present.
-- **`src/modules/account/services/export-rows.ts`** – `reapExpiredExports` exercises the expiration/cleanup path.
-- **`src/modules/account/services/personal-data-registry.ts`** – `setPersonalDataSections` / `personalDataSections` let tests swap in or restore the section list.
-- **`src/modules/account/model.ts`** – `accountExportModel.updateOne` manipulates `expiresAt` directly for deadline-control tests.
-- **`src/modules/account/repository.ts`** – `accountExportRepository.findByUserId` asserts row state after a build.
-- **`src/modules/account/metrics.ts`** – `accountExportFailedTotal` is imported for failure-path metric assertions.
-- **`src/modules/users/tests/factories.ts`** – `createUser`, `userRepository`, `eraseAsScheduled` seed and clean up user fixtures.
-- **`src/modules/users/friends/account.ts`** – `accountUserService` provides the real section collector for the users module.
-- **`src/modules/notifications/tests/factories.ts`** – `createNotification` seeds notification documents to verify export scoping.
-- **`src/kernel/outbox.ts`** – `outboxEventModel` queried to confirm outbox events are emitted on state transitions.
-- **`src/kernel/registry.ts`** – `PersonalDataSection` type used by all section helpers.
-- **`src/infrastructure/adapters/logger.ts`** – Imported (likely for spy/assertion on structured log output).
-- **`tests/support/callers.ts`** – `testCallerContext` supplies the authenticated caller for every service call.
+- **`@tests/http`** (imported for side effects): builds the app, which runs every module's `onRegistered` and installs the real section list and erasers. This is why the notifications and users section tests use the real list.
+- **`src/modules/account/services/export.ts`**: supplies `requestExport`, `openOwnExport`, `readOwnExport` and `settleInlineExports`, the "wait for the worker" step.
+- **`src/modules/account/services/export-job.ts`** (`runExportJob`) and **`src/modules/account/services/export-rows.ts`** (`reapExpiredExports`): imported to drive the build and the reaper directly.
+- **`src/modules/account/services/personal-data-registry.ts`**: `personalDataSections` and `setPersonalDataSections` let cases swap sections and put them back.
+- **`src/kernel/registry.ts`**: provides the `PersonalDataSection` type.
+- **`src/modules/account/repository.ts`, `src/modules/account/model.ts`, `src/modules/account/metrics.ts`**: `accountExportRepository`, `accountExportModel` and `accountExportFailedTotal` are used to inspect rows, edit deadlines and check the failure metric.
+- **`src/kernel/outbox.ts`**: `outboxEventModel` is imported, so tests can inspect outbox events.
+- **`src/infrastructure/adapters/logger.ts`**: `logger` is imported, so tests can check logging.
+- **`src/modules/users/tests/factories.ts`, `src/modules/users/friends/account.ts`, `src/modules/users/repository.ts`, `src/modules/notifications/tests/factories.ts`, `tests/support/callers.ts`**: supply `createUser`, `eraseAsScheduled`, `userRepository`, `accountUserService`, `createNotification` and `testCallerContext`.
 
 ## Notes
-
-- No message broker exists in the test environment, so every export build runs synchronously inline; `settleInlineExports()` must be called after each request before asserting on the file.
-- `mockOutbox` is deliberately prefixed with `mock` so the hoisted `jest.mock` factory can reference it without a `ReferenceError`.
-- The `@tests/http` import is a **side-effect-only** import: it builds the app and runs `onRegistered` hooks. Tests that need the *real* section list rely on this and must not call `setPersonalDataSections` before reading.
-- The HTTP-layer contract (status codes, auth, body shape) is intentionally excluded here and lives in `contract/api.contract.test.ts`; this file tests service-level behavior and file content.
-- A fresh `mkdtemp` directory is created per test (`beforeEach`) and removed in `afterEach`; `NODE_ACCOUNT_EXPORT_STORE_PATH` is pointed at it via `setEnvironment`.
-- The profile-section test verifies that **every** Mongoose `select: false` field is absent from the export JSON, using distinctive `marker-` values as a safety net against accidental leaks.
+- No broker runs in tests, so builds run inline after the request resolves. Cases must `await settleInlineExports()` before asserting on the finished state, and `afterEach` also settles any leftover builds.
+- The mocks are named `mock*` so the hoisted `jest.mock` factories may close over them.
+- Cases that don't use the real section list install their own with `setPersonalDataSections`, which `afterEach` reverts.

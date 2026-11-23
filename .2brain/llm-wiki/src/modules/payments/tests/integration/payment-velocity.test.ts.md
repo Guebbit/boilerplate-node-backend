@@ -1,38 +1,40 @@
 ---
 source: src/modules/payments/tests/integration/payment-velocity.test.ts
-sha256: e968ed79d847b045d4958f5bbcf4f3345f4fc1383e723cddf087b74c847f0b1d
-generated_at: 2026-11-08T07:33:29.127638+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f157d78973c852ef3884e75072ddf10b40f824491f705eaf11e766e4fb7da430
+context_sha256: 0c76eaaafb41ee50509d8c9c188dcf0b7ac24642524fd9dc63b3ba5a0260aae3
+generated_at: 2026-11-22T06:58:06.757173+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/tests/integration/payment-velocity.test.ts
 
 ## Purpose
-
-Integration tests for the three rate-limiting layers on `POST /payments/:id/confirm`: the per-account attempt budget, the per-account decline budget, the shared address-block decline budget, and the anti-bot challenge gate. The tests exercise the limiters through trivial Express handlers (not the real `postPaymentConfirm` route) so the property under test—isolation of limiter behavior—isn't confounded by database round trips. The real route's middleware ordering is covered separately in `payments/tests/unit/routes.test.ts`.
+Integration tests for the card-testing velocity budgets on `POST /payments/:id/confirm`: the attempt limiter, the decline limiter, the address-block decline limiter, and the challenge gate between them. The tests use small stub Express handlers instead of the real `postPaymentConfirm` controller, because the behavior under test belongs to the limiters. A real payment would add a database round trip to every attempt. A comment in the file says `src/modules/payments/tests/unit/routes.test.ts` already checks that the real route mounts all three in the documented order.
 
 ## Key elements
-
-- **`asAccount(id)`** — Minimal `RequestHandler` that attaches `request.authContext` (a stub with only `.id`) so the limiters' `accountIdOf` key extraction works.
-- **`declineAwareApp(declineLimiter)`** — Builds an Express app whose `/confirm` handler sets `request.paymentConfirmDeclined` based on the request body's `outcome` field (`declined` → `true`, otherwise `false`).
-- **`limitersWithBudget(attemptLimit, declineLimit?)`** — Re-imports `@modules/payments/rate-limits` via `withReloadedRateLimits` with custom `NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX` / `NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX` env values.
-- **`appWithBudget(declineLimit)`** — Re-imports the same module instance for both `paymentConfirmDeclineLimiter` and `paymentDeclineChallengeGate` (they must share an instance), then wires them in order on `/confirm`.
-- **`blockApp(accountLimit, blockLimit)`** — Re-imports all three limiters plus the gate; varies the account via `x-account` header so the block limiter (keyed by IP) can be tested independently of per-account limits.
-- **Test suites** — Four `describe` blocks covering: attempt budget (all outcomes spend it, per-account isolation), decline budget (genuine declines spend it; `order-lost` 409 and successes do not), challenge gate (engages only when a provider is set *and* a prior decline exists), and address-block budget (shared IP pool, independent of per-account limits).
+- `asAccount(id)`: middleware that sets `request.authContext` to a stub `AuthContext` containing only `id`, standing in for `getAuth`.
+- `declineAwareApp(declineLimiter)`: Express app with one `/confirm` route. The request body's `outcome` (default `declined`) sets `request.paymentConfirmDeclined`. A decline returns 409 `PAYMENT_DECLINED`. `order-lost` returns 409 `PAYMENT_ORDER_NOT_PAYABLE`. Any other outcome returns 200.
+- `limitersWithBudget(attemptLimit, declineLimit = attemptLimit)`: uses `withReloadedRateLimits` to re-import `@modules/payments/rate-limits` with `NODE_PAYMENT_CONFIRM_RATE_LIMIT_MAX` and `NODE_PAYMENT_DECLINE_RATE_LIMIT_MAX` set.
+- `appWithBudget(declineLimit)`: sets the decline env var, resets modules, and builds a route chained as `paymentConfirmDeclineLimiter`, then `paymentDeclineChallengeGate`, then a handler that always declines.
+- `blockApp(accountLimit, blockLimit)`: builds the full chain of `paymentConfirmDeclineLimiter`, `paymentConfirmDeclineBlockLimiter`, `paymentDeclineChallengeGate` and a handler. The account comes from the `x-account` header. It also sets `NODE_PAYMENT_DECLINE_BLOCK_RATE_LIMIT_MAX`.
+- Test suites:
+  - **Confirm-attempt budget:** every outcome, including success, spends the budget, so attempts 4 and 5 of a 3-attempt budget return 429. Budgets are tracked per account.
+  - **Decline budget:** only a genuine decline spends it. A lost-order 409 or a success does not.
+  - **`paymentDeclineChallengeGate`:**
+    - It never engages when `NODE_ANTIBOT_PROVIDER` is unset.
+    - With `turnstile` selected, the first attempt passes through to the handler's own 409.
+    - The next attempt, once the account has a decline on record, returns 403 `ANTIBOT_VERIFICATION_FAILED`.
+  - **Address-block decline budget:** declines spread across many accounts exhaust a shared block budget and then return 429. Successes and order-lost 409s do not spend it. A further test about challenging a first-time account at half the block budget is cut off in the visible content.
 
 ## Relationships
-
-- **`src/modules/payments/rate-limits.ts`** — The module under test. Dynamically imported (after `jest.resetModules()`) to get freshly constructed limiters with the desired budgets. Exports used: `paymentConfirmAttemptLimiter`, `paymentConfirmDeclineLimiter`, `paymentConfirmDeclineBlockLimiter`, `paymentDeclineChallengeGate`.
-- **`src/types/auth-context.ts`** — Provides the `AuthContext` type for the `asStub<AuthContext>({ id })` cast, ensuring the stub shape matches what `accountIdOf` expects.
-- **`src/types/index.ts`** — Barrel re-export of `AuthContext`; the test imports from `@types` rather than the leaf file.
-- **`tests/support/environment.ts`** — `setEnvironment` mutates `process.env` before a module re-import so the limiter constructors pick up the new budget values.
-- **`tests/support/rate-limit-harness.ts`** — `withReloadedRateLimits` encapsulates the reset-modules → set-env → dynamic-import → restore-env cycle.
-- **`tests/support/stub.ts`** — `asStub` creates a partial object typed against a full interface, used here to build a minimal `AuthContext` with only `.id`.
+- `src/modules/payments/rate-limits.ts`: the module under test. It supplies `paymentConfirmAttemptLimiter`, `paymentConfirmDeclineLimiter`, `paymentConfirmDeclineBlockLimiter` and `paymentDeclineChallengeGate`. It is dynamically imported after module reset.
+- `tests/support/rate-limit-harness.ts`: provides `withReloadedRateLimits`, used by `limitersWithBudget`.
+- `tests/support/environment.ts`: provides `setEnvironment`, which sets `NODE_*` env vars such as the budgets and `NODE_ANTIBOT_PROVIDER`.
+- `tests/support/stub.ts`: provides `asStub`, used to build the partial `AuthContext`.
+- `src/types/auth-context.ts` and `src/types/index.ts`: `AuthContext` is imported as a type from `@types`.
 
 ## Notes
-
-- **Module re-evaluation is mandatory.** `rateLimit()` reads its options once at construction time; changing an env var without re-importing the module has no effect. Every test that needs a non-default budget re-imports the module.
-- **Same-instance constraint.** The decline limiter and the challenge gate must be destructured from the *same* module instance because the gate reads a property name the limiter set. `appWithBudget` and `blockApp` enforce this by importing once and destructuring together.
-- **Attempt budget counts success; decline budget does not.** The attempt limiter spends on every outcome (a card can be swapped and retried on the same intent). The decline limiter spends only when `request.paymentConfirmDeclined === true`, which the route sets exclusively for genuine provider declines—not for the `order-lost` 409.
-- **Single-IP assumption for block tests.** All supertest requests originate from one address, so they share the same block. Per-account isolation is tested by varying the `x-account` header, not the IP.
-- **`jest.resetModules()` in every `afterEach`** prevents cross-test contamination of the singleton limiter instances.
+- `rateLimit()` reads its options once, at construction. Every budget change therefore needs a module reset and a fresh import. Each `describe` block resets modules in `afterEach`.
+- The decline limiter and the challenge gate must come from the same module instance, because the gate reads the property name the decline limiter was configured with.
+- All requests come from `supertest`'s single address, so they share one address block. Only the account varies, through the `x-account` header.
+- The comments describe the same module-reload approach as `auth-hardening.test.ts#limitersWithBudget`.

@@ -1,30 +1,29 @@
 ---
 source: src/modules/payments/controllers/get-payments.ts
-sha256: 3e2f41e2321c34ae529deaf326235a63b3ab32a9ab6cad1e2af9d8bfc9282f11
-generated_at: 2026-11-08T07:17:27.682035+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8f3cf19f3c3dccf74687614a99556fce38da9ea0f76d8a4e335d7cceded33eff
+context_sha256: 37b707e9690922879ae5bf1a63a26c3b28ef954f7c9842798c337f479e6f5d8b
+generated_at: 2026-11-22T06:41:21.828165+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/controllers/get-payments.ts
 
 ## Purpose
-
-Single controller that serves both `GET /payments` and `POST /payments/search` (the staff payments list). It defines a query-string-aware Zod schema on top of the generated API body schema and delegates the actual lookup to `paymentService.listPayments`, using the shared `createSearchController` factory to wire up parsing, validation, and response shaping in one place.
+Controller for the staff payments list. A single controller serves both `GET /payments` and `POST /payments/search`. It is built with the shared `createSearchController` factory, so the file only supplies the payments-specific validation schema and the search call.
 
 ## Key elements
-
-- **`searchPaymentsQuerySchema`** – Extends the generated `SearchPaymentsBody` (from `@api/schemas.zod`) with transport-level coercions needed when the same fields arrive as query-string text: `page`/`pageSize` become integers, `amountMin`/`amountMax` get a `blankToUndefined` preprocess step, and `disputed` becomes an optional boolean.
-- **`getPayments`** (export) – The controller instance produced by `createSearchController({ entity: 'payments', schema, runSearch })`. `runSearch` calls `paymentService.listPayments(parsed, request.authContext)`.
+- `searchPaymentsQuerySchema` (module-private): the generated `SearchPaymentsBody` schema extended with the coercions a query string needs.
+  - `page` and `pageSize` use `pageSchema` and `pageSizeSchema`.
+  - `amountMin` and `amountMax` are wrapped in `z.preprocess(blankToUndefined, ...)`, so a blank value (`amountMin=`) means no filter. The amounts stay decimal text.
+  - `disputed` uses `optionalBooleanSchema`.
+- `getPayments` (exported): the controller, created with `createSearchController({ entity: 'payments', schema, runSearch })`. `runSearch` calls `paymentService.listPayments(parsed, request.authContext)`.
 
 ## Relationships
-
-- **`src/infrastructure/http/schemas.ts`** – Supplies `blankToUndefined`, `optionalBooleanSchema`, `pageSchema`, and `pageSizeSchema`, all imported to build `searchPaymentsQuerySchema`.
-- **`src/infrastructure/surfaces/create-search-controller.ts`** – Provides the `createSearchController` factory; this file is a thin configuration call into it.
-- **`src/modules/payments/routes.ts`** – Mounts `getPayments` on the `/payments` and `/payments/search` routes (the consumer of this export).
-- **`src/modules/payments/services/index.ts`** – Exports `paymentService`, whose `listPayments` method is the business-logic target invoked by `runSearch`.
+- `src/infrastructure/http/schemas.ts`: provides the coercion helpers `blankToUndefined`, `optionalBooleanSchema`, `pageSchema` and `pageSizeSchema`.
+- `src/infrastructure/surfaces/create-search-controller.ts`: provides `createSearchController`, which builds the controller from the entity name, schema and `runSearch` callback.
+- `src/modules/payments/services/index.ts`: provides `paymentService`, whose `listPayments` does the actual search.
+- `src/modules/payments/routes.ts`: a neighbor in the dependency graph. The file's doc comment says `getPayments` handles both the GET and POST spellings, so the route wiring presumably lives there. The file itself doesn't show it.
 
 ## Notes
-
-- Two different HTTP verbs/paths are served by **one** exported handler (`getPayments`). The `createSearchController` factory abstracts away the verb/path difference; adding a third spelling would mean adding another route registration, not a new controller.
-- The query schema deliberately **extends** the generated `SearchPaymentsBody` rather than redefining fields, so the API contract (from `@api/schemas.zod`) stays the single source of truth for field names and types.
-- `blankToUndefined` on the amount fields means `?amountMin=` (empty value) is treated as "no filter" instead of producing a Zod parse error—relevant when building URLs by hand or with a query-string library that emits empty keys.
+- The base schema is `SearchPaymentsBody` from `@api/schemas.zod` (generated). It is reused for the query string, so the coercions above are the only differences from the POST body shape.
+- The service receives the authenticated context from `request.authContext`, which is passed alongside the parsed input.

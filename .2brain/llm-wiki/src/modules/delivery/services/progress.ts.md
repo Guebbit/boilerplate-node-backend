@@ -1,34 +1,34 @@
 ---
 source: src/modules/delivery/services/progress.ts
-sha256: d5ca125c1213aa3b3fae8423ef4f3dca9e8952f0e36caa7214d172e21bb944f4
-generated_at: 2026-11-14T19:49:02.045077+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 8ec5d810d2378f48f0325c745592c36580cab808f464d058342711edfead5ed6
+context_sha256: 6aa23e3dba4ba0bdb08fdef201fced6b1303097dccbca29e9307e68c97cd44e2
+generated_at: 2026-11-22T04:57:28.847900+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/progress.ts
 
 ## Purpose
-
-Bridge between delivery acts and the `orders` module. Inside an act's Mongoose transaction it recomputes the fulfillment summary from the delivery records themselves (never mutates it) and asks `orders` to move its status accordingly. `orders` remains the sole status writer; this file only requests the move and refuses the act when the order can no longer fulfil.
+Keeps the `orders` module in step with what delivery wrote, inside the act's transaction. The fulfillment summary is recomputed from the records themselves (never adjusted incrementally), and the order's status moves only when the summary says all goods have left or all have arrived. `orders` remains the only status writer; this file asks it to move, passing the act's session, and refuses the act when it cannot.
 
 ## Key elements
-
-- **`ProgressReport`** (interface) — the read/write snapshot returned by `reportProgress`: the order document, the recomputed `FulfillmentReport`, and the fulfillment orders and shipments as seen by the act.
-- **`reportProgress(orderId, session)`** — reads fulfillment orders and shipments sequentially (session constraint), calls `summarize` to build the summary, then delegates to `orderService.recordFulfillmentProgress`. Refuses the act (409 `DELIVERY_NOT_SHIPPABLE`) if the order is no longer shippable.
-- **`startFulfillment(order, session, actor)`** — performs the `paid → processing` transition via `orderService.markProcessing` when the order is still `paid`. No-op if already past `paid`; refuses (409 `ORDER_NOT_PAID`) if the order moved away from `paid` since the read.
-- **`settleOrder(orderId, at, session, actor)`** — asks `orderService.settleFulfillment` to pick the correct status edge (shipped, delivered, both, or lost-parcel cancel). Refuses (409 `ORDER_NOT_PROCESSING`) if the expected move didn't land. May return a post-commit callback when the settlement canceled the order (lost parcel); the caller owns the transaction and invokes it after commit.
+- `ProgressReport` — interface returned by `reportProgress`: the `order` as the summary write left it, the `summary` (`FulfillmentReport`), and the `fulfillmentOrders` and `shipments` that were read.
+- `reportProgress(orderId, session)` — reads all fulfillment orders, then all shipments (sequentially, since a transaction session does not allow parallel operations). It computes `summarize({ fulfillmentOrders, shipments })` and passes the result to `orderService.recordFulfillmentProgress`. If that returns nothing, it refuses with 409 `DELIVERY_NOT_SHIPPABLE` (`delivery.not-shippable`), e.g. because the order was canceled in the meantime.
+- `startFulfillment(order, session, actor)` — if `canProcessOrder(order.status)` is true, calls `orderService.markProcessing` to make the `paid → processing` move. Does nothing otherwise. Refuses with 409 `ORDER_NOT_PAID` (`delivery.not-paid`) if the order moved away from `paid` since the read.
+- `settleOrder(orderId, at, session, actor?)` — calls `orderService.settleFulfillment`. Refuses with 409 `ORDER_NOT_PROCESSING` (`delivery.not-processing`) if a due move found the order elsewhere. Otherwise it returns `settled.reportCanceled`, a report-after-commit callback that is set only when the settlement canceled the order (lost parcel).
 
 ## Relationships
-
-- **`src/modules/delivery/domain/fulfillment.ts` / `src/modules/delivery/domain/index.ts`** — imports `summarize` and the `FulfillmentReport` type; the summary passed to `orders` is produced by this module.
-- **`src/modules/delivery/repository.ts`** — imports `fulfillmentOrderRepository` and `shipmentRepository` to read the records the summary is computed from.
-- **`src/modules/delivery/model.ts`** — imports `FulfillmentOrderDocument` and `ShipmentDocument` types for the `ProgressReport` shape.
-- **`src/modules/delivery/services/act.ts`** — imports the `refuse` helper; every failure path throws an `ActRefusal` that aborts the act's transaction.
-- **`src/modules/delivery/services/ship.ts`, `src/modules/delivery/services/deliver.ts`, `src/modules/delivery/services/cancel-remainder.ts`, `src/modules/delivery/services/lost.ts`, `src/modules/delivery/services/reship.ts`, `src/modules/delivery/services/split.ts`, `src/modules/delivery/services/fulfill.ts`, `src/modules/delivery/services/ensure.ts`, `src/modules/delivery/services/holds.ts`, `src/modules/delivery/services/override-sync.ts`** — sibling act services that call the three exports above (typically `startFulfillment` → `reportProgress` → `settleOrder`) within their own transaction.
+- `./act` — supplies `refuse`, used for all three 409 refusals.
+- `../repository` — `fulfillmentOrderRepository` and `shipmentRepository` provide `findByOrderId(orderId, session)`.
+- `../domain` — supplies `summarize` and the `FulfillmentReport` type.
+- `../model` — supplies the `FulfillmentOrderDocument` and `ShipmentDocument` types.
+- `@modules/orders` — `orderService` (`recordFulfillmentProgress`, `markProcessing`, `settleFulfillment`), `canProcessOrder` and the `OrderDocument` type.
+- `@api/error-codes` — `ERROR_CODES` used in the refusals.
+- The other delivery services in the neighbor list (such as `ship`, `deliver`, `fulfill` and `lost`) sit alongside this file in `services/`. This file does not import them. Based on its doc comments, shipping and fulfilling digital goods start the order themselves through `startFulfillment`.
 
 ## Notes
-
-- **Sequential, not parallel, reads.** Mongoose transaction sessions do not support concurrent operations, so `reportProgress` chains two `.then()` calls rather than `Promise.all`.
-- **Ordering contract.** `startFulfillment` runs *before* `reportProgress`, and `reportProgress` runs *before* `settleOrder`, so settlement always sees the order in `processing`.
-- **Summary is always recomputed, never adjusted.** This file never writes to delivery collections; it only reads them and hands the result to `orders`.
-- **`settleOrder` can return a callback.** Callers must hold onto it and invoke it after their transaction commits (used for the lost-parcel cancellation path).
+- Call order inside an act: `startFulfillment` runs before `reportProgress`, so the summary write and `settleOrder` see `processing`.
+- `settleOrder` does not choose the status edge (ship, deliver, both, or the lost-parcel cancel); `orders` decides. This module only reports that goods moved.
+- `settleOrder`'s `at` is the instant the clock starts for a completed order: the last arrival, or the cancel time.
+- The caller owns the transaction. It must invoke the callback from `settleOrder` only after the transaction commits.
+- The `reportProgress` refusal covers the delivery side of a ship racing a cancel: only one can win.

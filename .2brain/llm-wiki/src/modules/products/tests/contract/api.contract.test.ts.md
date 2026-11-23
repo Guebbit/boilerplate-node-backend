@@ -1,43 +1,44 @@
 ---
 source: src/modules/products/tests/contract/api.contract.test.ts
-sha256: 602433be48b257e363d7681363f9f30ba943e90ffc619bc2941da2b9de5dd58b
-generated_at: 2026-11-14T21:30:09.304744+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4af9ffc06d747928d6daee63e0807867a7fe78b91aa0b38a365fa8dcb60a5dce
+context_sha256: c9dfaef8ea01e5a427ea0aeaa1fd60b937616b1413c8ee44f117aed0a6303d31
+generated_at: 2026-11-22T07:15:02.101014+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/tests/contract/api.contract.test.ts
 
 ## Purpose
-
-Contract tests for the `/products` endpoints. They assert that the wire response shape conforms to the OpenAPI contract (enforced by the `@tests/contract` setup, including `additionalProperties: false` to catch unexpected field leakage) and that a small set of behavioural guarantees—scope enforcement, pagination validation, filter limits, date formatting, and sort order—are actually exercised on the wire. They are not a replacement for unit/service tests; they exist to prove the contract surface and its edge cases.
+Contract tests for the `/products` endpoints. They check the shape of the wire response against `openapi.yaml`, including `additionalProperties: false`, which catches a field leaking into a payload. Behavioural rules, such as which products a role may see, live in the unit and service suites. These tests exist to make sure each contract branch is exercised.
 
 ## Key elements
-
-- **`setupTestDb()`** – Initialises an isolated test database before all suites in this file.
-- **`describe('GET /products — the filters it now publishes')`** – Verifies that `?title=` narrows results for an admin, that a stranger's scope still pins `active: true` (so `?active=false` does not leak unlisted rows), without pinning *how* the backend achieves that.
-- **`describe('GET /products')`** – Contract conformance for anonymous and admin callers, empty list, pagination; `it.each` over out-of-range `page`/`pageSize` expecting `422 application/problem+json`; blank params treated as absent; repeated `?id=` batch (valid, over-cap → 422, empty → 422, duplicate → 1 row, one malformed → 422); `?text=` over 200 chars → 422.
-- **`describe('POST /products/search')`** – Contract conformance; per-field (`title`/`category`/`tag`) 200-char limit on both body and query; a 100 KB nested-JSON body rejected with 400 before cache-key construction.
-- **`describe('promise dates on the list reads')`** – Asserts `releaseDate` and `restockDate` serialise as the shop-local date string (via `startOfShopDay`) on both GET and POST responses.
-- **`describe('sort — GET /products?sort= and POST /products/search { sort }')`** – Sort by one or more fields, ascending/descending (`-` prefix), case-insensitive text, multi-key priority, page-continuation consistency, array form in search body, repeated-key CSV equivalent, blank sort handling.
-- **`titlesOf`** – Small helper extracting the ordered `title` array from a paginated response body.
+- **`setupTestDb()`**: sets up the test database for the suite.
+- **`GET /products — the filters it now publishes`**: covers the `title` and `active` filters. `title` narrows results for staff and strangers. For a stranger, `active=false` must not expose unlisted products. The test asserts only that the unlisted product is absent, not how the scope achieves that.
+- **`GET /products`**: covers these cases:
+  - anonymous and admin callers, an empty list, and pagination;
+  - out-of-range or malformed `page` and `pageSize` return 422 with `application/problem+json`;
+  - blank pagination is treated as absent, giving defaults `page=1` and `pageSize=10`;
+  - repeated `?id=` works, but more than 100 ids returns 422;
+  - an empty `id` returns 422;
+  - a duplicated id collapses to one row;
+  - one malformed id in a batch returns 422;
+  - `text` over 200 characters returns 422.
+- **`the browser re-checks the product reads`**: a guest `GET /products` returns `cache-control: public, no-cache`. `POST /products/search` returns 200 with `no-store`.
+- **`POST /products/search`**: checks the contract, and that `title`, `category` and `tag` over 200 characters return 422 through both the body and the query string. A JSON body nested about 50k levels deep returns 400, not 500.
+- **`promise dates on the list reads`**: `releaseDate` and `restockDate` are serialised as shop-day strings (`2999-01-05`, `2999-02-10`) on both `GET /products` and `POST /products/search`.
+- **`titlesOf`**: local helper that returns the item titles of a list response in order.
+- **`sort — ...`**: covers `?sort=` on GET and `{ sort }` on POST. Three products (banana, Apple, cherry) are seeded in `beforeEach`. Cases include `-` for descending, case-insensitive text sorting, and multi-field ordering. The shown content ends partway through the sort tests.
 
 ## Relationships
-
-- **`tests/support/contract.ts`** (`@tests/contract`) – Side-effect import; registers automatic response shape-validation on every `api()` call so each endpoint's output is checked against the published contract, including `additionalProperties: false`.
-- **`tests/support/http.ts`** – Provides `api()` (supertest-style HTTP client) and `authenticateAs()` (Bearer-token auth) used throughout.
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` clears/seeds the test database at module load.
-- **`tests/support/environment.ts`** – `withEnvironmentOverrides` imported for environment-scoped test configuration (used in the truncated portion).
-- **`src/modules/products/tests/factories.ts`** – `createProduct()` builds fixture products with specified `title`, `price`, `active`, `releaseDate`, `restockDate`, etc.
-- **`src/modules/locales/tests/factories.ts`** – `givenLocale()` for locale-dependent fixtures (truncated portion).
-- **`src/modules/locales/index.ts`** – `localeService` imported for locale-aware assertions (truncated portion).
-- **`src/infrastructure/i18n/index.ts` / `overrides.ts`** – `refreshLocaleOverrides`, `registerLocaleOverrideProvider`, `resetLocaleOverrides` for i18n override lifecycle in tests (truncated portion).
-- **`src/modules/shop/index.ts`** – `startOfShopDay()` converts a calendar date to the shop's local midnight, used in date-formatting assertions.
-- **`src/modules/products/repository.ts`** – `productRepository` imported for direct data manipulation in the truncated portion.
+- `@tests/contract` is imported for its side effects, which enable the OpenAPI response validation.
+- `@tests/setup-test-db`, `@tests/http` (`api`, `authenticateAs`) and `@tests/environment` (`withEnvironmentOverrides`) provide the DB, HTTP client, auth and environment helpers.
+- `@modules/products/tests/factories` (`createProduct`) seeds products.
+- `@modules/locales/tests/factories` (`givenLocale`), `@modules/locales` (`localeService`) and `@infrastructure/i18n` (`refreshLocaleOverrides`, `registerLocaleOverrideProvider`, `resetLocaleOverrides`) are imported for locale and i18n setup. The visible portion does not use them.
+- `@modules/shop` provides `startOfShopDay`, used to build the promise-date fixtures.
+- `../../repository` (`productRepository`) is imported but not used in the visible portion.
 
 ## Notes
-
-- The file deliberately separates *contract shape* from *behavioural logic*. Comments call out that the stranger-scope test asserts the guarantee ("a stranger does not see unlisted rows") but not the mechanism, so a backend can change its merge strategy (overwrite vs. AND) without breaking the test.
-- Pagination validation: out-of-range values → `422 problem+json`; *blank* values (`?page=&pageSize=`) → treated as absent, defaults returned. This distinction is intentional and tested explicitly.
-- The 200-character text limit comes from a shared `Text` schema referenced via `$ref`; the test documents that this is inherited by every search endpoint.
-- The depth-guard test constructs a ~100 KB JSON string of nested arrays to verify the server rejects it with 400 *before* building a cache key, protecting against both DoS and cache-pollution.
-- `additionalProperties: false` in the OpenAPI spec is the mechanism that would flag an unexpected field leaking into the payload; the `@tests/contract` import is what enforces it on every response automatically.
+- The `withEnvironmentOverrides`, locale, i18n and `productRepository` imports have no visible use in the shown portion. They are presumably used in the rest of the file.
+- The comments reference a PHP twin implementation. The stranger-scope assertion is deliberately written so that it does not depend on how each backend enforces the scope.
+- Pagination bounds and the 200-character text cap come from shared schemas (`@infrastructure/http/schemas` and `shared/contracts/openapi.root.yaml`). Other search endpoints inherit them.
+- The depth-limit test expects the guard to reject the body before the response-cache key is built.

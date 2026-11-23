@@ -1,34 +1,28 @@
 ---
 source: scripts/audit/code-shape/scripts/generate-shallow-candidates.ts
-sha256: d9b559b9dafcb76de2c2bbccae0b9813cf31db2c00aa9abecbf07858328a1f8d
-generated_at: 2026-11-14T17:20:24.583525+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T01:51:36.652063+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/audit/code-shape/scripts/generate-shallow-candidates.ts
 
 ## Purpose
-
-CLI entry point for the `code-shape` audit's shallow-candidate pass. It builds a TypeScript program from the repo's `tsconfig.json`, runs the `findShallowCandidates` counting logic over the requested scope, and writes the resulting report to `<out>/shallow.json`. It exists as a separate file from the pure counting module so that unit tests can import `findShallowCandidates` without triggering this script's side effects (arg parsing, FS writes, console output).
+CLI entry point for the `code-shape` audit's "shallow candidates" pass. It builds a TypeScript program for the whole repo, runs `findShallowCandidates` over a chosen scope, and writes the result to `<out>/shallow.json` inside the run's report folder. It is kept separate from `./shallow-candidates.ts` so that module's counting logic can be unit-tested without executing this script's side effects.
 
 ## Key elements
-
-- **`DEFAULT_SCOPE`** – Array `['src', 'scripts', 'scenarios', 'tests/support']`; used when the caller supplies no explicit path arguments.
-- **`outIndex` / `outDirectory`** – Parses `--out <dir>` from `process.argv`; throws immediately if `--out` is absent.
-- **`scopeArguments`** – Remaining argv entries after stripping `--out` and its value; becomes the scan scope if non-empty.
-- **`OUTPUT`** – Resolved absolute path `<REPO_ROOT>/<outDirectory>/shallow.json`.
-- **`rawConfig` / `parsed` / `program`** – Three-step TypeScript Compiler API setup: read `tsconfig.json` via `ts.readConfigFile`, expand `include` globs into a file list via `ts.parseJsonConfigFileContent`, then build a full program via `ts.createProgram` for import resolution.
-- **`report`** – The result of `findShallowCandidates(program, REPO_ROOT, scope)`; contains `smallAndRare`, `passThroughs`, `optionalNeverPassed`, and `lazyFiles` arrays.
-- **Write + summary** – `mkdirSync` (recursive) ensures the report folder exists, `writeFileSync` emits pretty-printed JSON, and a `console.log` line prints per-category counts and the relative output path.
+- **Usage**: `npm run audit:shallow -- --out <dir> [path...]`. Positional arguments are repo-relative path prefixes.
+- **`DEFAULT_SCOPE`**: `src`, `scripts`, `scenarios`, `tests/support`. This is used when no paths are given.
+- **`--out` parsing**: reads `--out <dir>` from `process.argv`. If it is missing, the script throws a usage error. The remaining arguments (with `--out` and its value removed) become `scopeArguments`.
+- **`OUTPUT`**: `<REPO_ROOT>/<out>/shallow.json`.
+- **Program construction**: reads `tsconfig.json` with `ts.readConfigFile`, expands it with `ts.parseJsonConfigFileContent`, and creates one `ts.createProgram` for the whole project so the checker can resolve every import.
+- **Report**: calls `findShallowCandidates(program, REPO_ROOT, scope)`. It creates the output directory, then writes `{ scope, ...report }` as pretty-printed JSON.
+- **Console summary**: prints the counts of `smallAndRare`, `passThroughs`, `optionalNeverPassed` and `lazyFiles`, followed by the output path relative to the repo root.
 
 ## Relationships
-
-- **`scripts/audit/code-shape/scripts/shallow-candidates.ts`** – Imported for `findShallowCandidates`, the pure function that actually inspects the program and returns the candidate lists. This file couples that function to a specific program instance and file output.
-- **`scripts/modules-on-disk.ts`** – Imported for `REPO_ROOT`, the single source of truth for the repository's absolute root path, used for constructing the output path and resolving the compiler config.
+- Imports `findShallowCandidates` from `./shallow-candidates`, which holds the analysis. This file only handles arguments, program setup and output.
+- Imports `REPO_ROOT` from `scripts/modules-on-disk.ts`. It uses it to resolve the output path, locate the project config, and make the output path repo-relative in the console message.
 
 ## Notes
-
-- The script is top-level (no `main()` wrapper); all logic runs at module load. Importing it for any reason will execute the full pipeline and write to disk.
-- `--out` must be the **first** recognised flag; its value is always the next argv slot. Any other `--flag` tokens are silently treated as scope paths.
-- The JSON payload is `{ scope, ...report }` — the `scope` array is embedded so a reader of `shallow.json` can tell which directories were scanned without re-deriving it from the CLI invocation.
-- Per the module docstring, this script is governed by `scripts/audit/RULES.md` rules 1 and 4: it writes *only* to the `--out` directory and only to `shallow.json`.
+- All work runs at module top level with no exported functions. Importing the file triggers the audit.
+- Output goes only to the `--out` folder, per the audit rules cited in the file (rules 1 and 4 of the audit's `RULES.md`).
+- The program covers every file in the parsed `tsconfig.json` file list, regardless of scope. The scope is only passed to `findShallowCandidates`.

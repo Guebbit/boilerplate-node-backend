@@ -1,32 +1,28 @@
 ---
 source: src/modules/payments/index.ts
-sha256: 6b108e6428e32661d42f166838a13220322ff9e3745449c9bbe0fbce097e6806
-generated_at: 2026-11-08T07:21:19.681236+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T06:45:27.160613+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/index.ts
 
 ## Purpose
-
-Public barrel (barrel export) for the payments module. It is the **only** import surface that sibling modules are permitted to use, enforcing the strategic-DDD rule documented in `docs/theory/strategic-ddd.md` §5. Internals such as `paymentRepository` and the model's runtime stay hidden; all writes are routed through the provider-confirmed choreography in `services/settlement.ts` rather than exposed as direct document writes.
+Public barrel for the payments module. Per its doc comment, it is the only surface a sibling module may import. It re-exports the module's services, domain, events, emails and model types. `paymentRepository` and the model's runtime stay internal. All writes must go through the provider-confirmed choreography in `services/settlement.ts`, never through a direct document write from outside.
 
 ## Key elements
-
-- **`export * from './services'`** — re-exports all service functions (including `settlement` choreography) so callers never reach into the repository directly.
-- **`export * from './domain'`** — re-exports domain entities, value objects, and business rules.
-- **`export * from './events'`** — re-exports payment domain event definitions.
-- **`export * from './emails'`** — re-exports payment-related email template builders.
-- **`export type * from './model'`** — type-only re-export of the persistence model (interfaces / types), intentionally **not** a value export, keeping the runtime model private.
+- `export * from './services'`: public service functions.
+- `export * from './domain'`: domain exports.
+- `export * from './events'`: payments event exports.
+- `export * from './emails'`: payments email exports.
+- `export type * from './model'`: model types only. The model's runtime values are deliberately not exported.
 
 ## Relationships
-
-- **Downstream (re-exported):** `./services`, `./domain`, `./events`, `./emails`, `./model` — this file exists solely to aggregate them into one import path.
-- **Upstream consumers (sibling modules):** `src/modules/cart/services/checkout.ts`, `src/modules/invoicing/module.ts`, `src/modules/invoicing/services/issue-credit-note.ts`, `src/modules/returns/module.ts` all import from this barrel rather than reaching into sub-paths.
-- **Test / double surfaces:** `scenarios/support/doubles/payments/levers.ts` and the various integration/contract tests (`checkout.interleavings`, `product-removal-protects-orders`, `credit-note-catch-up`, `issue-credit-note`, `shop.contract`) depend on the types and service signatures exposed here.
+- Re-exports `src/modules/payments/services/index.ts`, `src/modules/payments/domain/index.ts`, `src/modules/payments/events.ts`, `src/modules/payments/emails.ts` and `src/modules/payments/model.ts` (types only).
+- Other modules linked to it in the graph include `src/modules/cart/services/checkout.ts`, `src/modules/invoicing/module.ts`, `src/modules/invoicing/services/issue-credit-note.ts` and `src/modules/returns/module.ts`.
+- Several tests also depend on it: `src/modules/account/tests/contract/shop.contract.test.ts`, the cart integration tests (`src/modules/cart/tests/integration/checkout-interleavings.test.ts`, `src/modules/cart/tests/integration/product-removal-protects-orders.test.ts`) and the invoicing integration tests (`src/modules/invoicing/tests/integration/credit-note-catch-up.test.ts`, `src/modules/invoicing/tests/integration/issue-credit-note.test.ts`).
+- `scenarios/support/doubles/payments/levers.ts` is also linked to it in the graph.
 
 ## Notes
-
-- The `export type *` (type-only) on `./model` is deliberate: importing a *value* from `./model` outside the module would bypass the settlement choreography. If you find yourself needing a runtime symbol from the model, it's a sign the service layer is missing a function.
-- This file is a pure re-export; it contains no logic, no side effects, and no runtime code of its own. It can be read in under a second, but the barrel boundary it enforces is the whole point.
-- Reference doc: `docs/modules/payments.md`.
+- The barrel contains no logic, only re-exports.
+- Using `export type *` for the model keeps the runtime model and `paymentRepository` out of the public surface.
+- The doc comment also references two documentation pages on the "published language — the barrel" and the payments module's neighbourhood.

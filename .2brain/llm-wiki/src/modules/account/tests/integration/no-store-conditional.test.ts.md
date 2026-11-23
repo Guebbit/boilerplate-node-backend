@@ -1,33 +1,31 @@
 ---
 source: src/modules/account/tests/integration/no-store-conditional.test.ts
-sha256: 3144d3a509f684f2357653a3969590e2fe9ca685bc83862bf037db1c360d42fc
-generated_at: 2026-11-14T19:05:24.156429+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 82f59acf978cce47941fe239152b147823b1e8e36dcbd52cb7282bc1ccbc8781
+context_sha256: 15734782a2660477def6808ea12388d4df4b92d6117c1194dac45ac552475d9a
+generated_at: 2026-11-22T03:57:12.242059+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/tests/integration/no-store-conditional.test.ts
 
 ## Purpose
-
-Integration test verifying that the origin still honours `If-None-Match` and returns a 304 on a `no-store` endpoint, per RFC 9110 §13.1.2. `no-store` constrains *caches*, not the origin server, so the account router must answer conditionals even when its `Cache-Control` header is `no-store`.
+Integration test verifying that a `no-store` response still honors conditional requests. Per RFC 9110 §13.1.2, `no-store` binds caches, not the origin, so the origin must still evaluate `If-None-Match`. The account router mounts the `noStore` middleware, so `GET /account/sessions` serves as the probe.
 
 ## Key elements
-
-- **`setupTestDb()`** — call made once at module scope to provision a clean test database before the suite runs.
-- **`describe('GET /account/sessions with its own tag', …)`** — single test case that:
-  - Authenticates a user via `authenticateAs('user')`.
-  - Fires a **warm-up** `GET /account/sessions` to flush the throttled `lastUsedAt` write so the body stabilises.
-  - Captures the `ETag` from a second (first "real") response.
-  - Re-issues the same `GET` with `If-None-Match` set to that ETag.
-  - Asserts: status 304, empty body, ETag preserved, and `cache-control: no-store` still present on the 304.
+- `setupTestDb()` — called at module level to prepare the test database.
+- `describe('GET /account/sessions with its own tag')` with one test: *answers an empty 304 that keeps the ETag and no-store*.
+  - Authenticates as `'user'` via `authenticateAs` and uses the returned `bearer` token.
+  - Makes a warm-up request, then a second request to capture `first` and its `etag`.
+  - Replays the request with `If-None-Match: <first etag>` and asserts:
+    - status is `304`
+    - body text is `''`
+    - the `etag` header equals the first response's
+    - `cache-control` is `no-store`
 
 ## Relationships
-
-- **`tests/support/http.ts`** — supplies the `api()` request helper (wraps a supertest/fetch client) and `authenticateAs()` which returns a bearer token for a seeded user.
-- **`tests/support/setup-test-db.ts`** — `setupTestDb()` initialises and seeds the in-memory/test database so the sessions table exists for the endpoint under test.
+- `tests/support/http.ts` — supplies `api()` (HTTP client for requests) and `authenticateAs()` (returns a `bearer` Authorization value), imported via the `@tests/http` alias.
+- `tests/support/setup-test-db.ts` — supplies `setupTestDb()`, imported via the `@tests/setup-test-db` alias.
 
 ## Notes
-
-- The warm-up request is intentional: the sessions endpoint throttles `lastUsedAt` writes, so the very first read after sign-in can mutate the row and change the body (and therefore the ETag). Skipping it makes the assertion flaky.
-- The probe endpoint is `GET /account/sessions` specifically because the account router attaches the `noStore` header middleware there; other routes may not.
-- The 304 response is expected to carry **no body** (`text === ''`) but **must** repeat the ETag and `no-store` header—this is the contract under test.
+- The warm-up request exists because the session's `lastUsedAt` is throttled: the first read after sign-in may touch the row and change the body (and thus the ETag). Without it, the tag could be stale by the time of the conditional request.
+- The test relies on the account router applying `noStore`; the endpoint is chosen for that reason, not for anything specific to sessions.

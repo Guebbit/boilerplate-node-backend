@@ -1,54 +1,50 @@
 ---
 source: src/modules/account/session/cookie-strategy.ts
-sha256: d73f3350b21b9692a59f8bd9f75e3c6c61d0abe600671f785e0988b8edf60945
-generated_at: 2026-11-14T18:56:12.360345+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 355e331a01ea9dedecbd01ddd66e4a0c2fb5ebbfcc4592617739d10fc4e709fd
+context_sha256: ac20bf2790b88e85f8ac69789e92dff5f08ab236563a748c8c20769d524a67b1
+generated_at: 2026-11-22T03:45:53.449025+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/session/cookie-strategy.ts
 
 ## Purpose
-
-Implements the **cookie** session strategy: a single random session ID (stored only as its SHA-256 hash in a `sessions` row) that travels to browsers in an HttpOnly `__Host-session` cookie and to other clients as a `ses_…` Bearer token. No signing key, no refresh token, no rotation race — logging out is a row delete and the row is read on every request anyway. This file provides the full lifecycle: issue, resolve, replace (OWASP id renewal), and retire sessions.
+Implements the `cookie` session mode: one random session id per sign-in, stored server-side only as its sha256 in a `sessions` row. Browsers carry it in an HttpOnly `__Host-session` cookie; other clients receive it as `ses_…` and send it as `Authorization: Bearer`. There is no signing key, refresh or rotation race, and logout is a row delete.
 
 ## Key elements
-
-- **`storeSession`** — Generates a new session ID, inserts a `sessions` row (hashing the ID via `hashToken`), and returns the plaintext ID (its only moment in memory) plus the computed expiry.
-- **`deliver`** — Hands the issued credential to the client: sets the `__Host-session` cookie for browsers or returns `{ sessionToken }` for Bearer consumers.
-- **`credentialOf`** / **`transportOf`** — Extract the presented credential and determine whether it arrived as Bearer or cookie, controlling how a replacement is handed back.
-- **`snapshotOf`** — Reads the caller's current row to capture `familyId`, `startedAt`, `expiresAt`, `device`, and `remember` for inheritance on replacement.
-- **`replaceSession`** — Stores the successor row first, then deletes the old row; a failure between the two leaves two sessions rather than none.
-- **`retirePresentedSession`** — Deletes the entire family a new sign-in supersedes; same store-first safety pattern.
-- **`findLiveRow`** — Resolves a presented ID to a live `cookie`-mode row; distinguishes `malformed`, `revoked` (other mode or JWT), and `expired` misses.
-- **`resolveRowProof`** — Delegates to `resolveProof` to turn a row's `authTime`/`amr` into an `AuthContext`.
-- **`resolveSession`** — Full per-request resolution: find row → resolve proof → enforce idle/staff-cap limits (deleting the family on breach) → fire-and-forget `lastUsedAt` stamp.
-- **`stampDue`** — Returns whether `lastUsedAt` is missing or older than one minute, gating the throttled write.
-- **`rememberOf`** — Maps a stored tier value back to the `RememberTier` enum (or `undefined`).
-- **`USE_STAMP_INTERVAL_MS`** — Constant (`MINUTE_MS`) controlling how often a busy tab may write `lastUsedAt`.
-- **`Inherited`** — Type for the fields a replacement session carries forward from its predecessor.
+- `USE_STAMP_INTERVAL_MS` – `lastUsedAt` is written at most once per minute (`MINUTE_MS`).
+- `rememberOf(row)` – maps a row's stored `remember` string back to a `RememberTier`, or `undefined` for a browser-session login.
+- `storeSession(userId, proof, remember, inherited)` – generates a new id, inserts a `mode: 'cookie'` row (hashed token, `authTime` in seconds, `amr`, expiry, optional device and `familyId`/`startedAt`/`expiresAt` inherited from a replaced session), records activity, and returns the plaintext id and expiry.
+- `deliver(response, started, remember, transport)` – for `bearer` transport returns `{ sessionToken }`. Otherwise it sets the session cookie, persistent only for remembered sessions.
+- `credentialOf(request)` – takes the `ses_…` bearer if present, else the session cookie.
+- `transportOf(request)` – `bearer` if `request.sessionVia === 'bearer'`, else `cookie`.
+- `snapshotOf(request, userId)` – reads the caller's own cookie-mode row (must belong to `userId`) and returns its remember tier, family, start, expiry and device. It returns `{}` if there is no live session.
+- `replaceSession(...)` – stores the successor first, then deletes the old row. A failure in between leaves two sessions rather than none. A delete failure is logged and swallowed.
+- `retirePresentedSession(request)` – on a new sign-in, removes the whole family of the presented session, with the same store-first logic and a logged, swallowed failure.
+- `stampDue(row)` – whether `lastUsedAt` is missing or older than the interval.
+- `findLiveRow(id)` – returns a `Resolution` with a miss of `malformed`, `revoked` (unknown, other-mode, or a JWT left over from `jwt` mode) or `expired`, else `ok: row`.
+- `resolveRowProof(row)` – calls `resolveProof` with the row's `authTime` and `amr`.
+- `resolveSession(id, options)` – resolves an id to an `AuthContext`:
+  - Ends the whole family and answers `idle` for a staff session idle past its limit.
+  - Ends the whole family and answers `expired` for a staff session past its absolute cap.
+  - Otherwise stamps `lastUsedAt` fire-and-forget via `sessionRepository.touch` when the stamp is due and the request is not `passive`. It then calls `recordActivity`, and a failure is logged.
 
 ## Relationships
-
-- **`@kernel/cookies`** — `bearerOf` and `readSessionCookie` extract the credential from incoming requests.
-- **`@kernel/authentication`** — Provides the `Resolution<T>` tagged-union type used throughout for typed miss/ok results.
-- **`@infrastructure/security/hash-token`** — `hashToken` produces the SHA-256 stored in the row; the plaintext ID never persists.
-- **`@infrastructure/adapters/logger`** — Warns on non-fatal failures (retire, stamp) without interrupting the request.
-- **`@domain-primitives/time`** — Supplies `MINUTE_MS` for the activity-stamp throttle.
-- **`../repository`** — `sessionRepository` is the sole data-access point for `sessions` rows; `SessionRow` is the row shape.
-- **`./activity`** — `recordActivity` is called after a successful store or stamp to update the account-level activity clock.
-- **`./auth-context`** — `resolveProof` converts a row's `authTime`/`amr` into the `AuthContext` the caller sees.
-- **`./config`** — `getExpiryTimeMilliseconds` computes the absolute expiry from the remembered tier.
-- **`./device-label`** — `describeDevice` (imported for row construction context).
-- **`./listing`** — `listSessions` (imported, likely for the strategy interface surface).
-- **`./idle`** — `hasIdledOut` and `hasOutlivedStaffCap` gate resolution and trigger family deletion.
-- **`./family-liveness`** — `resolveInLiveFamily` (imported for strategy completeness).
-- **`./mint-guard`** — `assertProofCurrent` and `assertSecondFactor` guard the mint/re-mint path.
-- **`./cookies`** — `createSessionCookie` sets the `__Host-session` response cookie.
+- **`../repository`** – `sessionRepository` (`insert`, `findByHash`, `removeByHash`, `removeFamilyByHash`, `removeFamily`, `touch`) and the `SessionRow` type are the persistence layer.
+- **`@infrastructure/security/hash-token`** – `hashToken` hashes ids before storage and lookup.
+- **`@kernel/cookies`** – `bearerOf` and `readSessionCookie` extract credentials. `./cookies` supplies `createSessionCookie`.
+- **`@kernel/authentication`** – supplies the `Resolution` and `StreamWatch` types.
+- **`./auth-context`** – `resolveProof` builds the `AuthContext`.
+- **`./config`** – `getExpiryTimeMilliseconds(remember)` gives the lifetime per tier.
+- **`./idle`** – `hasIdledOut` and `hasOutlivedStaffCap` apply the staff limits.
+- **`./activity`** – `recordActivity` is called after inserts and stamps.
+- **`./mint-guard`**, **`./family-liveness`**, **`./listing`**, **`./device-label`** – imported helpers (`assertProofCurrent`, `assertSecondFactor`, `resolveInLiveFamily`, `listSessions`, `describeDevice`). The visible part of the file does not show their use.
+- **`@infrastructure/adapters/logger`** – the `logger` is used to report non-fatal cleanup and stamp failures.
+- **`@domain-primitives/time`** – `MINUTE_MS`.
 
 ## Notes
-
-- **Store-first, delete-second.** Both `replaceSession` and `retirePresentedSession` insert the new row before removing the old one. A crash between the two leaves two live sessions — never zero.
-- **Fire-and-forget stamp.** The `lastUsedAt` write in `resolveSession` is `void`-ed and caught; a lost stamp only costs a stale reading, never a failed request. The throttle check reuses the row already in hand, so a busy tab adds no extra query.
-- **`authTime` semantics.** Set at login and renewed only by an explicit reauth call — keeping a session alive does not reset it, so step-up behaves identically to `jwt` mode.
-- **JWT in the cookie slot.** If a value that `looksLikeJwt` appears where a session ID is expected, it is classified as `revoked` (stale from a mode switch), not `malformed`.
-- **`rememberOf`** returns `undefined` (not a default tier) for browser-session logins, which propagates as "no explicit tier" into expiry calculation.
+- `authTime` is set at login and renewed only by `POST /account/reauth`, never by use. Step-up therefore behaves as in `jwt` mode.
+- The id is replaced on every re-proof, as OWASP advises for a privilege change. The session keeps its public id (`familyId`), start time and absolute expiry.
+- A non-remembered session's cookie is a browser-session cookie, but its server-side limit is still the `short` tier. A remembered cookie lasts until the row's expiry, with a minimum of 1 second.
+- The plaintext id exists only at creation, and only the hash is persisted.
+- `lastUsedAt` housekeeping is off the request path, so a lost write only makes the stored reading stale.

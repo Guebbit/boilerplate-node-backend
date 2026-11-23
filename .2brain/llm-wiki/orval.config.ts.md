@@ -1,32 +1,29 @@
 ---
 source: orval.config.ts
-sha256: 5d0a191693d072ef00eb3265f262589dad6c2eac3224665c14d0096451f0aa75
-generated_at: 2026-11-08T02:26:19.002234+00:00
-model: ollama:qwen3.8:27b
+source_sha256: bdceae38555706e0b0567f48655b430df30f5e28b2fef7ccca507145c01f129d
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T01:40:28.910274+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # orval.config.ts
 
 ## Purpose
-
-Configures Orval to generate TypeScript model types and Zod validators from `openapi.yaml`. The project is a backend that only consumes generated types (`@api/models`) and validators (`@api/schemas.zod`) — it does not use any HTTP-client or data-fetching hooks, so the `zod` client is the sole generation target.
+Orval configuration that generates TypeScript model types and Zod validators from `openapi.yaml`. The project only consumes generated types and Zod schemas (no in-repo HTTP client), so a single `zod` client block covers everything.
 
 ## Key elements
-
-- **`zodSchemas`** (default export via `defineConfig`) — the single config block; input is `./openapi.yaml`.
-- **`output.mode: 'single'`** — all generated operation schemas land in one file rather than being split by tag.
-- **`output.target: './api/schemas.zod.ts'`** — where the Zod validator module is written.
-- **`output.schemas: './api/models'`** — directory for raw TypeScript model interfaces.
-- **`output.client: 'zod'`** — generates types + validators only; no `fetch`/`axios`/`react-query` call functions.
-- **`override.zod.strict`** (`{ query, body, response: true }`) — forces Zod `.strict()` on all three surfaces so unknown keys are *rejected* rather than silently stripped.
-- **`override.zod.generateEachHttpStatus: true`** — emits one schema per documented status code (e.g. `Login200Response`, `Login422Response`) instead of a single success-only schema per operation.
+- **Default export (`defineConfig`)**: declares one target, `zodSchemas`, with input `./openapi.yaml`.
+- **`mode: 'single'`**: all generated Zod code goes into a single output file, set by `target`.
+- **`target`**: the output path of the generated Zod schemas, under `./api.generated/` (a generated artifact, not a source file in the repo).
+- **`schemas: './api.generated/models'`**: raw model interfaces are emitted here, regardless of client choice.
+- **`client: 'zod'`**: generates schemas and types only, with no call functions. Other clients (fetch, axios, react-query, hono, mcp, etc.) are documented in comments as not applicable.
+- **`override.zod.strict`**: `{ query: true, body: true, response: true }`. Unknown keys are rejected rather than silently stripped by Zod. Strict response makes the contract test an over-serialization guard, and strict query turns undeclared parameters into a 422.
+- **`override.zod.generateEachHttpStatus: true`**: emits one schema per documented status (e.g. `Login200Response`, `Login422Response`), so error responses can be validated too.
 
 ## Relationships
-
-No graph neighbors.
+No graph neighbors; the file imports only `defineConfig` from the `orval` package. Its comments mention consumers of the generated output (type and validator import aliases, a contract test helper, and a fuzz test suite), but the config does not reference or depend on them directly.
 
 ## Notes
-
-- **`strict` is load-bearing.** Without it, Orval emits plain `zod.object({...})`, which Zod treats as *strip* mode: unknown keys are silently discarded. That makes the generated validator *weaker* than the OpenAPI contract and defeats the over-serialization guard in `tests/support/contract.ts`.
-- **`generateEachHttpStatus` is load-bearing.** The contract-test harness and the fuzz suite (`tests/fuzz/endpoints.fuzz.test.ts`) validate *error* responses (401, 422) against their own declared shapes. Without this flag only the single success branch receives a schema.
-- The `client` field is effectively documentation here: the only valid value for this project's needs is `'zod'`. Switching to `'hono'` (the other backend-oriented option) would pull in the Hono framework, which this repo does not use.
+- The strict settings rely on the spec's fragments declaring `additionalProperties: false`. Without `strict`, orval emits a plain `zod.object`, which would be weaker than the contract.
+- Changing `client` away from `'zod'` would only make sense if something in-repo consumed the generated callers.
+- The `hono` client requires Hono, not Express, according to the comments.

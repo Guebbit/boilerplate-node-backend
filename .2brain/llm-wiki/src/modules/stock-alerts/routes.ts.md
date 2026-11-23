@@ -1,34 +1,28 @@
 ---
 source: src/modules/stock-alerts/routes.ts
-sha256: 271bd9877479afd89b55d39af4514458256d58fc65420a1946ab2e2a81897e95
-generated_at: 2026-11-08T08:29:38.753932+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 271bd9877479afd89b55d39af4514458256d58fc65420a1946ab2e2a81897e95
+context_sha256: dfa1c586f4847e87d78204d2080e4d9ad6ce119330aa993be92e858ec4a071f8
+generated_at: 2026-11-22T07:55:23.500291+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/stock-alerts/routes.ts
 
 ## Purpose
-
-Express route table for the stock-alerts (back-in-stock) feature. Defines the three HTTP endpoints (list, ask, cancel) and applies authentication to every route. No admin/permission key is required — the same "signed-in only" pattern used by the wishlist module.
+Defines the Express router for back-in-stock requests. Users can ask to be notified about a product, cancel that request, or list their own requests. The whole router requires authentication and has no admin or permission-key checks, as with the wishlist.
 
 ## Key elements
-
-- **`router`** (exported) — the Express `Router` instance that the module mounts.
-- **`router.use(getAuth, isAuth)`** — global middleware for every route in this table; enforces a valid session without checking any role.
-- **`GET /`** → `getStockAlerts` — list the caller's alerts.
-- **`POST /`** → `postStockAlerts` — create an alert; the product goes in the request body. Intended to be idempotent (re-sending is a no-op).
-- **`DELETE /:productId`** → `deleteStockAlert` — cancel a pending alert by product ID.
+- `router`: the exported Express `Router`.
+- `router.use(getAuth, isAuth)`: applies authentication to every route below it. The code comment says this is so account erasure covers the rows.
+- `GET /` → `getStockAlerts`: lists stock alerts.
+- `POST /` → `postStockAlerts`: creates a request, with the product in the request body. The comment says repeating it is the same request.
+- `DELETE /:productId` → `deleteStockAlert`: cancels a request before it is answered.
 
 ## Relationships
-
-- **`src/kernel/middlewares/authorizations.ts`** — source of `getAuth` and `isAuth`, applied as route-level middleware before any controller runs.
-- **`src/modules/stock-alerts/controllers/get-stock-alerts.ts`** — handler for `GET /`.
-- **`src/modules/stock-alerts/controllers/post-stock-alerts.ts`** — handler for `POST /`.
-- **`src/modules/stock-alerts/controllers/delete-stock-alert.ts`** — handler for `DELETE /:productId`.
-- **`src/modules/stock-alerts/module.ts`** — sibling in the same feature directory; this file is its route table (the `@module` annotation and directory convention indicate module.ts mounts `router`).
+- `src/kernel/middlewares/authorizations.ts`: supplies `getAuth` and `isAuth`, which guard the whole router.
+- `src/modules/stock-alerts/controllers/get-stock-alerts.ts`, `src/modules/stock-alerts/controllers/post-stock-alerts.ts` and `src/modules/stock-alerts/controllers/delete-stock-alert.ts`: supply the handlers for the three routes.
+- `src/modules/stock-alerts/module.ts`: a neighbor in the dependency graph. This file does not show how the router is mounted. The comments imply the `/stock-alerts` base path.
 
 ## Notes
-
-- The file deliberately omits any permission/authorization-key middleware; "signed-in" is the entire access model. Do not add role checks here without a product decision.
-- `DELETE` keys on `:productId`, not an alert ID — the assumption is one alert per product per user.
-- The POST idempotency note ("Repeating it is the same request") is a contract for the controller, not something this file enforces.
+- The route comments show paths as `/stock-alerts`, but the router itself registers `/` and `/:productId`. The prefix is applied outside this file.
+- Authentication is applied before any route is registered, so there are no unauthenticated endpoints.

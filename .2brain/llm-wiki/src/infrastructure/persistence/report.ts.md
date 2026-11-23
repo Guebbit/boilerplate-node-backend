@@ -1,32 +1,33 @@
 ---
 source: src/infrastructure/persistence/report.ts
-sha256: 541b6b602d03baa9303a1ac8afa0db37966638dcce2c5240af1207fe801085dc
-generated_at: 2026-11-08T03:44:04.605793+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 541b6b602d03baa9303a1ac8afa0db37966638dcce2c5240af1207fe801085dc
+context_sha256: 271a94c753d1167df460f6cd14e848d71184cedbf9fc47be1451afde21569936
+generated_at: 2026-11-22T03:03:49.944889+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/persistence/report.ts
 
 ## Purpose
-
-Shared building blocks for MongoDB grouped reads used across stats endpoints: a half-open time window with a bucket interval and IANA time zone, plus the `$dateTrunc` aggregation expression that buckets a date field in that zone. It is intentionally module-agnostic so every owner module (invoicing, orders, payments, returns) reuses the same window/bucketing contract without duplicating logic.
+Holds the shared building blocks for grouped (time-bucketed) reads behind the stats. It defines a half-open date window with a bucket size and time zone, plus the MongoDB `$dateTrunc` expression that buckets a date field in that zone. It is not stats-specific: each owner module uses it for its own grouped read.
 
 ## Key elements
-
-- **`ReportInterval`** (type) — the three allowed bucket sizes: `'day' | 'week' | 'month'`.
-- **`ReportWindow`** (interface) — the shape a grouped read is asked about: `from` (included), `to` (excluded), `interval`, and `timeZone` (IANA string defining where local midnight cuts the bucket).
-- **`bucketOf(field, window)`** (function) — returns a ready-to-embed `$dateTrunc` aggregation object for a given date field. Emits `startOfWeek: 'monday'` only when `interval === 'week'`; omits it otherwise.
+- `ReportInterval`: union type `'day' | 'week' | 'month'`, the allowed bucket sizes.
+- `ReportWindow`: interface describing what a grouped read is asked about:
+  - `from`: first instant included.
+  - `to`: first instant excluded.
+  - `interval`: the bucket size.
+  - `timeZone`: IANA zone; a bucket starts at local midnight there.
+- `bucketOf(field, window)`: returns a `$dateTrunc` expression (`date`, `unit` = interval, `timezone`) for the given date field (passed with its `$`).
 
 ## Relationships
-
-- **Consumed by** `src/modules/invoicing/repository.ts`, `src/modules/payments/repository.ts`, `src/modules/returns/repository.ts` — these repositories embed `bucketOf` in their aggregation pipelines for grouped reads.
-- **Consumed by** `src/modules/invoicing/services/stats.ts`, `src/modules/orders/services/stats.ts`, `src/modules/payments/services/stats.ts`, `src/modules/returns/services/stats.ts` — stats services build a `ReportWindow` and pass it into the corresponding repository.
-- **`src/modules/stats/services/range.ts`** — provides the time-range logic that populates the `from`/`to`/`timeZone` fields of a `ReportWindow` before it reaches a stats service.
-- **Tested by** `tests/unit/infrastructure/persistence/report.test.ts`.
+- Graph neighbors on the repository side: `src/modules/invoicing/repository.ts`, `src/modules/payments/repository.ts` and `src/modules/returns/repository.ts`.
+- Graph neighbors on the stats-service side: `src/modules/invoicing/services/stats.ts`, `src/modules/orders/services/stats.ts`, `src/modules/payments/services/stats.ts` and `src/modules/returns/services/stats.ts`.
+- `src/modules/stats/services/range.ts` is a graph neighbor. This file does not show how the two interact.
+- Covered by `tests/unit/infrastructure/persistence/report.test.ts`.
+- Money is read by `toMinorUnits` from `@domain-primitives/money`, which is referenced in the module doc but not imported here.
 
 ## Notes
-
-- The window is **half-open**: `from` is inclusive, `to` is exclusive. Callers must not treat `to` as included.
-- `startOfWeek` is hard-coded to `'monday'` and only sent for the `week` interval; other intervals ignore it.
-- The file carries no MongoDB driver import; it produces plain aggregation objects, leaving the actual query execution to the consuming repositories.
-- Money values aggregated via `$sum` are Decimal128 and are read as minor units per currency by `toMinorUnits` from `@domain-primitives/money` (referenced in the module doc-block but not imported here).
+- `startOfWeek: 'monday'` is only included when `interval === 'week'`, because it only applies to weeks.
+- Money is stored as Decimal128, so a plain `$sum` is exact. The result is read once, as minor units per currency, by `toMinorUnits`.
+- The window is half-open: `from` is inclusive and `to` is exclusive.

@@ -1,41 +1,39 @@
 ---
 source: src/modules/cart/controllers/post-checkout.ts
-sha256: 094be7aa3c3bce355ab80653b659837ca51bf84e7a93a8c5077db2f2ffb8af7f
-generated_at: 2026-11-14T19:28:06.790173+00:00
-model: ollama:qwen3.8:27b
+source_sha256: a070ef80a4d186b1d3a9ead4109561305c4f9dd6bef12db59e9e34abd1d61910
+context_sha256: 82041f6059586d2538d6bb39223e53a360d153372f84cdbab85ccc95eb8a2ec2
+generated_at: 2026-11-22T04:31:21.805395+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/controllers/post-checkout.ts
 
 ## Purpose
-
-Thin HTTP adapter for `POST /cart/checkout`. It validates the request body, delegates to `cartService` to convert the cart into an order, records the `cart_checkout_total` metric on every outcome, and shapes the created order into a `201 Created` response.
+HTTP controller for `POST /cart/checkout`. It is a thin Express adapter over `cartService.orderConfirm`: it converts the caller's cart into an order, clears the cart, and responds with the created order. It also records the `cart_checkout_total` business metric on every outcome.
 
 ## Key elements
-
-- **`postCheckout(request, response)`** — sole export; the route handler for checkout.
-  - Validates the body with `parseBody(CheckoutBody, …)`; a missing/malformed body short-circuits to `422`.
-  - Calls `cartService.orderConfirm(userId, callerContextOf(request), body)`.
-  - Increments `cartCheckoutTotal` (`status: 'success' | 'failure'`) **before** the `refused()` check, so both outcomes are recorded.
-  - On success, pipes the `OrderDocument` through `orderService.withActions(…)` to obtain the wire-shape `Order` (resolves each line's live `current` picture).
-  - Responds with `answerAsResource` (ETag) + `createdResponse<Order>` (201, `Location: /orders/:id`).
-  - In `.catch`, increments the metric with `status: 'failure'` and delegates to `catchAs(response, 'postCheckout')`.
+- `postCheckout(request, response)` — the only export. Flow:
+  1. Reads `userId` from `request.authContext!.id`.
+  2. Validates `request.body` with `parseBody(CheckoutBody, ...)`. The body is required because it carries `expectedTotal`. A missing or malformed body answers 422, and the handler returns early.
+  3. Calls `cartService.orderConfirm(userId, callerContextOf(request), body)`.
+  4. Increments `cartCheckoutTotal` with `status: 'success'` or `'failure'` based on `result.success`.
+  5. Calls `refused(response, result)`, which handles a failed result and stops the handler.
+  6. On success, calls `orderService.withActions(result.data, request.authContext)` to build the wire-shape order. It then calls `answerAsResource(response, result.data, '/orders/<id>')` and `createdResponse<Order>(response, order, '/orders/<id>')`.
+  7. `.catch` increments `cartCheckoutTotal` with `status: 'failure'`, then delegates to `catchAs(response, 'postCheckout')(error)`.
 
 ## Relationships
-
-- **`src/modules/cart/services/index.ts`** — this file imports `cartService` from it; the controller delegates the core checkout operation to that service.
-- **`src/modules/orders/index.ts`** — this file imports `orderService` from it; used to project the `OrderDocument` into its wire-shape `Order` before responding.
-- **`src/modules/orders/services/index.ts`** — underlying orders service module related to the `orderService` import path.
-- **`src/modules/cart/metrics.ts`** — source of the `cartCheckoutTotal` counter incremented on every checkout attempt.
-- **`src/infrastructure/http/controller.ts`** — supplies `parseBody`, `refused`, and `catchAs` for body validation, rejection envelopes, and error serialization.
-- **`src/infrastructure/http/response.ts`** — supplies `createdResponse` for the 201 + `Location` header.
-- **`src/infrastructure/http/preconditions.ts`** — supplies `answerAsResource` to set the `ETag` from the order document.
-- **`src/infrastructure/http/request.ts`** — supplies `callerContextOf` to extract the caller's context from the Express request.
-- **`src/types/index.ts`** — provides the `Order` type used as the generic parameter of `createdResponse`.
-- **`src/modules/cart/routes.ts`** — consumer; registers `postCheckout` on the `POST /cart/checkout` path.
+- `../services` (`cartService`) — supplies `orderConfirm`, which does the checkout.
+- `@modules/orders` (`orderService`) — `withActions` turns the order document into the response shape.
+- `../metrics` — provides the `cartCheckoutTotal` counter.
+- `@infrastructure/http/controller` — provides `parseBody`, `refused` and `catchAs`.
+- `@infrastructure/http/response` — provides `createdResponse`, which sends the 201.
+- `@infrastructure/http/preconditions` — provides `answerAsResource`.
+- `@infrastructure/http/request` — provides `callerContextOf`.
+- `@types` — provides the `Order` type.
+- `src/modules/cart/routes.ts` is a graph neighbor. This file does not import it, so the route registration there presumably wires this handler to the endpoint.
 
 ## Notes
-
-- The metric increments **three** times in the source (success path, `refused` path, catch path) but semantically once per request: the success and refused branches are mutually exclusive, and the catch branch handles thrown errors. A failed checkout is intentionally still counted.
-- Do **not** replace the `orderService.withActions` call with a bare `result.data.toJSON()` — the comment in-file warns that `.toJSON()` would omit each line's `current` picture from the response.
-- The response carries **both** an `ETag` (from `answerAsResource`) and a `Location` header (from `createdResponse`); the `message` field in the envelope doubles as the confirmation copy.
+- The metric increments once per call, before `refused()`, so failed checkouts are counted too. A thrown error is also counted as a failure.
+- `withActions` is used instead of a bare `.toJSON()` because it resolves each line's live `current` picture, which `.toJSON()` would leave off.
+- The 201 response mirrors `POST /orders`: it carries the order resource and its `Location` path `/orders/<id>`, and the confirmation copy goes in the envelope's `message`.
+- `request.authContext` is non-null asserted (`!`). The handler assumes an authentication middleware has already run.

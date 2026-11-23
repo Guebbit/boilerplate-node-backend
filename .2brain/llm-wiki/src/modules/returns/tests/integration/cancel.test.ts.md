@@ -1,46 +1,36 @@
 ---
 source: src/modules/returns/tests/integration/cancel.test.ts
-sha256: cdf89f318316c0dbe87bcbf82f6a8dff7216aa5582fbab68d666690fea6f47df
-generated_at: 2026-11-08T08:07:47.448944+00:00
-model: ollama:qwen3.8:27b
+source_sha256: fb70c75ba5b58bbcec33c4c559e41451254ef83c1cbb7192b4ad0ab42595a94c
+context_sha256: 333ebb48986cbb7709b04d43ed450d76af28495a6cbea140c555b37bfc98504d
+generated_at: 2026-11-22T07:33:39.602038+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/tests/integration/cancel.test.ts
 
 ## Purpose
-
-Integration tests for the `approved → canceled` return transition. They verify that canceling an approved return is purely bookkeeping: no refunds, no stock movement, no domain events, and no outbound email. They also pin down which states reject cancel, and that post-cancel the return is inert (cannot be received or closed).
+Integration tests for `returnService.cancelReturn`: cancelling an approved return whose goods never arrived (`approved → canceled`). The tests pin down that this is bookkeeping only: it writes an audit row and one order-timeline row, but moves no money or stock, publishes no event, and sends no mail.
 
 ## Key elements
-
-- **`paidAndDelivered()`** – Fixture builder: creates a user, two products, an order, reserves inventory, confirms a card payment, and marks the order delivered. Returns handles to all created entities.
-- **`openedReturn(fixture, reason, approve)`** – Creates a return on the fixture and (unless reason is `'withdrawal'`) approves it. Flushes outbox and clears the mail mock so subsequent assertions are clean.
-- **`refundsOf(orderId)`** – Reads the payment's refund list for an order.
-- **`describe('canceling an approved return')`** – Happy-path tests: status/timestamp, audit entry shape, timeline row, no side-effects on money/stock/events/mail, returnable-lines are freed, withdrawal cancel, and the `actions.cancel` affordance toggle.
-- **`describe('what cannot be canceled')`** – Error-path tests: double-cancel (409 `RETURN_NOT_CANCELABLE`), requested (pending) return, received/closed return, declined return, and 404 for a non-existent id.
-- **`describe('after a cancel')`** – Post-cancel invariants: `receiveReturn` and `closeReturnByHand` both reject.
-- **`mockEnqueueEmail`** – Jest mock of `enqueueEmail`; asserted never called during cancel.
-- **`audited`** (module-level array) – Populated by a registered audit sink; inspected in each test to verify exactly one (or zero) audit row.
+- `paidAndDelivered()` – arranges a fixture: a new user, a Shirt (30.00 × 2) and a Mug (10.00 × 1), stock reserved via `inventoryService`, card payment created and confirmed via `paymentService`, order carried to `delivered`. The `Fixture` type is its return type.
+- `openedReturn(fixture, reason, approve)` – creates a return as the customer and approves it as admin (unless `reason` is `'withdrawal'`, which is born approved, or `approve` is false). It then settles outbox nudges and clears the mail mock so setup side effects don't pollute assertions. Returns the return id.
+- `refundsOf(orderId)` – reads the refunds on the order's payment.
+- `mockEnqueueEmail` – the jest-mocked `enqueueEmail`.
+- `audited` – audit entries captured through `registerAuditSink` and reset in `beforeEach`.
+- Test groups:
+  - **canceling an approved return** – status becomes `canceled` and `canceledAt` is set. One `admin.return.canceled` audit row carries the note in its metadata. One `return_canceled` timeline row exists, and the note does not appear in it. No refunds, stock changes, outbox events or mail result. Without a note, the audit metadata has no `note` key, and the order's `returnStatus` goes from `in_progress` to `none`. The canceled return's units become returnable again. A withdrawal can be canceled. `actions.cancel` is true for an admin only while the return is approved.
+  - **what cannot be canceled** – a second cancel gives 409 `RETURN_NOT_CANCELABLE` and writes nothing more. The same code is returned for requested, received and declined returns. A missing return gives 404.
+  - **after a cancel** – `receiveReturn` gives `RETURN_NOT_RECEIVABLE` and `closeReturnByHand` gives `RETURN_NOT_CLOSABLE`, and no refunds exist.
 
 ## Relationships
-
-- **`src/modules/returns/services/index.ts`** – Provides `returnService`, the system under test.
-- **`src/modules/returns/module.ts`** – Registered in `beforeEach` so the service is wired into the test DI container.
-- **`src/modules/payments/index.ts` / `services/index.ts` / `module.ts`** – `paymentService` used in the fixture to create/confirm a card payment; `paymentsModule` registered alongside the returns module.
-- **`src/modules/inventory/index.ts` / `services/index.ts`** – `inventoryService.reserveForOrder` called in the fixture to hold stock.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder`, `readOrder`, `timelineOf`, `toOrderItem` used to build and inspect orders.
-- **`src/modules/products/tests/factories.ts`** – `createProduct`, `countersOf` for product setup and stock assertions.
-- **`src/modules/users/tests/factories.ts`** – `createUser` for the customer identity.
-- **`src/modules/delivery/tests/factories.ts`** – `carryOrderTo(orderId, 'delivered')` advances the order lifecycle.
-- **`src/infrastructure/adapters/mailer.ts`** – `enqueueEmail` is mocked; tests assert it is never called by cancel.
-- **`src/infrastructure/observability/audit.ts`** – `registerAuditSink` captures audit entries into `audited` for per-test assertions.
-- **`src/kernel/outbox.ts`** – `settleOutboxNudges` flushes pending outbox work; `outboxEventModel.countDocuments` verifies no new events are published.
-- **`src/kernel/events.ts`** – `resetDomainEvents` called in `afterEach` to avoid cross-test leakage.
+- Uses `returnService` (`returns/services`) as the unit under test, and registers `returns/module` together with `payments/module` through `registerCheckoutModules`.
+- Uses `inventoryService` (`inventory`) to reserve stock, and `paymentService` (`payments`) to create intents, confirm payments and read refunds.
+- Uses the test factories of `users`, `products` (`createProduct`, `countersOf`), `orders` (`createOrder`, `readOrder`, `timelineOf`, `toOrderItem`) and `delivery` (`carryOrderTo`).
+- Mocks `infrastructure/adapters/mailer` (`enqueueEmail`) to assert no mail is sent.
+- Uses `infrastructure/observability/audit` (`registerAuditSink`, `AuditEntry`) to capture audit rows.
+- Uses `kernel/outbox` (`outboxEventModel`, `settleOutboxNudges`) to count and flush outbox events, and `kernel/events` (`resetDomainEvents`) for cleanup in `afterEach`.
 
 ## Notes
-
-- The cancel **note** (free-text admin annotation) is asserted to be *absent* from the order timeline — it is staff-only metadata on the audit row, not a customer-visible field.
-- Withdrawal returns are **born approved**; `openedReturn` skips the explicit `approveReturn` call for that reason.
-- `openedReturn` calls `settleOutboxNudges()` + `mockEnqueueEmail.mockClear()` after setup so that the approval/ack mails don't pollute the "no mail" assertion in the cancel test.
-- The `customers` counter guarantees a unique email per fixture invocation, avoiding user-collision across parallel tests.
-- `jest.restoreAllMocks()` in `afterEach` combined with `setupTestDb()` at module scope means each test gets a fresh in-memory database but shares the module-level mock references.
+- `setupTestDb()` provides a real database, so these tests run against actual persistence rather than mocks. Only the mailer is mocked.
+- The `customers` counter gives each fixture a distinct email.
+- The cancel note is staff-only: it goes into the audit metadata but never into the order timeline.

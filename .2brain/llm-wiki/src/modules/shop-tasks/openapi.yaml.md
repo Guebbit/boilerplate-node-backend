@@ -1,30 +1,33 @@
 ---
 source: src/modules/shop-tasks/openapi.yaml
-sha256: 85c319e95d8971dcdfbd815546a3a763bb84fb543a266c6d5f58b1b77df13f94
-generated_at: 2026-11-14T21:51:47.877888+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 85c319e95d8971dcdfbd815546a3a763bb84fb543a266c6d5f58b1b77df13f94
+context_sha256: 1db6f1e92515af6467e76d17917651897685b578d8c480dda6db78731674b2a0
+generated_at: 2026-11-22T07:42:21.480741+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/shop-tasks/openapi.yaml
 
 ## Purpose
-OpenAPI 3.1.0 contract for the `shop-tasks` module. It defines the single API endpoint (`GET /shop-tasks/summary`) that returns per-screen work counts for staff navigation badges, along with the response schema and security requirements. It exists so the contract is explicit, versionable, and independent of the TypeScript implementation.
+OpenAPI 3.1.0 contract (version `0.1.0`) for the `shop-tasks` module. It describes a single read-only endpoint that returns the counts of open work shown as badges in the staff navigation.
 
 ## Key elements
-- **`GET /shop-tasks/summary`** (`operationId: getShopWorkSummary`) — returns one integer count per staff screen. Always returns `0` (never omits) for screens the caller can see; omits the key entirely if the caller lacks permission. Authenticated via `bearerAuth`; always evaluated in the caller's session (no API-key path). Explicitly never cached.
-- **`ShopWorkSummary` schema** — flat object (`additionalProperties: false`) with five integer fields, each `minimum: 0`:
-  - `salesOrders` — orders with `fulfillmentStatus=awaiting_shipment` (requires `display:Order`)
-  - `salesPayments` — rows listed by `GET /payments/attention`, all sources (each capped at 100); awaiting transfers excluded (requires `display:Payment`)
-  - `returns` — returns with `status=requested` (requires `read:Return`)
-  - `salesPreorders` — preorder fulfillment orders with `late=true` (requires `display:Order`)
-  - `inventory` — stock levels at or under the low-stock threshold, `lowOnly=true` (requires `read:StockLevel`)
-- **`401` response** — reuses a shared `Unauthorized` definition from `../../../shared/contracts/openapi.root.yaml`.
-- **Tag `Shop`** — groups the operation under the "Running the shop" family.
+- **Tag `Shop`**: the tag this module's operations use (`x-family: Running the shop`).
+- **`GET /shop-tasks/summary`** (`operationId: getShopWorkSummary`): returns one count per staff screen that has a badge. It requires `bearerAuth`. It responds `200` with `ShopWorkSummary`, or `401` through a shared `Unauthorized` response.
+- **`ShopWorkSummary` schema**: an object with `additionalProperties: false`. Every property is an integer with `minimum: 0`, and each is optional.
+  - `salesOrders`: orders with `fulfillmentStatus=awaiting_shipment`. Needs `display:Order`.
+  - `salesPayments`: the rows listed by `GET /payments/attention`, all sources together, each capped at 100. Transfers still awaited are excluded. Needs `display:Payment`.
+  - `returns`: returns with `status=requested`. Needs `read:Return`.
+  - `salesPreorders`: preorder fulfillment orders with `late=true`. Needs `display:Order`.
+  - `inventory`: stock levels with `lowOnly=true`. Needs `read:StockLevel`.
 
 ## Relationships
-- **`src/modules/shop-tasks/module.ts`** — the implementation that fulfils this contract. The `operationId`, path, response shape, and permission gates defined here are what `module.ts` is expected to satisfy.
+- None in the dependency graph: this file has no graph neighbors.
+- The descriptions mention list endpoints and filters that the counts mirror, such as `GET /payments/attention`, the orders list with `fulfillmentStatus=awaiting_shipment`, the returns list with `status=requested`, and the stock list with `lowOnly=true`. Those endpoints are not defined in this file.
 
 ## Notes
-- Field presence is permission-gated: a key is absent (not `null`, not `0`) when the caller cannot open that screen. This is a deliberate distinction from the `0` sentinel for "screen is visible but empty."
-- The `salesPayments` count is an aggregate of multiple sources, each individually capped at 100, so the total is not a true count of all pending payments.
-- The contract specifies OpenAPI **3.1.0** (not 3.0.x); tooling that only supports 3.0 will not validate this file correctly.
+- A count key is present only when the caller may open the matching screen. Zero is sent as `0` and is never omitted. A missing key therefore means "no access", not "nothing to do".
+- Each count should equal the count of the corresponding screen's own list, so a badge and its screen agree.
+- Counts are read as the calling person. API keys are not used, so each count reflects the caller's own jurisdiction.
+- The response is never cached, because it is one person's view.
+- The `401` response is a `$ref` to `Unauthorized` in a shared root contract file, outside this module.

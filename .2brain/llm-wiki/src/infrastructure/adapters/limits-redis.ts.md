@@ -1,42 +1,36 @@
 ---
 source: src/infrastructure/adapters/limits-redis.ts
-sha256: 5411b998004152b9b3a61b69970f748fb375d70e304e1bad7b323d58aa4d4067
-generated_at: 2026-11-08T03:20:34.836051+00:00
-model: ollama:qwen3.8:27b
+generated_at: 2026-11-22T02:38:48.752801+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/infrastructure/adapters/limits-redis.ts
 
 ## Purpose
-
-Manages a dedicated Redis instance for rate-limit counters and single-use claims (e.g. spent ALTCHA solutions). It is kept separate from the response-cache Redis instance because eviction is per-instance: the cache runs `allkeys-lru` and may drop keys under pressure, which would silently reset a budget or reopen a replayable solution. The limits instance uses `noeviction` so cache pressure can never reach it.
+Manages the connection to the dedicated `limits` Redis instance, which holds data that must not be evicted: rate-limit counters and single-use claims (e.g. spent ALTCHA solutions). The cache Redis runs `allkeys-lru` and could drop these keys under pressure, resetting budgets or making solutions replayable. So these live on a separate `noeviction` instance.
 
 ## Key elements
-
-- **`limitsKeyPrefix()`** — Returns the key-namespace prefix for the limits instance, read from `rateLimitConfig().NODE_RATE_LIMIT_REDIS_PREFIX`. Separate from the cache prefix so a cache flush or prefix rotation never resets budgets or claims.
-- **`limitsRedisUrl()`** — Returns `NODE_RATE_LIMIT_REDIS_URL` or `undefined`. Deliberately has no fallback to the cache URL.
-- **`buildLimitsClient(url)`** — Constructs (does not connect) a `RedisClient` and attaches the mandatory `'error'` listener (node-redis is an EventEmitter; an unhandled error event would crash the process).
-- **`sendToLimits(url, command)`** — Sends one raw command to the limits instance, opening the shared connection on first use. Rejects on failure; destroys the client and forgets the connection so the next call starts from a clean socket.
-- **`claimLimitsKey(key, seconds)`** — Atomic single-use claim via `SET NX EX`. Returns `'claimed'` (one winner), `'taken'` (subsequent callers), or `'unavailable'` (no Redis / failure — caller falls back to in-process enforcement).
-- **`isLimitsKeyClaimed(key)`** — Read-only `EXISTS` check without claiming. Returns `false` on miss, no Redis, or any failure.
-- **`stopLimitsRedis()`** — Releases the managed connection on shutdown so a restart begins from a clean socket.
-- **`claimKey(key)`** *(private)* — Namespaces a claim key under the limits prefix: `<prefix>:claim:<key>`.
+- `limitsKeyPrefix()` — key namespace from `rateLimitConfig().NODE_RATE_LIMIT_REDIS_PREFIX`, separate from the cache prefix.
+- `limitsRedisUrl()` — `NODE_RATE_LIMIT_REDIS_URL` or `undefined`. It never falls back to the cache's URL.
+- `buildLimitsClient(url)` — creates, but doesn't connect, a client via `createRedisClient`. It attaches a no-op `'error'` listener, because an unhandled error event would crash the process.
+- `connectionFor(url)` (private) — lazily builds and memoises a `ManagedConnection<RedisClient>` through `manageConnection`. It logs an `error`-level "unreachable" message and an `info` message on recovery. It keeps its own `redisClient` handle so a half-handshaken client is reused rather than reconnected. On connect failure the client is destroyed and cleared. `forget` is wrapped to clear that handle too.
+- `sendToLimits(url, command)` — sends a raw command via `sendCommand<RedisReply>`. It rejects if Redis is unreachable. On a command failure it destroys the client, forgets the connection and reports it unavailable, then rethrows.
+- `stopLimitsRedis()` — closes the connection on shutdown; it does nothing if no connection was made.
+- `claimLimitsKey(key, seconds)` — atomic `SET NX EX` under `<prefix>:claim:<key>`. Returns `'claimed'`, `'taken'` or `'unavailable'`.
+- `isLimitsKeyClaimed(key)` — read-only `EXISTS`. Returns `true` only if Redis says the claim exists, and `false` on a miss, with no URL, or on error.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/redis.ts`** — Imports `createRedisClient`, `closeRedisClient`, and the `RedisClient` type for client construction and teardown.
-- **`src/infrastructure/adapters/managed-connection.ts`** — Imports `manageConnection` and `ManagedConnection` to delegate connect/dedup/recover/warn-once lifecycle.
-- **`src/infrastructure/adapters/logger.ts`** — Imports `logger` for warn/error/info messages on claim failures and recovery.
-- **`src/infrastructure/http/config.ts`** — Imports `rateLimitConfig` to read the limits URL and key prefix.
-- **`src/infrastructure/http/middlewares/rate-limit-store.ts`** — Consumer: calls `sendToLimits` to execute rate-limit counter commands (INCR, EXPIRE, etc.) against this instance.
-- **`src/infrastructure/adapters/antibot-providers/altcha-store.ts`** — Consumer: calls `claimLimitsKey` / `isLimitsKeyClaimed` to enforce single-use ALTCHA solutions across replicas.
-- **`src/infrastructure/runtime/server-lifecycle.ts`** — Consumer: calls `stopLimitsRedis()` during graceful shutdown.
-- **`tests/unit/infrastructure/adapters/limits-redis.test.ts`** — Unit tests for the module's exports.
-- **`tests/unit/infrastructure/http/middlewares/rate-limit-store.test.ts`** / **`rate-limit-store-selection.test.ts`** — Verify how the rate-limit middleware selects and uses this store.
+- Uses `redis.ts` (`createRedisClient`, `closeRedisClient`, `RedisClient`) for the client.
+- Uses `managed-connection.ts` (`manageConnection`) for memoised handle, deduped connect and warn-once behaviour.
+- Reads `rateLimitConfig` from `src/infrastructure/http/config.ts` for the URL and prefix.
+- Logs through `logger.ts`.
+- The `rate-limit-store.ts` middleware and `altcha-store.ts` are the consumers named by the file's purpose (rate-limit counters, spent ALTCHA solutions). The file does not show how they call it.
+- `server-lifecycle.ts` is the likely shutdown caller of `stopLimitsRedis`.
+- Covered by `tests/unit/infrastructure/adapters/limits-redis.test.ts`. The `rate-limit-store*.test.ts` files and `scripted-environment.ts` are also related through the graph.
 
 ## Notes
-
-- **Client reuse on reconnect (unlike cache):** `connectionFor` keeps a single `redisClient` across failed connect attempts. node-redis rejects a second `connect()` on the same socket with `Socket already opened`, so the cache adapter's "fresh client per attempt" pattern cannot be replicated here. On failure the client is destroyed and nulled; on success the *same* handle is returned.
-- **`getOrThrow` rejects, not resolves-undefined:** Unlike the cache adapter, callers must handle the rejection themselves, allowing each to choose its own safe fallback (in-process counters, per-process claims, etc.).
-- **No URL ⇒ in-process fallback:** When `NODE_RATE_LIMIT_REDIS_URL` is unset, `claimLimitsKey` short-circuits to `'unavailable'` and `isLimitsKeyClaimed` to `false`. Callers are responsible for their in-process floor; this module never silently falls back to the cache instance.
-- **Mandatory `'error'` listener:** The empty `redisClient.on('error', () => undefined)` in `buildLimitsClient` is not defensive—it prevents a process-level crash from an unhandled EventEmitter error.
+- With no URL configured, the claim helpers return `unavailable`/`false` and callers use their in-process stores. This is deliberate and must not be swapped for the cache Redis.
+- Unlike the cache adapter, `getOrThrow` rejects instead of resolving `undefined`, so each caller picks its own fallback. The claim helpers swallow errors, log a warning and return the "unavailable" value.
+- A single client is shared per process and is not recreated per attempt. node-redis rejects a second `connect()` that races the first with `Socket already opened`.
+- `isEnabled` is always `true`, because a connection is only created when a URL exists.
+- The `limitsConnection` module singleton is built with the first `url` passed in. Later URLs are ignored.

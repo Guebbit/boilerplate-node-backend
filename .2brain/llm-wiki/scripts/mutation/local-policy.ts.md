@@ -1,29 +1,33 @@
 ---
 source: scripts/mutation/local-policy.ts
-sha256: c4e58185580c4c76c772334b8341514b380cb637900045ca8c183e47d805b41e
-generated_at: 2026-11-08T02:53:38.569789+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 80a4d3ef792dcaf51b3925b86450ea88550f73e5faa9cff6b9eff75656539669
+context_sha256: cacbdd6743ea60469a0baf78fc57c659ee553f65d69cb28410740df390bdbb4a
+generated_at: 2026-11-22T02:09:23.573162+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/mutation/local-policy.ts
 
 ## Purpose
-
-Pure selection logic that decides which mutation-testing shards a local evening sweep will actually run. Extracted from `run-shards.ts` so the resumability rule (skip already-reported shards, narrow by `--only`, cap by `--limit`) is unit-testable without invoking a CLI.
+Decides which mutation-testing shards a local sweep runs, based on which shards already have reports from earlier evenings. It is the pure, testable half of `run-shards.ts`, so the resumability rule lives outside the CLI. There is no "run everything in one go" mode. The full scope is always sharded (`npm run mutation:full`).
 
 ## Key elements
-
-- **`ShardSelection`** (interface) — the result shape: `run` (shards to execute this evening) and `done` (shards skipped because a report already exists).
-- **`selectShards`** (exported const) — takes the full shard list plus `{ completed, only?, limit?, force? }` and returns a `ShardSelection`. Filters by explicit names, excludes already-completed shards (unless `force`), then slices to `limit`.
+- `ShardSelection` (interface): the result of a selection.
+  - `run`: outstanding shards, after `--only` and `--limit` are applied.
+  - `done`: shards skipped because a report already exists.
+- `selectShards(shards, { completed, only, limit, force })`: returns a `ShardSelection`.
+  - `completed`: shard names that already have a report on disk.
+  - `only`: shard names to restrict to. Empty (the default) means all shards.
+  - `limit`: maximum number of shards to run this evening. `undefined` means no cap.
+  - `force`: ignores `completed`, so `done` is empty and every asked-for shard is outstanding.
 
 ## Relationships
-
-- **`scripts/mutation/sharding.ts`** — supplies the `Shard` type that `selectShards` operates on; this file is the consumer of that type.
-- **`scripts/mutation/run-shards.ts`** — the CLI entry point that calls `selectShards` to decide what to execute; this file is its extracted "pure half."
-- **`tests/unit/scripts/mutation/local-policy.test.ts`** — unit-tests `selectShards` directly, exercising the resumability, `--only`, `--limit`, and `force` paths.
+- Imports the `Shard` type from `./sharding`.
+- `run-shards.ts` is the CLI that this module's pure logic backs. The module doc says it is the pure half of that file.
+- `tests/unit/scripts/mutation/local-policy.test.ts` tests the resumability rule.
 
 ## Notes
-
-- There is intentionally no "run everything in one shot" path: the full scope is always sharded (`npm run mutation:full`), so `selectShards` never needs a refusal branch.
-- `force: true` empties the `done` list entirely, treating all shards as outstanding regardless of existing reports.
-- `only` is a whitelist filter applied *before* the completed check, so a shard named in `--only` but already reported will land in `done`, not `run`.
+- Order of operations: filter by `only`, then split into `done` and outstanding, then apply `limit` to the outstanding list only. Skipped shards do not count against the limit.
+- `limit` slices in the original shard order, so each evening picks up at the first shard without a report.
+- Without `force`, a stale report is honoured indefinitely. Re-measuring requires `force`.
+- Shard names in `only` that don't match any shard are silently ignored.

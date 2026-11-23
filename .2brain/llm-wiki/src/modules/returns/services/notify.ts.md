@@ -1,38 +1,48 @@
 ---
 source: src/modules/returns/services/notify.ts
-sha256: 4bd3701de1df7450f692a17e66d2e9fa0ee75867b222c27afa2c4642301fd0e8
-generated_at: 2026-11-08T08:04:12.526778+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 748fc45d7b9e00812ca58381cff51db5d968ecbe218a0d960701e1617a8e5e79
+context_sha256: 99341b24a3584df4b25f060949fc4589ab12e3625272a1780f8f6685b845d5ec
+generated_at: 2026-11-22T07:30:09.207383+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/returns/services/notify.ts
 
 ## Purpose
-Event listeners that email the customer at each return lifecycle stage—requested, decided, closed. Each listener loads the return, picks the right notice kind and copy, and enqueues a localized email via the buyer lookup in the orders module. All failures are logged and swallowed so that a mail outage never blocks or replays the underlying event.
+Mails the customer about a return or withdrawal. It exposes listeners for the returns module's own events (`return.requested`, `return.decided`, `return.closed`). Because it hooks events rather than call sites, every way a return is opened, decided or closed is covered. A failed mail is logged and swallowed, so it never undoes the return operation.
 
 ## Key elements
-- **`withReturn(returnId, send)`** — loads a `ReturnDocument` by ID and invokes the callback; catches all errors and logs them. Never rejects.
-- **`sendNotice(kind, found, input)`** — delegates to `orderService.mailBuyerOfOrder` to resolve buyer locale/name/email, builds the email via `returnNoticeEmail`, and calls `enqueueEmail`.
-- **`mailReturnRequested`** *(exported)* — listener for `return.requested`. Skips buyer mail when staff opened a non-withdrawal return. Chooses between `withdrawal-acknowledged`, `withdrawal-recorded`, or `return-requested` kind. Includes `returnAddress` only for withdrawals (goods go back immediately) and `remedyChoice` only for guarantee reasons.
-- **`mailReturnDecided`** *(exported)* — listener for `return.decided`. Maps decision + `openedBy` to `return-declined`, `return-approved`, or `return-opened`. Includes `returnAddress` on approval, `declineReason`/`declineMessage` on decline.
-- **`mailReturnClosed`** *(exported)* — listener for `return.closed`. Maps remedy to `return-closed`, `return-replaced`, or `return-repaired`. Skips mail entirely when `receivedAt` is absent (born-closed returns already acknowledged at open; their refund notice comes from `payments`).
-- **`decidedNoticeOf`** / **`closedNoticeOf`** — small internal mappers from (decision, openedBy) / remedy to `ReturnNoticeKind`.
+- `mailReturnRequested({ returnId })`: acknowledges a newly opened return.
+  - A withdrawal gets `withdrawal-acknowledged`, or `withdrawal-recorded` if staff opened it. Any other reason from the buyer gets `return-requested`.
+  - Staff-opened non-withdrawals send nothing here, because `return.decided` covers them.
+  - A return born closed (closed, never received) is mailed only if it is a withdrawal. That mail has no postage line and no address.
+  - Withdrawals include `returnAddress()`. The `at` date is `requestedAt`.
+  - `remedyChoice` comes from `isGuaranteeReason`.
+  - For `withdrawal-recorded`, it adds `recorded: { via: statedVia ?? 'other', at: createdAt ?? now }`.
+- `mailReturnDecided({ returnId, decision })`: picks the notice via `decidedNoticeOf`.
+  - `declined` gives `return-declined`.
+  - `approved` gives `return-approved`, or `return-opened` if staff opened the return.
+  - It includes the decline reason and message, and the return address only on approval.
+  - `at` is `requestedAt` for staff-opened returns, otherwise `decidedAt ?? now`.
+- `mailReturnClosed({ returnId, refundAmount, currency, remedy })`: sends only if the return has `receivedAt`.
+  - The notice is `return-replaced`, `return-repaired` or `return-closed`, chosen by `closedNoticeOf(remedy)`.
+  - It includes the refund amount and currency.
+- Internal helpers:
+  - `withReturn` loads the return by id and swallows and logs any error.
+  - `sendNotice` delegates to the orders module's buyer-mail policy and builds the mail with `returnNoticeEmail`.
 
 ## Relationships
-- **`@infrastructure/adapters/logger`** — `logger.error` on any fetch failure in `withReturn`.
-- **`@infrastructure/adapters/mailer`** — `enqueueEmail` is the sole transport; called once per notice inside `sendNotice`.
-- **`@kernel/events`** — provides `DomainEventMap` for typed event payloads.
-- **`@modules/orders`** (`orderService`) — `mailBuyerOfOrder` resolves the buyer's locale, name, and email from the order; this module supplies the email template and data.
-- **`@modules/shop`** (`returnAddress`) — returns the shop's physical mailing address for the return-postage block.
-- **`../domain`** (`isGuaranteeReason`) — determines whether the copy offers a remedy-choice paragraph.
-- **`../emails`** — `returnNoticeEmail` builds subject + template + data; `ReturnNoticeKind` and `ReturnNoticeInput` are the shared shape.
-- **`../repository`** (`returnRepository.findById`) — loads the current return document.
-- **`../model`** — `ReturnDocument` type used throughout.
-- **`../services/index.ts`** — re-exports the three listener functions so the event relay can subscribe.
+- `../repository` loads the return by id. `../model` provides the `ReturnDocument` type.
+- `@modules/orders` looks up the buyer, their locale and name, and supplies the order number and email.
+- `../emails` (`returnNoticeEmail`) renders the copy for a notice kind. This file supplies the notice kinds and inputs.
+- `@infrastructure/adapters/mailer` (`enqueueEmail`) queues the mail.
+- `@infrastructure/adapters/logger` logs failures.
+- `@modules/shop` (`returnAddress`) provides the address that tells the customer where to send the goods.
+- `../domain` (`isGuaranteeReason`) decides `remedyChoice`.
+- `@kernel/events` (`DomainEventMap`) types the event payloads.
 
 ## Notes
-- **No-throw guarantee is intentional.** A rejecting event listener triggers redelivery; a failed email is not worth replaying the business event. Both `withReturn` and `enqueueEmail` swallow errors by design.
-- **`void` + eslint-disable on `enqueueEmail`.** The call is fire-and-forget; the adapter logs its own failures.
-- **Date semantics.** The customer-facing `at` is always the buyer's action time (`requestedAt`), not the shop's `createdAt` or `decidedAt`.
-- **Born-closed returns** (withdrawal before dispatch, remainder cancel) skip the standard "received" mail and the closed mail; they only get the withdrawal acknowledgement (or none, if staff-opened).
-- **Staff-opened non-withdrawal returns** produce no mail on `return.requested`; the customer is informed once via `return.decided` with the `return-opened` notice.
+- The listeners must never reject. A rejection would make the event relay redeliver the event, and a failed mail is not worth that.
+- `enqueueEmail` is fired with `void`, with an eslint disable. The comment says it never rejects and logs its own failure.
+- Refunds for returns born closed are not mailed from here. The comment says `payments` has its own notice for them.
+- The logger call in `withReturn` is wrapped in Stryker disable/restore comments, so mutation testing skips it.

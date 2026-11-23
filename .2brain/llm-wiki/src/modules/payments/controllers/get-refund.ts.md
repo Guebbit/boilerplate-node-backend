@@ -1,31 +1,31 @@
 ---
 source: src/modules/payments/controllers/get-refund.ts
-sha256: 40b42389a288c934f4c467aafb23fd495cb698245de315542879af98cd55eeb6
-generated_at: 2026-11-08T07:17:37.050482+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 40b42389a288c934f4c467aafb23fd495cb698245de315542879af98cd55eeb6
+context_sha256: def1757b6c8850776639aacb1b082e0112ad0ddf6c00597fd02fdcb91b2701b3
+generated_at: 2026-11-22T06:41:27.304923+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/payments/controllers/get-refund.ts
 
 ## Purpose
-
-Handler for `GET /payments/:id/refunds/:refundId`. Returns a single refund record addressed through its parent payment (the read counterpart to `POST /payments/:id/refunds`). Delegates all data access to the payment service and translates the result into an HTTP response.
+Express controller for `GET /payments/:id/refunds/:refundId`. It returns a single refund record addressed through its parent payment, and is the target that `Location` points to after `POST /payments/:id/refunds`.
 
 ## Key elements
-
-- **`getRefund`** (default export) — Express handler. Validates both route params, calls `paymentService.getRefund`, then either rejects (via `refused`) or sends the `Refund` payload (via `successResponse`). Errors are funnelled through `catchAs(response, 'getRefund')`.
+- `getRefund(request, response)`: the exported handler.
+  - Validates the `id` and `refundId` path params with `requireId`. Both use `notFound: 'payments.not-found'`, and the second call passes `name: 'refundId'`. If either id is invalid, it returns `Promise.resolve()` without continuing, so `requireId` is expected to have already written the response.
+  - Calls `paymentService.getRefund(paymentId, refundId, request.authContext)`.
+  - If `refused(response, result)` is true, it returns and sends nothing more. Otherwise it responds with `successResponse<Refund>(response, result.data)`.
+  - Rejections go to `catchAs(response, 'getRefund')`.
 
 ## Relationships
-
-- **`src/modules/payments/services/index.ts`** — calls `paymentService.getRefund(paymentId, refundId, authContext)`; the sole source of refund data and authorization logic.
-- **`src/infrastructure/http/ids.ts`** — `requireId` extracts and validates both `id` and `refundId` from the route, short-circuiting with a 404 when either is missing.
-- **`src/infrastructure/http/response.ts`** — `successResponse` shapes the 200 JSON body.
-- **`src/infrastructure/http/controller.ts`** — `refused` detects a denied result (e.g. 403) and writes the error response; `catchAs` serialises thrown errors into a structured error response.
-- **`src/modules/payments/routes.ts`** — registers `getRefund` on the `GET /payments/:id/refunds/:refundId` route.
-- **`src/types/index.ts`** — imports the `Refund` type used as the generic on `successResponse`.
+- `src/infrastructure/http/ids.ts`: provides `requireId`, which validates each path param.
+- `src/infrastructure/http/controller.ts`: provides `refused`, which handles a refused service result, and `catchAs`, the error handler for the promise chain.
+- `src/infrastructure/http/response.ts`: provides `successResponse`, which sends the success payload.
+- `src/modules/payments/services/index.ts`: provides `paymentService`, which does the lookup and any authorization using `authContext`.
+- `src/types/index.ts`: provides the `Refund` type used to type the response.
+- `src/modules/payments/routes.ts`: the neighbor most likely to mount this handler. The file itself does not show this.
 
 ## Notes
-
-- An invalid or missing `refundId` returns the **same** 404 body as a missing `paymentId` (`payments.not-found`). This is intentional: a refund is only addressable through its payment, so no separate "refund not found" message exists.
-- Early-exit paths return `Promise.resolve()` (a resolved Promise) rather than a plain `return;`, keeping the handler's return type uniformly `Promise<void>`.
-- Route param types are declared as optional (`id?: string; refundId?: string`); the actual "required" check is performed at runtime by `requireId`, not by the type system.
+- An invalid or unknown `refundId` returns the same `payments.not-found` key as an unknown payment. A code comment says the refund id is only ever read through its payment.
+- The handler returns a Promise on every path (`Promise.resolve()` on early exit), so callers can treat it uniformly.

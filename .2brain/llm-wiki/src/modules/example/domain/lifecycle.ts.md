@@ -1,43 +1,38 @@
 ---
 source: src/modules/example/domain/lifecycle.ts
-sha256: 72b813bfd3cb1acff3afeafe8108829e6218f7ad1e596f16cffb62bd5e702379
-generated_at: 2026-11-08T05:49:51.794625+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 878791d6eb979937926c46318d6fe930471ee09f379bbba22ab21412ef3a527b
+context_sha256: e18f6fea7052a6f3e643b90c71db39a55def0aefb6a8935786509bbac10d14b2
+generated_at: 2026-11-22T05:08:33.538341+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/example/domain/lifecycle.ts
 
 ## Purpose
-
-Pure, I/O-free status-machine definition for the `example` entity. It declares the three lifecycle events (publish, archive, unarchive), validates them against the status enum at module load via `defineLifecycle`, and exposes small query predicates that services use to enforce transitions, compute permissions, and apply side-effect rules (publish-date stamping, body-length ceiling).
+Defines the pure, I/O-free rules for an example's life: statuses `draft`, `published` and `archived`, the events that move between them, and which actions a caller may take. It also holds two small related facts: when to stamp `publishedAt` and whether a body fits a length limit. The transition graph lives only here. The contract carries just the status enum and the `actions` flags.
 
 ## Key elements
-
-- **`ExampleEvent`** — union type: `'publish' | 'archive' | 'unarchive'`.
-- **`EXAMPLE_EVENTS`** — `as const` table mapping each event to `{ from: ExampleStatus[], to: ExampleStatus }`; satisfies `Record<ExampleEvent, LifecycleEvent<ExampleStatus>>`.
-- **`lifecycle`** (internal) — the `defineLifecycle` instance; checked once at load, not re-evaluated per call.
-- **`initialExampleStatus`** — the starting status (`draft`).
-- **`canApply(event, status)`** — boolean: is this event legal from this status?
-- **`statusAfter(event)`** — the `to` status an event produces.
-- **`exampleActionsFor(status, permits)`** — merges lifecycle validity with the caller's row-level permissions (`update`, `delete`) into an `ExampleActions` object.
-- **`isPublished(status)`** — simple equality check; used to gate anonymous read access.
-- **`shouldStampPublishedAt(nextStatus, alreadyPublishedAt)`** — true only when transitioning *into* `published` for the first time.
-- **`fitsBodyLength(body, maximum)`** — deployment-level character-ceiling check, independent of the contract limit.
+- `ExampleEvent`: the type `'publish' | 'archive' | 'unarchive'`. Each event matches an endpoint, `POST /examples/{id}/<event>`.
+- `EXAMPLE_EVENTS`: the `as const` event table, checked with `satisfies Record<ExampleEvent, LifecycleEvent<ExampleStatus>>`.
+  - `publish`: draft → published.
+  - `archive`: draft or published → archived.
+  - `unarchive`: archived → draft.
+- `initialExampleStatus`: the starting status for new examples, which is `draft`.
+- `canApply(event, status)`: whether the event is allowed from that status.
+- `statusAfter(event)`: the status the event leaves the example in.
+- `exampleActionsFor(status, permits)`: builds an `ExampleActions` object. Each lifecycle action is `permits.update && canApply(...)`. `update` and `delete` pass through from `permits`.
+- `isPublished(status)`: true only for `published`. The doc comment says it decides whether anyone, signed in or not, may read an example.
+- `shouldStampPublishedAt(nextStatus, alreadyPublishedAt)`: true only when the next status is `published` and no stamp exists yet.
+- `fitsBodyLength(body, maximum)`: true when `body.length <= maximum`.
 
 ## Relationships
-
-- **`src/domain-primitives/lifecycle.ts`** — provides `defineLifecycle` (the validation/normalisation engine) and the `LifecycleEvent` type used by `EXAMPLE_EVENTS`.
-- **`src/modules/example/domain/index.ts`** — module barrel; re-exports the public surface of this file so consumers import from the domain root.
-- **`src/modules/example/services/transition.ts`** — consumes `canApply`, `statusAfter`, and `EXAMPLE_EVENTS` to guard and execute a single event transition.
-- **`src/modules/example/services/actions.ts`** — calls `exampleActionsFor` to build the response payload describing what the caller may do.
-- **`src/modules/example/services/crud.ts`** — uses `initialExampleStatus`, `shouldStampPublishedAt`, and `fitsBodyLength` during create/update.
-- **`src/modules/example/services/owner.ts`** — uses `isPublished` to decide whether a read is permitted without authentication.
-- **`src/modules/example/tests/unit/domain.test.ts`** / **`lifecycle.property.test.ts`** — unit and property-based tests asserting transition validity, idempotence, and permission-matrix correctness.
-- **`src/types/index.ts`** — source of the `ExampleStatus` enum and `ExampleActions` interface consumed here.
+- `src/domain-primitives/lifecycle.ts`: supplies `defineLifecycle` and the `LifecycleEvent` type. The table is passed through `defineLifecycle` once at load to get `initial`, `allows` and `toOf`.
+- `src/types/index.ts`: supplies `ExampleStatus` and `ExampleActions`.
+- `src/modules/example/domain/index.ts`: the domain barrel for this module. Its exact contents aren't visible here.
+- The services (`actions.ts`, `crud.ts`, `owner.ts`, `transition.ts`) and the tests (`domain.test.ts`, `lifecycle.property.test.ts`) are listed as graph neighbors. This file's code doesn't say which exports each one uses.
 
 ## Notes
-
-- `unarchive` intentionally routes to `draft`, **not** back to `published`. A re-publish must be a separate explicit `publish` event; the original `publishedAt` stamp is preserved (see `shouldStampPublishedAt`).
-- `exampleActionsFor` gates *all* event flags on `permits.update`; a caller without `update` can never publish/archive/unarchive regardless of status. `delete` is independent of the lifecycle.
-- `fitsBodyLength` is a *deployment* ceiling that may be tighter than the API contract limit; do not confuse the two.
-- The event table is `as const` + `satisfies`, so the compiler pins the exact `from`/`to` tuples at the site; adding a new status to the enum without updating the table will be a type error at build time.
+- A published example is never "unpublished". It is archived, and only an archived example can return to `draft`.
+- Re-publishing after an archive does not move the original `publishedAt` date, because the stamp is set only if none exists.
+- `exampleActionsFor` takes the lifecycle moves from the status. Whether the caller may make any of them depends on the `update` key. The `permits` values come from the kernel.
+- `fitsBodyLength` checks against the deployment's own ceiling, which may be lower than the contract's.

@@ -1,33 +1,40 @@
 ---
 source: scripts/scaffold/demo-remove-modules.ts
-sha256: f373fcdc2a658721af1d3e53bea20d45d4e8f7c784925d886f105dda1619a009
-generated_at: 2026-11-08T02:58:22.758989+00:00
-model: ollama:qwen3.8:27b
+source_sha256: f373fcdc2a658721af1d3e53bea20d45d4e8f7c784925d886f105dda1619a009
+context_sha256: cc0f34423ae2b7f3fca16db650672d74551466631301644d9ee85fe2e91378e7
+generated_at: 2026-11-22T02:14:33.854796+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # scripts/scaffold/demo-remove-modules.ts
 
 ## Purpose
-
-Orchestrates the module-agnostic half of removing modules from a checkout: deleting their folders, stripping their registry entries, removing shared authorization grants, alert rules, validation labels, scenario files, and residue tests. It exists so the shop-specific removal script (`demo-remove.ts`) can delegate the "which files to touch" logic and focus on the shop-only catalogue and scenario work.
+Generic "remove these modules from the tree" step of the demo-removal scaffold. It handles everything that doesn't depend on *which* modules are removed: their folders, the registry line naming them, shared authorization files, alert rules on their metrics, validation labels only their fields used, scenario files, test doubles and residue tests. Registries that listed the removed files are not edited here. `npm run regenerate` rebuilds them, and `regenerate` runs that.
 
 ## Key elements
-
-- **`removeModules(repoRoot: string, names: readonly string[]): RemovalNote[]`** — The single export. Reads authorization keys, metrics, and request fields from the target modules' files *before* deleting those folders, then executes the removal steps in a fixed order and returns one `RemovalNote` per edit.
+- `removeModules(repoRoot, names)` is the only export. It edits the checkout at `repoRoot` for the module folders in `names` and returns a `RemovalNote[]`, one note per edit in the order made.
+  - **Read phase:** it first collects `removedAuthorization`, `removedMetrics` and `removedFields` from the modules' own files.
+  - **Edit phase:** it then runs, in order:
+    1. `removeModuleFolders`
+    2. `stripModuleRegistry`
+    3. `removeScenarioModuleFiles`
+    4. `stripRoleGrants`
+    5. `stripConformanceCases`
+    6. `stripAlertRules`
+    7. `stripValidationLabels`
+    8. `removeResidueTests`
 
 ## Relationships
-
-- **`./demo-remove-registry`** — Provides `removeModuleFolders`, `stripModuleRegistry`, and the `RemovalNote` type; handles folder deletion and the registry line that names the modules.
-- **`./demo-remove-authorization`** — Provides `readRemovedAuthorization`, `stripRoleGrants`, `stripConformanceCases`; reads permission keys from module files and then strips them from shared conformance/role files.
-- **`./demo-remove-alert-rules`** — Provides `readRemovedMetrics`, `stripAlertRules`; reads metric names from module files and removes their alert rules.
-- **`./demo-remove-validation-labels`** — Provides `readRemovedFields`, `stripValidationLabels`; reads request-field names and removes validation labels used only by those fields.
-- **`./demo-remove-scenarios`** — Provides `removeScenarioModuleFiles`; deletes scenario files and test doubles owned by the target modules.
-- **`./demo-remove-tests`** — Provides `removeResidueTests`; removes tests that reference the removed modules.
-- **`./demo-remove.ts`** — The caller; invokes `removeModules` with every `group: shop` module, then performs the remaining shop-specific removal (catalogue, scenarios).
+This file only orchestrates. Each step is delegated to a sibling module:
+- `demo-remove-registry.ts`: `removeModuleFolders`, `stripModuleRegistry` and the `RemovalNote` type.
+- `demo-remove-authorization.ts`: `readRemovedAuthorization`, `stripRoleGrants` and `stripConformanceCases`.
+- `demo-remove-alert-rules.ts`: `readRemovedMetrics` and `stripAlertRules`.
+- `demo-remove-validation-labels.ts`: `readRemovedFields` and `stripValidationLabels`.
+- `demo-remove-scenarios.ts`: `removeScenarioModuleFiles`.
+- `demo-remove-tests.ts`: `removeResidueTests`.
+- `demo-remove.ts` is the caller. It passes every `group: shop` module, then does the shop-only work (demo catalogue, scenarios).
 
 ## Notes
-
-- **Read-before-delete ordering is load-bearing.** The authorization keys, metrics, and request fields are read from the modules' own files, so those reads must complete before `removeModuleFolders` runs. Reordering the steps in the returned array would break the reads.
-- **Registries that *list* the removed files are intentionally NOT edited here.** They are rebuilt by `npm run regenerate`, which `regenerate` invokes. Do not add manual registry edits to this function.
-- The file is a `@module` (no default export); consumers import the named `removeModules` binding.
-- `names` is `readonly string[]` — callers may pass a literal array or a `ReadonlyArray`.
+- **Ordering:** the permission keys, metrics and request fields are read from the module files, so all three reads must happen before `removeModuleFolders` deletes them.
+- **Scratch copies:** `repoRoot` can be this checkout or a scratch copy.
+- **Registries:** generated registries are intentionally left stale and rebuilt by `npm run regenerate`.

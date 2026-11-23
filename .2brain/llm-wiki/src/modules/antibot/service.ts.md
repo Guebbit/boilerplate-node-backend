@@ -1,34 +1,34 @@
 ---
 source: src/modules/antibot/service.ts
-sha256: c7fe34220ebf2976def01596abd34dd5ccfc4b318b361129f5f1fd71a285f946
-generated_at: 2026-11-08T05:00:51.055989+00:00
-model: ollama:qwen3.8:27b
+source_sha256: c7fe34220ebf2976def01596abd34dd5ccfc4b318b361129f5f1fd71a285f946
+context_sha256: 1f6f6c756ab1b63362125c0d468de428b4d59e625095a0dd8f7ff380f879ede3
+generated_at: 2026-11-22T04:19:54.311586+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/antibot/service.ts
 
 ## Purpose
-
-Provides the antibot module's slice of the `GET /config` endpoint: which human-challenge provider is active, the parameters the client needs to render its widget, and a summary of the other antibot rungs (identity budgets, email policy).
+Supplies the antibot module's contribution to `GET /config`. It reports which human-challenge provider is active, the public parameters a client needs to render that provider's widget, and a summary of the other protection "rungs" (identity budgets and email policy).
 
 ## Key elements
-
-- **`CHALLENGE_URL`** (`const`) — Fixed path `'/antibot/challenge'` handed to self-hosted providers as their widget mount point. Defined here (in the module) rather than in the provider adapter, by design.
-- **`antibotService`** (exported object) — Single method:
-  - `config(): Promise<AntibotConfig>` — Resolves the active provider, then returns `{ provider: name, parameters: provider.publicParameters(CHALLENGE_URL), rungs: { identityBudgets: true, emailPolicy } }`. Rejects if `NODE_ANTIBOT_PROVIDER` or `NODE_ANTIBOT_EMAIL_POLICY` names an implementation absent from this build.
+- `antibotService.config()`: returns `Promise<AntibotConfig>`. It resolves the active provider with `resolveHumanChallengeProvider()` and returns:
+  - `provider`: the provider's `name`.
+  - `parameters`: `provider.publicParameters(CHALLENGE_URL)`.
+  - `rungs`: `{ identityBudgets: true, emailPolicy: resolveEmailPolicy() }`.
+- `CHALLENGE_URL` (`'/antibot/challenge'`): module-private constant passed to the provider so self-hosted providers can point their widget at this module's challenge route.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/antibot-providers/index.ts`** — Source of `resolveHumanChallengeProvider`, called inside `config()`.
-- **`src/infrastructure/adapters/antibot.ts`** — Source of `resolveEmailPolicy`, used to populate `rungs.emailPolicy`.
-- **`src/types/index.ts`** — Provides the `AntibotConfig` return-type used by `config()`.
-- **`src/app/config-routes.ts`** — Upstream caller that invokes `antibotService.config()` and maps its rejection to a server-error response.
-- **`src/modules/antibot/index.ts`** — Module barrel; re-exports `antibotService` as the module's public surface.
-- **`src/modules/antibot/tests/unit/service.test.ts`** — Unit tests for `antibotService.config`.
+- `@infrastructure/adapters/antibot-providers` (`index.ts`): supplies `resolveHumanChallengeProvider`, which yields the provider object with `name` and `publicParameters`.
+- `@infrastructure/adapters/antibot`: supplies `resolveEmailPolicy`.
+- `@types` (`src/types/index.ts`): supplies the `AntibotConfig` return type.
+- `src/app/config-routes.ts`: the `GET /config` aggregation that calls this service. It is the "caller" that turns rejections into server errors.
+- `src/modules/antibot/index.ts`: the module's entry point, which presumably exposes `antibotService`.
+- `src/modules/antibot/tests/unit/service.test.ts`: unit tests for this service.
 
 ## Notes
-
-- `CHALLENGE_URL` is intentionally owned by the module, not the adapter: *"an adapter must not know its own mount path."*
-- `rungs.identityBudgets` is hardcoded to `true`; it is not derived from any config flag.
-- `config()` is always async (returns a Promise) even though the current code path is synchronous — keeps the interface stable if a provider's resolution becomes genuinely async.
-- The `none` provider (default) returns an empty parameter map, which the client interprets as "render nothing."
+- `config` rejects if `NODE_ANTIBOT_PROVIDER` or `NODE_ANTIBOT_EMAIL_POLICY` names something this build does not include. The caller answers that rejection as a server error.
+- The default `none` provider returns an empty parameter map, which means the client should render nothing.
+- `CHALLENGE_URL` lives in the module, not the adapter, because an adapter must not know its own mount path. It must stay in sync with `module.ts`'s `basePath` plus `routes.ts`'s `/challenge`.
+- `Promise.resolve().then(...)` wraps the synchronous resolvers, so a throw from `resolveHumanChallengeProvider` becomes a rejected promise rather than a synchronous exception. `resolveEmailPolicy()` is called inside the `.then` callback, so it is covered the same way.
+- `identityBudgets: true` is hardcoded and not read from configuration.

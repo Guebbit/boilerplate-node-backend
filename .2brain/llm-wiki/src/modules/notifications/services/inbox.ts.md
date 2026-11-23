@@ -1,51 +1,55 @@
 ---
 source: src/modules/notifications/services/inbox.ts
-sha256: 4762db99f5b1a5a3aa65ffa6bd7fc2eb281b51d6f5635188f71f40c3c57eae35
-generated_at: 2026-11-08T06:33:13.712127+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 4e0f6fd75b59a293a29cebd7d856b69c39b1117d6e94e4631a4fab94f019ca5e
+context_sha256: 0554c37f3b4e0be7c4fa71d9cf751e9ff75d23c59904c143714eb01d14035119
+generated_at: 2026-11-22T05:55:33.665509+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/notifications/services/inbox.ts
 
 ## Purpose
-
-The inbox service: the single place where notifications are read, written, and removed (owner delete, inbox empty, or cap trim). Every mutation is also broadcast to the owner's open streams via `publishToUser`, so multiple tabs stay in sync without a manual refresh.
+The notifications inbox service: it writes, reads and removes notifications, and pushes every change to the owner's open streams so multiple tabs stay in sync. It covers creation, listing, per-user caps, summary rows, deletion, mark-all-read, and erasure on account deletion.
 
 ## Key elements
-
-- **`notificationsList(userId)`** — returns the user's own notifications, newest first, for data export and tests.
-- **`notificationsListStaffNotices(userId)`** — returns sanitized staff-notice rows (code, timestamps only; `params` omitted) for the data export.
-- **`visibleTo(row, caller)`** *(internal)* — the single visibility gate: own messages always visible; staff notices only to a tenant-scope caller who still holds one of the row's permission sets.
-- **`notificationsListVisible(caller)`** — merges own + staff rows, filters through `visibleTo`, sorts descending.
-- **`notificationGet(caller, id)`** — fetches one notification; returns 404 for unknown, foreign, or unpermitted rows (anti-enumeration).
-- **`trimInbox(userId, audience)`** *(internal)* — deletes everything past the per-audience cap and publishes the removed ids.
-- **`notificationsCreate(rows)`** — bulk-inserts, publishes a `CREATED` event per row, then trims each affected user sequentially.
-- **`notificationsCreateStaffOnce(row)`** — idempotent insert (dedupe key); returns `true` only when a new row was written, so callers can conditionally send mail.
-- **`notificationsWriteSummary(summary, now?)`** — upserts a summary row; returns `'appeared' | 'grew' | 'unchanged'` so digest mailers can skip no-ops. Publishes delete-then-create to keep one copy per tab.
-- **`notificationsClearSummary(code)`** — deletes all summary rows for a code (count hit zero) and notifies recipients.
-- **`notificationDelete(userId, id)`** — removes one row; 404 if not found or not owned.
-- **`notificationsDismissAll(userId, audience?)`** — empties the whole inbox or one audience; publishes `all: true` vs. explicit ids accordingly.
-- **`notificationsReadAll(userId)`** — stamps `readAt` on all unread rows and broadcasts a `READ` event.
-- **`notificationsDeleteByUserId(userId, session)`** — hard-delete hook for account erasure; joins the caller's mongoose transaction.
+- `notificationsList(userId)`: the user's own messages, newest first (used by the data export and tests).
+- `notificationsListStaffNotices(userId)`: work notices as the data export shows them. It returns only `code`, `createdAt` and optional `readAt`, never `params`.
+- `notificationsListVisible(caller)`: the caller's own messages plus the staff notices of their tenant, filtered by `visibleTo` and sorted newest first.
+- `notificationGet(caller, id)`: returns one notification, or a 404 reject. The 404 is the same for an unknown id, someone else's notification, or a staff notice the caller no longer holds the sets for.
+- `notificationsCreate(rows)`: inserts rows, publishes `CREATED` for each, then trims each distinct owner sequentially to the `own` cap.
+- `notificationsCreateStaffOnce(row)`: an idempotent insert of a staff notice. It publishes and trims only if the notice was newly written, and returns a boolean so the caller mails only on the first write.
+- `notificationsWriteSummary(summary, now)`: upserts a per-recipient summary row and returns a `SummaryOutcome` (`'appeared' | 'grew' | 'unchanged'`).
+  - The expiry is computed as `NODE_NOTIFICATIONS_STAFF_TTL_DAYS` × `DAY_MS` from `now`.
+  - When the row appeared or grew, it publishes a `DELETED` event for the old row's id (if one existed), then a `CREATED` event, then trims.
+  - When the count is unchanged or lower, it updates quietly, with no event and no trim.
+- `notificationsClearSummary(code)`: deletes all recipients' summary rows for a code and publishes `DELETED` per user.
+- `notificationDelete(userId, id)`: deletes one owned notification, with a 404 if none matched, and publishes `DELETED`.
+- `notificationsDismissAll(userId, audience?)`: empties the whole inbox or one audience. A whole-inbox delete publishes `{ all: true }`. An audience delete publishes only the deleted ids.
+- `notificationsReadAll(userId)`: marks all notifications read as of now and publishes `READ` with an ISO `readAt`.
+- `notificationsDeleteByUserId(userId, session)`: the `personalData.erase` hook. It runs inside the caller's hard-delete transaction.
+- `SummaryOutcome`: the exported outcome type.
+- Internal helpers:
+  - `visibleTo`: the visibility rule.
+  - `trimInbox`: cap enforcement.
+  - `countOf`: reads `params.count`, defaulting to 0.
 
 ## Relationships
-
-- **`src/modules/notifications/repository.ts`** — all reads/writes go through `notificationRepository`; this file never touches Mongoose directly.
-- **`src/modules/notifications/services/stream.ts`** — `publishToUser` is called after every mutation (create, delete, read, trim) to push events to open sockets.
-- **`src/modules/notifications/presenter.ts`** — `presentNotification` / `presentNotifications` convert DB rows into the API-facing `NotificationsView`.
-- **`src/modules/notifications/staff-routing.ts`** — `callerHoldsAnySet` powers the staff-notice visibility check inside `visibleTo`.
-- **`src/modules/notifications/config.ts`** — `notificationsConfig()` supplies per-user caps and the staff TTL in days.
-- **`src/modules/notifications/model.ts`** — `NotificationDocument` type is the DB row shape used in visibility and trimming logic.
-- **`src/infrastructure/http/response.ts`** — `generateSuccess` / `generateReject` shape every API response.
-- **`src/infrastructure/i18n/index.ts`** — `t()` localizes the single `notifications.not-found` error string.
-- **`src/domain-primitives/time.ts`** — `DAY_MS` is used to compute `expiresAt` in `notificationsWriteSummary`.
-- **`src/types/auth-context.ts` / `src/types/index.ts`** — `Caller`, `NOTIFICATIONS_CHANNELS`, `Notification`, `NotificationAudience` types shared across the module.
-- **`src/modules/notifications/services/index.ts`** — barrel re-export; consumers import from the barrel, not this file directly.
+- `../repository`: all persistence goes through `notificationRepository` (`listOwn`, `listStaff`, `findOwned`, `insertMany`, `insertStaffOnce`, `trimToNewest`, `findSummary`, `writeSummary`, `deleteSummaries`, `deleteOwned`, `deleteByUserId`, `deleteByAudience`, `markAllRead`). It also supplies the `NewNotification` and `NewStaffNotification` types.
+- `./stream`: `publishToUser` pushes `CREATED`, `DELETED` and `READ` events on `NOTIFICATIONS_CHANNELS` (from `@types`).
+- `../presenter`: `presentNotification` and `presentNotifications` shape documents for output.
+- `../config`: `notificationsConfig()` supplies `NODE_NOTIFICATIONS_MAX_PER_USER`, `NODE_NOTIFICATIONS_STAFF_MAX_PER_USER` and `NODE_NOTIFICATIONS_STAFF_TTL_DAYS`.
+- `../staff-routing`: `callerHoldsAnySet` decides whether a caller may see a staff notice.
+- `../model`: `NotificationDocument` is used as a type.
+- `@infrastructure/http/response`: `generateSuccess` and `generateReject` build the responses.
+- `@infrastructure/i18n`: `t` provides the 404 message for not-found notifications.
+- `@domain-primitives/time`: `DAY_MS` is used for the summary expiry.
+- `@types`: `Caller`, `Notification`, `NotificationAudience`, `StaffNoticeExport` and `NOTIFICATIONS_CHANNELS`.
 
 ## Notes
-
-- **Sequential trimming on bulk writes.** `notificationsCreate` trims one user at a time (not `Promise.all`) because a bulk product delete can name thousands of users and parallel cap queries would spike DB load.
-- **404 is the only error.** Both `notificationGet` and `notificationDelete` collapse "unknown id", "someone else's", and "lost permission" into the same 404 so a caller cannot enumerate.
-- **Summary publish pattern.** `notificationsWriteSummary` emits `DELETED` (old id) before `CREATED` (new row) when a row is updated, ensuring a tab never holds two copies of the same summary.
-- **`notificationsDismissAll` stream payload.** Omitting `audience` sends `{ all: true, ids: [] }`; specifying one sends the explicit removed ids so other audiences remain visible in the tab.
-- **Transaction coupling.** `notificationsDeleteByUserId` accepts a `ClientSession`; a throw here aborts the surrounding hard-delete transaction.
+- Staff notices are filtered at read time by the caller's current permission sets. Revoking a role hides the notices without any write.
+- The `own` and `staff` audiences have separate caps, and trimming runs after the insert.
+- Trimming is sequential per owner on purpose, because bulk events can name thousands of users.
+- A filtered dismiss publishes ids rather than `all: true`, so the owner's other tab isn't wiped.
+- Summary rows that grow are republished as a delete followed by a create, so a tab holds one copy.
+- `notificationsDeleteByUserId` must throw rather than swallow errors, so the surrounding transaction aborts.
+- `notificationsListVisible` expects `caller.id` to be set. Outside tenant scope it returns only the caller's own messages.

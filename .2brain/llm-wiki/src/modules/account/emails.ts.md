@@ -1,47 +1,48 @@
 ---
 source: src/modules/account/emails.ts
-sha256: 5bef5eb6ec3230148b09754a74ee0fddb0168bb57518fa6156f329f059030bb3
-generated_at: 2026-11-14T18:35:56.498024+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 59f89349bbfe2e5906e7344a98ff3e05bc49080f6d879585a8d92f67a30af892
+context_sha256: 31ad8ace284ea2bb7d41bd53d9d5c967fcbabbc20f38df75bb175838ef0e7025
+generated_at: 2026-11-22T03:29:26.151384+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/account/emails.ts
 
 ## Purpose
-
-Every account-module email's finished content (template name, subject, localized body fields) is built here. Because emails render later in `adapters/email.worker.ts` with no request or locale store available, each builder binds its own translator to the recipient's locale up front and returns a complete `EmailContent` object. Templates only interpolate; they never translate.
+Holds the copy for every email the account module sends, resolved into finished strings. Templates only interpolate and never translate, because emails render later in `src/infrastructure/adapters/email.worker.ts` with no request or locale store. Each builder therefore takes the recipient's locale explicitly, binds its own translator `t`, and returns a complete `EmailContent` (template name, subject and render data).
 
 ## Key elements
-
-- **`greetableName(user, address)`** – Security gate: returns the account's `username` only when the mail is going to that account's *verified* address; otherwise `''`. Prevents attacker-chosen display text from landing in a stranger's inbox.
-- **`greetingFor(t, key, name)`** (internal) – Chooses a named greeting or a generic "Hello!" when no name is present.
-- **`accountMail({template, locale, name, body, security})`** (internal) – Shared frame: derives the i18n key prefix from the template name, builds subject + `pageMetaTitle` + greeting + body slots + footer in one `EmailContent`. `security: true` switches the footer to the support-address variant.
-- **`verifyRequestEmail(locale, name, token, kind?)`** – Confirmation-link email shared by signup verification and email-change flows (`kind` picks the frontend route).
-- **`emailChangeNoticeEmail(locale, name, newEmail, undoToken)`** – Warning sent to the *old* address at change-request time; carries a 7-day undo link. Uses `security: true`.
-- **`resetRequestEmail(locale, name, token)`** – One-time password-reset link.
-- **`setupRequestEmail(locale, name, token)`** – Admin-created account's first contact; links Terms and privacy notice (GDPR Art. 14).
-- **`twoFactorCodeEmail(locale, name, code, minutes)`** – 2FA login code. Deliberately contains **no link** (phishing-reflex prevention).
-- **`reauthCodeEmail(locale, name, code, minutes)`** – Step-up code for passwordless sign-in; same layout as 2FA code but different template and copy.
-- **`TwoFactorChange`** (exported type) – `'enrolled' | 'removed' | 'disabled' | 'codes-regenerated'`.
-- **`twoFactorChangedEmail(locale, name, change, method)`** – Out-of-band MFA factor change notice (OWASP). No action link. Uses `security: true`.
-- **`SignInMethodChange`** (exported type) – `'linked' | 'unlinked'`.
-- **`signInMethodChangedEmail(...)`** – Out-of-band sign-in provider change notice (NIST SP 800-63C-4 §3.8). No action link.
+- `greetableName(user, address)` is exported. It returns `user.username` only when the user has `verifiedAt` set and `address` matches `user.email` after `normalizeEmail`. Otherwise it returns `''`.
+- `greetingFor` (private) returns the translated "greeting-anonymous" line for an empty name, or the template's own `...greeting` key with `{ name }`.
+- `accountMail` (private) is the shared frame. It takes `template` (`account.<flow>`), `locale`, `name`, a `body(t)` callback and an optional `security` flag.
+  - Copy keys are `account.email.<flow>.*`.
+  - It fills `subject`, `pageMetaTitle`, `greeting`, the body slots and `footer`.
+  - With `security`, the footer is `account.email.footer-support` naming `supportEmail()`. Otherwise it is `email.footer`.
+- Builders, all returning `EmailContent`:
+  - `verifyRequestEmail(locale, name, token, kind)`: the verification link. `kind` is `'verify'` (default) or `'email-change'`.
+  - `emailChangeNoticeEmail(locale, name, newEmail, undoToken)`: a security notice to the OLD address, sent when a change is requested. It carries the undo link (`email-undo`).
+  - `resetRequestEmail(locale, name, token)`: the password reset link.
+  - `setupRequestEmail(locale, name, token)`: account setup for admin-created accounts. It also links the Terms and the privacy notice.
+  - `twoFactorCodeEmail(locale, name, code, minutes)`: a login code with no link.
+  - `reauthCodeEmail(locale, name, code, minutes)`: a step-up code for accounts with no password, with no link.
+  - `twoFactorChangedEmail(locale, name, change, method)`: a security notice. The body key is `body-${change}`.
+- Types: `TwoFactorChange` (`'enrolled' | 'removed' | 'disabled' | 'codes-regenerated'`) and `SignInMethodChange` (`'linked' | 'unlinked'`).
+- `signInMethodChangedEmail` is documented as a notice sent when a provider is linked to or unlinked from an account. The rest of the file is not shown here.
 
 ## Relationships
-
-- **`src/infrastructure/adapters/config.ts`** – Imports `supportEmail()` for the security-footer variant.
-- **`src/infrastructure/adapters/mailer.ts`** – Imports the `EmailContent` return type shared by all builders.
-- **`src/infrastructure/i18n/index.ts`** – Imports `translator` and `getDefaultLocale` to bind locale at build time.
-- **`src/infrastructure/persistence/normalize-email.ts`** – Imports `normalizeEmail` used inside `greetableName` for case-insensitive address comparison.
-- **`src/modules/account/config.ts`** – Imports `accountFrontendLink`, `accountTermsLink`, `accountExportLink`, and the `AccountLinkKind` type for constructing in-email URLs.
-- **`src/modules/users`** (via `privacyFrontendLink`) – Used in `setupRequestEmail` for the GDPR privacy link.
-- **`src/modules/account/index.ts`** – Re-exports the public builders so services can import them from the module barrel.
-- **Service callers** (`email-change.ts`, `password-reset-request.ts`, `password-reset.ts`, `oauth.ts`, `account-deletion.ts`, `export.ts` / `export-job.ts`) – Each service calls the relevant builder(s) and passes the resulting `EmailContent` to the mailer adapter for queueing.
+- `src/infrastructure/adapters/config.ts` supplies `supportEmail()` for the security footer.
+- `src/infrastructure/adapters/mailer.ts` supplies the `EmailContent` type that every builder returns.
+- `src/infrastructure/i18n/index.ts` supplies `translator` and `getDefaultLocale`.
+- `src/modules/account/config.ts` supplies `accountFrontendLink`, `accountExportLink`, `accountTermsLink` and the `AccountLinkKind` type. These build the links in the emails.
+- `src/infrastructure/persistence/normalize-email.ts` supplies `normalizeEmail`, used by `greetableName`.
+- `@modules/users` supplies `privacyFrontendLink`, used in the setup email.
+- `@types` supplies `CallerContext`.
+- The service files in the neighbor list are likely callers of these builders. The visible code confirms only that a comment references `password-reset-request.ts` (`requestAccountSetup`).
 
 ## Notes
-
-- **Template names are identifiers, not i18n keys.** The `template` literal (e.g. `'account.reset-request'`) is a published outbox name shared with a twin repository; cross-cutting tooling sweeps the source text for `template:` lines. Do not rename or interpolate it.
-- **`greetableName` is a one-line security rule.** Any new account email that prints the recipient's name must route through it; skipping it lets an unverified address carry attacker text.
-- **No links in code-delivery emails.** `twoFactorCodeEmail` and `reauthCodeEmail` intentionally omit `linkUrl` so the recipient never forms a "click the button" habit.
-- **`security: true` changes the footer.** When set, the footer names the support address from `supportEmail()` (env `NODE_SUPPORT_EMAIL`) instead of the generic `email.footer`.
-- **The i18n key prefix is derived, not passed.** `accountMail` strips the `account.` prefix from the template name to build `account.email.<flow>.*` keys — add a new flow by adding a new template literal; the key namespace follows automatically.
+- Pass `name` through `greetableName`. A display name is user-supplied text. Printing it to an unverified address would put attacker-chosen text in a stranger's inbox from the shop's own domain.
+- Code emails (`twoFactorCodeEmail`, `reauthCodeEmail`) deliberately carry no `linkUrl`, so recipients are not taught to click a button in a mail that also carries a code.
+- `template` is passed as a literal string and declared `readonly`. Cross-cutting sweeps read lines starting `template:` as published outbox names, and the name is shared with a "twin repository".
+- Security notices (`security: true`) are `emailChangeNoticeEmail` and `twoFactorChangedEmail`. They use the support-address footer.
+- `emailChangeNoticeEmail` is sent when the change is requested, not when it completes. Its undo link lasts 7 days and survives a password change, according to the doc comment.
+- `setupRequestEmail` reuses the same link, token type and TTL as the reset email. Only the copy differs.

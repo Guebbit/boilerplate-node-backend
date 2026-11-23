@@ -1,39 +1,41 @@
 ---
 source: src/modules/invoicing/services/issue-invoice.ts
-sha256: c1615220663ce0be691879f79b33e59573ad76c9aedc2a29d1a0709b6b309304
-generated_at: 2026-11-08T06:14:58.623141+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 0a167fc6669a96b112e7432626e2aa6825801fe08003cb72f60380bc05ecedf7
+context_sha256: 97fc283ce93a22304370286ea8dafc6f46fe27ecad6c9246e59a755ef8d1fa40
+generated_at: 2026-11-22T05:35:48.986860+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/invoicing/services/issue-invoice.ts
 
 ## Purpose
-
-The single write path in the invoicing module. When an order transitions to `paid` (via the `ORDER_STATUS_CHANGED` listener in `module.ts`), this file freezes that order into an immutable `InvoiceDocument` — allocating a number, encrypting the billing address, and inserting the row — all inside one transaction. Idempotent by construction: a duplicate-key abort returns the already-issued invoice rather than creating a second.
+Freezes a paid order into its invoice. It is the single write the invoicing module makes in response to `ORDER_STATUS_CHANGED` (`to: 'paid'`), called from `module.ts`'s listener. It is idempotent: if an event is redelivered or two settlements race on the same order, only one invoice is created and the other caller gets the existing one.
 
 ## Key elements
-
-- **`issueInvoice(order: OrderDocument)`** — exported. Orchestrates the full issue: computes the tax breakdown, allocates a number, inserts the invoice, appends an `invoice_issued` timeline entry, and on duplicate-key falls through to `readWinner` to return the existing row. Returns `undefined` if the order has no lines.
-- **`findInvoiceForOrder(orderId: string)`** — exported. Thin read-through to `invoicingRepository.findInvoiceByOrderId`; the service-level gate so callers (credit-note service, `GET /orders/{id}/invoice`) never reach the repository directly. Returns `null` when no invoice exists.
-- **`frozenSeller()`** *(internal)* — Builds `InvoiceSeller` from `operatorIdentity()` at call time. `vatNumber` is optional; all other fields are required at boot.
-- **`frozenLines(order)`** *(internal)* — Maps order items to `InvoiceLine[]`. Deliberately stores only the raw fields (unit price, tax rate, rate type); net/tax/gross per line is re-derived downstream by `orderTaxBreakdown` to avoid a second source of truth.
+- **`issueInvoice(order)`**: Builds and persists the invoice for an order.
+  - Returns `undefined` if the order has no items.
+  - Computes the tax breakdown with `orderTaxBreakdown`.
+  - Mints the `_id` and `issuedAt` before the transaction, so a driver retry reuses them.
+  - Inside `withTransaction`, allocates the number, inserts the invoice, and appends an `invoice_issued` timeline entry to the order.
+  - On failure, the `.catch(readWinner(...))` handler reads the winning invoice instead.
+- **`frozenSeller()`**: Snapshots the operator identity (`legalName`, optional `vatNumber`, address) fresh at each issue. Only the VAT number can be absent.
+- **`buyerOf(address)`**: Maps the order's billing address to an `InvoiceParty`: name, postal fields, and VAT number if present. It deliberately omits the phone number (data minimisation).
+- **`frozenLines(order)`** (not exported): Maps order items to `InvoiceLine`s (product id, title, quantity, unit price, tax rate, and `rateType` when present). Net/tax/gross per line is not stored.
+- **`findInvoiceForOrder(orderId)`**: Returns the live invoice for an order or `null`. It is the service's door onto the repository read.
 
 ## Relationships
-
-- **`@infrastructure/runtime/database`** — `withTransaction` wraps the insert + timeline append as a single unit of work.
-- **`@modules/orders`** (index, model, services, `domain/totals`) — imports `orderService` (read order, `billingAddressOf`, `appendTimeline`), `orderTaxBreakdown`, `orderTotal`, and the `OrderDocument` type. `orderTotal(order)` is the authoritative `grandTotal` source, identical to what `applyOrderTotals` and the placed-order email use.
-- **`@modules/account`** (`services/operator-identity.ts` via barrel) — `operatorIdentity()` supplies the seller's legal identity at issue time.
-- **`../model`** — type-only: `InvoiceDocument`, `InvoiceLine`, `InvoiceSeller`.
-- **`../pii`** — `encryptInvoiceParty` re-encrypts the billing address under the invoice's own `_id`.
-- **`../repository`** — `invoicingRepository.insertInvoice` / `findInvoiceByOrderId`.
-- **`./numbering`** — `allocateInvoiceNumber` (in-transaction number allocation) and `readWinner` (duplicate-key fallback).
-- **`services/index.ts`** — this module is re-exported through the services barrel; consumers import from there.
-- **`services/issue-credit-note.ts`** — calls `findInvoiceForOrder` to locate the invoice a credit note corrects.
+- **`../repository`**: Its `invoicingRepository` inserts the invoice and backs `findInvoiceForOrder` through `findInvoiceByOrderId`.
+- **`./numbering`**: `allocateInvoiceNumber` assigns the number inside the transaction. `readWinner` handles the lost-race recovery.
+- **`../pii`**: `encryptInvoiceParty` re-encrypts the buyer block under the invoice's own id.
+- **`../model`**: Supplies the `InvoiceDocument`, `InvoiceLine`, `InvoiceParty` and `InvoiceSeller` types.
+- **`@infrastructure/runtime/database`**: `withTransaction` provides the session.
+- **`@modules/orders`**: Supplies `orderService` (`billingAddressOf`, `appendTimeline`), `orderTaxBreakdown`, `orderTotal` and the `OrderDocument` type.
+- **`@modules/account`**: `operatorIdentity` provides the seller data.
+- **`./issue-credit-note`** (`src/modules/invoicing/services/issue-credit-note.ts`): Uses `findInvoiceForOrder` to read the invoice a credit note corrects.
 
 ## Notes
-
-- **Retry stability:** `_id` and `issuedAt` are allocated *before* the transaction so a driver retry reuses the same values rather than generating new ones.
-- **Billing vs. shipping address:** the buyer address is always the order's own `billingAddress` (Art. 226), never the ship-to. A digital-only order has no ship-to at all.
-- **`grandTotal` is never hand-computed** — it comes from `orderTotal(order)`, the same function the order model and the confirmation email quote, eliminating drift.
-- **Locale** is taken from `order.items[0].locale` (the language product titles were resolved into at checkout), not from any request-level setting.
-- **Return-type asymmetry:** `issueInvoice` → `InvoiceDocument | undefined` (empty order); `findInvoiceForOrder` → `InvoiceDocument | null` (no row yet).
+- The transaction covers the number allocation, the invoice insert and the timeline append. If a racing writer hits a duplicate-key error, the transaction aborts, the number is returned, and the loser reads the winner's row.
+- The buyer address is the order's own frozen `billingAddress`, not the ship-to address, because digital-only orders have no ship-to. If the order has no billing address, the invoice omits the field.
+- The invoice locale is `order.items[0].locale`.
+- `grandTotal` comes from `orderTotal(order)`, the same function the order model and the placed-order email use. It is not a hand-composed sum, so it cannot drift from what the order charged.
+- The tax breakdown is not stored per line. `emails.ts#buildVatBlock` re-derives it via `orderTaxBreakdown`.

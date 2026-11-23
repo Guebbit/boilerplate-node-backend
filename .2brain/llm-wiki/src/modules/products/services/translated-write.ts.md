@@ -1,40 +1,36 @@
 ---
 source: src/modules/products/services/translated-write.ts
-sha256: 3f6ae1ac71e5928eb0d2ca916e93262ed39a9b9c7f270dc9564ef73624bb778d
-generated_at: 2026-11-08T07:48:58.763625+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 78168cd8471ace1d43b873927f21fba6c49cf23e162f73cf971948665b32cd0d
+context_sha256: 7bdf112f8c0869e40c998427ee7f6a1decd1ccb66b063401c7fdcfdd53574c32
+generated_at: 2026-11-22T07:14:26.427894+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/products/services/translated-write.ts
 
 ## Purpose
-
-The multilingual write surface for products. Provides the two mutation doors — `create` and `updateById` — that persist a product row together with its per-locale translation rows in a single database transaction, guaranteeing that the fallback-locale title can never be changed without its translation row changing with it. Also exports `clearOmittedLocales`, the PUT-semantics preparer that turns a sparse body into the full locale set expected by `updateById`.
+Defines the product module's write operations, `create` and `updateById`. Each writes a product row and its translation rows in one transaction. No function writes the product row alone, so a title can't change without the fallback-locale translation changing too. It also provides `clearOmittedLocales`, which gives PUT its replace-the-whole-set semantics.
 
 ## Key elements
-
-- **`create(data, context, imageExtras?)`** — Validates the translation batch via `planTranslations`, then inside one `withTransaction` inserts the product row, writes all translation rows, and returns a 201 via `finishCreate`.
-- **`updateById(id, data, context, imageExtras?)`** — Plans translations (if any), then in one transaction performs the 404 check, row update, derived-column refresh, and translation upsert. Serves both PUT and PATCH because `clearOmittedLocales` normalises PUT before it reaches here.
-- **`clearOmittedLocales(id, changes)`** — Reads all stored translation locales, marks any locale absent from the PUT body as `null`, and fills omitted `description` within stated locales with `null` (via `fillOmittedWithNull`). The fallback locale is always present (schema refinement).
-- **`toUpsertTranslationsRequest`** *(internal)* — Converts the module's flat `{ title?, description? } | null` per-locale shape into the kernel's `TranslationBatch` (`{ fields, origin? }`). `origin` is intentionally omitted so the port defaults to `"human"`.
-- **`prefixTranslationErrors`** *(internal)* — Rewrites error `details.field` from e.g. `"it"` to `"translations.it"` to match this module's nested request-body shape.
-- **`TRANSLATED_FIELDS`** — `['description']`; the subset of translated fields (beyond the always-present `title`) that `fillOmittedWithNull` applies to.
+- `create(data, context, imageExtras?)`: plans the translations batch first, so a bad batch opens no transaction. It then runs `insertProduct` and `writeTranslations` inside `withTransaction`. The fallback-locale entry's `title` and `description` are copied onto the product row (the derived column). Afterwards it calls `finishCreate` and returns `generateSuccess(..., 201)`.
+- `updateById(id, data, context, imageExtras?)`: splits `translations` from the other fields and plans the translations if present. Inside one transaction it runs `updateByIdInTransaction`, then `writeTranslations` only if the outcome has `updated`. If the fallback locale is upserted, its title and description go onto the row. `touch` is set when a plan exists. Afterwards it calls `finishUpdateById`. Otherwise it returns the not-found/reject outcome as is.
+- `clearOmittedLocales(id, changes)`: for PUT. It reads the stored translations with `readAllTranslations`. A stated locale has its omitted `description` filled with `null` (via `fillOmittedWithNull` and `TRANSLATED_FIELDS = ['description']`). Every stored locale missing from the body becomes `null`, meaning delete.
+- `toUpsertTranslationsRequest` (private): converts the module's flat `{ title, description? } | null` per-locale shape into the kernel's `TranslationBatch` (`{ fields }`). It leaves `origin` to the port's default, `human`.
+- `prefixTranslationErrors` (private): rewrites the `details.field` of plan rejections to `translations.<field>`, because `translations` is a nested field in this module's body.
 
 ## Relationships
-
-- **`@kernel/translation`** — Consumes `planTranslations`, `isTranslationPlan`, `readAllTranslations`, `writeTranslations`, and the `TranslationBatch` type. This file is a product-specific caller of that generic translation port.
-- **`./crud`** — Delegates the actual row insert/update and the post-commit side-effects (outbox, audit, image enqueue) to `insertProduct`, `updateByIdInTransaction`, `finishCreate`, and `finishUpdateById`.
-- **`../model`** — Imports `zodProductCreateSchema`, `zodProductUpdateSchema` (used to type `data` and to derive `ProductDocument`); the schemas' refinements (fallback-locale presence, `null`-for-fallback rejection) are relied upon but not re-checked here.
-- **`@infrastructure/runtime/database`** — Wraps every multi-write sequence in `withTransaction` so row + translations + derived column commit atomically.
-- **`@infrastructure/http/response`** — Shapes every return value via `generateSuccess` / `ResponseReject` / `ResponseSuccess`.
-- **`@infrastructure/i18n`** — Calls `getFallbackLocale()` to pick the locale whose title/description populate the derived index column.
-- **`@infrastructure/object-guards`** — Uses `fillOmittedWithNull` inside `clearOmittedLocales` to materialise "stated but omitted" fields as explicit `null`.
-- **`@types`** — Imports `CallerContext`, `ProductTranslationFieldsPatch`, and `ServerImageFields` for parameter/return typing.
+- `@kernel/translation` supplies `planTranslations`, `isTranslationPlan`, `writeTranslations`, `readAllTranslations` and the `TranslationBatch` type. The `'product'` resource key is passed to each.
+- `./crud` supplies `insertProduct`, `updateByIdInTransaction`, `finishCreate` and `finishUpdateById`. This file composes them with the translation writes.
+- `@infrastructure/runtime/database` provides `withTransaction`, which supplies the session used by both the row writes and the translation writes.
+- `@infrastructure/i18n` provides `getFallbackLocale()` to pick the locale mirrored onto the product row.
+- `@infrastructure/http/response` provides `generateSuccess`, `ResponseSuccess` and `ResponseReject`.
+- `@infrastructure/object-guards` provides `fillOmittedWithNull`.
+- `../model` provides `zodProductCreateSchema`, `zodProductUpdateSchema` and the `ProductDocument` type.
+- `@types` provides `CallerContext`, `ServerImageFields` and `ProductTranslationFieldsPatch`.
 
 ## Notes
-
-- **PUT vs PATCH sharing one path.** `clearOmittedLocales` runs *before* `updateById` for PUT, so by the time `updateById` sees `translations` every stored locale is explicitly present (value or `null`). PATCH skips `clearOmittedLocales` and sends only the locales being touched.
-- **`imageExtras` is server-side only.** It is never part of the client contract; it is merged after validation and inside the transaction, the same ordering the controller uses.
-- **`null` vs `undefined` for `imageUrl` on create.** The schema default applies to `undefined`; an explicit `null` means "no image." The code uses `imageExtras.imageUrl ?? undefined` to preserve that distinction.
-- **No-description means absent, not empty.** The code omits the `description` key entirely rather than writing `''` when it is `undefined`.
-- **Error-field prefixing.** This module's request body nests translations under `translations.*`, unlike the generic translation endpoint where the body is the batch itself. `prefixTranslationErrors` bridges the two shapes so 422 responses carry the correct pointer.
+- Validation happens before this file runs. The create schema refuses a missing or `null` fallback locale, and the update schema refuses `null` for it. The code relies on this and reads `data.translations[getFallbackLocale()]` without a check.
+- `imageExtras` is server-derived and is merged only after validation. On create, `imageUrl: imageExtras.imageUrl ?? undefined` makes `null` mean "no image" so the schema default can apply.
+- A missing description is stored as no field, never `''`.
+- `clearOmittedLocales` must run before `updateById` so a PUT arrives with every omitted locale already `null`. That way `updateById` serves both PUT and PATCH.
+- Post-transaction steps (relay wake-up, audit, image enqueue, old-image delete) live in the `finish*` helpers. The doc comment says each catches its own failure.

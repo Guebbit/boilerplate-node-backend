@@ -1,39 +1,36 @@
 ---
 source: src/modules/delivery/services/release-date-impact.ts
-sha256: 1d7cb2fdb5c065316956bb2a58cc66ed1738233806e756c0261890e68c17bb6a
-generated_at: 2026-11-08T05:39:01.908782+00:00
-model: ollama:qwen3.8:27b
+source_sha256: ae243a073b3ac2c3b588587df571e7d75eb2833b5b0da291835e767f8eb4dde2
+context_sha256: 0ecc057f619f2223be6d1141cdf8f4efa2d0eac6332ad9e2faab198492fc8ceb
+generated_at: 2026-11-22T04:58:14.570006+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/delivery/services/release-date-impact.ts
 
 ## Purpose
-
-Provides a **read-only staff preview** of how changing a product's release date (preorder) or restock date (backorder) would affect waiting orders. It runs the same judgment logic (`judgeMove`, `expectedDateOfWaiting`) that the actual save listener uses, so the preview count cannot drift from the real outcome. No writes are performed.
+Powers the staff preview of a release-date (preorder) or restock-date (backorder) change. Before the date is saved, it counts how many already-paid orders would be emailed. It reuses the event listener's own rule (`judgeMove`, `expectedDateOf*`) and writes nothing, so the preview matches what saving would do.
 
 ## Key elements
-
-- **`previewDateImpact(productId, cause, date)`** — the sole public export. Resolves a product, short-circuits to `{ notify: 0 }` if the date is unchanged, otherwise loads all waiting fulfillment orders for that product, judges each against the hypothetical new date, and returns a `ReleaseDateImpact` count. Returns a 404 `ResponseReject` for unknown products.
-- **`verdictsFor(waiting, productId, date, cause)`** — internal. Batch-fetches *other* products referenced in the fulfillment order lines (via `productService.findManyByIds`) so `judgeMove` can compare against their dates, then returns one `Judged` entry per fulfillment order that produced a verdict.
-- **`tally(judged)`** — internal. Deduplicates by `orderId` and counts only entries whose verdict kind is `'notify'`. This is why the count is **orders**, not fulfillment orders.
-- **`dateFor(product, cause)`** / **`sameDate(a, b)`** — small helpers: pick the correct date field based on wait cause, and compare two optional `Date` values by `getTime()`.
-- **`NOBODY`** — frozen constant `{ notify: 0 }` returned when no change is detected.
+- `previewDateImpact(productId, cause, date)` — the only export. Returns `ResponseSuccess<ReleaseDateImpact>` or a 404 reject (`products.not-found`) if the product doesn't exist. A `date` of `undefined` means the date is being cleared.
+- `verdictsFor` — takes the waiting fulfillment orders and judges each with `judgeMove` against the hypothetical date. It loads the other products on those orders via `productService.findManyByIds`. For the product being previewed it uses the new date. For the others it uses their current date, chosen by `dateFor`. Orders with no verdict are dropped.
+- `tally` — counts distinct `orderId`s whose verdict kind is `'notify'`, returning `{ notify: n }`.
+- `dateFor` — picks `restockDate` for `'backorder'`, otherwise `releaseDate`.
+- `sameDate` — compares two optional dates by timestamp.
+- `NOBODY` — the `{ notify: 0 }` constant returned when nothing changes.
 
 ## Relationships
-
-- **`../domain` (fulfillment, preorder)** — imports `judgeMove`, `expectedDateOfWaiting`, `SlipVerdict`, `WaitCause`. These are the exact functions the post-save listener uses, guaranteeing preview fidelity.
-- **`../repository`** — `fulfillmentOrderRepository.findWaitingForProduct(productId, cause)` supplies the set of orders still waiting.
-- **`@modules/products`** — `productService.findByIdRaw` resolves the target product; `productService.findManyByIds` resolves sibling products needed for multi-product fulfillment order lines.
-- **`@modules/shop`** — `shopTimezone()` is passed into `judgeMove` so date comparisons are timezone-correct.
-- **`@infrastructure/http/response`** — `generateSuccess` / `generateReject` shape the HTTP-level result.
-- **`@infrastructure/i18n`** — `t('products.not-found')` localises the 404 message.
-- **`@types`** — imports the `ReleaseDateImpact` shape returned to the caller.
-- **`../services/index`** — this file is re-exported from the services barrel for external consumers.
-- **`../tests/unit/reship.test.ts`** — exercises the preview alongside reship logic.
+- `../domain` — supplies `judgeMove`, `expectedDateOfWaiting` and the types `SlipVerdict` and `WaitCause`.
+- `../repository` — loads the waiting fulfillment orders for the product and cause.
+- `../model` — `FulfillmentOrderDocument` type.
+- `@modules/products` — `productService` is used to look up the previewed product and the other products on the waiting orders.
+- `@modules/shop` — `shopTimezone()` is passed to `judgeMove`.
+- `@infrastructure/http/response` — `generateSuccess` and `generateReject`.
+- `@infrastructure/i18n` — `t()` for the 404 message.
+- `@types` — `ReleaseDateImpact` type.
 
 ## Notes
-
-- The preview is intentionally a **snapshot**: a payment or shipment landing between preview and save will shift the real count. The doc comment calls this out explicitly.
-- `date` being `undefined` means "clear the date," not "keep it." The `sameDate` check treats both-`undefined` as no-change.
-- `verdictsFor` filters out fulfillment orders that produced no verdict (i.e., `judgeMove` returned `undefined`), so only orders actually affected are tallied.
-- The `NOBODY` constant is marked `as const`; the 404 path and the no-change path both return a fresh spread of it rather than a shared mutable reference.
+- The count is of orders, not fulfillment orders. An order with several notified groups counts once.
+- The result is a snapshot. A payment or shipment between preview and save can change the real outcome.
+- If the new date equals the product's current date, it returns `{ notify: 0 }` without querying fulfillment orders. This mirrors saving an unchanged date, which emits nothing.
+- Only `notify` verdicts are counted. Other verdict kinds are ignored.

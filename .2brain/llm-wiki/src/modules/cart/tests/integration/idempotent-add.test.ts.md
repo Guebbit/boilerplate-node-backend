@@ -1,34 +1,35 @@
 ---
 source: src/modules/cart/tests/integration/idempotent-add.test.ts
-sha256: 53b85815298493c0a8f73d2207027fa09dcf7d6b1564c6b0826708d200bf998b
-generated_at: 2026-11-14T19:33:48.638017+00:00
-model: ollama:qwen3.8:27b
+source_sha256: 53b85815298493c0a8f73d2207027fa09dcf7d6b1564c6b0826708d200bf998b
+context_sha256: f0c92dcbd39b27f200f05abf0f51ed8cb2a2c4776a6fc7bc9b63a4ed6234342e
+generated_at: 2026-11-22T04:39:19.646333+00:00
+model: claude-code:claude-sonnet-5-5
 ---
 
 # src/modules/cart/tests/integration/idempotent-add.test.ts
 
 ## Purpose
-
-Integration test verifying the idempotency contract for `POST /cart/items` and `POST /cart/reorder`: a retried request under the same `Idempotency-Key` must replay the original response (cart line grows once), while a new key must add the line again ("two clicks make two").
+Integration tests for `POST /cart/items` and `POST /cart/reorder` when called with an `Idempotency-Key` header. They check that a retry with the same key replays the first response and changes the cart only once. They also check that a different key counts as a new request and adds again ("two clicks make two").
 
 ## Key elements
-
-- **`add(bearer, productId, key)`** – Helper that issues `POST /cart/items` with an `Authorization` bearer token, an `Idempotency-Key` header, and a single-unit quantity body.
-- **`reorder(bearer, orderId, key)`** – Helper that issues `POST /cart/reorder` with the same auth/key headers and an `orderId` body.
-- **`heldOf(bearer, productId)`** – Reads `GET /cart` and returns the stored quantity for a given product (defaults to `0` if absent). Casts the untyped supertest `response.body.items` to the expected shape.
-- **`describe('POST /cart/items …')`** – Two tests: (1) same key replays with `idempotent-replayed: true` header and identical body, line stays at 1; (2) a second key increments the line to 2.
-- **`describe('POST /cart/reorder …')`** – Two tests: (1) same key replays, order line (qty 2) appears once; (2) a second key doubles the line to 4.
+- `add(bearer, productId, key)`: posts `{ productId, quantity: 1 }` to `/cart/items` with the `Authorization` and `Idempotency-Key` headers.
+- `reorder(bearer, orderId, key)`: posts `{ orderId }` to `/cart/reorder` with the same headers.
+- `heldOf(bearer, productId)`: reads `GET /cart` and returns the quantity held for the product, or `0` if the line is absent. The `items` body shape is cast, since supertest bodies are untyped.
+- `describe('POST /cart/items ...')`:
+  - Same key sent twice: both responses are 200, the retry has `idempotent-replayed: true` and a body equal to the first, and the cart holds 1.
+  - A new key after a replayed pair: the cart holds 2.
+- `describe('POST /cart/reorder ...')`:
+  - Same key sent twice: both responses are 200, the retry is flagged as replayed, and the cart holds 2 (the order's quantity).
+  - A new key after a replayed pair: the cart holds 4.
 
 ## Relationships
-
-- **`tests/support/setup-test-db.ts`** – `setupTestDb()` is called at module top-level to provision and tear down the test database before any test runs.
-- **`tests/support/http.ts`** – Provides the `api()` supertest wrapper and `authenticateAs(role)` to obtain a bearer token for the "user" role.
-- **`tests/support/replay.ts`** – `sendTwice(fn)` invokes the request function twice in sequence, simulating a client that lost the first response and retries; returns `{ first, retry }`.
-- **`src/modules/products/tests/factories.ts`** – `createProduct()` creates a minimal product record whose `_id` is used as the `productId` in cart requests.
-- **`src/modules/orders/tests/factories.ts`** – `createOrder(user, items)` and `toOrderItem(product, qty)` build a prior order (with a 2-unit line) that the reorder tests then re-insert into the cart.
+- `tests/support/setup-test-db.ts`: `setupTestDb()` is called at module level to prepare the test database.
+- `tests/support/http.ts`: provides `api()` (the request client) and `authenticateAs('user')`, which returns `{ bearer, user }`.
+- `tests/support/replay.ts`: `sendTwice(fn)` runs the request twice and returns `{ first, retry }`.
+- `src/modules/products/tests/factories.ts`: `createProduct()` creates the product that is added to the cart.
+- `src/modules/orders/tests/factories.ts`: `createOrder(user, items)` and `toOrderItem(product, quantity)` build the order used by the reorder tests.
 
 ## Notes
-
-- The `idempotent-replayed: 'true'` response header is the sole contract signal distinguishing a replay from a fresh 200; tests assert it explicitly rather than relying on body comparison alone (the body equality check is a secondary guard).
-- `heldOf` reads the cart through the public `GET /cart` endpoint rather than hitting the DB directly, keeping the test at the HTTP boundary.
-- `sendTwice` does **not** simulate a network timeout; it simply calls the same request function a second time, which is sufficient because the idempotency store is keyed by the header, not by connection state.
+- Each test authenticates a fresh user and creates its own product, so tests don't share cart state.
+- The "new key" tests first run `sendTwice` with the first key and then make a single call with the second key. This shows that the replay did not add twice and that the new key still adds.
+- Imports use the `@tests/*` and `@modules/*` path aliases.
