@@ -2,8 +2,8 @@
  * @module
  * A subscription hands an event stream to a machine, so writing one needs the read rule of every
  * event it carries. Walks every door that could take over a stream the caller may not read:
- * create, update (narrow-then-redirect included), secret rotation, replay and the delivery
- * itself.
+ * create, update, secret rotation, replay and the delivery itself. Narrowing and redirecting a
+ * stream, which needs an event a manager may read, is in `public-event.test.ts`.
  */
 
 import { setupTestDb } from '@tests/setup-test-db';
@@ -17,21 +17,21 @@ import { webhookDeliveryRepository, webhookSubscriptionRepository } from '../../
 setupTestDb();
 
 beforeAll(() => {
-    registerWebhookCatalog(['orders', 'users', 'example']);
+    registerWebhookCatalog(['users']);
 });
 
 afterAll(() => {
     registerWebhookCatalog([]);
 });
 
-/** The manager reads orders but no accounts; the admin reads both. */
+/** The manager writes subscriptions but reads no accounts; the admin reads them. */
 const asManager = { caller: callerAs('manager'), analyticsConsent: false };
 
 /** An admin caller, without analytics consent. */
 const asAdmin = { caller: callerAs('admin'), analyticsConsent: false };
 
 /** An admin-made subscription on `eventTypes`, as the stored row. */
-const adminSubscription = async (eventTypes: ('*' | 'user.updated' | 'order.paid')[]) => {
+const adminSubscription = async (eventTypes: ('*' | 'user.updated' | 'user.erased')[]) => {
     const result = await create({ url: 'https://hooks.example.com/admin', eventTypes }, asAdmin);
     if (!result.success || !result.data) throw new Error('setup failed: create was refused');
     return result.data.subscription;
@@ -55,17 +55,12 @@ describe('create', () => {
         }
     );
 
-    it('lets a manager subscribe to an order event, and an admin to everything', async () => {
-        const order = await create(
-            { url: 'https://hooks.example.com/a', eventTypes: ['order.paid'] },
-            asManager
-        );
+    it('lets an admin subscribe to everything', async () => {
         const everything = await create(
             { url: 'https://hooks.example.com/b', eventTypes: ['*'] },
             asAdmin
         );
 
-        expect(order).toMatchObject({ success: true, status: 201 });
         expect(everything).toMatchObject({ success: true, status: 201 });
     });
 });
@@ -83,20 +78,6 @@ describe('update', () => {
         expect(codeOf(result)).toBe('WEBHOOK_EVENT_READ_REQUIRED');
         const row = await webhookSubscriptionRepository.findById(String(subscription._id));
         expect(row?.url).toBe('https://hooks.example.com/admin');
-    });
-
-    it('refuses narrowing and redirecting an admin’s `*` stream in one call', async () => {
-        const subscription = await adminSubscription(['*']);
-
-        const result = await update(
-            String(subscription._id),
-            { eventTypes: ['order.paid'], url: 'https://evil.example.com/hook' },
-            asManager
-        );
-
-        expect(codeOf(result)).toBe('WEBHOOK_EVENT_READ_REQUIRED');
-        const row = await webhookSubscriptionRepository.findById(String(subscription._id));
-        expect(row?.eventTypes).toEqual(['*']);
     });
 
     it('lets a description-only PATCH through on a stream the manager may not read', async () => {
@@ -159,7 +140,7 @@ describe('a delivery', () => {
     });
 
     it('is abandoned, not sent, once the subscription no longer names its event', async () => {
-        const subscription = await adminSubscription(['order.paid']);
+        const subscription = await adminSubscription(['user.erased']);
         const delivery = await deliveryOf(subscription, 'user.updated');
 
         await processDeliveryJob({ deliveryId: String(delivery._id) });

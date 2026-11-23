@@ -8,7 +8,11 @@
 import { asStub } from '@tests/stub';
 import { setupTestDb } from '@tests/setup-test-db';
 import { auditLogRepository, AUDIT_SORT } from '@modules/audit-logs/repository';
-import { auditLogService, OWN_ENTRIES_PAGE } from '@modules/audit-logs/service';
+import {
+    auditLogService,
+    OWN_ENTRIES_PAGE,
+    setStaffReadPurposes
+} from '@modules/audit-logs/service';
 import { coreAuditActions, type AuditEntry } from '@infrastructure/observability/audit';
 import type { AuditLogDocument } from '@modules/audit-logs/model';
 import { auditLogsConfig } from '@modules/audit-logs/config';
@@ -416,7 +420,7 @@ describe('the rows that name a person', () => {
     // A staff read, written as the sink writes it: a consultation action naming the subject.
     const read = (overrides: Partial<AuditLogDocument> = {}): Partial<AuditLogDocument> => ({
         ...makeEntry({ actorUserId: 'staff-1', timestamp: daysAgo(1) }),
-        action: 'admin.order.viewed',
+        action: 'security.forbidden',
         targetType: 'order',
         targetId: 'o-1',
         subjectId: 'mario',
@@ -439,12 +443,12 @@ describe('the rows that name a person', () => {
         await auditLogRepository.create(read({ targetId: 'out', timestamp: daysAgo(200) }));
         await auditLogRepository.create(read({ subjectId: 'luisa', targetId: 'other-person' }));
         await auditLogRepository.create(
-            read({ action: 'admin.user.updated', targetId: 'not-a-read' })
+            read({ action: 'security.unauthorized', targetId: 'not-a-read' })
         );
 
         const rows = await auditLogRepository.consultationsOf(
             'mario',
-            ['admin.order.viewed'],
+            ['security.forbidden'],
             daysAgo(180)
         );
 
@@ -459,12 +463,21 @@ describe('the rows that name a person', () => {
 });
 
 describe('auditLogService.findConsultationsOf', () => {
+    // The purposes are what each module declares at boot; a core action stands in for them here.
+    beforeAll(() => {
+        setStaffReadPurposes({ [coreAuditActions.SECURITY_FORBIDDEN]: 'handling a refusal' });
+    });
+
+    afterAll(() => {
+        setStaffReadPurposes({});
+    });
+
     it('answers the window it covers and a purpose per entry, never an actor', async () => {
         await auditLogRepository.create({
             ...makeEntry({ actorUserId: 'staff-1', timestamp: new Date() }),
-            action: 'admin.order.viewed',
-            targetType: 'order',
-            targetId: 'o-7',
+            action: coreAuditActions.SECURITY_FORBIDDEN,
+            targetType: 'session',
+            targetId: 's-7',
             subjectId: 'mario'
         });
 
@@ -475,9 +488,9 @@ describe('auditLogService.findConsultationsOf', () => {
             entries: [
                 {
                     timestamp: expect.any(String) as string,
-                    targetType: 'order',
-                    targetId: 'o-7',
-                    purpose: 'handling your order'
+                    targetType: 'session',
+                    targetId: 's-7',
+                    purpose: 'handling a refusal'
                 }
             ]
         });

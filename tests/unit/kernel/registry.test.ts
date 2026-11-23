@@ -15,8 +15,10 @@ import {
     resolvePersonalDataMinimisers,
     resolvePublicEvents,
     resolveBrowserEvents,
+    resolveStaffReadPurposes,
     type AppModule
 } from '@kernel/registry';
+import { coreAuditActions } from '@infrastructure/observability/audit';
 
 /** One locale's rules for the two stub entities: a single optional string each. */
 const titleRules = z.strictObject({ title: z.string().optional() });
@@ -281,5 +283,38 @@ describe('resolveBrowserEvents', () => {
                 { name: 'b', browserEvents: { product_viewed: target }, personalData: 'none' }
             ])
         ).toThrow(/browser event name.*product_viewed/);
+    });
+});
+
+describe('resolveStaffReadPurposes', () => {
+    it('merges every module declaration into one lookup keyed by audit action', () => {
+        const modules: AppModule[] = [
+            {
+                name: 'first',
+                staffReadPurposes: { [coreAuditActions.SECURITY_FORBIDDEN]: 'handling a refusal' },
+                personalData: 'none'
+            },
+            {
+                name: 'second',
+                staffReadPurposes: { [coreAuditActions.SECURITY_UNAUTHORIZED]: 'handling a login' },
+                personalData: 'none'
+            },
+            { name: 'quiet', personalData: 'none' }
+        ];
+
+        expect(resolveStaffReadPurposes(modules)).toEqual({
+            'security.forbidden': 'handling a refusal',
+            'security.unauthorized': 'handling a login'
+        });
+    });
+
+    it('refuses to boot when two modules declare the same action, instead of keeping one', () => {
+        const declared = { [coreAuditActions.SECURITY_FORBIDDEN]: 'handling a refusal' };
+        const modules: AppModule[] = [
+            { name: 'first', staffReadPurposes: declared, personalData: 'none' },
+            { name: 'second', staffReadPurposes: declared, personalData: 'none' }
+        ];
+
+        expect(() => resolveStaffReadPurposes(modules)).toThrow(/"security\.forbidden"/);
     });
 });

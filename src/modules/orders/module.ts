@@ -30,6 +30,7 @@ import { ORDER_CANCELED, ORDER_CREATED, ORDER_REDACTED, ORDER_STATUS_CHANGED } f
 import { ordersConfig } from './config';
 import { ordersRateLimits } from './rate-limits';
 import { ordersJobs } from './jobs';
+import { ordersAuditActions } from './audit';
 
 /**
  * This module's public (webhook-visible) events — `webhooks/services/publish.ts`
@@ -79,6 +80,7 @@ export default {
     rateLimits: ordersRateLimits,
     /** The frozen addresses and the notes are PII-encrypted. */
     reencrypt: orderService.reencryptOrders,
+    staffReadPurposes: { [ordersAuditActions.ADMIN_ORDER_VIEWED]: 'handling your order' },
     personalData: [
         {
             section: 'orders',

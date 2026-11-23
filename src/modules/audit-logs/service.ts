@@ -14,7 +14,6 @@ import type { AuditAction, AuditEntry } from '@infrastructure/observability/audi
 import { SHOP_REFUSAL_REASONS } from '@modules/access';
 import type { AuditLogDocument } from './model';
 import type { AuditEntryItem } from '@types';
-import { STAFF_READ_PURPOSES } from '@kernel/staff-read';
 import { DAY_MS } from '@domain-primitives/time';
 import { auditLogsConfig } from './config';
 import { logger } from '@infrastructure/adapters/logger';
@@ -163,6 +162,26 @@ export interface Consultations {
 }
 
 /**
+ * Why staff open each kind of record, in words a data subject can read: the "purpose" half of
+ * what the person is told when they ask who consulted their data (GDPR Art. 15, CJEU C-579/21
+ * gives dates and purposes, not the employee). Also the list of actions that count as a
+ * consultation. Each module declares its own (`AppModule.staffReadPurposes`); empty until boot.
+ *
+ * @see docs/modules/audit-logs.md#the-person-can-see-who-looked
+ */
+let staffReadPurposes: Readonly<Record<string, string>> = {};
+
+/**
+ * Install the merged staff-read purposes, replacing any previous map. Called once at boot from
+ * `module.ts`'s `onRegistered`; a test calls it to install a fixture.
+ *
+ * @param purposes - the enabled modules' declarations, from `resolveStaffReadPurposes`
+ */
+export const setStaffReadPurposes = (purposes: Readonly<Record<string, string>>): void => {
+    staffReadPurposes = purposes;
+};
+
+/**
  * Every time staff opened a record about this person, within the retention window, for their own
  * data export (GDPR Art. 15; CJEU C-579/21: the dates and purposes, not the employee).
  *
@@ -177,7 +196,7 @@ const findConsultationsOf = (userId: string): Promise<Consultations> => {
     const since = new Date(Date.now() - windowDays * DAY_MS);
 
     return auditLogRepository
-        .consultationsOf(userId, Object.keys(STAFF_READ_PURPOSES), since)
+        .consultationsOf(userId, Object.keys(staffReadPurposes), since)
         .then((rows) => ({
             windowDays,
             entries: rows.map((row) => ({
@@ -185,7 +204,7 @@ const findConsultationsOf = (userId: string): Promise<Consultations> => {
                 targetType: row.targetType,
                 targetId: row.targetId,
                 // A row whose action left the map was filtered out by the query: the lookup holds.
-                purpose: STAFF_READ_PURPOSES[row.action as keyof typeof STAFF_READ_PURPOSES]
+                purpose: staffReadPurposes[row.action]
             }))
         }));
 };

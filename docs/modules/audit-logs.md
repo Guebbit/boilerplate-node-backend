@@ -118,9 +118,10 @@ flowchart LR
     C --> E["the person's data export"]
 ```
 
-- **Purpose** comes from one fixed map, `STAFF_READ_PURPOSES` in `src/kernel/staff-read.ts`
-  (`admin.order.viewed` is "handling your order"). It is also the list of actions that count as a
-  consultation: a new `admin.<resource>.viewed` is added there, or it never reaches the export.
+- **Purpose** comes from the modules: each one declares `staffReadPurposes` on its manifest
+  (`admin.order.viewed` is "handling your order", declared by `orders`), and `audit-logs` merges
+  them at boot. It is also the list of actions that count as a consultation: a module that records
+  a new `admin.<resource>.viewed` declares its purpose, or it never reaches the export.
 - **Window** is `NODE_AUDIT_RETENTION_DAYS`, and the section says so (`windowDays`). Retention is not
   extended to answer the request: the ruling covers the logs that are held, not how long they are kept.
 - **Limits, stated rather than hidden:** a guest's order has no person to name, so it has no

@@ -18,6 +18,7 @@ import { systemTasks } from './services/system';
 import { tasksRateLimits } from './rate-limits';
 import { taskService } from './services';
 import { tasksConfig } from './config';
+import { tasksAuditActions } from './audit';
 
 /** This module's manifest entry: public contact form, keyed triage (`tasks.*`). */
 export default {
@@ -27,6 +28,7 @@ export default {
     /** The contact-form budgets — see `./rate-limits.ts`. */
     rateLimits: tasksRateLimits,
     jobs: tasksJobs,
+    staffReadPurposes: { [tasksAuditActions.ADMIN_TASK_VIEWED]: 'handling your request' },
     personalData: [
         {
             section: 'tasks',

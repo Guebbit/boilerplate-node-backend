@@ -99,13 +99,13 @@ jest.mock('@infrastructure/observability/audit', () => {
 const [ADMIN_ONLY_ACTION, ADMIN_ONLY_SUBJECT] = ['delete', 'ApiKey'] as const;
 
 /**
- * Runs the staff payments guard for one caller.
+ * Runs the staff locales guard for one caller.
  * @param authContext - who is asking
  */
-const runPaymentsStaffGuard = (authContext: AuthContext) => {
+const runLocalesStaffGuard = (authContext: AuthContext) => {
     const next = jest.fn();
     const response = makeResponseStub();
-    requirePermission('display', 'Payment')(makeRequest({ authContext }), response, next);
+    requirePermission('display', 'Locale')(makeRequest({ authContext }), response, next);
     return { next, response };
 };
 
@@ -966,12 +966,12 @@ describe('requirePermission', () => {
 
     it('refuses a caller holding only the narrow key of the same action and subject', () => {
         /**
-         * `read:Payment` and `display:Payment` are both `read` on `Payment`, and every
+         * `read:Locale` and `display:Locale` are both `read` on `Locale`, and every
          * signed-in account holds the first: the guard asks for the literal key, or a customer
          * reads the staff list.
          */
-        const customer = runPaymentsStaffGuard(asCustomer('user-1'));
-        const staff = runPaymentsStaffGuard(asAdmin('user-2'));
+        const customer = runLocalesStaffGuard(asCustomer('user-1'));
+        const staff = runLocalesStaffGuard(asAdmin('user-2'));
 
         expect(customer.next).not.toHaveBeenCalled();
         expect(customer.response.status).toHaveBeenCalledWith(403);

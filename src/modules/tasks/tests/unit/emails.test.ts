@@ -76,8 +76,8 @@ describe('contactRequestEmail', () => {
         expect(contactRequestEmail('en', { ...REQUEST, category: 'privacy' }).data.category).toBe(
             'Personal data'
         );
-        expect(contactRequestEmail('en', { ...REQUEST, category: 'order' }).data.category).toBe(
-            'Order'
+        expect(contactRequestEmail('en', { ...REQUEST, category: 'account' }).data.category).toBe(
+            'Account'
         );
         expect(contactRequestEmail('en', REQUEST).data.category).toBe('Uncategorised');
     });

@@ -222,25 +222,6 @@ describe('relayOutbox', () => {
         });
     });
 
-    it('keeps an empty object in a payload: a hard-deleted product has no titles, and the row must still validate', async () => {
-        const delivered: unknown[] = [];
-        onDomainEvent('stock_alert.sent', (fact) => {
-            delivered.push(fact);
-        });
-        await withTransaction((session) =>
-            enqueueOutboxEvent(
-                'stock_alert.sent',
-                { userId: 'u-1', productId: 'p-1', titles: {} },
-                'u-1',
-                session
-            )
-        );
-
-        expect(await relayOutbox()).toMatchObject({ published: 1, retried: 0 });
-
-        expect(delivered).toEqual([{ userId: 'u-1', productId: 'p-1', titles: {} }]);
-    });
-
     it('drops a field the contract does not know before any consumer sees it', async () => {
         subscribe();
         await outboxEventModel.create({
@@ -630,5 +611,20 @@ describe('cleanup', () => {
             .find(([, index]) => index.expireAfterSeconds !== undefined);
 
         expect(ttl?.[1].expireAfterSeconds).toBe(7 * 24 * 60 * 60);
+    });
+});
+
+describe('a stored payload', () => {
+    it('keeps an empty object in a stored payload: it is a fact, not an absent field', async () => {
+        const row = await outboxEventModel.create({
+            name: EVENT,
+            payload: { ...payload(1), labels: {} },
+            aggregateId: 'agg-1',
+            nextAttemptAt: new Date(0)
+        });
+
+        const stored = await outboxEventModel.findById(row._id).lean().exec();
+
+        expect(stored?.payload).toEqual({ ...payload(1), labels: {} });
     });
 });

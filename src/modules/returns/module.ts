@@ -25,6 +25,7 @@ import { RETURN_REQUESTED, RETURN_RECEIVED, RETURN_CLOSED, RETURN_DECIDED } from
 import { closeReturn } from './services/close';
 import { returnService } from './services';
 import { returnsJobs } from './jobs';
+import { returnsAuditActions } from './audit';
 
 /**
  * This module's public (webhook-visible) events, projected by `webhooks` through
@@ -87,6 +88,7 @@ export default {
         onDomainEvent(RETURN_DECIDED, returnService.mailReturnDecided);
         onDomainEvent(RETURN_CLOSED, returnService.mailReturnClosed);
     },
+    staffReadPurposes: { [returnsAuditActions.ADMIN_RETURN_VIEWED]: 'handling your return' },
     personalData: [
         {
             section: 'returns',

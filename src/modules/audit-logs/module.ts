@@ -15,19 +15,23 @@
  */
 
 import path from 'node:path';
-import type { AppModule } from '@kernel/registry';
+import { type AppModule, resolveStaffReadPurposes } from '@kernel/registry';
 import { registerAuditSink } from '@infrastructure/observability/audit';
-import { auditLogService } from './service';
+import { auditLogService, setStaffReadPurposes } from './service';
 import { router } from './routes';
 import { auditLogsConfig } from './config';
 
 /**
  * Installs the persistence sink once this module is known to be enabled — see the module
  * header for why here, not `app.ts`, and not at import time (a type or a test importing this file
- * would otherwise silently start persisting audit rows too).
+ * would otherwise silently start persisting audit rows too). Also collects every enabled module's
+ * staff-read purposes for the consultations section of a data export.
+ *
+ * @param modules - every enabled module
  */
-const onRegistered = (): void => {
+const onRegistered = (modules: readonly AppModule[]): void => {
     registerAuditSink(auditLogService.record);
+    setStaffReadPurposes(resolveStaffReadPurposes(modules));
 };
 
 /** This module's manifest entry. */

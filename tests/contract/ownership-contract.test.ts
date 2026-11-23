@@ -101,7 +101,7 @@ const requestProperties = (path: string, method: string): Found[] => {
     return [...body, ...query];
 };
 
-/** `/orders/` is how a module mounts its root; the contract and the keys write `/orders`. */
+/** `/users/` is how a module mounts its root; the contract and the keys write `/users`. */
 const withoutTrailingSlash = (path: string): string => path.replace(/(.)\/$/, '$1');
 
 /** The routes a customer can call: an identity guard, and every permission one a customer holds. */

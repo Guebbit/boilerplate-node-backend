@@ -142,7 +142,7 @@ describe('a task three days from its deadline', () => {
             email: 'ada@example.com',
             subject: 'Where is my parcel',
             message: 'Please call me.',
-            category: 'order'
+            category: 'account'
         });
         await giveLife(String(task._id), 2, 30);
         await settleOutboxNudges();

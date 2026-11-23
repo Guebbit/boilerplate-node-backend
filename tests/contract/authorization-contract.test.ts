@@ -111,7 +111,7 @@ describe('every guarded route agrees with the role file, for every tenant person
                  */
                 const caller = callerAs(role);
                 /**
-                 * A route that stacks guards (a product write asks for the product AND the
+                 * A route that stacks guards (a write to translated content asks for the record AND the
                  * translation) is open only to a role that holds every one of them.
                  */
                 const allowed = route.permissions.every((ask) =>

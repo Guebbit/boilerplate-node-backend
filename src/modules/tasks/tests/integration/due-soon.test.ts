@@ -115,7 +115,7 @@ describe('remindDueSoon', () => {
             email: 'bob@example.com',
             subject: 'Parcel',
             message: 'Hello',
-            category: 'order'
+            category: 'account'
         });
         await giveLife(String(ordinary._id), 2, 30);
 

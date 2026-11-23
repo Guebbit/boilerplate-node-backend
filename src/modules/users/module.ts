@@ -30,6 +30,7 @@ import { setPersonalDataErasers, setPersonalDataMinimisers } from './erasure-reg
 import { USER_ERASED, USER_PROFILE_CHANGED } from './events';
 import { usersConfig } from './config';
 import { usersJobs } from './jobs';
+import { usersAuditActions } from './audit';
 
 /**
  * Resolves every module's `personalData.erase` and `minimise` hooks once every module is known, and
@@ -87,6 +88,7 @@ export default {
      * there is no separate `users` collection for them to register their own target under.
      */
     imageTargets: { users: { writeback: userRepository.writebackImage } },
+    staffReadPurposes: { [usersAuditActions.ADMIN_USER_VIEWED]: 'handling your account' },
     personalData: [
         /**
          * `null` when the subject's own row is gone — `account`'s assembly answers 404 for

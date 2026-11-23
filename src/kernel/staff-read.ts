@@ -36,23 +36,6 @@ export interface StaffReadTarget {
 }
 
 /**
- * Why staff open each kind of record, in words a data subject can read: the "purpose" half of
- * what the person is told when they ask who consulted their data (GDPR Art. 15, CJEU C-579/21
- * gives dates and purposes, not the employee). Doubles as the list of actions that count as a
- * consultation, so a new `admin.<resource>.viewed` is added here or it never reaches the export.
- *
- * @see docs/modules/audit-logs.md#the-person-can-see-who-looked
- */
-export const STAFF_READ_PURPOSES = {
-    'admin.order.viewed': 'handling your order',
-    'admin.user.viewed': 'handling your account',
-    'admin.return.viewed': 'handling your return',
-    'admin.task.viewed': 'handling your request',
-    'admin.invoice.viewed': 'handling your invoice',
-    'admin.credit_note.viewed': 'handling your credit note'
-} as const satisfies Partial<Record<AuditAction, string>>;
-
-/**
  * Record a staff read of another person's record. A no-op for a caller without the wide-read key
  * and for a session caller's read of their own record.
  *

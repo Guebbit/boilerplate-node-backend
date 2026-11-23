@@ -22,13 +22,13 @@ setupTestDb();
 /** A subscription body pointed at a URL nothing ever calls — these tests never deliver anything. */
 const subscriptionBody = (overrides: Record<string, unknown> = {}) => ({
     url: 'https://example.test/inbox',
-    eventTypes: ['order.paid'],
+    eventTypes: ['user.updated'],
     ...overrides
 });
 
 describe('GET /webhooks/subscriptions', () => {
-    it('lists a manager’s own subscriptions, never a secret', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+    it('lists the caller’s own subscriptions, never a secret', async () => {
+        const { bearer } = await authenticateAsRole('admin');
         await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -46,7 +46,7 @@ describe('GET /webhooks/subscriptions', () => {
     });
 
     it('carries the caller’s actions on every row', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -65,7 +65,7 @@ describe('GET /webhooks/subscriptions', () => {
     });
 
     it('orders by url when asked, and newest first when not', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         for (const path of ['b', 'a', 'c'])
             await api()
                 .post('/webhooks/subscriptions')
@@ -84,7 +84,7 @@ describe('GET /webhooks/subscriptions', () => {
     });
 
     it('422s a sort field the contract does not list', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .get('/webhooks/subscriptions?sort=consecutiveFailures')
@@ -96,7 +96,7 @@ describe('GET /webhooks/subscriptions', () => {
 
 describe('GET /webhooks/subscriptions/:id', () => {
     it('answers one subscription with the shape the list rows carry', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -114,7 +114,7 @@ describe('GET /webhooks/subscriptions/:id', () => {
     });
 
     it('404s an id that matches nothing, and a malformed one alike', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const unknown = await api()
             .get('/webhooks/subscriptions/000000000000000000000000')
@@ -128,11 +128,11 @@ describe('GET /webhooks/subscriptions/:id', () => {
     });
 
     it('404s another shop’s subscription as it would an unknown one', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const foreign = await webhookSubscriptionRepository.create({
             tenant: 'another-shop',
             url: 'https://example.test/elsewhere',
-            eventTypes: ['order.paid'],
+            eventTypes: ['user.updated'],
             secrets: [{ id: 's', ciphertext: 'c', createdAt: new Date() }]
         });
 
@@ -146,7 +146,7 @@ describe('GET /webhooks/subscriptions/:id', () => {
 
 describe('POST /webhooks/subscriptions', () => {
     it('creates a subscription and returns its one-time secret', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .post('/webhooks/subscriptions')
@@ -156,13 +156,13 @@ describe('POST /webhooks/subscriptions', () => {
         expect(response.status).toBe(201);
         expect(typeof response.body.secret).toBe('string');
         expect(response.body.secret.startsWith('whsec_')).toBe(true);
-        expect(response.body.eventTypes).toEqual(['order.paid']);
+        expect(response.body.eventTypes).toEqual(['user.updated']);
         expect(response.body.enabled).toBe(true);
         expect(response.body.consecutiveFailures).toBe(0);
     });
 
     it('422s a plain http:// url', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .post('/webhooks/subscriptions')
@@ -173,7 +173,7 @@ describe('POST /webhooks/subscriptions', () => {
     });
 
     it('422s an empty eventTypes list', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .post('/webhooks/subscriptions')
@@ -185,7 +185,7 @@ describe('POST /webhooks/subscriptions', () => {
 
     it('409s once the subscription cap is reached, with its code, and a delete lets it through', async () => {
         setEnvironment({ NODE_WEBHOOK_SUBSCRIPTION_CAP: '1' });
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const first = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -213,7 +213,7 @@ describe('POST /webhooks/subscriptions', () => {
 
 describe('PUT /webhooks/subscriptions/:id', () => {
     it('replaces a subscription, clearing an omitted description', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -222,7 +222,7 @@ describe('PUT /webhooks/subscriptions/:id', () => {
         const response = await api()
             .put(`/webhooks/subscriptions/${String(created.body.id)}`)
             .set('Authorization', bearer)
-            .send({ url: 'https://example.test/inbox-2', eventTypes: ['order.paid'] });
+            .send({ url: 'https://example.test/inbox-2', eventTypes: ['user.updated'] });
 
         expect(response.status).toBe(200);
         expect(response.body.url).toBe('https://example.test/inbox-2');
@@ -231,7 +231,7 @@ describe('PUT /webhooks/subscriptions/:id', () => {
     });
 
     it('422s an `enabled` field: whether it is on has its own endpoints', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -246,7 +246,7 @@ describe('PUT /webhooks/subscriptions/:id', () => {
     });
 
     it('422s a body missing a required field', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -261,7 +261,7 @@ describe('PUT /webhooks/subscriptions/:id', () => {
     });
 
     it('404s an id from outside this admin’s reach', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .put('/webhooks/subscriptions/000000000000000000000000')
@@ -274,7 +274,7 @@ describe('PUT /webhooks/subscriptions/:id', () => {
 
 describe('PATCH /webhooks/subscriptions/:id', () => {
     it('leaves an omitted field unchanged', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -283,15 +283,15 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
         const response = await api()
             .patch(`/webhooks/subscriptions/${String(created.body.id)}`)
             .set('Authorization', bearer)
-            .send({ eventTypes: ['order.paid'] });
+            .send({ eventTypes: ['user.updated'] });
 
         expect(response.status).toBe(200);
-        expect(response.body.eventTypes).toEqual(['order.paid']);
+        expect(response.body.eventTypes).toEqual(['user.updated']);
         expect(response.body.description).toBe('was here');
     });
 
     it('422s an `enabled` field: whether it is on has its own endpoints', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -306,7 +306,7 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
     });
 
     it('404s an id from outside this admin’s reach', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .patch('/webhooks/subscriptions/000000000000000000000000')
@@ -317,7 +317,7 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
     });
 
     it('leaves a building failure streak alone', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -340,7 +340,7 @@ describe('PATCH /webhooks/subscriptions/:id', () => {
 
 describe('POST /webhooks/subscriptions/:id/disable and /enable', () => {
     it('pauses by hand, leaving autoDisabledAt absent, then turns it back on', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const id = await createSubscription(bearer);
 
         const disabled = await api()
@@ -365,7 +365,7 @@ describe('POST /webhooks/subscriptions/:id/disable and /enable', () => {
     });
 
     it('enabling clears the auto-disable marker and the failure streak', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const id = await createSubscription(bearer);
         const stored = await webhookSubscriptionRepository.findById(id);
         if (!stored) throw new Error('fixture subscription vanished');
@@ -385,7 +385,7 @@ describe('POST /webhooks/subscriptions/:id/disable and /enable', () => {
     });
 
     it('409s enabling an enabled subscription, and leaves its streak alone', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const id = await createSubscription(bearer);
         const stored = await webhookSubscriptionRepository.findById(id);
         if (!stored) throw new Error('fixture subscription vanished');
@@ -403,7 +403,7 @@ describe('POST /webhooks/subscriptions/:id/disable and /enable', () => {
     });
 
     it('409s disabling a disabled subscription', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const id = await createSubscription(bearer);
         await api().post(`/webhooks/subscriptions/${id}/disable`).set('Authorization', bearer);
 
@@ -418,7 +418,7 @@ describe('POST /webhooks/subscriptions/:id/disable and /enable', () => {
     it.each(['enable', 'disable'])(
         '404s %s on an id from outside this admin’s reach',
         async (verb) => {
-            const { bearer } = await authenticateAsRole('manager');
+            const { bearer } = await authenticateAsRole('admin');
 
             const response = await api()
                 .post(`/webhooks/subscriptions/000000000000000000000000/${verb}`)
@@ -431,7 +431,7 @@ describe('POST /webhooks/subscriptions/:id/disable and /enable', () => {
 
 describe('POST /webhooks/subscriptions/:id/secrets', () => {
     it('adds a secret to the ring, returning newSecret and leaving the old one active too', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -453,7 +453,7 @@ describe('POST /webhooks/subscriptions/:id/secrets', () => {
     });
 
     it('keeps at most two secrets, dropping the oldest on a second rotation', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -470,7 +470,7 @@ describe('POST /webhooks/subscriptions/:id/secrets', () => {
     });
 
     it('404s an id from outside this admin’s reach', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .post('/webhooks/subscriptions/000000000000000000000000/secrets')
@@ -482,7 +482,7 @@ describe('POST /webhooks/subscriptions/:id/secrets', () => {
 
 describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
     it('404s a secretId the ring does not carry, without touching the ring', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -499,7 +499,7 @@ describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
     });
 
     it('422s a removal that would empty the ring', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -514,7 +514,7 @@ describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
     });
 
     it('drops the old secret once a rotation leaves two', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -544,7 +544,7 @@ describe('DELETE /webhooks/subscriptions/:id/secrets/:secretId', () => {
 
 describe('DELETE /webhooks/subscriptions/:id', () => {
     it('permanently removes the subscription', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -567,7 +567,7 @@ describe('DELETE /webhooks/subscriptions/:id', () => {
 
 describe('GET /webhooks/deliveries', () => {
     it('answers an empty page when nothing has been delivered yet', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api().get('/webhooks/deliveries').set('Authorization', bearer);
 
@@ -576,7 +576,7 @@ describe('GET /webhooks/deliveries', () => {
     });
 
     it('says per row whether a replay would be accepted: not while its subscription is off', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const live = await createSubscription(bearer);
         const paused = await createSubscription(bearer);
         await api().post(`/webhooks/subscriptions/${paused}/disable`).set('Authorization', bearer);
@@ -586,7 +586,7 @@ describe('GET /webhooks/deliveries', () => {
                 tenant,
                 subscriptionId: new Types.ObjectId(subscriptionId),
                 eventId: `evt_${subscriptionId}`,
-                eventType: 'order.paid',
+                eventType: 'user.updated',
                 payload: {},
                 attempt: 1,
                 status: 'exhausted'
@@ -606,7 +606,7 @@ describe('GET /webhooks/deliveries', () => {
     });
 
     it('422s an unrecognised status filter', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .get('/webhooks/deliveries?status=not-a-real-status')
@@ -622,7 +622,7 @@ const fileDelivery = (tenant: string, subscriptionId: string) =>
         tenant,
         subscriptionId: new Types.ObjectId(subscriptionId),
         eventId: `evt_item_${subscriptionId}`,
-        eventType: 'order.paid',
+        eventType: 'user.updated',
         payload: {},
         attempt: 1,
         status: 'exhausted'
@@ -630,7 +630,7 @@ const fileDelivery = (tenant: string, subscriptionId: string) =>
 
 describe('GET /webhooks/deliveries/:id', () => {
     it('reads one delivery of the caller’s shop, with its replay action', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const id = await createSubscription(bearer);
         const { tenant } = (await webhookSubscriptionRepository.findById(id))!;
         const delivery = await fileDelivery(tenant, id);
@@ -648,7 +648,7 @@ describe('GET /webhooks/deliveries/:id', () => {
     });
 
     it('answers 404 for another shop’s delivery, an unknown id and a malformed one', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const id = await createSubscription(bearer);
         const foreign = await fileDelivery('another-shop', id);
 
@@ -672,7 +672,7 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
      * What is checked is that answer's shape, not the endpoint's health.
      */
     it('matches the contract for an exhausted delivery replayed by an operator', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -685,7 +685,7 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
             tenant: subscription!.tenant,
             subscriptionId: new Types.ObjectId(created.body.id as string),
             eventId: 'evt_contract_replay',
-            eventType: 'order.paid',
+            eventType: 'user.updated',
             payload: { orderId: 'order_1' },
             attempt: 1,
             status: 'exhausted',
@@ -703,14 +703,14 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
     });
 
     it('409s while the subscription is disabled, with its code, and leaves the row alone', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const id = await createSubscription(bearer);
         const subscription = await webhookSubscriptionRepository.findById(id);
         const delivery = await webhookDeliveryRepository.create({
             tenant: subscription!.tenant,
             subscriptionId: new Types.ObjectId(id),
             eventId: 'evt_contract_replay_disabled',
-            eventType: 'order.paid',
+            eventType: 'user.updated',
             payload: { orderId: 'order_1' },
             attempt: 1,
             status: 'exhausted'
@@ -728,7 +728,7 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
     });
 
     it('404s a delivery id that does not exist', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .post('/webhooks/deliveries/000000000000000000000000/replay')
@@ -740,7 +740,7 @@ describe('POST /webhooks/deliveries/:id/replay', () => {
 
 describe('GET /webhooks/events', () => {
     it('serves the events the deployed modules declare', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api().get('/webhooks/events').set('Authorization', bearer);
 
@@ -762,12 +762,12 @@ const createSubscription = async (bearer: string): Promise<string> => {
 
 describe('an event filter must name events the catalogue lists', () => {
     it('422s a create naming an unknown event, listing it under the eventTypes field', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
 
         const response = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
-            .send(subscriptionBody({ eventTypes: ['order.paid', 'order.payd'] }));
+            .send(subscriptionBody({ eventTypes: ['user.updated', 'order.payd'] }));
 
         expect(response.status).toBe(422);
         // The contract's enum refuses it before the service: the field names the offending item.
@@ -782,7 +782,7 @@ describe('an event filter must name events the catalogue lists', () => {
         const response = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
-            .send(subscriptionBody({ eventTypes: ['*', 'order.paid'] }));
+            .send(subscriptionBody({ eventTypes: ['*', 'user.updated'] }));
 
         expect(response.status).toBe(201);
     });
@@ -793,7 +793,7 @@ describe('an event filter must name events the catalogue lists', () => {
     ] as const)(
         '422s a %s naming an unknown event and keeps the stored filter',
         async (verb, rest) => {
-            const { bearer } = await authenticateAsRole('manager');
+            const { bearer } = await authenticateAsRole('admin');
             const id = await createSubscription(bearer);
 
             const response = await api()
@@ -804,7 +804,7 @@ describe('an event filter must name events the catalogue lists', () => {
             expect(response.status).toBe(422);
             expect(response.body.errors[0].details).toEqual({ field: 'eventTypes.0' });
             const stored = await webhookSubscriptionRepository.findById(id);
-            expect(stored?.eventTypes).toEqual(['order.paid']);
+            expect(stored?.eventTypes).toEqual(['user.updated']);
         }
     );
 });
@@ -818,7 +818,7 @@ describe('a private target is refused at create and update', () => {
     });
 
     it('422s a create whose host resolves to a private address, naming the url field', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         resolvesToPrivateAddress();
 
         const response = await api()
@@ -832,10 +832,10 @@ describe('a private target is refused at create and update', () => {
     });
 
     it.each([
-        ['PUT', { eventTypes: ['order.paid'] }],
+        ['PUT', { eventTypes: ['user.updated'] }],
         ['PATCH', {}]
     ] as const)('422s a %s that moves the url to a private address', async (verb, rest) => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -853,7 +853,7 @@ describe('a private target is refused at create and update', () => {
     });
 
     it('does not look the host up again when an edit leaves the url as it is', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         const created = await api()
             .post('/webhooks/subscriptions')
             .set('Authorization', bearer)
@@ -870,7 +870,7 @@ describe('a private target is refused at create and update', () => {
     });
 
     it('lets a registered exempt origin through, private address and all', async () => {
-        const { bearer } = await authenticateAsRole('manager');
+        const { bearer } = await authenticateAsRole('admin');
         registerSsrfExemptOrigin('https://sink.internal');
         resolvesToPrivateAddress();
 

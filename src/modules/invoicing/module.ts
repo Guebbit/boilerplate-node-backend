@@ -34,6 +34,7 @@ import { invoicingRateLimits } from './rate-limits';
 import { invoicingConfig } from './config';
 import { invoicingProviderProbe } from './providers';
 import { invoicingJobs } from './jobs';
+import { invoicingAuditActions } from './audit';
 
 /** This module's manifest entry: routes, the two issuing subscriptions, and locales. */
 export default {
@@ -44,6 +45,10 @@ export default {
     rateLimits: invoicingRateLimits,
     // The buyer address frozen on each invoice and credit note is PII-encrypted.
     reencrypt: invoicingService.reencryptInvoices,
+    staffReadPurposes: {
+        [invoicingAuditActions.ADMIN_INVOICE_VIEWED]: 'handling your invoice',
+        [invoicingAuditActions.ADMIN_CREDIT_NOTE_VIEWED]: 'handling your credit note'
+    },
     personalData: [
         {
             section: 'invoicing',

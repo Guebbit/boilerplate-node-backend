@@ -194,6 +194,6 @@ describe('ownOrderFlag', () => {
         expect(ownOrderFlag(me, 'someone-else')).toEqual({});
         expect(ownOrderFlag(me, undefined)).toEqual({});
         expect(ownOrderFlag(undefined, 'me')).toEqual({});
-        expect(ownOrderFlag(systemCallerContext('Order'), 'system')).toEqual({});
+        expect(ownOrderFlag(systemCallerContext('Locale'), 'system')).toEqual({});
     });
 });

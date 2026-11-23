@@ -17,6 +17,7 @@ import type { ConfigSlice } from '@infrastructure/config/define';
 import { markDomainEventsWired } from '@kernel/events';
 import type { AnalyticsEventRequest, RateLimitBudget } from '@types';
 import type { AnalyticsEventInput } from '@infrastructure/observability/analytics';
+import type { AuditAction } from '@infrastructure/observability/audit';
 import type { ReencryptReport } from '@infrastructure/security/reencrypt';
 
 /**
@@ -483,6 +484,17 @@ export interface AppModule {
     browserEvents?: Readonly<Record<string, BrowserEventTarget>>;
 
     /**
+     * The staff reads this module records (`admin.<resource>.viewed`), each with why staff open the
+     * record, in words a data subject can read. `audit-logs` collects them: they are the actions
+     * that count as a consultation in a person's data export, and the "purpose" it shows. A module
+     * whose detail read calls `recordStaffRead` declares its action here, or the read is recorded
+     * but never reaches the export. Most modules have none.
+     *
+     * @see docs/modules/audit-logs.md#the-person-can-see-who-looked
+     */
+    staffReadPurposes?: Readonly<Partial<Record<AuditAction, string>>>;
+
+    /**
      * Paths whose callers SIGN the request body, so the JSON parser must keep the bytes verbatim.
      * Relative to the first of {@link mounts}.
      *
@@ -677,6 +689,26 @@ export const resolveBrowserEvents = (
     uniqueEntries(
         appModules.flatMap((appModule) => Object.entries(appModule.browserEvents ?? {})),
         'browser event name'
+    );
+
+/**
+ * Every registered module's {@link AppModule.staffReadPurposes}, merged into one lookup keyed by
+ * audit action. Built from the passed-in list for the same reason {@link resolvePublicEvents} is.
+ *
+ * @param appModules - the enabled module list
+ * @throws {Error} when two modules declare the same staff-read action
+ */
+export const resolveStaffReadPurposes = (
+    appModules: readonly AppModule[]
+): Readonly<Record<string, string>> =>
+    uniqueEntries(
+        appModules.flatMap((appModule) =>
+            // `Object.entries` loses the action key type; the values are the purpose strings.
+            Object.entries(appModule.staffReadPurposes ?? {}).map(
+                ([action, purpose]): [string, string] => [action, purpose]
+            )
+        ),
+        'staff-read action'
     );
 
 /**

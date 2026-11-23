@@ -30,29 +30,27 @@ describe('registerWebhookCatalog', () => {
     });
 
     it('lists only the events of the modules it is given', () => {
-        registerWebhookCatalog(['payments']);
+        registerWebhookCatalog(['users']);
 
-        expect(listedNames()).toEqual(declaredWebhookEvents(['payments']));
+        expect(listedNames()).toEqual(declaredWebhookEvents(['users']));
         expect(listedNames().length).toBeGreaterThan(0);
-        expect(listedNames().every((name) => name.startsWith('payment.'))).toBe(true);
+        expect(listedNames().every((name) => name.startsWith('user.'))).toBe(true);
     });
 
     it('skips a registered module that owns no fragment', () => {
-        registerWebhookCatalog(['webhooks', 'orders']);
+        registerWebhookCatalog(['webhooks', 'example']);
 
-        expect(listedNames()).toEqual(declaredWebhookEvents(['orders']));
+        expect(listedNames()).toEqual(declaredWebhookEvents(['example']));
     });
 
     it('carries each channel description through', () => {
-        registerWebhookCatalog(['orders']);
+        registerWebhookCatalog(['users']);
 
         expect(
-            listWebhookEventCatalog(callerAs('admin')).find(
-                (event) => event.name === 'order.created'
-            )
+            listWebhookEventCatalog(callerAs('admin')).find((event) => event.name === 'user.erased')
         ).toEqual({
-            name: 'order.created',
-            description: 'A new order was placed.',
+            name: 'user.erased',
+            description: 'An account was erased.',
             actions: { subscribe: true }
         });
     });
@@ -60,63 +58,70 @@ describe('registerWebhookCatalog', () => {
 
 describe('unknownEventTypes', () => {
     beforeEach(() => {
-        registerWebhookCatalog(['orders']);
+        registerWebhookCatalog(['users']);
     });
     afterEach(() => {
         registerWebhookCatalog([]);
     });
 
     it('is empty for listed names and for the wildcard', () => {
-        expect(unknownEventTypes(['order.paid', '*'])).toEqual([]);
+        expect(unknownEventTypes(['user.updated', '*'])).toEqual([]);
     });
 
     it('names each unknown event once, in request order', () => {
-        expect(unknownEventTypes(['order.payd', 'order.paid', 'order.payd', 'x'])).toEqual([
-            'order.payd',
+        expect(unknownEventTypes(['user.updatd', 'user.updated', 'user.updatd', 'x'])).toEqual([
+            'user.updatd',
             'x'
         ]);
     });
 
     it('refuses an event of a module that is not registered', () => {
-        expect(unknownEventTypes(['payment.succeeded'])).toEqual(['payment.succeeded']);
+        expect(unknownEventTypes(['example.published'])).toEqual(['example.published']);
     });
 });
 
+/**
+ * Whether `role` may subscribe to each listed event, by event name.
+ *
+ * @param role - a persona from `@tests/callers`
+ */
+const flagsOf = (role: string) =>
+    Object.fromEntries(
+        listWebhookEventCatalog(callerAs(role)).map((event) => [
+            event.name,
+            event.actions.subscribe
+        ])
+    );
+
 describe('read rules', () => {
     beforeEach(() => {
-        registerWebhookCatalog(['orders', 'users', 'example']);
+        registerWebhookCatalog(['users']);
     });
     afterEach(() => {
         registerWebhookCatalog([]);
     });
 
     it('flags each event by whether the caller holds its read rule', () => {
-        const flags = Object.fromEntries(
-            listWebhookEventCatalog(callerAs('manager')).map((e) => [e.name, e.actions.subscribe])
-        );
-
-        expect(flags).toMatchObject({
-            'order.paid': true,
-            'user.updated': false,
-            'example.published': true
-        });
+        expect(flagsOf('manager')).toEqual({ 'user.erased': false, 'user.updated': false });
+        // `support` reads accounts through `UserDisplay` without being the superuser.
+        expect(flagsOf('support')).toEqual({ 'user.erased': true, 'user.updated': true });
     });
 
     it('names the unreadable events of a filter, and `*` stands for every event', () => {
         const manager = callerAs('manager');
 
-        expect(unreadableEventTypes(['order.paid', 'user.updated'], manager)).toEqual([
-            'user.updated'
-        ]);
+        expect(unreadableEventTypes(['user.updated'], manager)).toEqual(['user.updated']);
         expect(unreadableEventTypes(['*'], manager).toSorted()).toEqual([
             'user.erased',
             'user.updated'
         ]);
-        expect(unreadableEventTypes(['*'], callerAs('admin'))).toEqual([]);
+        expect(unreadableEventTypes(['*'], callerAs('support'))).toEqual([]);
     });
 
-    it('does not let an own-rows holder pass for a staff rule', () => {
-        expect(unreadableEventTypes(['order.paid'], callerAs('customer'))).toEqual(['order.paid']);
+    it('does not let a caller with no staff rule pass for one', () => {
+        expect(unreadableEventTypes(['user.updated'], callerAs('customer'))).toEqual([
+            'user.updated'
+        ]);
     });
 });
 
@@ -146,7 +151,7 @@ describe('registerWebhookCatalog — a channel without a usable x-read-rule', ()
         );
 
         expect(() => {
-            registerWebhookCatalog(['orders']);
+            registerWebhookCatalog(['users']);
         }).toThrow(/thing\.happened/);
     });
 });

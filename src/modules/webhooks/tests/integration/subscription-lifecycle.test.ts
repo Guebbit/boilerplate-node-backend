@@ -69,7 +69,7 @@ setupTestDb();
 beforeEach(() => {
     mockChecked.length = 0;
     mockEmitAuditEvent.mockClear();
-    registerWebhookCatalog(['orders']);
+    registerWebhookCatalog(['users']);
     jest.spyOn(logger, 'warn').mockImplementation(() => logger);
 });
 
@@ -78,8 +78,8 @@ afterEach(() => {
     jest.restoreAllMocks();
 });
 
-/** A tenant caller, as the manager role. */
-const context = { caller: callerAs('manager'), analyticsConsent: false };
+/** A tenant caller, as the admin role. */
+const context = { caller: callerAs('admin'), analyticsConsent: false };
 
 /** The audit events recorded under one action. */
 const auditedAs = (action: string) =>
@@ -231,7 +231,7 @@ describe('what a create refuses', () => {
         const result = await create(
             {
                 url: 'https://hooks.example.com/a',
-                eventTypes: outsideTheEnum('order.created', 'nope.one', 'nope.two')
+                eventTypes: outsideTheEnum('user.erased', 'nope.one', 'nope.two')
             },
             context
         );
@@ -249,7 +249,7 @@ describe('what a create refuses', () => {
 
     it('accepts event types the catalogue lists', async () => {
         const result = await create(
-            { url: 'https://hooks.example.com/a', eventTypes: ['order.created'] },
+            { url: 'https://hooks.example.com/a', eventTypes: ['user.erased'] },
             context
         );
 
@@ -348,7 +348,7 @@ describe('updating', () => {
     });
 
     it('refuses event types outside the catalogue and leaves the row as it was', async () => {
-        const created = await subscribe('https://hooks.example.com/a', ['order.created']);
+        const created = await subscribe('https://hooks.example.com/a', ['user.erased']);
 
         const result = await update(
             String(created._id),
@@ -359,7 +359,7 @@ describe('updating', () => {
         expect(result.success).toBe(false);
         if (result.success) throw new Error('unreachable — asserted above');
         expect(result.errors[0]).toMatchObject({ details: { field: 'eventTypes' } });
-        expect(await read(String(created._id), 'eventTypes')).toEqual(['order.created']);
+        expect(await read(String(created._id), 'eventTypes')).toEqual(['user.erased']);
     });
 
     it('checks a URL only when it changes, and refuses a change the guard refuses', async () => {
@@ -389,23 +389,23 @@ describe('updating', () => {
     });
 
     it('changes only what the request names, and clears a description with null', async () => {
-        const created = await subscribe('https://hooks.example.com/a', ['order.created']);
+        const created = await subscribe('https://hooks.example.com/a', ['user.erased']);
         await update(String(created._id), { description: 'first' }, context);
         const kept = await stored(String(created._id));
 
-        await update(String(created._id), { eventTypes: ['order.paid'] }, context);
+        await update(String(created._id), { eventTypes: ['user.updated'] }, context);
         const retargeted = await stored(String(created._id));
         await update(String(created._id), { description: null }, context);
         const cleared = await stored(String(created._id));
 
-        expect(kept).toMatchObject({ description: 'first', eventTypes: ['order.created'] });
+        expect(kept).toMatchObject({ description: 'first', eventTypes: ['user.erased'] });
         expect(retargeted).toMatchObject({
             description: 'first',
-            eventTypes: ['order.paid'],
+            eventTypes: ['user.updated'],
             url: 'https://hooks.example.com/a'
         });
         expect(cleared?.description).toBeUndefined();
-        expect(cleared?.eventTypes).toEqual(['order.paid']);
+        expect(cleared?.eventTypes).toEqual(['user.updated']);
     });
 
     it('audits an update with the subscription’s id', async () => {
@@ -423,21 +423,21 @@ describe('updating', () => {
     });
 
     it('audits what changed: the event filter by value, the url and description by name only', async () => {
-        const created = await subscribe('https://hooks.example.com/a', ['order.created']);
+        const created = await subscribe('https://hooks.example.com/a', ['user.erased']);
 
         await update(
             String(created._id),
             {
                 url: 'https://hooks.example.com/token-in-the-path',
                 description: 'personal note',
-                eventTypes: ['order.paid']
+                eventTypes: ['user.updated']
             },
             context
         );
 
         const [event] = auditedAs(webhooksAuditActions.ADMIN_WEBHOOK_SUBSCRIPTION_UPDATED);
         expect(event.metadata).toEqual({
-            changes: { eventTypes: { from: ['order.created'], to: ['order.paid'] } },
+            changes: { eventTypes: { from: ['user.erased'], to: ['user.updated'] } },
             changedFields: ['url', 'description']
         });
         expect(JSON.stringify(event.metadata)).not.toContain('token-in-the-path');
@@ -445,11 +445,11 @@ describe('updating', () => {
     });
 
     it('records no change for a request that moves nothing', async () => {
-        const created = await subscribe('https://hooks.example.com/a', ['order.created']);
+        const created = await subscribe('https://hooks.example.com/a', ['user.erased']);
 
         await update(
             String(created._id),
-            { url: 'https://hooks.example.com/a', eventTypes: ['order.created'] },
+            { url: 'https://hooks.example.com/a', eventTypes: ['user.erased'] },
             context
         );
 
@@ -665,8 +665,8 @@ describe('removing', () => {
             tenant: created.tenant,
             subscriptionId: created._id,
             eventId: 'evt_kept',
-            eventType: 'order.paid',
-            payload: { orderId: 'order_1' },
+            eventType: 'user.updated',
+            payload: { userId: 'user_1' },
             attempt: 1,
             status: 'succeeded'
         });
