@@ -31,6 +31,7 @@ import {
     sharedFileProblems,
     type RepoRole
 } from '../../../../scripts/pairing/spec-identity';
+import { expectWarning } from '@tests/expect-warning';
 import { resolveFrontendPath } from '../../../../scripts/pairing/paired-frontend-path';
 
 /** Builds a throwaway repo root holding the named files with the given contents. */
@@ -363,8 +364,12 @@ describe(`the paired frontend at ${siblingRoot}`, () => {
         if (siblingPresent) return;
 
         const message = `Shared-contract checks skipped: no sibling repo at ${siblingRoot}.`;
-        // eslint-disable-next-line no-console -- the skip warning must reach a terminal that has no logger configured
-        if (!siblingExpected) console.warn(`⚠️  ${message}`);
+        if (!siblingExpected) {
+            // The fail-on-warning guard fails a case that warns unannounced; this one warns on purpose.
+            expectWarning(/Shared-contract checks skipped/);
+            // eslint-disable-next-line no-console -- the skip warning must reach a terminal that has no logger configured
+            console.warn(`⚠️  ${message}`);
+        }
         expect(siblingExpected ? message : '').toBe('');
     });
 
