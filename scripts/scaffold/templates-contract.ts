@@ -61,13 +61,14 @@ tags:
 paths:
     ${names.basePath}:
         get:
+            x-cache: private-no-cache
             tags: [${names.entity}]
             summary: List ${names.words}
             description: Returns one page of ${names.words}, newest first.
             operationId: list${names.plural}
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:${names.entity}']
+                - apiKeyAuth: ['read:${names.entity}']
             parameters:
                 - $ref: '${ROOT}#/components/parameters/PageParam'
                 - $ref: '${ROOT}#/components/parameters/PageSizeParam'
@@ -93,8 +94,8 @@ ${KEYED_ERRORS}
             description: Creates one ${names.entityCamel}.
             operationId: create${names.entity}
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['create:${names.entity}']
+                - apiKeyAuth: ['create:${names.entity}']
             requestBody:
                 required: true
                 content:
@@ -114,13 +115,14 @@ ${KEYED_ERRORS}
 
     ${names.basePath}/{id}:
         get:
+            x-cache: private-no-cache
             tags: [${names.entity}]
             summary: Get ${names.entityCamel}
             description: Returns the ${names.entityCamel} identified by {id}, with the actions the caller may take on it.
             operationId: get${names.entity}ById
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['read:${names.entity}']
+                - apiKeyAuth: ['read:${names.entity}']
             parameters:
                 - $ref: '${ROOT}#/components/parameters/IdPathParam'
             responses:
@@ -137,8 +139,8 @@ ${PATH_ONLY_ERRORS}
             description: Replaces the ${names.entityCamel} (RFC 9110 9.3.4, an omitted optional field is cleared). name is required, since a PUT names the whole representation.
             operationId: replace${names.entity}ById
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:${names.entity}']
+                - apiKeyAuth: ['update:${names.entity}']
             parameters:
                 - $ref: '${ROOT}#/components/parameters/IdPathParam'
             requestBody:
@@ -161,8 +163,8 @@ ${KEYED_ERRORS_WITH_NOT_FOUND}
             description: Merges a change into the ${names.entityCamel} (RFC 7396, an omitted field is left unchanged, null clears notes).
             operationId: update${names.entity}ById
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['update:${names.entity}']
+                - apiKeyAuth: ['update:${names.entity}']
             parameters:
                 - $ref: '${ROOT}#/components/parameters/IdPathParam'
             requestBody:
@@ -188,8 +190,8 @@ ${KEYED_ERRORS_WITH_NOT_FOUND}
             description: Permanently removes the ${names.entityCamel} identified by {id}.
             operationId: delete${names.entity}ById
             security:
-                - bearerAuth: []
-                - apiKeyAuth: []
+                - bearerAuth: ['delete:${names.entity}']
+                - apiKeyAuth: ['delete:${names.entity}']
             parameters:
                 - $ref: '${ROOT}#/components/parameters/IdPathParam'
             responses:

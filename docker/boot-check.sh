@@ -99,10 +99,11 @@ if docker exec "$app" sh -c 'touch /app/src/.boot-check-write 2>/dev/null'; then
 fi
 echo "boot-check: /app/src is not writable by $(docker exec "$app" id -un)"
 
-# The worker answers `/livez` on its own loopback (inside the container: the image has no curl).
+# The worker answers `/livez` on its own loopback listener, `NODE_WORKER_PORT` (default 3010), not the API's 3000.
+# It runs inside the container because the image has no curl.
 worker_alive=0
 for _ in $(seq 1 45); do
-    if docker exec "$worker" node -e "fetch('http://127.0.0.1:3000/livez').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
+    if docker exec "$worker" node -e "fetch('http://127.0.0.1:3010/livez').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))" >/dev/null 2>&1; then
         worker_alive=1
         break
     fi
