@@ -68,6 +68,18 @@ describe('deadCodeCitations', () => {
         ]);
     });
 
+    it('skips a tracked file deleted from the tree, and reports a citation of a deleted page', async () => {
+        const files = await track({
+            'docs/modules/orders.md': '# orders\n',
+            'src/gone.ts': '// docs/modules/orders.md\n',
+            'src/b.ts': '// docs/modules/orders.md\n'
+        });
+        await rm(path.join(root, 'src/gone.ts'));
+        await rm(path.join(root, 'docs/modules/orders.md'));
+
+        expect(deadCodeCitations(root, files)).toEqual(['src/b.ts: docs/modules/orders.md']);
+    });
+
     it('leaves a URL and a peer repo page alone', async () => {
         const files = await track({
             'src/a.ts': '// https://example.com/docs/nope.md\n// peer-repo/docs/tools/other.md#x\n'

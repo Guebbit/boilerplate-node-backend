@@ -66,6 +66,17 @@ describe('keysDocumentSchema', () => {
         expect(z.prettifyError(result.error)).toContain('action');
     });
 
+    it('refuses an implies entry naming an action the document does not declare', () => {
+        const result = keysDocumentSchema.safeParse({
+            ...validKeysDocument,
+            implies: { display: ['raed'] }
+        });
+
+        expect(result.success).toBe(false);
+        if (result.success) return;
+        expect(z.prettifyError(result.error)).toContain('"raed"');
+    });
+
     it('refuses a rule missing its scope', () => {
         const { scope: _scope, ...ruleWithoutScope } = validKeysDocument.rules[0];
         const result = keysDocumentSchema.safeParse({

@@ -17,6 +17,7 @@ export const personas = [
         id: 'b',
         username: 'banned',
         active: false,
+        // Armed accounts wear the owner's photo.
         ...userImages.root
     })
 ];
@@ -99,6 +100,7 @@ describe('removeSeedImages', () => {
         expect(users).not.toMatch(/userImages|users-images/u);
         expect(users).toContain("username: 'unverified'\n    }),");
         expect(users).toContain('active: false\n    })');
+        expect(users).not.toContain('Armed accounts');
         expect(users).toContain('analyticsConsent: index % 2 === 0\n    })');
     });
 

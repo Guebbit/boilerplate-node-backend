@@ -57,6 +57,17 @@ describe('readPermissionVocabulary', () => {
         });
     });
 
+    it('drops a declared action no rule carries, so the action union follows the subjects', () => {
+        const stripped = readPermissionVocabulary(
+            yamlOf({
+                actions: ['read', 'sweep', 'checkout'],
+                rules: [{ action: 'read', subject: 'Cart', scope: 'platform' }]
+            })
+        );
+        expect(stripped.actions).toEqual(['read']);
+        expect(stripped.pairs).toEqual({ Cart: ['read'] });
+    });
+
     it.each([
         ['has no actions', { actions: [] }, /no `actions:`/],
         ['repeats an action', { actions: ['read', 'read', 'sweep'] }, /repeats `read`/],

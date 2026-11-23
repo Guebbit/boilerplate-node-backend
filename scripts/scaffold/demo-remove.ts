@@ -4,7 +4,8 @@
  *
  * Deletes every `group: shop` and `group: example` module folder (its scheduled jobs go with it,
  * and `regenerate` rewrites the crontab), the seed images, and the demo
- * catalogue's own scenario data — then edits `src/modules.ts` and regenerates the scenario
+ * catalogue's own scenario data — or only the modules `--modules a,b,c` names (`example` goes only
+ * when listed; the catalogue only when `products` is) — then edits `src/modules.ts` and regenerates the scenario
  * registries (`npm run regenerate`), the only central files that would otherwise stop the
  * repo compiling. What this promises and does not is on the page below.
  *
@@ -15,10 +16,10 @@
  * @see docs/build/new-project.md#what-it-does-not-do
  */
 
-import { readDemoModuleNames } from '../testing/demo-module-names';
+import { resolveStripModules } from '../testing/demo-module-names';
 import { removeModules } from './demo-remove-modules';
 import type { RemovalNote } from './demo-remove-registry';
-import { removeSeedImages, removeShopOnlyScenarioFiles } from './demo-remove-scenarios';
+import { removeShopCatalogue } from './demo-remove-scenarios';
 import { formatWithRepoConfig } from './format-text';
 import { writeScenarioRegistries } from './scenario-registry';
 import { REPO_ROOT } from '../modules-on-disk';
@@ -29,8 +30,11 @@ const report = (notes: readonly RemovalNote[]): void => {
     for (const note of notes) console.info(`  ${note.file} — ${note.detail}`);
 };
 
-/** The module folders to strip: every one labelled `group: shop` or `group: example`. */
-const demoModuleNames = readDemoModuleNames(REPO_ROOT);
+/**
+ * The module folders to strip: the `--modules a,b,c` list, else every one labelled `group: shop`
+ * or `group: example`.
+ */
+const demoModuleNames = resolveStripModules(REPO_ROOT, process.argv.slice(2));
 
 /** Announce the strip before touching anything. */
 console.info(
@@ -41,10 +45,12 @@ console.info(
 console.info('\n[demo-remove] the modules, and everything central that names them:');
 report(removeModules(REPO_ROOT, demoModuleNames));
 
-/** Step two: delete the demo catalogue's data. Nothing is edited: the registries are step three. */
+/**
+ * Step two: delete the demo catalogue's data (only when `products` is being removed). Nothing is
+ * edited: the registries are step three.
+ */
 console.info('\n[demo-remove] the demo catalogue:');
-report(removeSeedImages(REPO_ROOT));
-report(removeShopOnlyScenarioFiles(REPO_ROOT));
+report(removeShopCatalogue(REPO_ROOT, demoModuleNames));
 
 /**
  * Step three: regenerate the registries that listed the deleted files — the one rewrite the strip

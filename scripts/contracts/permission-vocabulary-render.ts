@@ -13,7 +13,7 @@ import { isPlainObject } from '../../src/infrastructure/object-guards';
 
 /** Every closed list the shared authorization keys declare, in declared order. */
 export interface PermissionVocabulary {
-    /** `actions:`. */
+    /** `actions:` that at least one rule carries, in declared order. */
     actions: string[];
     /** Distinct `subject` of the rules, in first-seen order. */
     subjects: string[];
@@ -153,7 +153,10 @@ export const readPermissionVocabulary = (yamlText: string): PermissionVocabulary
         subjects.map((subject) => [subject, [] as string[]])
     );
     for (const [index, action] of ruleActions.entries()) pairs[ruleSubjects[index]].push(action);
-    return { actions, subjects, ruleIds, setNames, scopes, stepUpTiers, pairs };
+    // The action union is drawn from the rules, like the subject union and the pair map, so a
+    // declared action no rule carries any more (its module was removed) leaves all three together.
+    const carried = actions.filter((action) => ruleActions.includes(action));
+    return { actions: carried, subjects, ruleIds, setNames, scopes, stepUpTiers, pairs };
 };
 
 /**

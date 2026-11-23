@@ -1,7 +1,10 @@
 import { mkdirSync, mkdtempSync, existsSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { removeScenarioModuleFiles } from '../../../../scripts/scaffold/demo-remove-scenarios';
+import {
+    removeScenarioModuleFiles,
+    removeShopCatalogue
+} from '../../../../scripts/scaffold/demo-remove-scenarios';
 
 /** A throwaway checkout holding just the scenario files a module can own. */
 let root: string;
@@ -49,5 +52,37 @@ describe('removeScenarioModuleFiles', () => {
     it('reports nothing for a module that has no scenario files', () => {
         expect(removeScenarioModuleFiles(root, ['wishlist'])).toEqual([]);
         expect(exists('scenarios/support/doubles/payments')).toBe(true);
+    });
+});
+
+describe('removeShopCatalogue', () => {
+    beforeEach(() => {
+        write('scenarios/products.ts');
+        write('public/images/seed/photo.jpg');
+        write('scenarios/users-images.generated.json');
+        write('scenarios/tools/generate-seed-images.ts');
+        write('scenarios/users.ts');
+        writeFileSync(
+            path.join(root, 'scenarios/users.ts'),
+            "import userImages from './users-images.generated.json';\n"
+        );
+        writeFileSync(
+            path.join(root, 'package.json'),
+            '{\n    "scripts": {\n        "scenario:images": "x"\n    }\n}\n'
+        );
+    });
+
+    it('takes the seed images and the shop scenario files when `products` goes', () => {
+        removeShopCatalogue(root, ['orders', 'products']);
+
+        expect(exists('scenarios/products.ts')).toBe(false);
+        expect(exists('public/images/seed')).toBe(false);
+    });
+
+    it('leaves the catalogue alone while `products` stays', () => {
+        expect(removeShopCatalogue(root, ['orders'])).toEqual([]);
+
+        expect(exists('scenarios/products.ts')).toBe(true);
+        expect(exists('public/images/seed/photo.jpg')).toBe(true);
     });
 });

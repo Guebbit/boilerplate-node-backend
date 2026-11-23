@@ -8,7 +8,7 @@
  * Skips:       a URL, a `../`-relative path and a peer repo's `<dir>/docs/…` (the lookbehind).
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { slugify } from '@mdit-vue/shared';
 
@@ -81,7 +81,8 @@ const isCitingFile = (file: string): boolean =>
  * @param file - a tracked file, relative to `root`
  */
 const citingText = (root: string, file: string): string | undefined => {
-    if (!isCitingFile(file)) return undefined;
+    // `git ls-files` still lists a file deleted from the tree but not yet committed.
+    if (!isCitingFile(file) || !existsSync(path.join(root, file))) return undefined;
     const text = readFileSync(path.join(root, file), 'utf8');
     // Only a test file may opt out: a marker in `src/` is a comment, and its citations still count.
     return file.startsWith('tests/') && text.startsWith(FIXTURE_MARKER) ? undefined : text;
@@ -95,7 +96,15 @@ const citingText = (root: string, file: string): string | undefined => {
  * @returns one `file: citation` line per dead link, in file order
  */
 export const deadCodeCitations = (root: string, files: string[]): string[] => {
-    const pages = new Set(files.filter((file) => file.startsWith('docs/') && file.endsWith('.md')));
+    // A page deleted from the tree but still in the index is no target: a citation of it is dead.
+    const pages = new Set(
+        files.filter(
+            (file) =>
+                file.startsWith('docs/') &&
+                file.endsWith('.md') &&
+                existsSync(path.join(root, file))
+        )
+    );
     // One parse per cited page, however many files cite it.
     const slugsCache = new Map<string, Set<string>>();
     const slugsOf = (page: string): Set<string> => {

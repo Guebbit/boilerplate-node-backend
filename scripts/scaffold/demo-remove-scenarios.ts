@@ -82,12 +82,13 @@ export const removeSeedImages = (repoRoot: string): RemovalNote[] => {
     );
     /**
      * `,\n        ...userImages.customer`, or the customer base's `...(index % 2 === 0 ? userImages.root :
-     * userImages.customer)` — the spread is always a user's last property.
+     * userImages.customer)` — the spread is always a user's last property, and may follow its own
+     * `//` comment lines, which go with it.
      */
     writeFileSync(
         usersFile,
         withoutImport.replaceAll(
-            /,\n\s*\.\.\.(?:userImages\.\w+|\([^\n]*userImages[^\n]*\))(?=\n)/g,
+            /,\n(?:\s*\/\/[^\n]*\n)*\s*\.\.\.(?:userImages\.\w+|\([^\n]*userImages[^\n]*\))(?=\n)/g,
             ''
         )
     );
@@ -125,3 +126,15 @@ export const removeScenarioModuleFiles = (
             rmSync(path.join(repoRoot, relativePath), { recursive: true, force: true });
         return owned.map((relativePath) => ({ file: relativePath, detail: 'deleted' }));
     });
+
+/**
+ * The demo catalogue's data — the seed images and the shop-only scenario files — which belongs to
+ * the `products` module: a strip that keeps `products` keeps it.
+ * @param repoRoot - the checkout to edit
+ * @param names - the removed module names
+ * @returns the steps' notes, none when `products` is not being removed
+ */
+export const removeShopCatalogue = (repoRoot: string, names: readonly string[]): RemovalNote[] =>
+    names.includes('products')
+        ? [...removeSeedImages(repoRoot), ...removeShopOnlyScenarioFiles(repoRoot)]
+        : [];

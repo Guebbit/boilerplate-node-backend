@@ -227,14 +227,30 @@ const audienceRoleSchema = z.object({
  * Exported so a unit test can assert on malformed fixtures directly, rather than reaching for the
  * private `readShared`/filesystem path this module resolves at import.
  */
-export const keysDocumentSchema = z.object({
-    version: z.number(),
-    actions: z.array(z.enum(PERMISSION_ACTIONS)),
-    implies: z.partialRecord(z.enum(PERMISSION_ACTIONS), z.array(z.enum(PERMISSION_ACTIONS))),
-    scopes: z.record(z.enum(AUTHORIZATION_SCOPES), z.string()),
-    rules: z.array(permissionRuleSchema),
-    sets: z.array(permissionSetSchema)
-});
+export const keysDocumentSchema = z
+    .object({
+        version: z.number(),
+        // The declared list may name an action no rule carries; the type lists only the carried ones.
+        actions: z.array(z.string()),
+        // Strings, like `actions`: an implying action no rule carries any more is harmless. A typo is
+        // still refused, by the check below against the document's own `actions:` list.
+        implies: z.record(z.string(), z.array(z.string())),
+        scopes: z.record(z.enum(AUTHORIZATION_SCOPES), z.string()),
+        rules: z.array(permissionRuleSchema),
+        sets: z.array(permissionSetSchema)
+    })
+    .superRefine((document, context) => {
+        for (const [staff, plain] of Object.entries(document.implies)) {
+            for (const action of [staff, ...plain]) {
+                if (!document.actions.includes(action))
+                    context.addIssue({
+                        code: 'custom',
+                        path: ['implies', staff],
+                        message: `implies names "${action}", which \`actions:\` does not declare`
+                    });
+            }
+        }
+    });
 
 /** The full shape of `shared/rules/authorization-roles.yaml`, before its sets are expanded. See {@link keysDocumentSchema}. */
 export const rolesDocumentSchema = z.object({
@@ -327,9 +343,7 @@ for (const set of PERMISSION_SETS) {
  * rule beside the staff one, so one query serves a customer's own rows and a staff member's every
  * row, while a route guard asking for the staff action is still not opened by the own-rows rule.
  */
-export const IMPLIED_ACTIONS: Readonly<
-    Partial<Record<PermissionAction, readonly PermissionAction[]>>
-> = keysDocument.implies;
+export const IMPLIED_ACTIONS: Readonly<Record<string, readonly string[]>> = keysDocument.implies;
 
 /**
  * The rule ids a list of set names expands to, each once.
