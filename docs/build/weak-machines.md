@@ -146,6 +146,10 @@ npm run test:integration
 
 # Pin it, when the runner's guess is wrong for this box.
 JEST_SHARDS=12 npm run test:integration
+
+# Run ONE slice of a layer and nothing else (CI runs one per matrix job).
+JEST_SHARD=2/4 npm run test:integration
+
 JEST_WORKERS=1 npx jest path/to/one.test.ts
 
 # Give a layer a night's rigour instead of a minute's.

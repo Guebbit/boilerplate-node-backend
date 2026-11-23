@@ -20,10 +20,12 @@ import {
     environmentKnob,
     filesPerShard,
     heapCapMb,
+    parseShardSelector,
     positiveInteger,
     processBudgetMb,
     shardCount,
     shardTargetMb,
+    sliceShards,
     workerCount
 } from '../../../../scripts/testing/machine-budget';
 import { setProcessEnvironment } from '@tests/environment';
@@ -164,6 +166,44 @@ describe('clampShards', () => {
 
     it('treats an unknown file count as one shard, like shardCount does', () => {
         expect(clampShards(4, 0)).toBe(1);
+    });
+});
+
+describe('parseShardSelector', () => {
+    it('reads i/n as a 1-based slice', () => {
+        expect(parseShardSelector('2/4')).toEqual({ index: 2, count: 4 });
+        expect(parseShardSelector(' 4/4 ')).toEqual({ index: 4, count: 4 });
+    });
+
+    it.each([undefined, '', '4', '0/4', '5/4', '1/0', '-1/4', '1.5/4', 'a/b', '1/4/2'])(
+        'refuses %p, so a typo runs the whole layer rather than an invented slice',
+        (value) => {
+            expect(parseShardSelector(value)).toBeUndefined();
+        }
+    );
+});
+
+describe('sliceShards', () => {
+    it('splits the memory-driven shards over the jobs, keeping each at the single-machine size', () => {
+        // 5 shards on one machine, 4 jobs: 2 per job, 8 jest shards in all.
+        expect(sliceShards({ index: 1, count: 4 }, 5, 406)).toEqual({ total: 8, mine: [1, 5] });
+        expect(sliceShards({ index: 4, count: 4 }, 5, 406)).toEqual({ total: 8, mine: [4, 8] });
+    });
+
+    it('runs every shard exactly once across the jobs', () => {
+        const all = [1, 2, 3, 4].flatMap((index) => sliceShards({ index, count: 4 }, 5, 406).mine);
+
+        expect(all.toSorted((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    });
+
+    it('gives each job one shard when the layer already fits in as many as there are jobs', () => {
+        expect(sliceShards({ index: 2, count: 4 }, 1, 406)).toEqual({ total: 4, mine: [2] });
+        expect(sliceShards({ index: 3, count: 3 }, 3, 540)).toEqual({ total: 3, mine: [3] });
+    });
+
+    it('caps the total at the file count, so a job past it runs nothing instead of an empty shard', () => {
+        expect(sliceShards({ index: 1, count: 4 }, 1, 2)).toEqual({ total: 2, mine: [1] });
+        expect(sliceShards({ index: 4, count: 4 }, 1, 2)).toEqual({ total: 2, mine: [] });
     });
 });
 

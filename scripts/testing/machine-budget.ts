@@ -188,6 +188,52 @@ export const clampShards = (override: number, fileCount: number): number =>
     fileCount > 0 ? Math.max(1, Math.min(override, fileCount)) : 1;
 
 /**
+ * Parses `JEST_SHARD=<i>/<n>`: the one slice of a layer THIS process runs, for a CI matrix job.
+ *
+ * Distinct from `JEST_SHARDS` (a count the wrapper loops over in one process): here several
+ * machines each take one slice, so nothing loops. `i` is 1-based, as in jest's `--shard=i/n`.
+ *
+ * @param value the raw variable
+ * @returns the slice, or undefined when unset, empty or not `i/n` with 1 <= i <= n
+ */
+export const parseShardSelector = (
+    value: string | undefined
+): { index: number; count: number } | undefined => {
+    const match = /^(\d+)\/(\d+)$/.exec(value?.trim() ?? '');
+    if (!match) return undefined;
+
+    const index = Number(match[1]);
+    const count = Number(match[2]);
+
+    return index >= 1 && index <= count ? { index, count } : undefined;
+};
+
+/**
+ * Which of a layer's jest shards one matrix job runs, so no job exceeds the memory-driven shard size.
+ *
+ * The layer needs `memoryShards` processes to stay inside the heap (see {@link shardCount}). Split
+ * over `count` jobs, each job runs `ceil(memoryShards / count)` of them: the layer becomes
+ * `count x per` jest shards, and job `index` takes every `count`-th one starting at `index`, so
+ * every shard runs exactly once across the jobs.
+ *
+ * @param selector this job's slice, from {@link parseShardSelector}
+ * @param memoryShards the shard count the layer needs on one machine
+ * @param fileCount how many files the layer matches; caps the total so no shard runs empty
+ * @returns the total shard count for jest's `--shard=k/total`, and the 1-based `k` values this job runs
+ */
+export const sliceShards = (
+    selector: { index: number; count: number },
+    memoryShards: number,
+    fileCount: number
+): { total: number; mine: number[] } => {
+    const total = clampShards(selector.count * Math.ceil(memoryShards / selector.count), fileCount);
+    const mine: number[] = [];
+    for (let shard = selector.index; shard <= total; shard += selector.count) mine.push(shard);
+
+    return { total, mine };
+};
+
+/**
  * How many parallel workers a pool may run, bounded by cores AND by memory.
  *
  * The memory half is what jest's own `logical CPUs - 1` default misses: this workload is bounded by
