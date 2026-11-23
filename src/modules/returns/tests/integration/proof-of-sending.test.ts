@@ -11,6 +11,7 @@ import { storedRefundStamps } from '@modules/payments/tests/factories';
 import { setupTestDb } from '@tests/setup-test-db';
 import { registerCheckoutModules } from '@tests/checkout-modules';
 import { withEnvironmentOverrides } from '@tests/environment';
+import { drain } from '@tests/drain';
 import { eventually } from '@tests/eventually';
 import { resetDomainEvents } from '@kernel/events';
 import { asAdmin, asCustomer, testCallerContext, callerContextAs } from '@tests/callers';
@@ -85,6 +86,38 @@ const approvedReturn = async (reason: 'withdrawal' | 'defective') => {
     if (reason !== 'withdrawal')
         await returnService.approveReturn(returnId, callerContextAs('admin'));
     return { shirt, orderId, returnId };
+};
+
+/**
+ * The receipt's own read, taken just before the proof was saved: the proof lands, then the
+ * receipt acts on the stale copy. Its claim loses, and the receipt re-reads the return once.
+ * @param returnId - an approved return the proof has not touched yet
+ * @param remedy - the remedy staff pick on the receipt
+ * @param staleReads - how many reads answer the copy from before the proof; two make the retry lose too
+ */
+const receiveOnStaleRead = async (
+    returnId: string,
+    remedy: 'refund' | 'repair',
+    staleReads = 1
+) => {
+    const beforeProof = await returnRepository.findById(returnId);
+    await returnService.recordProofOfSending(
+        returnId,
+        { ...proofOn(new Date()), refundOnProof: true },
+        callerContextAs('admin')
+    );
+    // The proof's own listeners read the return too: let them finish so a stale copy is only ever served to the receipt.
+    await drain();
+    const findById = jest.spyOn(returnRepository, 'findById');
+    for (let read = 0; read < staleReads; read += 1) findById.mockResolvedValueOnce(beforeProof);
+
+    const result = await returnService.receiveReturn(
+        returnId,
+        { remedy },
+        callerContextAs('admin')
+    );
+    jest.restoreAllMocks();
+    return result;
 };
 
 describe('a proof of sending on a withdrawal', () => {
@@ -483,36 +516,43 @@ describe('refund on proof, chosen by staff on a faulty item', () => {
         expect(await countersOf(shirt._id)).toMatchObject({ onHand: 8 });
     });
 
-    it.each(['refund', 'repair'] as const)(
-        'loses a %s receipt that read the return before the proof landed: 409, one refund, still approved',
-        async (remedy) => {
-            const { orderId, returnId } = await approvedReturn('defective');
-            const beforeProof = await returnRepository.findById(returnId);
-            await returnService.recordProofOfSending(
-                returnId,
-                { ...proofOn(new Date()), refundOnProof: true },
-                callerContextAs('admin')
-            );
-            // The receipt's own read, taken just before the proof was saved.
-            jest.spyOn(returnRepository, 'findById').mockResolvedValueOnce(beforeProof);
+    it('redoes a refund receipt that read the return before the proof landed: it closes, restocks, one refund', async () => {
+        const { shirt, orderId, returnId } = await approvedReturn('defective');
 
-            const result = await returnService.receiveReturn(
-                returnId,
-                { remedy },
-                callerContextAs('admin')
-            );
+        const result = await receiveOnStaleRead(returnId, 'refund');
 
-            expect(asReject(result).status).toBe(409);
-            expect(asReject(result).errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
-            expect(await storedRefundStamps(orderId)).toHaveLength(1);
-            jest.restoreAllMocks();
-            const stored = await returnRepository.findById(returnId);
-            expect(stored?.status).toBe('approved');
-        }
-    );
+        expect(result.success && result.data.status).toBe('closed');
+        expect(await countersOf(shirt._id)).toMatchObject({ onHand: 10 });
+        expect(await storedRefundStamps(orderId)).toHaveLength(1);
+    });
 
-    it('loses a receipt whose claim a proof with refundOnProof beat inside its transaction: one refund, proof kept', async () => {
+    it('refuses a repair receipt that read the return before the proof landed, once it re-reads: 409, one refund, still approved', async () => {
         const { orderId, returnId } = await approvedReturn('defective');
+
+        const result = await receiveOnStaleRead(returnId, 'repair');
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('RETURN_REFUND_OPENED_ON_PROOF');
+        expect(await storedRefundStamps(orderId)).toHaveLength(1);
+        const stored = await returnRepository.findById(returnId);
+        expect(stored?.status).toBe('approved');
+    });
+
+    it('answers 409 not receivable when the retry loses too: one refund, still approved, nothing restocked', async () => {
+        const { shirt, orderId, returnId } = await approvedReturn('defective');
+
+        const result = await receiveOnStaleRead(returnId, 'refund', 2);
+
+        expect(asReject(result).status).toBe(409);
+        expect(asReject(result).errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
+        expect(await storedRefundStamps(orderId)).toHaveLength(1);
+        expect(await countersOf(shirt._id)).toMatchObject({ onHand: 8 });
+        const stored = await returnRepository.findById(returnId);
+        expect(stored?.status).toBe('approved');
+    });
+
+    it('redoes a receipt whose claim a proof with refundOnProof beat inside its transaction: it lands, restocks, one refund, proof kept', async () => {
+        const { shirt, orderId, returnId } = await approvedReturn('defective');
         const realLock = returnRepository.lockOrder.bind(returnRepository);
         let proofSaved = false;
         /**
@@ -534,11 +574,12 @@ describe('refund on proof, chosen by staff on a faulty item', () => {
         // The file's afterEach restores the spy, throw or not.
         const result = await returnService.receiveReturn(returnId, {}, callerContextAs('admin'));
 
-        expect(asReject(result).status).toBe(409);
-        expect(asReject(result).errors[0].code).toBe('RETURN_NOT_RECEIVABLE');
+        // The first claim lost to the proof; the receipt re-read the return and landed on the second try.
+        expect(result.success && result.data.status).toBe('closed');
+        expect(await countersOf(shirt._id)).toMatchObject({ onHand: 10 });
         expect(await storedRefundStamps(orderId)).toHaveLength(1);
         const stored = await returnRepository.findById(returnId);
-        expect(stored).toMatchObject({ status: 'approved', refundOnProof: true });
+        expect(stored).toMatchObject({ refundOnProof: true });
         expect(stored?.proofOfSendingAt).toBeInstanceOf(Date);
     });
 

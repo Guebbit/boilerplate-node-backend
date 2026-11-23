@@ -239,7 +239,8 @@ Shopify, Medusa, Saleor and Magento. A leftover row in the default language is i
 validates a whole PATCH-shaped batch — the locale exists (active or not: a draft language is where
 content is written before it goes live), every field name is one the registry declares for that
 `entityType` — before anything is written; `writePlannedTranslations`
-applies it, stamping each row with the digest of the entity's text as the record holds it, read
+applies it, stamping each row whose own text is new or changed with the digest of the entity's text
+as the record holds it (a row re-sent unchanged keeps its stored digest), read
 inside the same transaction after the owner wrote its own document (see
 [`products`](./products.md#writing-translated-content)).
 

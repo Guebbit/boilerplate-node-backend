@@ -104,10 +104,9 @@ describe('planMergeLine', () => {
             });
         });
 
-        it('never lowers a line already above the number', () => {
+        it('never lowers a line already above the number, and names no reason: the stock verdict says why', () => {
             expect(plan({ requested: 1, held: 8, quantityAvailable: 3 })).toEqual({
                 add: 0,
-                reason: 'summed',
                 stock: { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', wanted: 9 }
             });
         });

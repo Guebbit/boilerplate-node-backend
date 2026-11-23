@@ -438,13 +438,15 @@ const closeAfterProofRefund = (
  * @param order - the order it belongs to
  * @param input - what staff enter on receipt
  * @param context - the staff member
+ * @param onLost - what to answer when another write (a proof of sending) took the claim first
  */
 const receiveFor = (
     id: string,
     returned: ReturnDocument,
     order: OrderDocument,
     input: ReceiveReturnInput,
-    context: CallerContext
+    context: CallerContext,
+    onLost: () => Promise<ResponseSuccess<ReturnDocument> | ResponseReject>
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> => {
     const remedy = input.remedy ?? ReturnRemedy.refund;
     /**
@@ -529,6 +531,7 @@ const receiveFor = (
                 throw error instanceof Error ? error : new Error(String(error));
             })
             .then((claimed) => {
+                if (claimed.kind === 'lost') return onLost();
                 if (claimed.kind === 'refused') return claimed.reject;
                 if (claimed.kind === 'deduction-too-high')
                     return generateReject(422, [
@@ -538,7 +541,6 @@ const receiveFor = (
                             ERROR_CODES.RETURN_DEDUCTION_INVALID
                         )
                     ]);
-                if (claimed.kind === 'lost') return notReceivable();
 
                 const { received, breakdown, opened, openedOnProof } = claimed;
                 const restockedTo = received.lines.map(({ productId, restocked }) => ({
@@ -587,6 +589,38 @@ const receiveFor = (
 };
 
 /**
+ * One try at the receipt: load the return, then receive it. A claim lost to a write that landed
+ * after the load (a proof of sending that opened the refund) re-reads the return and redoes the
+ * receipt once, against what it now holds, as the invoicing and cart-merge losers do. A second
+ * loss is a real "not receivable".
+ *
+ * @param id - the return
+ * @param input - what staff enter on receipt
+ * @param context - the staff member
+ * @param retried - whether this is already the second try
+ */
+const attemptReceipt = (
+    id: string,
+    input: ReceiveReturnInput,
+    context: CallerContext,
+    retried: boolean
+): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
+    returnRepository.findById(id).then((returned) => {
+        if (!returned) return generateReject(404, [t('returns.not-found')]);
+        if (!returnLifecycle.allows('receive', returned.status)) return notReceivable();
+
+        return orderService.getById(String(returned.orderId)).then((order) => {
+            if (!order) return generateReject(404, [t('returns.order-not-found')]);
+
+            return receiveFor(id, returned, order, input, context, () =>
+                retried
+                    ? Promise.resolve(notReceivable())
+                    : attemptReceipt(id, input, context, true)
+            );
+        });
+    });
+
+/**
  * Record that a return's goods arrived: restock them, pay the customer back, close the return.
  *
  * @param input - what staff enter on receipt
@@ -598,13 +632,4 @@ export const receiveReturn = (
     input: ReceiveReturnInput,
     context: CallerContext
 ): Promise<ResponseSuccess<ReturnDocument> | ResponseReject> =>
-    returnRepository.findById(id).then((returned) => {
-        if (!returned) return generateReject(404, [t('returns.not-found')]);
-        if (!returnLifecycle.allows('receive', returned.status)) return notReceivable();
-
-        return orderService.getById(String(returned.orderId)).then((order) => {
-            if (!order) return generateReject(404, [t('returns.order-not-found')]);
-
-            return receiveFor(id, returned, order, input, context);
-        });
-    });
+    attemptReceipt(id, input, context, false);

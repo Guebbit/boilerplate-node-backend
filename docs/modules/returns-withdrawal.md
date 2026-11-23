@@ -170,6 +170,10 @@ makes the refund due on proof, so staff choose it with the claim in front of the
 stored as `refundOnProof` on the return, shown on the `Return` response (so a client can lock the
 remedy at receipt) and written on the proof's audit row. Once the refund opened on proof, receipt
 refuses a repair or a replacement with a 409 `RETURN_REFUND_OPENED_ON_PROOF`.
+A receipt that read the return just before such a proof was saved loses its claim in the database,
+then re-reads the return once and redoes the receipt against the proof: a refund lands, restocks and
+opens no second refund, and a repair or a replacement gets that 409. A second loss is a 409
+`RETURN_NOT_RECEIVABLE`.
 
 A return whose refund opened on proof counts as **settled** for the order's accounts, though its
 parcel may not have arrived: its units and the delivery it quoted are already accounted for, so the

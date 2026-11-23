@@ -258,7 +258,11 @@ describe('merge', () => {
                 testCallerContext
             );
 
-            expect(lines[0]).toMatchObject({ resulting: 8, reason: 'summed' });
+            expect(lines[0]).toEqual({
+                productId: String(product._id),
+                requested: 1,
+                resulting: 8
+            });
             expect(warnings).toMatchObject([
                 { code: 'MERCHANDISE_NOT_ENOUGH_STOCK', requested: 9, resulting: 8 }
             ]);

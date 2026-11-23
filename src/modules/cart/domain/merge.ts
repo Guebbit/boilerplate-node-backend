@@ -34,7 +34,7 @@ export interface MergeLineFacts {
 export interface MergePlan {
     /** Units to add to the cart; `0` writes nothing. */
     add: number;
-    /** Absent when the line lands exactly as asked. */
+    /** Absent when the line lands exactly as asked, and when stock alone added nothing (`stock` says why). */
     reason?: MergeLineReason;
     /** Set when stock held the line back; `wanted` is then what it would hold without that limit. */
     stock?: { code: StockWarningCode; wanted: number };
@@ -73,6 +73,8 @@ export const planMergeLine = ({
     const add = quantity - held;
     const stock = code === undefined ? {} : { stock: { code, wanted: target } };
 
+    // Stock alone kept the line from growing: the warning says why, a reason would only repeat it.
+    if (add === 0 && code !== undefined) return { add, ...stock };
     if (target < wanted) return { add, reason: 'capped', ...stock };
     if (held > 0) return { add, reason: 'summed', ...stock };
     return { add, ...stock };

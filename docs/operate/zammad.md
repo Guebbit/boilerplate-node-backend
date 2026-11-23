@@ -171,7 +171,8 @@ tracking issue, labelled `zammad-advisory`, while the pin is covered or a range 
 Zammad's version numbers carry a build suffix (`7.2.3-0017`); the advisory ranges do not, so the script strips it.
 
 To check by hand: `npm run security:zammad-advisories`. It reads `compose.production.yaml` and exits 2 on an
-exposed pin; `GITHUB_TOKEN` lifts GitHub's anonymous limit of 60 requests an hour.
+exposed pin, 1 when a range cannot be read or GitHub cannot be reached. A pin that is exposed to one advisory while
+another is unreadable still exits 2: the exposure is the actionable signal. `GITHUB_TOKEN` lifts GitHub's anonymous limit of 60 requests an hour.
 
 ## Backup {#backup}
 

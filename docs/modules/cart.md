@@ -273,6 +273,7 @@ sequenceDiagram
 | the sum passes the ceiling                       | the line stops at the ceiling, `reason: capped`                           |
 | short                                            | added up to `quantityAvailable`, a `MERCHANDISE_NOT_ENOUGH_STOCK` warning |
 | sold out, or taken off sale                      | nothing added, a `MERCHANDISE_OUT_OF_STOCK` warning                       |
+| already held above what can be bought            | nothing added, no `reason`, a `MERCHANDISE_NOT_ENOUGH_STOCK` warning      |
 | not shown by the catalogue (deleted or hidden)   | nothing added, `reason: removed`, one notification                        |
 | a new product, and the cart holds the most lines | nothing added, `reason: cart_full`, one notification                      |
 

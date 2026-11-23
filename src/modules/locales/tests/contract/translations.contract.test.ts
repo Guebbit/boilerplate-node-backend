@@ -61,6 +61,30 @@ describe('GET & PATCH /locales/translations/:entityType/:id', () => {
         expect(response.status).toBe(422);
     });
 
+    it('412s a save made on the tag read before a price edit, and stores nothing', async () => {
+        const { bearer } = await authenticateAs('admin');
+        await createLanguage(bearer);
+        const product = await createProduct({ price: '5.00' });
+        const path = `/locales/translations/product/${String(product._id)}`;
+        const read = await api().get(path).set('Authorization', bearer);
+        // The entity's tag is shared with its own door: a price edit moves it.
+        await api()
+            .patch(`/products/${String(product._id)}`)
+            .set('Authorization', bearer)
+            .send({ price: '6.00' })
+            .expect(200);
+
+        const stale = await api()
+            .patch(path)
+            .set('Authorization', bearer)
+            .set('If-Match', read.headers.etag)
+            .send({ pt: { fields: { title: 'Cama boa' }, origin: 'human' } });
+        const after = await api().get(path).set('Authorization', bearer);
+
+        expect(stale.status).toBe(412);
+        expect(after.body.translations).toEqual([]);
+    });
+
     it('404s an unregistered entityType, like any path that names nothing', async () => {
         const { bearer } = await authenticateAs('admin');
 

@@ -284,9 +284,11 @@ field by field, and `null` deletes the row. A default-language key in `translati
 included, is a 422 (`translations.en`): that language is the top-level text.
 `src/modules/products/services/translated-write.ts`'s `create`/`updateById` validate the whole batch
 (`planTranslations`, the `@kernel/translation` port) before writing anything, then write the
-product and its rows in the same operation, the product first: each row is stamped with the
-digest of the text the save left on the product, so a row written beside a new title is current
-and one left alone is flagged `outdated` on the generic door's read.
+product and its rows in the same operation, the product first: a row whose own text is new or
+changed is stamped with the digest of the text the save left on the product, so it is current.
+A row the save re-sends unchanged keeps its stored digest, so it stays `outdated` on the generic
+door's read until someone changes it: an edit form sends every row back, and must not mark them
+all current by doing so.
 
 `GET /products/{id}` adds `translations` (every other language, drafts included) and `source` (the
 stored default-language text) for a caller holding `read:Translation` — what the editor's form

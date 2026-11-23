@@ -1199,7 +1199,12 @@ describe('runReservationSweep', () => {
             await stockLevelModel.updateOne({ productId: broken._id }, { $set: { reserved: 0 } });
             await inventoryService.runReservationSweep();
 
-            // Past its deadline by seconds: the sweep may simply be mid-tick, so not yet counted.
+            // Past its deadline by 30 seconds, set explicitly so the deadline has really passed:
+            // the sweep may simply be mid-tick, so not yet counted.
+            await reservationModel.updateOne(
+                { orderId: brokenOrder },
+                { $set: { expiresAt: new Date(Date.now() - 30 * 1000) } }
+            );
             expect(await overdueHolds()).toBe(0);
 
             // Past it by 11 minutes, more than two ticks: the one the sweep keeps refusing. The
